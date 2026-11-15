@@ -15,6 +15,11 @@ export const MODULES: Record<string, Module> = {
 		imports: ['repo'],
 		packages: [],
 	},
+	diagram: {
+		job: 'Diagrams as checked data: boxes and arrows that rest on quotes, and their Mermaid text.',
+		imports: ['repo', 'checks'],
+		packages: [],
+	},
 	record: {
 		job: 'The project record: an append-only store of pieces of work, decisions, topics and notes.',
 		imports: ['repo', 'checks'],
