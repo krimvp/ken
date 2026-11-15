@@ -1,0 +1,334 @@
+/* Design tokens. ken's own page will reuse these, and the card below is the first draft of its card. */
+:root {
+	--font-text: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+	--font-code: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+
+	--text-sm: 0.875rem;
+	--text-code: 0.875rem;
+	--text-base: 1.125rem;
+	--text-lead: 1.3125rem;
+	--text-h2: 1.375rem;
+	--text-h1: 2.75rem;
+	--leading-text: 1.65;
+	--leading-tight: 1.25;
+	--leading-code: 1.6;
+	/* About 70 characters of body text per line. */
+	--measure: 36rem;
+
+	--space-1: 0.25rem;
+	--space-2: 0.5rem;
+	--space-3: 0.75rem;
+	--space-4: 1rem;
+	--space-5: 1.5rem;
+	--space-6: 2rem;
+	--space-7: 3rem;
+	--space-8: 4.5rem;
+	--gutter: 1rem;
+
+	--radius-sm: 4px;
+	--radius-md: 8px;
+
+	--color-bg: #faf9f6;
+	--color-text: #1d2024;
+	--color-muted: #555b63;
+	--color-border: #dedad1;
+	--color-accent: #1c5d8c;
+	--color-card: #ffffff;
+	--color-code-bg: #f3f1ec;
+	--color-code-text: #24292f;
+	--color-line-number: #5f656c;
+	--color-label-bg: #e8eef4;
+	--color-label-text: #1b4a6e;
+	--color-focus: #1c5d8c;
+}
+
+@media (prefers-color-scheme: dark) {
+	:root {
+		--color-bg: #17191c;
+		--color-text: #e4e2dd;
+		--color-muted: #a5aab1;
+		--color-border: #33373d;
+		--color-accent: #7db3dc;
+		--color-card: #1e2125;
+		--color-code-bg: #131518;
+		--color-code-text: #d9dce1;
+		--color-line-number: #8a9098;
+		--color-label-bg: #22313f;
+		--color-label-text: #b5d4ec;
+		--color-focus: #7db3dc;
+	}
+}
+
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+html {
+	-webkit-text-size-adjust: 100%;
+	text-size-adjust: 100%;
+}
+
+body {
+	margin: 0;
+	background: var(--color-bg);
+	color: var(--color-text);
+	font-family: var(--font-text);
+	font-size: var(--text-base);
+	line-height: var(--leading-text);
+}
+
+main {
+	max-width: calc(var(--measure) + 2 * var(--gutter));
+	margin: 0 auto;
+	padding: var(--space-8) var(--gutter) var(--space-8);
+}
+
+h1,
+h2 {
+	line-height: var(--leading-tight);
+	font-weight: 650;
+	letter-spacing: -0.01em;
+}
+
+h1 {
+	font-size: var(--text-h1);
+	margin: 0 0 var(--space-4);
+	letter-spacing: -0.02em;
+}
+
+h2 {
+	font-size: var(--text-h2);
+	margin: 0 0 var(--space-4);
+}
+
+p,
+ul,
+ol,
+dl {
+	margin: 0 0 var(--space-4);
+}
+
+section {
+	margin-top: var(--space-7);
+	padding-top: var(--space-6);
+	border-top: 1px solid var(--color-border);
+}
+
+a {
+	color: var(--color-accent);
+	text-decoration-thickness: 1px;
+	text-underline-offset: 0.18em;
+}
+
+a:hover {
+	text-decoration-thickness: 2px;
+}
+
+:focus-visible {
+	outline: 2px solid var(--color-focus);
+	outline-offset: 2px;
+	border-radius: var(--radius-sm);
+}
+
+code {
+	font-family: var(--font-code);
+	font-size: 0.9em;
+}
+
+.lead {
+	font-size: var(--text-lead);
+	line-height: 1.45;
+}
+
+.intro p:last-child {
+	color: var(--color-muted);
+}
+
+/* The label. The card uses it, and so do the list of labels and the "Planned" tag. */
+.label {
+	display: inline-block;
+	padding: 0.1em 0.55em;
+	border-radius: var(--radius-sm);
+	background: var(--color-label-bg);
+	color: var(--color-label-text);
+	font-size: var(--text-sm);
+	font-weight: 600;
+	line-height: 1.5;
+	white-space: nowrap;
+}
+
+h2 .label {
+	margin-left: var(--space-2);
+	vertical-align: 0.2em;
+}
+
+.example {
+	margin: var(--space-6) 0 0;
+}
+
+.example figcaption {
+	margin-bottom: var(--space-3);
+	color: var(--color-muted);
+	font-size: var(--text-sm);
+}
+
+.ask {
+	margin: 0 0 var(--space-3);
+}
+
+.ask-who {
+	display: block;
+	color: var(--color-muted);
+	font-size: var(--text-sm);
+}
+
+.card {
+	padding: var(--space-5);
+	border: 1px solid var(--color-border);
+	border-radius: var(--radius-md);
+	background: var(--color-card);
+}
+
+.card-label {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: var(--space-1) var(--space-3);
+	margin-bottom: var(--space-3);
+}
+
+.label-note {
+	color: var(--color-muted);
+	font-size: var(--text-sm);
+}
+
+.card-statement {
+	margin-bottom: var(--space-4);
+	font-size: 1.125rem;
+	line-height: 1.5;
+}
+
+.quote {
+	border: 1px solid var(--color-border);
+	border-radius: var(--radius-sm);
+	background: var(--color-code-bg);
+	overflow: hidden;
+}
+
+.quote-source {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0 var(--space-2);
+	margin: 0;
+	padding: var(--space-2) var(--space-3);
+	border-bottom: 1px solid var(--color-border);
+	color: var(--color-muted);
+	font-size: var(--text-sm);
+}
+
+.quote-source code {
+	color: var(--color-code-text);
+}
+
+.quote-code {
+	margin: 0;
+	padding: var(--space-3) var(--space-3) var(--space-3) var(--space-2);
+	overflow-x: auto;
+	color: var(--color-code-text);
+	font-family: var(--font-code);
+	font-size: var(--text-code);
+	line-height: var(--leading-code);
+	tab-size: 4;
+}
+
+.quote-code code {
+	font-size: inherit;
+}
+
+.line {
+	display: inline;
+}
+
+.line::before {
+	counter-increment: line;
+	content: counter(line);
+	display: inline-block;
+	width: 4ch;
+	padding-right: 1.5ch;
+	color: var(--color-line-number);
+	text-align: right;
+	user-select: none;
+}
+
+.labels {
+	display: grid;
+	gap: var(--space-3);
+}
+
+.labels div {
+	display: grid;
+	grid-template-columns: 9.5rem 1fr;
+	gap: var(--space-3);
+	align-items: baseline;
+}
+
+.labels dt,
+.labels dd {
+	margin: 0;
+}
+
+.limit {
+	margin-top: var(--space-5);
+	padding-left: var(--space-4);
+	border-left: 3px solid var(--color-accent);
+}
+
+.nots,
+.steps {
+	padding-left: 1.25rem;
+}
+
+.nots li,
+.steps li {
+	margin-bottom: var(--space-2);
+	padding-left: var(--space-1);
+}
+
+.steps li::marker {
+	color: var(--color-muted);
+	font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 34rem) {
+	main {
+		padding-top: var(--space-7);
+	}
+
+	h1 {
+		font-size: 2.25rem;
+	}
+
+	.lead {
+		font-size: 1.1875rem;
+	}
+
+	.card {
+		padding: var(--space-3);
+	}
+
+	.quote-code {
+		padding-right: var(--space-2);
+	}
+
+	.line::before {
+		width: 3ch;
+		padding-right: 1ch;
+	}
+
+	.labels div {
+		grid-template-columns: 1fr;
+		gap: var(--space-1);
+	}
+}
