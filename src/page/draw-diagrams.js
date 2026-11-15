@@ -73,13 +73,12 @@ function config() {
 			attributeBackgroundColorOdd: card,
 			attributeBackgroundColorEven: token('--color-code-bg'),
 		},
-		// Tight spacing and wrapped messages, so a diagram at the bounds (6 parts, 8 arrows) fits the answer column at
-		// 1440 pixels: six sequence participants take 6 x 120 + 5 x 8 pixels before the drawing shrinks.
+		// Tight spacing, and sequence labels broken into lines by breakSequence, so a diagram at the bounds (6 parts,
+		// 8 arrows) fits the answer column at 1440 pixels: six participants take 6 x 120 + 5 x 8 pixels.
 		flowchart: { useMaxWidth: false, diagramPadding: 4, nodeSpacing: 24, rankSpacing: 36, wrappingWidth: 140 },
 		sequence: {
 			useMaxWidth: false,
 			mirrorActors: false,
-			wrap: true,
 			width: 120,
 			actorMargin: 8,
 			wrapPadding: 4,
@@ -122,6 +121,44 @@ function fit(box, drawing) {
 	atEnd()
 }
 
+// Mermaid wraps a sequence label by cutting long words, and it cuts through the entity codes ken writes for characters
+// such as "{" or ",", which then show as garbage. So the page breaks each label itself, only between words, into lines
+// of about as many characters as fit between the participants a message joins. It adds nothing but <br> between words
+// that ken's server already made safe.
+const CHARS_PER_GAP = 14
+
+function breakSequence(text) {
+	const lines = text.split('\n')
+	const order = new Map()
+	for (const line of lines) {
+		const id = line.match(/^ {2}participant (n\d+) as /)?.[1]
+		if (id) order.set(id, order.size)
+	}
+	return lines
+		.map((line) => {
+			const actor = line.match(/^( {2}participant n\d+ as )(.*)$/)
+			if (actor) return actor[1] + inLines(actor[2], CHARS_PER_GAP)
+			const message = line.match(/^( {2}(n\d+)->>(n\d+): )(.*)$/)
+			if (!message) return line
+			const gaps = Math.max(1, Math.abs(order.get(message[2]) - order.get(message[3])))
+			return message[1] + inLines(message[4], gaps * CHARS_PER_GAP)
+		})
+		.join('\n')
+}
+
+// Mermaid measures a line before it turns each entity code back into its character, while the code still stands as a
+// placeholder about six characters wide, so a code counts as six.
+function inLines(label, most) {
+	const shown = (words) => words.replaceAll(/#\d+;/g, '######').length
+	const lines = []
+	for (const word of label.split(' ')) {
+		const last = lines.at(-1)
+		if (last !== undefined && shown(`${last} ${word}`) <= most) lines[lines.length - 1] = `${last} ${word}`
+		else lines.push(word)
+	}
+	return lines.join('<br>')
+}
+
 async function draw(mermaid, text) {
 	const id = `ken-drawing-${++counter}`
 	try {
@@ -142,6 +179,7 @@ function widthOf(svg) {
 async function drawToFit(text, width) {
 	const mermaid = await loadMermaid()
 	mermaid.initialize(config())
+	if (text.startsWith('sequenceDiagram')) return await draw(mermaid, breakSequence(text))
 	const across = await draw(mermaid, text)
 	if (!text.startsWith('flowchart LR') || widthOf(across) <= width) return across
 	const down = await draw(mermaid, text.replace('flowchart LR', 'flowchart TB'))
