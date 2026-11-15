@@ -45,11 +45,14 @@ export function readJsonText(
 }
 
 function readValue(schema: Schema, raw: JsonValue, where: string, problems: string[]): JsonValue {
-	const value = schema.type === 'array' || schema.type === 'object' ? parsedText(raw) : raw
-	if (value === undefined) {
-		problems.push(`${where} is text that is not JSON. Send it as ${schema.type === 'array' ? 'a list' : 'an object'}.`)
+	const parsed =
+		schema.type === 'array' || schema.type === 'object' ? parsedText(raw) : ({ kind: 'ok', value: raw } as const)
+	if (parsed.kind === 'refused') {
+		const wanted = schema.type === 'array' ? 'a list' : 'an object'
+		problems.push(`${where} is text that is not JSON (${parsed.reason}). Send it as ${wanted}, not as text.`)
 		return raw
 	}
+	const { value } = parsed
 	switch (schema.type) {
 		case 'array': {
 			const { items } = schema
@@ -66,7 +69,6 @@ function readValue(schema: Schema, raw: JsonValue, where: string, problems: stri
 			const read: Record<string, JsonValue> = {}
 			for (const [name, item] of Object.entries(value)) {
 				const property = schema.properties?.[name]
-				if (property && isBlank(property, item)) continue
 				if (property) read[name] = readValue(property, item, `${where}, ${name}`, problems)
 				else if (schema.additionalProperties === false) problems.push(`${where} has "${name}", which it does not take.`)
 				else read[name] = item
@@ -97,19 +99,33 @@ function readValue(schema: Schema, raw: JsonValue, where: string, problems: stri
 	}
 }
 
-// Models fill a list or an object they mean to leave out with "" as often as they leave it out, so "" is not given.
-function isBlank(schema: Schema, value: JsonValue): boolean {
-	return (schema.type === 'array' || schema.type === 'object') && typeof value === 'string' && value.trim() === ''
+function parsedText(value: JsonValue): { kind: 'ok'; value: JsonValue } | { kind: 'refused'; reason: string } {
+	if (typeof value !== 'string') return { kind: 'ok', value }
+	try {
+		return { kind: 'ok', value: JSON.parse(escapeControls(value)) }
+	} catch (error) {
+		return { kind: 'refused', reason: error instanceof Error ? error.message : String(error) }
+	}
 }
 
-// undefined means the value was text that does not parse as JSON.
-function parsedText(value: JsonValue): JsonValue | undefined {
-	if (typeof value !== 'string') return value
-	try {
-		return JSON.parse(value)
-	} catch {
-		return undefined
+// A model that writes JSON inside a JSON argument often leaves the tabs and line breaks of quoted code unescaped, and
+// JSON allows them between values but not inside a string. So this escapes them inside strings only; valid JSON
+// passes through unchanged.
+function escapeControls(text: string): string {
+	let inString = false
+	let afterBackslash = false
+	let escaped = ''
+	for (const char of text) {
+		if (inString && !afterBackslash && char < ' ') {
+			escaped += JSON.stringify(char).slice(1, -1)
+			continue
+		}
+		if (afterBackslash) afterBackslash = false
+		else if (char === '\\') afterBackslash = inString
+		else if (char === '"') inString = !inString
+		escaped += char
 	}
+	return escaped
 }
 
 function isObject(value: JsonValue | undefined): value is JsonObject {

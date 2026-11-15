@@ -110,12 +110,13 @@ test('a topic named like one in the record, in another case and spacing, is refu
 	assert.equal(topics.length, 1)
 })
 
-test('decisions sent as JSON text are stored, topics sent as "" count as none, and JSON text that lacks a field is rejected with the field named', async () => {
+test('decisions sent as JSON text are stored, raw tabs in its quotes included, and JSON text that lacks a field is rejected with the field named', async () => {
 	const { undo, ...withoutUndo } = DECISION
 	const waits = { ...DECISION, question: 'Does a retry wait after the last attempt too?' }
 	const { events, requests } = await ask([
 		answer({ decisions: JSON.stringify([withoutUndo]) }),
-		answer({ decisions: JSON.stringify([waits]), topics: '' }),
+		// The quote holds tab-indented code. A model that writes the tabs raw inside the JSON text makes it invalid JSON.
+		answer({ decisions: JSON.stringify([waits]).replaceAll('\\t', '\t') }),
 		{ text: 'Done.' },
 	])
 
