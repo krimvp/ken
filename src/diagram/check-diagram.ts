@@ -10,7 +10,7 @@ import type { Arrow, Diagram, DiagramDraft, DiagramKind } from './diagram.ts'
 export const DIAGRAM_BOUNDS = {
 	diagrams: 3,
 	nodes: 8,
-	edges: 12,
+	edges: 10,
 	fields: 6,
 	quotes: 3,
 	title: 80,
