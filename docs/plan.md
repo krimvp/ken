@@ -20,14 +20,14 @@ Agents now produce code faster than a person can absorb it. The gap has a name, 
 
 No single product closes this gap for the reader. A search on 15 November 2026 found six groups of tools, each covering one part.
 
-| Job | Examples | What it lacks |
-| --- | --- | --- |
-| Record what the agent did and why | Entire, SpecStory, Git AI, Agent Trace, Agent Decision Records | A transcript or a log to read, not an explanation |
-| Make one change readable | Stage, Haystack, Graphite Code Tours, Devin Review | One pull request at a time, the same text for every reader, reasons guessed afterwards |
-| Explain a codebase | DeepWiki, Google Code Wiki, Codemaps, Understand-Anything, xpl | A picture of the code now: no history, no decisions, no memory of the reader |
-| Teach while coding | Claude Code's Explanatory and Learning styles | Only inside the live session |
-| Check the reader understood | Quiz gates such as SlopBlock and pr-quiz; LACY (research) | A gate before merging, not a guide |
-| Measure who knows what | CodeScene, degree-of-knowledge models | Based on who wrote the code, which means little when agents write it |
+| Job                               | Examples                                                       | What it lacks                                                                          |
+| --------------------------------- | -------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Record what the agent did and why | Entire, SpecStory, Git AI, Agent Trace, Agent Decision Records | A transcript or a log to read, not an explanation                                      |
+| Make one change readable          | Stage, Haystack, Graphite Code Tours, Devin Review             | One pull request at a time, the same text for every reader, reasons guessed afterwards |
+| Explain a codebase                | DeepWiki, Google Code Wiki, Codemaps, Understand-Anything, xpl | A picture of the code now: no history, no decisions, no memory of the reader           |
+| Teach while coding                | Claude Code's Explanatory and Learning styles                  | Only inside the live session                                                           |
+| Check the reader understood       | Quiz gates such as SlopBlock and pr-quiz; LACY (research)      | A gate before merging, not a guide                                                     |
+| Measure who knows what            | CodeScene, degree-of-knowledge models                          | Based on who wrote the code, which means little when agents write it                   |
 
 Four things are missing everywhere, and this product is built around them:
 
@@ -42,16 +42,16 @@ The recording side is crowded and moving fast. The reader side is open.
 
 These were settled in the design discussion. An agent working on the project should treat them as fixed unless the owner changes them.
 
-| Decision | Reason |
-| --- | --- |
-| One developer first, not a team | It keeps the reader's model to one local file and needs no accounts or sharing. A collaborator's changes must still be handled, because the owner sometimes works beside someone else. |
-| A new repository | Nothing is reused from xpl or own-your-diff. Their ideas carry over; their code and data models do not. |
-| `aigent` is the chat engine | It is the owner's own engine, and it runs on any model provider, including open-weight models. |
-| No tie to one coding tool | The code may be written by Claude Code, Codex, a collaborator or the owner. Git is the only source every case shares. |
-| No parser and no code index at the start | An agent explores with read, search and git. This works for every language and file type from the first day, and a parser per language is a large cost to pay before the idea is proven. |
-| Chat first, with a page beside it | The developer interacts best by asking. The questions are also the main signal of what the developer knows. |
-| No single "since last time" cursor | It assumes one reader and nobody else changing the code. It fails with a collaborator and after weeks away. Time is one way to scope a question, not the centre of the design. |
-| Prose first, diagrams only where they help | xpl's diagram-first explanations felt strict and hard to follow at the level of the whole project. |
+| Decision                                   | Reason                                                                                                                                                                                   |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| One developer first, not a team            | It keeps the reader's model to one local file and needs no accounts or sharing. A collaborator's changes must still be handled, because the owner sometimes works beside someone else.   |
+| A new repository                           | Nothing is reused from xpl or own-your-diff. Their ideas carry over; their code and data models do not.                                                                                  |
+| `aigent` is the chat engine                | It is the owner's own engine, and it runs on any model provider, including open-weight models.                                                                                           |
+| No tie to one coding tool                  | The code may be written by Claude Code, Codex, a collaborator or the owner. Git is the only source every case shares.                                                                    |
+| No parser and no code index at the start   | An agent explores with read, search and git. This works for every language and file type from the first day, and a parser per language is a large cost to pay before the idea is proven. |
+| Chat first, with a page beside it          | The developer interacts best by asking. The questions are also the main signal of what the developer knows.                                                                              |
+| No single "since last time" cursor         | It assumes one reader and nobody else changing the code. It fails with a collaborator and after weeks away. Time is one way to scope a question, not the centre of the design.           |
+| Prose first, diagrams only where they help | xpl's diagram-first explanations felt strict and hard to follow at the level of the whole project.                                                                                       |
 
 ## The model
 
@@ -61,12 +61,12 @@ The design has two stores and a set of lenses. A lens picks a part of the projec
 
 The project record is about the code and is the same for every reader. It holds four kinds of entry.
 
-| Entry | What it holds |
-| --- | --- |
-| Piece of work | Commits that belong together (a task, a branch, a pull request), who did it, when, and a short summary |
-| Decision | The question, the option chosen, the options rejected with a reason each, how easy it is to undo, and whether it needs the owner's opinion |
-| Topic | A named part of the project, such as "retry logic", with the quoted code it rests on |
-| Note | The agent's cached summary of a topic, stored with the hash of the code it describes |
+| Entry         | What it holds                                                                                                                              |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Piece of work | Commits that belong together (a task, a branch, a pull request), who did it, when, and a short summary                                     |
+| Decision      | The question, the option chosen, the options rejected with a reason each, how easy it is to undo, and whether it needs the owner's opinion |
+| Topic         | A named part of the project, such as "retry logic", with the quoted code it rests on                                                       |
+| Note          | The agent's cached summary of a topic, stored with the hash of the code it describes                                                       |
 
 "Who did it" is one of: the owner, the owner's agent, a collaborator, or unknown. Git tells the owner from a collaborator. It cannot always tell the owner from the owner's agent, so the record says "unknown" when it has no evidence.
 
@@ -86,23 +86,23 @@ The map is a plain file the reader can open and correct, because it will sometim
 
 ### Lenses
 
-| Lens | Question it answers |
-| --- | --- |
-| Catch up | What differs from what I understood |
-| A piece of work | What did this task, branch or pull request do |
-| A person or agent | What did my collaborator change |
-| An area | What do I need to know to work in this part today |
-| A decision | Why is it this way |
-| A time range | What happened in the last two weeks |
+| Lens              | Question it answers                               |
+| ----------------- | ------------------------------------------------- |
+| Catch up          | What differs from what I understood               |
+| A piece of work   | What did this task, branch or pull request do     |
+| A person or agent | What did my collaborator change                   |
+| An area           | What do I need to know to work in this part today |
+| A decision        | Why is it this way                                |
+| A time range      | What happened in the last two weeks               |
 
 ### How the depth is chosen
 
-| State of the topic for this reader | What the answer does |
-| --- | --- |
-| Never met | Explains from the top in a few sentences and offers to go deeper |
-| Understood, code unchanged | Collapses to one line |
-| Understood, code changed | Leads with what changed against what the reader knew |
-| Understood long ago | Gives a short reminder first, then the changes |
+| State of the topic for this reader | What the answer does                                             |
+| ---------------------------------- | ---------------------------------------------------------------- |
+| Never met                          | Explains from the top in a few sentences and offers to go deeper |
+| Understood, code unchanged         | Collapses to one line                                            |
+| Understood, code changed           | Leads with what changed against what the reader knew             |
+| Understood long ago                | Gives a short reminder first, then the changes                   |
 
 When many topics have changed at once, such as after weeks away, the answer starts one level up: a summary of the whole, then the topics ranked by how risky and how new they are to this reader.
 
@@ -124,12 +124,12 @@ The agent explores freely, but three things are never left to the model. None of
 
 A reader must be able to tell a recorded fact from a guess. Each statement carries one of these labels.
 
-| Label | Meaning |
-| --- | --- |
-| Recorded | An agent or the owner logged the decision when it was made |
-| From the session | Read afterwards from a saved agent transcript, and quoted |
-| Inferred | Reconstructed from the diff alone |
-| Found by search | A relation between pieces of code, such as "this calls that", that the agent found by searching and did not prove |
+| Label            | Meaning                                                                                                           |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Recorded         | An agent or the owner logged the decision when it was made                                                        |
+| From the session | Read afterwards from a saved agent transcript, and quoted                                                         |
+| Inferred         | Reconstructed from the diff alone                                                                                 |
+| Found by search  | A relation between pieces of code, such as "this calls that", that the agent found by searching and did not prove |
 
 Reasons generated after the fact are the weak point of this whole field. One source warns that decision records written from a finished codebase record what was decided and invent the why. The "inferred" label exists so the reader always sees when that risk applies.
 
@@ -166,28 +166,28 @@ flowchart LR
 
 The chat agent reads the repository and the stores directly. Anything it or a coding agent writes to a store goes through the checks first.
 
-| Part | Job |
-| --- | --- |
-| Page | A local web page. The chat streams on one side. Cards collect on the other: summaries, decisions and quoted code, each with its label. |
-| Chat agent | An `aigent` session with one plugin, run by a small local server that also serves the page. It answers questions, picks the depth from the understanding map, and writes entries through tools. |
-| Exploration tools | Tools inside the plugin: read a file at a commit, search the code, read git history, diffs and blame. They never change the project. |
-| Checks | The quote checker, the git change facts with hunk coverage, and the validation of every store entry. |
-| Stores | The project record and the understanding map, as plain append-only files. |
-| Decision command | A small command that any coding agent can call during its work to log a decision. It writes through the same checks. |
+| Part              | Job                                                                                                                                                                                             |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Page              | A local web page. The chat streams on one side. Cards collect on the other: summaries, decisions and quoted code, each with its label.                                                          |
+| Chat agent        | An `aigent` session with one plugin, run by a small local server that also serves the page. It answers questions, picks the depth from the understanding map, and writes entries through tools. |
+| Exploration tools | Tools inside the plugin: read a file at a commit, search the code, read git history, diffs and blame. They never change the project.                                                            |
+| Checks            | The quote checker, the git change facts with hunk coverage, and the validation of every store entry.                                                                                            |
+| Stores            | The project record and the understanding map, as plain append-only files.                                                                                                                       |
+| Decision command  | A small command that any coding agent can call during its work to log a decision. It writes through the same checks.                                                                            |
 
 ## Build order
 
 There are seven slices. Each one ends with something the owner can run. The main claim is tested after slice 3, before the reader model is built.
 
-| Slice | What it builds | Done when |
-| --- | --- | --- |
-| 0. Ground | The new repository in TypeScript with tests, and a settled way to use `aigent` from it | A script starts an `aigent` session with one empty plugin and prints a model's reply |
-| 1. Explore and check | An `aigent` plugin with tools to read a file at a commit, search, and read git history and diffs; the quote checker; the hunk coverage check; a chat in the terminal | On a real repository, "what did this branch do" returns an answer where every claim has a quote that passes. A test shows a false quote is rejected. Uncovered hunks are listed. |
-| 2. Project record | The append-only store for pieces of work, decisions, topics and notes, with the tools that write to it. Lenses: a piece of work, a decision. | The record survives a restart. Asking the same question again reads the record instead of exploring again. Decisions carry the "inferred" label. |
-| 3. Page with chat | A local server and a page: streaming chat on one side, cards on the other (summary, decision, quoted code, labels) | One command in any repository opens the page. The owner asks about a piece of work and gets cards with checked quotes. |
-| 4. Understanding map | The map, the three buttons, the depth rules, and detection of changed topics. Lenses: catch up, an area. | A topic the owner understood collapses to one line the second time. Editing its code marks it as changed. The map file can be read and corrected by hand. |
-| 5. Recorded decisions | A small command any coding agent can call to log a decision, and one instruction line for a project's `AGENTS.md`. Then a reader for one tool's saved transcripts. | A decision logged by an agent during a task shows on the page as "recorded". One from a transcript shows as "from the session" with its quote. |
-| 6. Following up | A list of what is open: decisions that need the owner's opinion, and changed topics not yet looked at. Lenses: a person or agent, a time range. | After a collaborator's commits, the page shows their changes to topics the owner knew, and nothing about topics the owner never met. |
+| Slice                 | What it builds                                                                                                                                                       | Done when                                                                                                                                                                        |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0. Ground             | The new repository in TypeScript with tests, and a settled way to use `aigent` from it                                                                               | A script starts an `aigent` session with one empty plugin and prints a model's reply                                                                                             |
+| 1. Explore and check  | An `aigent` plugin with tools to read a file at a commit, search, and read git history and diffs; the quote checker; the hunk coverage check; a chat in the terminal | On a real repository, "what did this branch do" returns an answer where every claim has a quote that passes. A test shows a false quote is rejected. Uncovered hunks are listed. |
+| 2. Project record     | The append-only store for pieces of work, decisions, topics and notes, with the tools that write to it. Lenses: a piece of work, a decision.                         | The record survives a restart. Asking the same question again reads the record instead of exploring again. Decisions carry the "inferred" label.                                 |
+| 3. Page with chat     | A local server and a page: streaming chat on one side, cards on the other (summary, decision, quoted code, labels)                                                   | One command in any repository opens the page. The owner asks about a piece of work and gets cards with checked quotes.                                                           |
+| 4. Understanding map  | The map, the three buttons, the depth rules, and detection of changed topics. Lenses: catch up, an area.                                                             | A topic the owner understood collapses to one line the second time. Editing its code marks it as changed. The map file can be read and corrected by hand.                        |
+| 5. Recorded decisions | A small command any coding agent can call to log a decision, and one instruction line for a project's `AGENTS.md`. Then a reader for one tool's saved transcripts.   | A decision logged by an agent during a task shows on the page as "recorded". One from a transcript shows as "from the session" with its quote.                                   |
+| 6. Following up       | A list of what is open: decisions that need the owner's opinion, and changed topics not yet looked at. Lenses: a person or agent, a time range.                      | After a collaborator's commits, the page shows their changes to topics the owner knew, and nothing about topics the owner never met.                                             |
 
 ### The checkpoint after slice 3
 
@@ -207,17 +207,17 @@ If it does not win, change the design before building slices 4 to 6.
 
 ## Risks
 
-| Risk | How it shows | How to test or limit it |
-| --- | --- | --- |
-| It is no better than a plain chat | The owner keeps asking the coding agent directly | The checkpoint after slice 3 |
-| A quote is real but the sentence about it is wrong | A checked answer that still misleads | The quote check proves the code exists, not that the claim is true. Show the quote beside every claim so the reader can judge. Do not describe answers as verified. |
-| Inferred reasons are invented | A confident "why" that nobody decided | The "inferred" label, and slice 5, which replaces guesses with recorded decisions |
-| Topics drift | The same part of the code gets two names, and the map splits | The agent must look up existing topics before it creates one. Count duplicate topics on a real repository after slice 2. |
-| Quotes break on harmless edits | Topics marked as changed after a rename or a reformat | Measure how often this happens in slice 4. If it is frequent, compare with whitespace ignored, then consider the parser tool. |
-| Exploration is slow or costly | Long waits, large model bills | Notes cached by content hash. Record tokens and seconds per question from slice 1. One source reports that search-only agents struggle past about 400,000 lines of code. |
-| The map misjudges the reader | Answers that are too shallow or too deep | The three buttons, and a map the reader can edit. Few questions per session means the map learns slowly; accept that at first. |
-| The record's own files pollute the history | The tool explains its own bookkeeping commits | Exclude the record's directory from every change fact |
-| Model provider limits | A chosen model cannot follow the tool rules | Run the slice 1 test on at least two models, one of them open-weight |
+| Risk                                               | How it shows                                                 | How to test or limit it                                                                                                                                                  |
+| -------------------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| It is no better than a plain chat                  | The owner keeps asking the coding agent directly             | The checkpoint after slice 3                                                                                                                                             |
+| A quote is real but the sentence about it is wrong | A checked answer that still misleads                         | The quote check proves the code exists, not that the claim is true. Show the quote beside every claim so the reader can judge. Do not describe answers as verified.      |
+| Inferred reasons are invented                      | A confident "why" that nobody decided                        | The "inferred" label, and slice 5, which replaces guesses with recorded decisions                                                                                        |
+| Topics drift                                       | The same part of the code gets two names, and the map splits | The agent must look up existing topics before it creates one. Count duplicate topics on a real repository after slice 2.                                                 |
+| Quotes break on harmless edits                     | Topics marked as changed after a rename or a reformat        | Measure how often this happens in slice 4. If it is frequent, compare with whitespace ignored, then consider the parser tool.                                            |
+| Exploration is slow or costly                      | Long waits, large model bills                                | Notes cached by content hash. Record tokens and seconds per question from slice 1. One source reports that search-only agents struggle past about 400,000 lines of code. |
+| The map misjudges the reader                       | Answers that are too shallow or too deep                     | The three buttons, and a map the reader can edit. Few questions per session means the map learns slowly; accept that at first.                                           |
+| The record's own files pollute the history         | The tool explains its own bookkeeping commits                | Exclude the record's directory from every change fact                                                                                                                    |
+| Model provider limits                              | A chosen model cannot follow the tool rules                  | Run the slice 1 test on at least two models, one of them open-weight                                                                                                     |
 
 ## Open questions for the owner
 
@@ -235,15 +235,15 @@ Each has a suggested answer, so work can start without waiting.
 
 The owner has not answered these questions yet. Work started on 2026-11-15 with the answers below. Each one can be changed later.
 
-| Question | Working answer |
-| --- | --- |
-| Name | `ken`, the name of the repository. The command is `ken`. |
-| How ken uses `aigent` | `aigent` gains a build step that packs it into a tarball (issue 76). ken commits that tarball under `vendor/` and installs it from there, because both repositories are private and there is no package registry. |
-| Where the project record lives | In `.ken/` inside the project's repository, committed. |
-| Where the understanding map lives | In `~/.ken/`, never committed. |
-| Default chat model | None. ken refuses to start until the owner names a provider and a model. |
-| First transcripts to read | Claude Code. |
-| "Following up" | Read as the plan reads it. |
+| Question                          | Working answer                                                                                                                                                                                                    |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Name                              | `ken`, the name of the repository. The command is `ken`.                                                                                                                                                          |
+| How ken uses `aigent`             | `aigent` gains a build step that packs it into a tarball (issue 76). ken commits that tarball under `vendor/` and installs it from there, because both repositories are private and there is no package registry. |
+| Where the project record lives    | In `.ken/` inside the project's repository, committed.                                                                                                                                                            |
+| Where the understanding map lives | In `~/.ken/`, never committed.                                                                                                                                                                                    |
+| Default chat model                | None. ken refuses to start until the owner names a provider and a model.                                                                                                                                          |
+| First transcripts to read         | Claude Code.                                                                                                                                                                                                      |
+| "Following up"                    | Read as the plan reads it.                                                                                                                                                                                        |
 
 ## Out of scope for the first version
 

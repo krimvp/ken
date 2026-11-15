@@ -29,20 +29,20 @@ These rules decide every change. Each names the skill that holds its detail. Rea
 
 ## Skills by need
 
-| Need | Skill |
-|---|---|
-| Any text a person reads | `plain-words`, then `unslop` for the full pattern list |
-| Docs, READMEs, commit messages | `technical-writing` |
-| Writing or reviewing TypeScript | `code-style`, then `typescript-best-practices` |
-| Sizing a change, adding a dependency | `ponytail` |
-| Reviewing a change | `ponytail-review` |
-| Writing, changing, or reviewing a test | `test-audit` |
-| Changing the page or the public site | `ui-review` |
-| Module and interface design | `codebase-design` |
-| Domain terms and decisions | `domain-modeling` |
-| Stress-testing a plan or design | `grilling`, or `grill-with-docs` to record decisions as you go |
-| Editing AGENTS.md, CLAUDE.md, or a skill | `writing-for-agents` |
-| Handing work to a new session | `handoff` |
+| Need                                     | Skill                                                          |
+| ---------------------------------------- | -------------------------------------------------------------- |
+| Any text a person reads                  | `plain-words`, then `unslop` for the full pattern list         |
+| Docs, READMEs, commit messages           | `technical-writing`                                            |
+| Writing or reviewing TypeScript          | `code-style`, then `typescript-best-practices`                 |
+| Sizing a change, adding a dependency     | `ponytail`                                                     |
+| Reviewing a change                       | `ponytail-review`                                              |
+| Writing, changing, or reviewing a test   | `test-audit`                                                   |
+| Changing the page or the public site     | `ui-review`                                                    |
+| Module and interface design              | `codebase-design`                                              |
+| Domain terms and decisions               | `domain-modeling`                                              |
+| Stress-testing a plan or design          | `grilling`, or `grill-with-docs` to record decisions as you go |
+| Editing AGENTS.md, CLAUDE.md, or a skill | `writing-for-agents`                                           |
+| Handing work to a new session            | `handoff`                                                      |
 
 ## Layout
 
