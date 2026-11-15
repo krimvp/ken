@@ -70,7 +70,10 @@ function parseLine(line: string): HistoryEntry | null {
 		typeof outcome === 'string' &&
 		OUTCOMES.has(outcome) &&
 		Array.isArray(steps)
-	return fine ? (value as HistoryEntry) : null
+	if (!fine) return null
+	// An answer saved before answers carried diagrams has none.
+	if (isObject(value.answer) && !Array.isArray(value.answer.diagrams)) value.answer.diagrams = []
+	return value as HistoryEntry
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {

@@ -1,6 +1,7 @@
 // Diagrams as checked data, and their Mermaid text. A model sends boxes and arrows, never diagram syntax, and
 // checkDiagrams turns them into diagrams whose every arrow, message and relation rests on a quote that passed
-// checkQuote. mermaidText writes the drawing and diagramElements the numbered list that goes under it. No model here.
+// checkQuote. mermaidText writes the drawing and diagramElements the numbered list that goes under it, and withDrawings
+// adds both to each diagram of an answer on its way to a reader. No model here.
 export { checkDiagrams, DIAGRAM_BOUNDS, type DiagramCheck, diagramDraft } from './check-diagram.ts'
 export {
 	type Arrow,
@@ -22,3 +23,4 @@ export {
 } from './diagram.ts'
 export { type DiagramElement, diagramElements } from './diagram-elements.ts'
 export { mermaidText } from './mermaid-text.ts'
+export { type DrawnDiagram, withDrawings } from './with-drawings.ts'

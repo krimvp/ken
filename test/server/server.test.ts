@@ -25,6 +25,7 @@ function tempFolder(name: string) {
 }
 
 const SLEEP = { path: 'src/retry.ts', commit: head, text: '\t\tsleep(100)' }
+const RETRY_LINE = { path: 'src/retry.ts', commit: head, text: 'export function retry(times: number) {' }
 const READ: Turn = { tool: 'ken__read_file', args: { path: 'src/retry.ts', start: 1, end: 3 } }
 const ANSWER: Turn = {
 	tool: 'ken__answer',
@@ -32,6 +33,15 @@ const ANSWER: Turn = {
 		scope: { base, head },
 		summary: 'Each retry now waits before the next attempt.',
 		statements: [{ text: 'The loop sleeps after each attempt.', label: 'inferred', quotes: [SLEEP] }],
+		diagrams: [
+			{
+				kind: 'component',
+				title: 'What retry does between attempts',
+				label: 'inferred',
+				boxes: [{ name: 'retry', quotes: [RETRY_LINE] }, { name: 'sleep' }],
+				arrows: [{ from: 'retry', to: 'sleep', text: 'calls', quotes: [SLEEP] }],
+			},
+		],
 		decisions: [
 			{
 				question: 'How long does a retry wait?',
@@ -90,7 +100,7 @@ async function ask(server: KenServer, question: string) {
 		.map((line) => JSON.parse(line))
 }
 
-test('a question streams its steps and a checked answer, and the history shows it again with no model, from a clone too', async () => {
+test('a question streams its steps and a checked answer with its diagram drawn, and the history shows it again with no model, from a clone too', async () => {
 	const home = tempFolder('ken-home-')
 	const model = await scriptedModel([READ, ANSWER, { text: 'I left out the tests.' }])
 	const server = await open(home, model.baseUrl)
@@ -104,6 +114,20 @@ test('a question streams its steps and a checked answer, and the history shows i
 	assert.match(lines[0].step, /^Read `src\/retry\.ts`, lines 1 to 3$/)
 	const accepted = lines.find((line) => line.kind === 'accepted')
 	assert.deepEqual(accepted.answer.statements[0].quotes, [{ ...SLEEP, startLine: 4, endLine: 4 }])
+	const [diagram] = accepted.answer.diagrams
+	assert.match(
+		diagram.mermaid,
+		/^flowchart LR\n.*"3\. calls"/s,
+		'the diagram arrives with the Mermaid text that draws it',
+	)
+	assert.deepEqual(
+		diagram.elements.map((element: { number: number; text: string }) => [element.number, element.text]),
+		[
+			[1, 'retry'],
+			[2, 'sleep'],
+			[3, 'retry calls sleep'],
+		],
+	)
 	const saved = lines.at(-1).view
 	assert.equal(saved.entry.outcome, 'answered')
 	assert.equal(saved.entry.note, 'I left out the tests.')
@@ -141,7 +165,7 @@ test('a question streams its steps and a checked answer, and the history shows i
 		},
 	])
 	const reopened = await json(later, `/api/questions/${saved.entry.id}`)
-	assert.deepEqual(reopened.entry.answer, accepted.answer)
+	assert.deepEqual(reopened.entry.answer, accepted.answer, 'the reopened answer carries the same drawings')
 	assert.deepEqual(reopened.recorded, saved.recorded)
 })
 

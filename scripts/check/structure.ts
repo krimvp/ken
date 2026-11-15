@@ -42,7 +42,7 @@ export const MODULES: Record<string, Module> = {
 	},
 	server: {
 		job: 'Serves the page on 127.0.0.1 and runs the questions it sends, one at a time.',
-		imports: ['agent', 'history', 'page', 'record', 'repo'],
+		imports: ['agent', 'diagram', 'history', 'page', 'record', 'repo'],
 		packages: [],
 	},
 	cli: {

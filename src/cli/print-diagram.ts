@@ -1,5 +1,5 @@
 import type { Answer } from '../agent/index.ts'
-import { type Diagram, diagramElements, mermaidText } from '../diagram/index.ts'
+import { type Diagram, diagramElements } from '../diagram/index.ts'
 import type { Paint } from './print-question.ts'
 
 type Quote = Answer['statements'][number]['quotes'][number]
@@ -29,9 +29,4 @@ export function formatQuote(quote: Quote, paint: Paint): string[] {
 			.split('\n')
 			.map((text, offset) => `   ${paint('dim', String(quote.startLine + offset).padStart(5))}  ${text}`),
 	]
-}
-
-// For ken ask --json: each diagram as data, with the Mermaid text that draws it.
-export function withMermaid(answer: Answer): Answer & { diagrams: (Diagram & { mermaid: string })[] } {
-	return { ...answer, diagrams: answer.diagrams.map((diagram) => ({ ...diagram, mermaid: mermaidText(diagram) })) }
 }

@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { Chat, ChatEvent } from '../agent/index.ts'
+import { withDrawings } from '../diagram/index.ts'
 import { entryFrom, type History, type HistoryEntry } from '../history/index.ts'
 import type { RecordEntry, RecordStore } from '../record/index.ts'
 
@@ -14,10 +15,11 @@ export type QuestionRow = {
 	hunks: { uncovered: number; total: number } | null
 }
 
-// An entry from the history, with the project record entries its answer added.
+// An entry from the history, with the project record entries its answer added. Its diagrams carry their drawings.
 export type QuestionView = { entry: HistoryEntry; recorded: RecordEntry[] }
 
-// What the page receives while a question runs: each chat event, then the saved entry as the last line.
+// What the page receives while a question runs: each chat event, then the saved entry as the last line. An accepted
+// answer's diagrams carry their drawings.
 export type QuestionLine = ChatEvent | { kind: 'saved'; view: QuestionView }
 
 // Runs the page's questions one at a time and keeps each in the reader's history, together with what it ended in.
@@ -42,7 +44,7 @@ export function questionDesk(history: History, record: RecordStore) {
 			const events: ChatEvent[] = []
 			for await (const event of chat.ask(question, stop)) {
 				events.push(event)
-				send(event)
+				send(event.kind === 'accepted' ? { ...event, answer: withDrawings(event.answer) } : event)
 			}
 			const entry = entryFrom(asked, events, stop.aborted)
 			await history.add(entry)
@@ -54,9 +56,11 @@ export function questionDesk(history: History, record: RecordStore) {
 	}
 
 	async function viewOf(entry: HistoryEntry): Promise<QuestionView> {
-		if (entry.outcome !== 'answered' || entry.recorded.length === 0) return { entry, recorded: [] }
+		if (entry.outcome !== 'answered') return { entry, recorded: [] }
+		const drawn = { ...entry, answer: withDrawings(entry.answer) }
+		if (entry.recorded.length === 0) return { entry: drawn, recorded: [] }
 		const { entries } = await record.read()
-		return { entry, recorded: entries.filter((stored) => entry.recorded.includes(stored.id)) }
+		return { entry: drawn, recorded: entries.filter((stored) => entry.recorded.includes(stored.id)) }
 	}
 
 	async function rows(): Promise<QuestionRow[]> {
