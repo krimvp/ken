@@ -534,7 +534,6 @@ html {
 }
 
 a.strip {
-	display: block;
 	color: var(--color-accent);
 	text-underline-offset: 0.18em;
 }
