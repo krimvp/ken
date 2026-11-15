@@ -51,7 +51,7 @@ These were settled in the design discussion. An agent working on the project sho
 | No parser and no code index at the start   | An agent explores with read, search and git. This works for every language and file type from the first day, and a parser per language is a large cost to pay before the idea is proven. |
 | Chat first, with a page beside it          | The developer interacts best by asking. The questions are also the main signal of what the developer knows.                                                                              |
 | No single "since last time" cursor         | It assumes one reader and nobody else changing the code. It fails with a collaborator and after weeks away. Time is one way to scope a question, not the centre of the design.           |
-| Prose first, diagrams only where they help | xpl's diagram-first explanations felt strict and hard to follow at the level of the whole project.                                                                                       |
+| High-level answers lean on basic diagrams  | The owner asked on 2026-11-15 for high-level answers that lean on basic diagrams. Detail stays prose with quotes. A diagram is checked data, so it cannot show code that is not there.   |
 
 ## The model
 
@@ -135,7 +135,7 @@ Reasons generated after the fact are the weak point of this whole field. One sou
 
 ### What the agent decides
 
-Everything else is the agent's work: which files to read, how to group commits into a piece of work, what to name a topic, how to word an explanation, and when a small diagram helps. Two runs may word the same answer differently. That is accepted for a personal tool, and the record stays stable because entries are only added.
+Everything else is the agent's work: which files to read, how to group commits into a piece of work, what to name a topic, how to word an explanation, and which basic diagrams a high-level answer needs. Two runs may word the same answer differently. That is accepted for a personal tool, and the record stays stable because entries are only added.
 
 ### When to add a parser
 
@@ -253,7 +253,7 @@ The owner has not answered these questions yet. Work started on 2026-11-15 with 
 - Quizzes, or any gate before a push or a merge.
 - Testing the reader, for example by asking them to predict what the code does.
 - Recording full agent sessions. Other tools do this; the companion reads what they save.
-- Diagrams as a main feature. A small diagram inside an answer may come later.
+- Large diagrams, such as a full call graph or a map of every file. A diagram in an answer stays basic: a few boxes and arrows that support the high level.
 - Editor plugins.
 
 ## Sources
