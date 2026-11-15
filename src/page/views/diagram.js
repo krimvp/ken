@@ -7,25 +7,30 @@ export function elementKey(index, number) {
 	return `g${index}n${number}`
 }
 
-export function diagramHtml(diagram, index, ui) {
+// The numbered list folds under the drawing, so the summary and the statements stay near the top. A box or an arrow
+// opens its quote all the same.
+export function diagramHtml(diagram, index, rows) {
 	const title = `diagram-${index}-title`
+	const open = rows.ui.openParts.has(index)
+	const toggle = `<button class="link small" data-act="parts" data-diagram="${index}" data-key="parts-${index}" aria-expanded="${open}">${open ? 'Hide the numbered list' : `Show the ${diagram.elements.length} numbered parts in words, with their quotes`}</button>`
 	return `<section class="diagram" aria-labelledby="${title}">
-		<p class="caption">The agent's diagram. ken found each quote; it did not check what the arrows say.</p>
+		<p class="caption">The agent's diagram. The arrows are not checked.</p>
 		<h3 class="diagram-title" id="${title}">${label(diagram.label)}${prose(diagram.title)}</h3>
 		<div class="drawing-frame"><div class="drawing" data-diagram="${index}" data-mermaid="${esc(diagram.mermaid)}" role="img" aria-label="Diagram: ${esc(diagram.title)}. The numbered list under it says the same in words."></div></div>
 		<p class="drawing-hint">The diagram is wider than the screen. Scroll it sideways to see the rest.</p>
-		<ol class="elements">${diagram.elements.map((element) => elementHtml(element, diagram, index, ui)).join('')}</ol>
+		<p class="parts-toggle">${toggle}</p>
+		${open ? `<ol class="elements">${diagram.elements.map((element) => elementHtml(element, diagram, index, rows)).join('')}</ol>` : ''}
 	</section>`
 }
 
-function elementHtml(element, diagram, index, ui) {
+function elementHtml(element, diagram, index, rows) {
 	const key = elementKey(index, element.number)
 	const own = element.label !== null && element.label !== diagram.label ? label(element.label) : ''
 	return `<li class="st" id="item-${key}">
 		<span class="st-n">${element.number}</span>
 		<div>
 			<p class="st-text">${own}${prose(element.text)}</p>
-			${element.quotes.length > 0 ? quoteRows(element.quotes, key, ui) : ''}
+			${element.quotes.length > 0 ? quoteRows(element.quotes, key, rows) : ''}
 		</div>
 	</li>`
 }

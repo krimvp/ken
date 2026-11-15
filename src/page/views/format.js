@@ -12,6 +12,11 @@ export function prose(text) {
 	return esc(text).replace(/`([^`]+)`/g, '<code>$1</code>')
 }
 
+// The project by its folder name, with the full path in the title.
+export function folderHtml(project) {
+	return `<code title="${esc(project)}">${esc(project.split('/').at(-1))}</code>`
+}
+
 export function short(hash) {
 	return hash.slice(0, 7)
 }
@@ -72,19 +77,21 @@ export function quoteBody(quote, where = '') {
 		<pre class="code"><code>${codeLines(lines, numbers)}</code></pre>`
 }
 
-// At rest a quote is one row: the file, the lines, and the first quoted line. Opened, it shows all its lines.
-export function quoteRows(quotes, key, ui) {
+// At rest a quote is one row: the file, the lines, and the first quoted line, with the commit when the answer quotes
+// more than one. Opened, it shows all its lines: in place, or in the panel on a wide screen.
+export function quoteRows(quotes, key, { ui, commits }) {
 	return `<ul class="quotes">${quotes
 		.map((quote, j) => {
 			const id = `${key}-q${j}`
-			const open = ui.openQuotes.has(id)
-			const chosen = ui.wide && ui.chosen?.key === key && ui.chosen.quote === j
+			const chosen = ui.wide && ui.panel.kind === 'quote' && ui.panel.key === key && ui.panel.quote === j
+			const open = ui.wide ? ui.panel.kind === 'all' : ui.openQuotes.has(id)
 			const first = quote.text.split('\n').find((line) => line.trim() !== '') ?? ''
+			const at = commits ? `<span class="q-commit">at <code>${short(quote.commit)}</code></span>` : ''
 			return `<li class="q${chosen ? ' chosen' : ''}">
-				<button class="q-row" data-act="quote" data-item="${key}" data-quote="${j}" data-key="${id}" aria-expanded="${open}">
-					<span class="q-path">${esc(quote.path)}</span><span class="q-lines">${lineSpan(quote.startLine, quote.endLine)}</span><span class="q-first">${esc(first.trim())}</span>
+				<button class="q-row" data-act="quote" data-item="${key}" data-quote="${j}" data-key="${id}" aria-expanded="${open || chosen}"${ui.wide ? ' aria-controls="panel"' : ''}>
+					<span class="q-path">${esc(quote.path)}</span><span class="q-lines">${lineSpan(quote.startLine, quote.endLine)}${at}</span><span class="q-first">${esc(first.trim())}</span>
 				</button>
-				${open ? quoteBody(quote) : ''}
+				${open && !ui.wide ? quoteBody(quote) : ''}
 			</li>`
 		})
 		.join('')}</ul>`
@@ -103,5 +110,5 @@ export const LABELS = {
 }
 
 export function label(name) {
-	return `<span class="label">${esc(LABELS[name]?.name ?? name)}</span>`
+	return `<span class="label label-${esc(name)}">${esc(LABELS[name]?.name ?? name)}</span>`
 }

@@ -83,7 +83,6 @@ function config() {
 			width: 120,
 			actorMargin: 8,
 			wrapPadding: 4,
-			messageMargin: 20,
 			boxMargin: 4,
 			height: 50,
 			diagramMarginX: 4,

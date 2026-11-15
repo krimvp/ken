@@ -1,6 +1,9 @@
 /* ken's page. The tokens come from tokens.css; these are the page's own. */
 :root {
 	--text-md: 1rem;
+	/* Small grey notes: a step larger and darker than the shared small text, so they stay easy to read. */
+	--text-note: 0.9375rem;
+	--color-note: #474c53;
 	--top: 3.25rem;
 	--color-add: #1f6b3a;
 	--color-del: #8c2b1c;
@@ -10,6 +13,7 @@
 
 @media (prefers-color-scheme: dark) {
 	:root {
+		--color-note: #bcc1c8;
 		--color-add: #7fc79a;
 		--color-del: #eda497;
 		--color-warn-bg: #2a2418;
@@ -72,17 +76,27 @@ button {
 }
 
 :focus-visible {
-	outline: 2px solid var(--color-focus);
+	outline: 3px solid var(--color-focus);
 	outline-offset: 2px;
 	border-radius: var(--radius-sm);
 }
 
+/* A row fills its box, so its ring goes inside, where no neighbour or scroll edge can hide it. */
+:is(.q-row, .d-row, .row, .file summary):focus-visible {
+	outline-offset: -3px;
+}
+
+/* Keyboard focus never lands under the pinned question box. */
+html {
+	scroll-padding-bottom: 6rem;
+}
+
 .muted {
-	color: var(--color-muted);
+	color: var(--color-note);
 }
 
 .small {
-	font-size: var(--text-sm);
+	font-size: var(--text-note);
 	line-height: 1.5;
 }
 
@@ -109,7 +123,7 @@ button {
 	border: 1px solid var(--color-border);
 	border-radius: var(--radius-sm);
 	background: var(--color-card);
-	font-size: var(--text-sm);
+	font-size: var(--text-note);
 	font-weight: 600;
 	line-height: 1.5;
 }
@@ -152,8 +166,8 @@ button {
 
 .project {
 	min-width: 0;
-	color: var(--color-muted);
-	font-size: var(--text-sm);
+	color: var(--color-note);
+	font-size: var(--text-note);
 	overflow-wrap: anywhere;
 }
 
@@ -164,7 +178,7 @@ button {
 .top-menu {
 	position: relative;
 	margin-left: auto;
-	font-size: var(--text-sm);
+	font-size: var(--text-note);
 }
 
 .menu {
@@ -183,8 +197,8 @@ button {
 }
 
 .menu-head {
-	color: var(--color-muted);
-	font-size: var(--text-sm);
+	color: var(--color-note);
+	font-size: var(--text-note);
 }
 
 .menu .row:last-child {
@@ -232,7 +246,7 @@ button {
 	display: none;
 }
 
-/* The question box, pinned under the thread. The fade above it keeps a line it covers from looking cut in half. */
+/* The question box, pinned under the thread. Text scrolls under its solid bar, which no fade makes look half there. */
 .composer {
 	position: sticky;
 	bottom: 0;
@@ -241,21 +255,10 @@ button {
 	background: var(--color-bg);
 }
 
-.composer::before {
-	content: "";
-	position: absolute;
-	right: 0;
-	bottom: 100%;
-	left: 0;
-	height: var(--space-6);
-	background: linear-gradient(to bottom, transparent, var(--color-bg));
-	pointer-events: none;
-}
-
 .composer-label {
 	display: block;
 	margin-bottom: var(--space-1);
-	font-size: var(--text-sm);
+	font-size: var(--text-note);
 	font-weight: 600;
 }
 
@@ -270,10 +273,6 @@ button {
 .page.first-visit .composer {
 	position: static;
 	border-top: 0;
-}
-
-.page.first-visit .composer::before {
-	display: none;
 }
 
 .composer-row {
@@ -296,7 +295,7 @@ button {
 }
 
 .composer textarea::placeholder {
-	color: var(--color-muted);
+	color: var(--color-note);
 	opacity: 1;
 }
 
@@ -306,8 +305,8 @@ button {
 
 .composer-hint {
 	margin-top: var(--space-1);
-	color: var(--color-muted);
-	font-size: var(--text-sm);
+	color: var(--color-note);
+	font-size: var(--text-note);
 }
 
 .page:not(.first-visit) .composer-hint {
@@ -339,13 +338,8 @@ button {
 
 .row-meta {
 	display: block;
-	color: var(--color-muted);
-	font-size: var(--text-sm);
-}
-
-.earlier-head {
-	color: var(--color-muted);
-	font-size: var(--text-sm);
+	color: var(--color-note);
+	font-size: var(--text-note);
 }
 
 /* The open question */
@@ -354,13 +348,9 @@ button {
 	scroll-margin-top: var(--top);
 }
 
-.earlier + .turn {
-	border-top: 1px solid var(--color-border);
-}
-
 .asked {
-	color: var(--color-muted);
-	font-size: var(--text-sm);
+	color: var(--color-note);
+	font-size: var(--text-note);
 }
 
 .question {
@@ -371,10 +361,18 @@ button {
 	overflow-wrap: anywhere;
 }
 
+.moved {
+	margin-top: var(--space-2);
+	padding: var(--space-2) var(--space-3);
+	border-left: 3px solid var(--color-warn-border);
+	background: var(--color-warn-bg);
+	font-size: var(--text-note);
+}
+
 .run-line {
 	margin-top: var(--space-2);
-	color: var(--color-muted);
-	font-size: var(--text-sm);
+	color: var(--color-note);
+	font-size: var(--text-note);
 }
 
 .working-head {
@@ -398,8 +396,8 @@ button {
 
 .who {
 	display: block;
-	color: var(--color-muted);
-	font-size: var(--text-sm);
+	color: var(--color-note);
+	font-size: var(--text-note);
 }
 
 .caret {
@@ -434,8 +432,8 @@ button {
 /* The answer */
 .caption {
 	margin-top: var(--space-5);
-	color: var(--color-muted);
-	font-size: var(--text-sm);
+	color: var(--color-note);
+	font-size: var(--text-note);
 }
 
 /* A diagram leads a high-level answer. The drawing shrinks to the column only as far as its text stays readable (see
@@ -477,8 +475,8 @@ button {
 .drawing-hint {
 	display: none;
 	margin-top: var(--space-1);
-	color: var(--color-muted);
-	font-size: var(--text-sm);
+	color: var(--color-note);
+	font-size: var(--text-note);
 }
 
 .drawing-frame.wide + .drawing-hint {
@@ -506,7 +504,7 @@ button {
 }
 
 .drawing-note {
-	color: var(--color-muted);
+	color: var(--color-note);
 	text-align: left;
 }
 
@@ -515,17 +513,14 @@ button {
 }
 
 .summary {
+	max-width: var(--measure);
 	margin-top: var(--space-1);
-	font-size: var(--text-base);
 	line-height: 1.6;
 	overflow-wrap: anywhere;
 }
 
-.summary.capped {
-	display: -webkit-box;
-	-webkit-box-orient: vertical;
-	-webkit-line-clamp: 4;
-	overflow: hidden;
+.parts-toggle {
+	margin-top: var(--space-2);
 }
 
 .strip {
@@ -533,9 +528,15 @@ button {
 	padding: var(--space-2) var(--space-3);
 	border-radius: var(--radius-sm);
 	background: var(--color-code-bg);
-	color: var(--color-muted);
-	font-size: var(--text-sm);
+	color: var(--color-note);
+	font-size: var(--text-note);
 	line-height: 1.5;
+}
+
+a.strip {
+	display: block;
+	color: var(--color-accent);
+	text-underline-offset: 0.18em;
 }
 
 .list-head {
@@ -556,8 +557,8 @@ button {
 
 .list-note {
 	flex-basis: 100%;
-	color: var(--color-muted);
-	font-size: var(--text-sm);
+	color: var(--color-note);
+	font-size: var(--text-note);
 }
 
 .st {
@@ -573,7 +574,7 @@ button {
 }
 
 .st-n {
-	color: var(--color-muted);
+	color: var(--color-note);
 	font-variant-numeric: tabular-nums;
 	line-height: 1.6;
 }
@@ -592,7 +593,7 @@ button {
 	border: 1px dashed var(--color-muted);
 	border-radius: var(--radius-sm);
 	color: var(--color-text);
-	font-size: var(--text-sm);
+	font-size: var(--text-note);
 	font-weight: 600;
 	line-height: 1.5;
 	white-space: nowrap;
@@ -605,6 +606,16 @@ button {
 	height: 0.55em;
 	border: 1.5px solid currentColor;
 	border-radius: 50%;
+}
+
+.label-found-by-search {
+	border-style: dotted;
+	background: var(--color-label-bg);
+	color: var(--color-label-text);
+}
+
+.label-found-by-search::before {
+	border-radius: 1px;
 }
 
 .st-text .label,
@@ -623,12 +634,12 @@ button {
 	grid-template-columns: 9rem minmax(0, 1fr);
 	gap: var(--space-3);
 	align-items: baseline;
-	font-size: var(--text-sm);
+	font-size: var(--text-note);
 	line-height: 1.5;
 }
 
 .label-key dd {
-	color: var(--color-muted);
+	color: var(--color-note);
 }
 
 /* Quote rows: at rest they show the file, the lines and the first quoted line */
@@ -658,7 +669,7 @@ button {
 	padding: var(--space-1) var(--space-3);
 	border: 0;
 	background: none;
-	font-size: var(--text-sm);
+	font-size: var(--text-note);
 	line-height: 1.6;
 	text-align: left;
 }
@@ -688,9 +699,13 @@ button {
 }
 
 .q-lines {
-	color: var(--color-muted);
+	color: var(--color-note);
 	white-space: nowrap;
 	font-variant-numeric: tabular-nums;
+}
+
+.q-commit {
+	margin-left: 0.5em;
 }
 
 .q-first {
@@ -709,8 +724,8 @@ button {
 .q-source {
 	padding: var(--space-1) var(--space-3);
 	border-top: 1px solid var(--color-border);
-	color: var(--color-muted);
-	font-size: var(--text-sm);
+	color: var(--color-note);
+	font-size: var(--text-note);
 }
 
 .q-source code {
@@ -761,52 +776,99 @@ button {
 .code .more {
 	grid-column: 2;
 	white-space: normal;
-	color: var(--color-muted);
+	color: var(--color-note);
 	font-family: var(--font-text);
-	font-size: var(--text-sm);
+	font-size: var(--text-note);
 }
 
-/* A decision, right after the summary */
-.decision {
-	margin-top: var(--space-5);
-	padding: var(--space-4) var(--space-5);
-	border: 1px solid var(--color-border);
-	border-radius: var(--radius-md);
-	background: var(--color-card);
-}
-
-.kind {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: baseline;
-	gap: var(--space-2);
-	color: var(--color-muted);
-	font-size: var(--text-sm);
-}
-
-.decision-q {
+/* Decisions, right after the summary: one line each, the question and the option taken. A line opens in place. */
+.decisions ul {
 	margin-top: var(--space-1);
-	font-size: var(--text-base);
-	font-weight: 650;
-	line-height: 1.35;
-	overflow-wrap: anywhere;
+	border-top: 1px solid var(--color-border);
+}
+
+.decision {
+	border-bottom: 1px solid var(--color-border);
+}
+
+.d-row {
+	display: flex;
+	align-items: baseline;
+	gap: var(--space-3);
+	width: 100%;
+	padding: var(--space-2) 0;
+	border: 0;
+	background: none;
+	text-align: left;
+	white-space: nowrap;
+}
+
+.d-row::before {
+	content: "";
+	flex: none;
+	border-width: 0.3em 0 0.3em 0.45em;
+	border-style: solid;
+	border-color: transparent transparent transparent var(--color-muted);
+}
+
+.d-row[aria-expanded="true"]::before {
+	transform: rotate(90deg);
+}
+
+.d-q {
+	flex: 0 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	font-weight: 600;
+	text-overflow: ellipsis;
+}
+
+.d-chosen {
+	flex: 1 1 0;
+	min-width: 6rem;
+	overflow: hidden;
+	color: var(--color-note);
+	text-overflow: ellipsis;
+}
+
+.d-row:hover .d-q {
+	text-decoration: underline;
+	text-underline-offset: 0.18em;
+}
+
+.your-call {
+	flex: none;
+	padding: 0 0.5em;
+	border: 1px solid var(--color-warn-border);
+	border-radius: var(--radius-sm);
+	background: var(--color-warn-bg);
+	font-size: var(--text-note);
+	font-weight: 600;
+}
+
+.d-card {
+	padding: 0 0 var(--space-4) 1.25rem;
+}
+
+.d-call {
+	margin-bottom: var(--space-2);
+	font-weight: 600;
 }
 
 .facts {
 	display: grid;
 	gap: var(--space-2);
-	margin-top: var(--space-3);
 }
 
 .facts div {
 	display: grid;
-	grid-template-columns: 6rem minmax(0, 1fr);
-	gap: var(--space-3);
+	grid-template-columns: 7.5rem minmax(0, 1fr);
+	gap: 0 var(--space-3);
 }
 
 .facts dt {
-	color: var(--color-muted);
-	font-size: var(--text-sm);
+	color: var(--color-note);
+	font-size: var(--text-note);
 	line-height: 1.75;
 }
 
@@ -814,10 +876,15 @@ button {
 	overflow-wrap: anywhere;
 }
 
+.facts dd + dd {
+	grid-column: 2;
+	margin-top: var(--space-1);
+}
+
 .facts .why {
 	display: block;
-	color: var(--color-muted);
-	font-size: var(--text-sm);
+	color: var(--color-note);
+	font-size: var(--text-note);
 	line-height: 1.5;
 }
 
@@ -843,8 +910,8 @@ button {
 
 .panel-limit {
 	margin-top: var(--space-2);
-	color: var(--color-muted);
-	font-size: var(--text-sm);
+	color: var(--color-note);
+	font-size: var(--text-note);
 }
 
 .panel-nav {
@@ -856,15 +923,6 @@ button {
 .panel-nav .quiet-button {
 	padding: var(--space-1) var(--space-3);
 	font-weight: 400;
-}
-
-/* The bar draws what the line above it says: the part of the changed hunks that a quote covers */
-.bar {
-	display: flex;
-	height: 0.75rem;
-	border: 1px solid var(--color-muted);
-	border-radius: 2px;
-	overflow: hidden;
 }
 
 .check {
@@ -880,24 +938,27 @@ button {
 	font-weight: 650;
 }
 
-.check p + p,
-.check p + .bar,
-.check .bar + p {
+.check p + p {
 	margin-top: var(--space-2);
 }
 
-.big {
-	font-size: var(--text-base);
-	line-height: 1.4;
-}
-
-.bar span {
-	display: block;
-	background: var(--color-accent);
+/* While the diffs of the unquoted blocks scroll, the line that counts them and its Hide button stay in view. */
+.coverage-head {
+	position: sticky;
+	top: 0;
+	z-index: 1;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-3);
+	margin-top: var(--space-3);
+	padding: var(--space-2) 0;
+	border-bottom: 1px solid var(--color-border);
+	background: var(--color-bg);
 }
 
 .files {
-	margin-top: var(--space-3);
+	margin-top: var(--space-1);
 }
 
 .file {
@@ -911,7 +972,7 @@ button {
 	gap: 0 var(--space-3);
 	padding: var(--space-2) 0;
 	cursor: pointer;
-	font-size: var(--text-sm);
+	font-size: var(--text-note);
 }
 
 .file summary code {
@@ -919,7 +980,7 @@ button {
 }
 
 .file summary .count {
-	color: var(--color-muted);
+	color: var(--color-note);
 	white-space: nowrap;
 	font-variant-numeric: tabular-nums;
 }
@@ -930,14 +991,20 @@ button {
 
 .hunk-head {
 	margin-bottom: var(--space-1);
-	color: var(--color-muted);
-	font-size: var(--text-sm);
+	color: var(--color-note);
+	font-size: var(--text-note);
 }
 
 .hunk .code {
+	max-height: 22rem;
+	overflow-y: auto;
 	border: 1px solid var(--color-border);
 	border-radius: var(--radius-sm);
 	background: var(--color-code-bg);
+}
+
+.commits {
+	margin-top: var(--space-3);
 }
 
 .commits li {
@@ -946,7 +1013,7 @@ button {
 	gap: var(--space-2);
 	padding: var(--space-2) 0;
 	border-top: 1px solid var(--color-border);
-	font-size: var(--text-sm);
+	font-size: var(--text-note);
 	line-height: 1.5;
 	overflow-wrap: anywhere;
 }
@@ -957,9 +1024,25 @@ button {
 
 .card-text {
 	margin-top: var(--space-3);
-	font-size: var(--text-base);
-	line-height: 1.55;
+	color: var(--color-note);
+	font-size: var(--text-note);
+	line-height: 1.5;
 	overflow-wrap: anywhere;
+}
+
+.panel .code {
+	font-size: 0.9375rem;
+}
+
+.all-item {
+	margin-top: var(--space-5);
+	padding-top: var(--space-3);
+	border-top: 1px solid var(--color-border);
+}
+
+.all-item h3 {
+	font-size: var(--text-md);
+	font-weight: 650;
 }
 
 .label-means {
@@ -968,8 +1051,8 @@ button {
 	align-items: baseline;
 	gap: var(--space-1) var(--space-3);
 	margin-top: var(--space-3);
-	color: var(--color-muted);
-	font-size: var(--text-sm);
+	color: var(--color-note);
+	font-size: var(--text-note);
 }
 
 .panel .q {
@@ -1012,6 +1095,23 @@ button {
 .settings {
 	display: grid;
 	gap: var(--space-2);
+	margin-top: var(--space-2);
+}
+
+.setup {
+	padding-left: 1.25rem;
+	list-style: decimal;
+}
+
+.setup > li:not(:first-child) {
+	margin-top: var(--space-3);
+}
+
+.notice pre.command {
+	margin-top: var(--space-2);
+	overflow-x: auto;
+	white-space: pre;
+	overflow-wrap: normal;
 }
 
 .settings div {
@@ -1027,8 +1127,8 @@ button {
 
 .tries .try {
 	display: block;
-	color: var(--color-muted);
-	font-size: var(--text-sm);
+	color: var(--color-note);
+	font-size: var(--text-note);
 }
 
 .tries ul {
@@ -1038,7 +1138,7 @@ button {
 
 .panel-empty {
 	max-width: 28rem;
-	color: var(--color-muted);
+	color: var(--color-note);
 }
 
 .panel-empty h2 {
@@ -1113,7 +1213,7 @@ button {
 	margin-top: var(--space-3);
 	padding: var(--space-2) 0 var(--space-2) var(--space-4);
 	border-left: 2px solid var(--color-border);
-	font-size: var(--text-sm);
+	font-size: var(--text-note);
 	line-height: 1.5;
 }
 
@@ -1123,7 +1223,7 @@ button {
 }
 
 .steps .tool {
-	color: var(--color-muted);
+	color: var(--color-note);
 }
 
 .steps .tool code {
@@ -1236,7 +1336,34 @@ button {
 		gap: 0;
 	}
 
-	.decision,
+	.facts dd + dd {
+		grid-column: 1;
+	}
+
+	/* Two lines on a narrow screen: the question with its mark, then the option taken. */
+	.d-row {
+		flex-wrap: wrap;
+		gap: 0 var(--space-2);
+	}
+
+	.d-q {
+		flex: 1 1 0;
+	}
+
+	.d-chosen {
+		order: 1;
+		flex-basis: 100%;
+		padding-left: 1.05rem;
+	}
+
+	.d-card {
+		padding-left: 0;
+	}
+
+	.coverage-head {
+		top: var(--top);
+	}
+
 	.notice {
 		padding: var(--space-4);
 	}

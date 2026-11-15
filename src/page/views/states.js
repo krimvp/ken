@@ -1,6 +1,6 @@
 // The states of a question with no answer to show: the first visit, the agent at work, and each way a question can
 // end without an answer. Also the list of steps, which the working state and "Show the steps" share.
-import { count, duration, esc, prose } from './format.js'
+import { count, duration, esc, folderHtml, list, prose } from './format.js'
 
 const EXAMPLES = [
 	'What did the last commit do?',
@@ -9,10 +9,10 @@ const EXAMPLES = [
 	'Why is the code laid out the way it is?',
 ]
 
-export function emptyHtml(project) {
+export function emptyHtml(project, canAsk) {
 	return `<section class="welcome">
-		<h1>Ask about this project.</h1>
-		<p class="lead">ken reads the code and the git history of <code>${esc(project)}</code>. The agent answers in short statements, and each statement comes with the code it is about, quoted from git.</p>
+		<h1>${canAsk ? 'Ask about this project.' : 'ken has no model to ask.'}</h1>
+		<p class="lead">ken reads the code and the git history of ${folderHtml(project)}. The agent answers in short statements, and each statement comes with the code it is about, quoted from git.</p>
 	</section>`
 }
 
@@ -32,7 +32,7 @@ export function stepsHtml(steps, live = false) {
 		.map((step, i) => {
 			if (step.kind === 'tool') return `<li class="tool">${prose(step.text)}</li>`
 			if (step.kind === 'rejected') {
-				return `<li class="sent-back"><strong>The quote check sent answer ${step.attempt} back:</strong><ul>${step.problems.map((p) => `<li>${prose(firstSentence(p))}</li>`).join('')}</ul></li>`
+				return `<li class="sent-back"><strong>The quote check sent answer ${step.attempt} back:</strong><ul>${step.problems.map((p) => `<li>${prose(readerProblem(p))}</li>`).join('')}</ul></li>`
 			}
 			const caret = live && i === steps.length - 1 ? '<span class="caret" aria-hidden="true"></span>' : ''
 			return `<li class="said">${prose(step.text.trim())}${caret}</li>`
@@ -55,16 +55,52 @@ export function workingHtml(q, ui, seconds) {
 		<p class="actions"><button class="quiet-button" data-act="stop" data-key="stop">Stop</button></p>`
 }
 
+const HOW_KEN_CHECKS = `<ol>
+		<li>ken looks in git for every line the answer quotes.</li>
+		<li>If a quote is not there, ken sends the answer back. The agent gets three tries.</li>
+		<li>The answer appears on the left. What ken checked appears here: the quotes, the changed code no quote covers, and the commits.</li>
+	</ol>`
+
 export function workingPanelHtml() {
-	return `<div class="panel-empty"><h2>Nothing to check yet</h2><p>When the agent sends its answer:</p>
-		<ol>
-			<li>ken looks in git for every line the answer quotes.</li>
-			<li>If a quote is not there, ken sends the answer back. The agent gets three tries.</li>
-			<li>The answer appears on the left. What ken checked appears here: the quotes, the changed code no quote covers, and the commits.</li>
-		</ol></div>`
+	return `<div class="panel-empty"><h2>Nothing to check yet</h2><p>When the agent sends its answer:</p>${HOW_KEN_CHECKS}</div>`
 }
 
-const ORDINAL = ['First', 'Second', 'Third']
+export function endedPanelHtml() {
+	return `<div class="panel-empty"><h2>Nothing to check</h2><p>This question has no answer, so there are no quotes to show. When an answer comes:</p>${HOW_KEN_CHECKS}</div>`
+}
+
+const ORDINAL = ['first', 'second', 'third']
+
+// Tries that were sent back for the same reasons fold into one item: "Second and third answers".
+function triesHtml(tries) {
+	const groups = []
+	for (const [i, step] of tries.entries()) {
+		const said = step.problems.map(readerProblem)
+		const last = groups.at(-1)
+		if (last && last.said.join('\n') === said.join('\n')) last.tries.push(i)
+		else groups.push({ tries: [i], said })
+	}
+	return groups
+		.map(({ tries: which, said }) => {
+			const names = list(which.map((i) => ORDINAL[i] ?? `number ${i + 1}`))
+			const name = which.length === 3 ? 'all three answers' : `${names} ${which.length === 1 ? 'answer' : 'answers'}`
+			return `<li><span class="try">${name[0].toUpperCase()}${name.slice(1)}</span><ul>${said.map((p) => `<li>${prose(p)}</li>`).join('')}</ul></li>`
+		})
+		.join('')
+}
+
+const STATUS = [
+	[/^40[13]$/, 'The model service refused the API key'],
+	[/^404$/, 'The model service has no such model, or ken has the wrong address for it'],
+	[/^(408|429|5\d\d)$/, 'The model service was busy or failed. Asking again often works'],
+]
+
+// A model error in words first. The service's own message follows it as it came.
+function modelProblem(error) {
+	const status = error.match(/^(\d{3})\b/)?.[1]
+	const words = status && STATUS.find(([pattern]) => pattern.test(status))?.[1]
+	return words ? `${words} (status ${status}).` : 'The request to the model failed.'
+}
 
 // Each way a question ends with no answer to show, with what it means and what the reader can do next.
 export function endedHtml(q) {
@@ -72,9 +108,9 @@ export function endedHtml(q) {
 	if (q.outcome === 'rejected') {
 		const tries = q.steps.filter((step) => step.kind === 'rejected')
 		return `<div class="notice" role="status">
-			<h3>ken has no checked answer for this question</h3>
-			<p>The agent sent an answer three times. Each time, ken's quote check found a quote that is not in its file at the commit it names, and sent the answer back. ken shows no answer it could not check.</p>
-			<ol class="tries">${tries.map((step, i) => `<li><span class="try">${ORDINAL[i] ?? `Answer ${step.attempt}`} answer</span><ul>${step.problems.map((p) => `<li>${prose(firstSentence(p))}</li>`).join('')}</ul></li>`).join('')}</ol>
+			<h3>No answer. The quotes did not match the code.</h3>
+			<p>The agent sent an answer three times. Each time a quote was not in its file at the commit it names, so ken sent the answer back. ken shows an answer only when it finds every quote.</p>
+			<ol class="tries">${triesHtml(tries)}</ol>
 			<p class="muted">A smaller question often works. Name one commit or one file.</p>
 			<p class="actions">${again}<button class="quiet-button" data-act="one-commit" data-key="one-commit">Ask about one commit</button></p>
 		</div>`
@@ -82,9 +118,10 @@ export function endedHtml(q) {
 	if (q.outcome === 'error') {
 		return `<div class="notice" role="alert">
 			<h3>The model did not answer</h3>
-			<p>ken asked the model, and the request failed with this message:</p>
+			<p>${modelProblem(q.error)}</p>
+			<p class="muted">What came back:</p>
 			<pre>${esc(q.error)}</pre>
-			<p class="muted">If the message names the key, the address or the model, fix that setting and start ken open again. If it says the model was busy, ask again.</p>
+			<p class="muted">If it names the key, the address or the model, fix that setting and restart <code>ken open</code>.</p>
 			<p class="actions">${again}</p>
 		</div>`
 	}
@@ -106,23 +143,33 @@ export function endedHtml(q) {
 	</div>`
 }
 
-// ken's checks explain a problem to the model and then tell it how to fix it. The reader needs only the problem.
-function firstSentence(problem) {
-	return problem.split(/(?<=\.)\s+/)[0]
+// ken's checks explain a problem to the model and then tell it how to fix it, with the near lines as JSON strings. The
+// reader needs only the problem, the line numbers of the near lines, and short commit ids.
+function readerProblem(problem) {
+	const first = problem.split(/(?<=\.)\s+/)[0].replace(/\b[0-9a-f]{40}\b/g, (hash) => hash.slice(0, 7))
+	const near = [...problem.matchAll(/^\s+line (\d+): /gm)].map((match) => match[1])
+	if (near.length === 0) return first
+	if (near.length === 1) return `${first} Line ${near[0]} is close, but does not match exactly.`
+	return `${first} Lines ${list(near)} are close, but none matches exactly.`
 }
 
-// No model is set, so nothing can be asked. Each setting comes with what it means, and an example to copy.
-export function noModelHtml(model, hasHistory) {
+// No model is set, so nothing can be asked. The steps come in the order the reader takes them, each setting with what it
+// means, and an example to copy with one setting per line.
+export function noModelHtml(model, hasHistory, heading) {
 	const settings =
 		model.missing.length === 0
-			? `<p>${esc(model.message)}</p>`
-			: `<p>ken sends your project's code to the model you choose, so it has no default model. Set these before you start ken open:</p>
-				<dl class="settings">${model.missing.map((s) => `<div><dt><code>${esc(s.name)}</code></dt><dd>${esc(s.means)}. Or give <code class="nowrap">${esc(s.flag)}</code>.</dd></div>`).join('')}</dl>
-				<p>For example:</p>
-				<pre>${esc(model.example)} npm run ken -- open</pre>`
+			? `<li>${esc(model.message)}</li><li>Start <code>ken open</code> again.</li>`
+			: `<li>Set these:
+				<dl class="settings">${model.missing.map((s) => `<div><dt><code>${esc(s.name)}</code></dt><dd>${esc(s.means)}. Or give <code class="nowrap">${esc(s.flag)}</code>.</dd></div>`).join('')}</dl></li>
+				<li>Start it again. For example:
+				<pre class="command">${esc(`${model.example.split(' ').join(' \\\n')} \\\nnpm run ken -- open`)}</pre></li>`
 	return `<div class="notice" role="alert" id="no-model">
-		<h3>ken has no model to ask</h3>
-		${settings}
-		<p>Then stop ken open with Ctrl-C and start it again.${hasHistory ? ' Until then you can still read your earlier questions.' : ''}</p>
+		${heading ? '<h3>ken has no model to ask</h3>' : ''}
+		<p>ken sends your project's code to the model you choose, so it has no default model.</p>
+		<ol class="setup">
+			<li>Stop <code>ken open</code> with Ctrl-C in its terminal.</li>
+			${settings}
+		</ol>
+		${hasHistory ? '<p class="muted">Until then you can still read your earlier questions under Your questions.</p>' : ''}
 	</div>`
 }

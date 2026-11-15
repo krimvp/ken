@@ -2,13 +2,12 @@
 // rows, and the agent's closing note. The agent wrote the words; ken checked only that each quote is in its file.
 import { checkStrip, checksHtml } from './checks.js'
 import { diagramHtml, elementKey } from './diagram.js'
-import { count, esc, label, prose, quoteRows } from './format.js'
+import { count, esc, LABELS, label, prose, quoteRows } from './format.js'
 
-const UNDO = {
-	easy: 'Easy to undo.',
-	'some-work': 'Some work to undo.',
-	hard: 'Hard to undo.',
-}
+const UNDO = { easy: 'easy', 'some-work': 'some work', hard: 'hard' }
+
+// The summary shows whole sentences up to about three lines, wide or narrow; the rest opens on request.
+const SUMMARY_CHARS = { wide: 240, narrow: 150 }
 
 export function decisionsOf(q) {
 	return q.recorded.filter((entry) => entry.kind === 'decision')
@@ -28,74 +27,134 @@ export function itemsOf(q) {
 	]
 }
 
+// When the quotes of one answer come from more than one commit, each quote row names its commit.
+function manyCommits(q) {
+	return new Set(itemsOf(q).flatMap(({ item }) => item.quotes.map((quote) => quote.commit))).size > 1
+}
+
 export function answerHtml(q, ui) {
 	const a = q.answer
 	const quotes = a.statements.reduce((n, s) => n + s.quotes.length, 0)
-	const allOpen = itemsOf(q).every(({ key, item }) => item.quotes.every((_, j) => ui.openQuotes.has(`${key}-q${j}`)))
+	const allOpen = ui.wide
+		? ui.panel.kind === 'all'
+		: itemsOf(q).every(({ key, item }) => item.quotes.every((_, j) => ui.openQuotes.has(`${key}-q${j}`)))
+	const rows = { ui, commits: manyCommits(q) }
+	const marked = markedLabels(a.statements)
 	return `
-		${a.diagrams.map((diagram, i) => diagramHtml(diagram, i, ui)).join('')}
-		<p class="caption">The agent's summary. Not checked.</p>
-		<p class="summary${ui.summaryOpen ? '' : ' capped'}" id="summary">${prose(a.summary)}</p>
-		<p hidden id="summary-more"><button class="link small" data-act="summary" data-key="summary">Show all of the summary</button></p>
-		<p class="strip narrow-only">${checkStrip(q)}</p>
-		${decisionsOf(q)
-			.map((d, i) => decisionHtml(d, `d${i}`, ui))
-			.join('')}
+		${a.diagrams.map((diagram, i) => diagramHtml(diagram, i, rows)).join('')}
+		${summaryHtml(a.summary, ui)}
+		${decisionsHtml(decisionsOf(q), rows)}
 		<div class="list-head">
 			<h3>${count(a.statements.length, 'statement', 'statements')}, ${count(quotes, 'quote', 'quotes')}</h3>
 			<button class="link small" data-act="all-quotes" data-key="all-quotes">${allOpen ? 'Close all quotes' : 'Open all quotes'}</button>
 			<p class="list-note">${labelLine(a.statements)}</p>
+			<p class="list-note wide-only">ken found every quote in git. It did not check the sentences.</p>
 		</div>
-		<ol>${a.statements.map((s, i) => statementHtml(s, i, ui)).join('')}</ol>
+		<a class="strip narrow-only" href="#checks-inline" title="See what ken checked">${checkStrip(q)}</a>
+		<ol>${a.statements.map((s, i) => statementHtml(s, i, rows, marked)).join('')}</ol>
 		${noteHtml(q)}
-		<section class="checks-inline narrow-only" aria-label="What ken checked">${ui.wide ? '' : checksHtml(q, ui)}</section>`
+		<section class="checks-inline narrow-only" id="checks-inline" aria-label="What ken checked">${ui.wide ? '' : checksHtml(q, ui)}</section>`
 }
 
-function statementHtml(s, i, ui) {
+// Whole sentences, so a cut never ends mid-word or hides half of a caveat.
+function summaryHtml(summary, ui) {
+	const sentences = summary.trim().split(/(?<=[.!?])\s+(?=\S)/)
+	let shown = 1
+	const most = ui.wide ? SUMMARY_CHARS.wide : SUMMARY_CHARS.narrow
+	while (shown < sentences.length && sentences.slice(0, shown + 1).join(' ').length <= most) shown++
+	const rest = ui.summaryOpen ? 0 : sentences.length - shown
+	const text = sentences.slice(0, sentences.length - rest).join(' ')
+	const more =
+		rest === 0
+			? ''
+			: ` <button class="link" data-act="summary" data-key="summary">Show the rest of the summary</button>`
+	return `<p class="caption">The agent's summary. Not checked.</p>
+		<p class="summary">${prose(text)}${more}</p>`
+}
+
+function statementHtml(s, i, rows, marked) {
 	return `<li class="st" id="item-s${i}">
 		<span class="st-n">${i + 1}</span>
 		<div>
-			<p class="st-text">${label(s.label)}${prose(s.text)}</p>
-			${quoteRows(s.quotes, `s${i}`, ui)}
+			<p class="st-text">${marked.has(s.label) ? label(s.label) : ''}${prose(s.text)}</p>
+			${quoteRows(s.quotes, `s${i}`, rows)}
 		</div>
 	</li>`
 }
 
-function decisionHtml(d, key, ui) {
-	const rejected =
+// Each decision folds to one line, the question and the option the code took. The line opens the decision in place.
+function decisionsHtml(decisions, rows) {
+	if (decisions.length === 0) return ''
+	return `<section class="decisions" aria-labelledby="decisions-head">
+		<p class="caption" id="decisions-head">${decisions.length === 1 ? 'A decision in this change' : `${decisions.length} decisions in this change`}</p>
+		<ul>${decisions.map((d, i) => decisionHtml(d, `d${i}`, rows)).join('')}</ul>
+	</section>`
+}
+
+function decisionHtml(d, key, { ui, commits }) {
+	const open = ui.openDecisions.has(key)
+	const call = d.needsOwner ? '<span class="your-call">Your call</span>' : ''
+	const row = `<button class="d-row" data-act="decision" data-item="${key}" data-key="${key}-row" aria-expanded="${open}">
+		<span class="d-q">${prose(d.question)}</span><span class="d-chosen">Chosen: ${prose(d.chosen)}</span>${call}</button>`
+	if (!open) return `<li class="decision" id="item-${key}">${row}</li>`
+	const others =
 		d.rejected.length === 0
-			? '<div><dt>Rejected</dt><dd class="muted">The code and the history show no other option.</dd></div>'
+			? '<dd class="muted">none found in the code or history</dd>'
 			: d.rejected
-					.map(
-						(r) =>
-							`<div><dt>Rejected</dt><dd>${prose(r.option)}<span class="why">Why: ${prose(r.reason)}</span></dd></div>`,
-					)
+					.map((r) => `<dd>${prose(r.option)}<span class="why">Why not: ${prose(r.reason)}</span></dd>`)
 					.join('')
-	const owner = d.needsOwner
-		? 'The agent says this one needs your opinion.'
-		: 'The agent says this one does not need your opinion.'
-	return `<article class="decision" id="item-${key}">
-		<p class="kind">Decision ${label(d.label)}</p>
-		<h3 class="decision-q">${prose(d.question)}</h3>
-		<dl class="facts">
-			<div><dt>Chosen</dt><dd>${prose(d.chosen)}</dd></div>
-			${rejected}
-			<div><dt>To undo</dt><dd>${UNDO[d.undo] ?? esc(d.undo)}</dd></div>
-			<div><dt>Your opinion</dt><dd>${owner}</dd></div>
-		</dl>
-		${quoteRows(d.quotes, key, ui)}
-	</article>`
+	return `<li class="decision open" id="item-${key}">${row}
+		<div class="d-card">
+			${d.needsOwner ? '<p class="d-call">The agent wants your call on this.</p>' : ''}
+			<dl class="facts">
+				<div><dt>Chosen</dt><dd>${prose(d.chosen)}</dd></div>
+				<div><dt>Other options</dt>${others}</div>
+				<div><dt>Undo</dt><dd>${UNDO[d.undo] ?? esc(d.undo)}</dd></div>
+			</dl>
+			${quoteRows(d.quotes, key, { ui, commits })}
+		</div>
+	</li>`
+}
+
+// What each label means, said of one statement and of several.
+const MEANS = {
+	inferred: [
+		'the agent worked it out from the code and the diff',
+		'the agent worked them out from the code and the diff',
+	],
+	'found-by-search': [
+		'a link the agent found by searching and did not prove',
+		'links the agent found by searching and did not prove',
+	],
+}
+
+function labelCounts(statements) {
+	const counts = new Map()
+	for (const s of statements) counts.set(s.label, (counts.get(s.label) ?? 0) + 1)
+	return [...counts].sort((a, b) => b[1] - a[1])
+}
+
+// The most common label goes without a mark, since the line above the statements names it. The others are marked.
+function markedLabels(statements) {
+	return new Set(
+		labelCounts(statements)
+			.slice(1)
+			.map(([name]) => name),
+	)
 }
 
 function labelLine(statements) {
-	const names = [...new Set(statements.map((s) => s.label))]
-	if (names.length === 1 && names[0] === 'inferred') {
-		const all =
-			statements.length === 1 ? 'It is' : statements.length === 2 ? 'Both are' : `All ${statements.length} are`
-		return `${all} inferred: the agent worked ${statements.length === 1 ? 'it' : 'them'} out from the code and the diff.`
+	const [common, ...marked] = labelCounts(statements)
+	if (!common) return ''
+	const name = (each) => LABELS[each]?.name ?? each
+	const means = ([each, n]) => MEANS[each]?.[n === 1 ? 0 : 1] ?? ''
+	if (marked.length === 0) {
+		const n = statements.length
+		const all = n === 1 ? 'It is' : n === 2 ? 'Both are' : `All ${n} are`
+		return `${all} ${name(common[0]).toLowerCase()}: ${means(common)}.`
 	}
-	const counts = names.map((name) => `${statements.filter((s) => s.label === name).length} ${name.replace(/-/g, ' ')}`)
-	return `${counts.join(', ')}.`
+	const rest = marked.map((each) => `${each[1]} marked ${name(each[0])}: ${means(each)}.`)
+	return [`${common[1]} ${name(common[0]).toLowerCase()}: ${means(common)}.`, ...rest].join(' ')
 }
 
 function noteHtml(q) {

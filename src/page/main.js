@@ -3,13 +3,14 @@
 // place. The page talks only to the server that sent it.
 import { fillDrawings } from './draw-diagrams.js'
 import { answerHtml, itemsOf } from './views/answer.js'
-import { checksHtml, quoteCardHtml } from './views/checks.js'
+import { allQuotesHtml, checksHtml, quoteCardHtml } from './views/checks.js'
 import { elementKey } from './views/diagram.js'
-import { count, duration, esc, prose, when } from './views/format.js'
+import { count, duration, esc, folderHtml, prose, short, when } from './views/format.js'
 import {
 	emptyAfterHtml,
 	emptyHtml,
 	endedHtml,
+	endedPanelHtml,
 	noModelHtml,
 	stepsHtml,
 	workingHtml,
@@ -19,11 +20,15 @@ import {
 const $ = (selector) => document.querySelector(selector)
 const wideQuery = matchMedia('(min-width: 1100px)')
 const darkQuery = matchMedia('(prefers-color-scheme: dark)')
-const EARLIER_SHOWN = 3
+
+// panel is what the right column shows on a wide screen: what ken checked, the quotes of one item, or all quotes.
+const CHECKS = { kind: 'checks' }
 
 const freshUi = () => ({
-	chosen: null,
+	panel: CHECKS,
 	openQuotes: new Set(),
+	openDecisions: new Set(),
+	openParts: new Set(),
 	openFiles: new Set(),
 	stepsOpen: false,
 	keyOpen: false,
@@ -44,10 +49,11 @@ const state = {
 	ui: freshUi(),
 }
 
-// A saved question as the page shows it: the history entry with its project record entries in place of their ids.
+// A saved question as the page shows it: the history entry with its project record entries in place of their ids, and
+// the project's HEAD now, to compare with the HEAD it was asked at.
 function fromView(view) {
-	const { entry, recorded } = view
-	return { answer: null, note: '', error: null, ...entry, recorded, live: false }
+	const { entry, recorded, head } = view
+	return { answer: null, note: '', error: null, ...entry, recorded, headNow: head, live: false }
 }
 
 // The same fold as the server's entryFrom, for the question while it runs. The saved entry replaces it at the end.
@@ -114,6 +120,8 @@ async function send(text) {
 		id: null,
 		question,
 		askedAt: new Date().toISOString(),
+		head: null,
+		headNow: null,
 		outcome: 'working',
 		steps: [],
 		usage: null,
@@ -199,7 +207,7 @@ function schedule() {
 
 function rowMeta(row) {
 	const ended = {
-		rejected: 'No checked answer: three answers sent back',
+		rejected: 'No answer: the quotes did not match the code',
 		stopped: 'You stopped it',
 		error: 'The model did not answer',
 		'no-answer': 'The agent sent no answer',
@@ -208,25 +216,25 @@ function rowMeta(row) {
 	if (ended) return `${when(row.askedAt)} · ${ended}`
 	const parts = [count(row.statements, 'statement', 'statements')]
 	if (row.decisions > 0) parts.push(count(row.decisions, 'decision', 'decisions'))
-	if (row.hunks) parts.push(`${row.hunks.total - row.hunks.uncovered} of ${row.hunks.total} changed hunks quoted`)
+	if (row.hunks) parts.push(`${row.hunks.total - row.hunks.uncovered} of ${row.hunks.total} changed blocks quoted`)
 	return `${when(row.askedAt)} · ${parts.join(', ')}`
 }
 
-function rowHtml(row, where) {
+function rowHtml(row) {
 	const current = state.open?.id === row.id
-	return `<button class="row" data-act="open" data-id="${esc(row.id)}" data-key="${where}-${esc(row.id)}"${current ? ' aria-current="true"' : ''}>
+	return `<button class="row" data-act="open" data-id="${esc(row.id)}" data-key="menu-${esc(row.id)}"${current ? ' aria-current="true"' : ''}>
 		<span class="row-q">${esc(row.question)}</span><span class="row-meta">${current ? 'Open now · ' : ''}${rowMeta(row)}</span></button>`
 }
 
 function menuHtml() {
 	const n = state.rows.length
 	if (n === 0) return ''
-	const button = `<button class="link" data-act="menu" data-key="menu" aria-expanded="${state.menuOpen}"><span class="wide-only">Your questions</span><span class="narrow-only">Questions</span> (${n})</button>`
+	const button = `<button class="link" data-act="menu" data-key="menu" aria-expanded="${state.menuOpen}">Your questions (${n})</button>`
 	if (!state.menuOpen) return button
 	const running = state.running
 		? `<button class="row" data-act="open-running" data-key="menu-running"><span class="row-q">${esc(state.running.q.question)}</span><span class="row-meta">Running now</span></button>`
 		: ''
-	const rows = [...state.rows].reverse().map((row) => rowHtml(row, 'menu'))
+	const rows = [...state.rows].reverse().map((row) => rowHtml(row))
 	return `${button}<div class="menu"><p class="menu-head">Your questions about this project, newest first. ken keeps them on this computer, outside the project.</p>${running}${rows.join('')}</div>`
 }
 
@@ -255,31 +263,32 @@ function turnHtml(q, ui) {
 	return `<article class="turn" id="turn">
 		<p class="asked">You asked ${when(q.askedAt)}</p>
 		<h2 class="question">${prose(q.question)}</h2>
+		${movedHtml(q)}
 		${body}
 	</article>`
+}
+
+function movedHtml(q) {
+	if (!q.head || !q.headNow || q.head === q.headNow) return ''
+	return `<p class="moved">Asked when the project was at <code>${short(q.head)}</code>. It is at <code>${short(q.headNow)}</code> now, so the code may have changed since.</p>`
 }
 
 function threadHtml() {
 	const q = state.open
 	if (state.problem && !q)
 		return `<div class="notice" role="alert"><h3>ken did not answer</h3><p>${esc(state.problem)}</p></div>`
-	if (!q) return emptyHtml(state.project)
-	const at = q.id === null ? state.rows.length : state.rows.findIndex((row) => row.id === q.id)
-	const earlier = state.rows.slice(Math.max(0, at - EARLIER_SHOWN), Math.max(0, at))
-	const head =
-		earlier.length === 0
-			? ''
-			: `<div class="earlier"><p class="earlier-head">${at > earlier.length ? `Earlier questions. ${count(at - earlier.length, 'more is', 'more are')} under Your questions, at the top.` : 'Earlier questions'}</p>${earlier.map((row) => rowHtml(row, 'row')).join('')}</div>`
-	return head + turnHtml(q, state.ui)
+	if (!q) return emptyHtml(state.project, state.model?.kind === 'ok')
+	return turnHtml(q, state.ui)
 }
 
 function panelHtml() {
 	const q = state.open
 	const ui = state.ui
 	if (!q || !ui.wide) return ''
-	if (q.answer) return ui.chosen ? quoteCardHtml(q, ui, itemsOf(q)) : checksHtml(q, ui)
-	if (q.live) return workingPanelHtml()
-	return ''
+	if (!q.answer) return q.live ? workingPanelHtml() : endedPanelHtml()
+	if (ui.panel.kind === 'quote') return quoteCardHtml(q, ui, itemsOf(q))
+	if (ui.panel.kind === 'all') return allQuotesHtml(q, itemsOf(q))
+	return checksHtml(q, ui)
 }
 
 function render() {
@@ -291,11 +300,8 @@ function render() {
 	const panel = $('#panel')
 	const scroll = panel.scrollTop
 	page.classList.toggle('first-visit', !q)
-	page.classList.toggle('single', !q || (!q.answer && !q.live))
-	const folder = state.project.split('/').at(-1)
-	$('#project').innerHTML = state.project
-		? `reads <code class="wide-only" title="${esc(state.project)}">${esc(state.project)}</code><code class="narrow-only">${esc(folder)}</code>`
-		: ''
+	page.classList.toggle('single', !q)
+	$('#project').innerHTML = state.project ? `reads ${folderHtml(state.project)}` : ''
 	$('#menu').innerHTML = menuHtml()
 	const across = [...document.querySelectorAll('.drawing')].map((box) => box.scrollLeft)
 	$('#thread').innerHTML = threadHtml()
@@ -305,15 +311,16 @@ function render() {
 	$('#ask').hidden = !canAsk
 	$('#send').disabled = state.running !== null
 	$('#after').innerHTML =
-		state.model?.kind === 'unset' ? noModelHtml(state.model, state.rows.length > 0) : q ? '' : emptyAfterHtml()
+		state.model?.kind === 'unset'
+			? noModelHtml(state.model, state.rows.length > 0, q !== null)
+			: q
+				? ''
+				: emptyAfterHtml()
 	$('#question').placeholder = ui.wide
 		? 'What changed, why was it done that way, how does a part work now?'
-		: 'Ask about this project'
+		: 'What changed, and why?'
 	panel.innerHTML = panelHtml()
 	panel.scrollTop = scroll
-	for (const bar of document.querySelectorAll('[data-share]')) bar.style.width = `${Number(bar.dataset.share) * 100}%`
-	const summary = $('#summary')
-	if (summary && !ui.summaryOpen) $('#summary-more').hidden = summary.scrollHeight <= summary.clientHeight + 1
 	if (focused) document.querySelector(`[data-key="${CSS.escape(focused)}"]`)?.focus({ preventScroll: true })
 }
 
@@ -328,11 +335,11 @@ function tick() {
 
 function choose(key, quote) {
 	const ui = state.ui
-	const same = ui.chosen?.key === key && ui.chosen.quote === quote
-	ui.chosen = same ? null : { key, quote }
+	const same = ui.panel.kind === 'quote' && ui.panel.key === key && ui.panel.quote === quote
+	ui.panel = same ? CHECKS : { kind: 'quote', key, quote }
 	render()
 	$('#panel').scrollTop = 0
-	if (ui.chosen) $(`#panel-q${quote}`)?.scrollIntoView({ block: 'nearest' })
+	if (!same) $(`#panel-q${quote}`)?.scrollIntoView({ block: 'nearest' })
 }
 
 // A box or an arrow in a drawing does what the first quote row of its numbered row does. Every label in a drawing
@@ -348,6 +355,7 @@ function chooseInDrawing(target) {
 		const element = state.open.answer.diagrams[index]?.elements.find((each) => each.number === number)
 		if (element?.quotes.length > 0) {
 			if (state.ui.wide) return choose(key, 0)
+			state.ui.openParts.add(index)
 			state.ui.openQuotes.add(`${key}-q0`)
 			render()
 		}
@@ -355,12 +363,13 @@ function chooseInDrawing(target) {
 	}
 }
 
-function closeChosen() {
-	const chosen = state.ui.chosen
-	if (!chosen) return false
-	state.ui.chosen = null
+function closePanel() {
+	const shown = state.ui.panel
+	if (shown.kind === 'checks') return false
+	state.ui.panel = CHECKS
 	render()
-	document.querySelector(`[data-key="${chosen.key}-q${chosen.quote}"]`)?.focus({ preventScroll: true })
+	const back = shown.kind === 'quote' ? `${shown.key}-q${shown.quote}` : 'all-quotes'
+	document.querySelector(`[data-key="${back}"]`)?.focus({ preventScroll: true })
 	return true
 }
 
@@ -403,17 +412,32 @@ const actions = {
 	},
 	'all-quotes'() {
 		const ui = state.ui
+		if (ui.wide) {
+			ui.panel = ui.panel.kind === 'all' ? CHECKS : { kind: 'all' }
+			render()
+			$('#panel').scrollTop = 0
+			return
+		}
 		const keys = itemsOf(state.open).flatMap(({ key, item }) => item.quotes.map((_, j) => `${key}-q${j}`))
 		const allOpen = keys.every((key) => ui.openQuotes.has(key))
 		ui.openQuotes = allOpen ? new Set() : new Set(keys)
+		if (!allOpen) for (const key of keys.filter((each) => each.startsWith('d'))) ui.openDecisions.add(key.split('-')[0])
+		render()
+	},
+	decision(el) {
+		toggle(state.ui.openDecisions, el.dataset.item)
+		render()
+	},
+	parts(el) {
+		toggle(state.ui.openParts, Number(el.dataset.diagram))
 		render()
 	},
 	step(el) {
 		const items = itemsOf(state.open)
-		const at = items.findIndex(({ key }) => key === state.ui.chosen.key) + Number(el.dataset.by)
+		const at = items.findIndex(({ key }) => key === state.ui.panel.key) + Number(el.dataset.by)
 		if (items[at]) choose(items[at].key, 0)
 	},
-	close: closeChosen,
+	close: closePanel,
 	summary() {
 		state.ui.summaryOpen = true
 		render()
@@ -472,10 +496,11 @@ document.addEventListener('keydown', (event) => {
 		$('[data-key="menu"]')?.focus()
 		return
 	}
-	if (closeChosen()) return
-	if (ui.coverageOpen || ui.stepsOpen || ui.keyOpen || ui.openQuotes.size > 0) {
+	if (closePanel()) return
+	if (ui.coverageOpen || ui.stepsOpen || ui.keyOpen || ui.openQuotes.size > 0 || ui.openDecisions.size > 0) {
 		ui.coverageOpen = ui.stepsOpen = ui.keyOpen = false
 		ui.openQuotes = new Set()
+		ui.openDecisions = new Set()
 		render()
 	}
 })
