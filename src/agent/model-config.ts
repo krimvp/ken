@@ -5,33 +5,51 @@ export type ModelConfig = { model: string; baseUrl: string; apiKeyEnv: string }
 
 export type ModelFlags = { model?: string | undefined; baseUrl?: string | undefined; apiKeyEnv?: string | undefined }
 
-const EXAMPLE = 'For example: KEN_MODEL=gpt-oss:120b KEN_BASE_URL=https://ollama.com/v1 KEN_API_KEY_ENV=OLLAMA_API_KEY'
+export type ModelSetting = { name: string; flag: string; means: string }
+
+const MODEL: ModelSetting = { name: 'KEN_MODEL', flag: '--model', means: 'the model to ask' }
+const BASE_URL: ModelSetting = {
+	name: 'KEN_BASE_URL',
+	flag: '--base-url',
+	means: 'the address of its OpenAI-compatible endpoint',
+}
+const API_KEY_ENV: ModelSetting = {
+	name: 'KEN_API_KEY_ENV',
+	flag: '--api-key-env',
+	means: 'the name of the variable that holds the key',
+}
+
+export const MODEL_EXAMPLE = 'KEN_MODEL=gpt-oss:120b KEN_BASE_URL=https://ollama.com/v1 KEN_API_KEY_ENV=OLLAMA_API_KEY'
+
+// missing lists the settings that are not given at all. It is empty when a setting is given but does not work.
+export type ModelUnset = { kind: 'unset'; message: string; missing: ModelSetting[] }
 
 export function readModelConfig(
 	flags: ModelFlags,
 	env: Record<string, string | undefined>,
-): { kind: 'ok'; config: ModelConfig } | { kind: 'unset'; message: string } {
+): { kind: 'ok'; config: ModelConfig } | ModelUnset {
 	const model = flags.model || env.KEN_MODEL
 	const baseUrl = flags.baseUrl || env.KEN_BASE_URL
 	const apiKeyEnv = flags.apiKeyEnv || env.KEN_API_KEY_ENV
 	if (!model || !baseUrl || !apiKeyEnv) {
-		const missing = [
-			model ? '' : 'KEN_MODEL or --model: the model to ask',
-			baseUrl ? '' : 'KEN_BASE_URL or --base-url: the address of its OpenAI-compatible endpoint',
-			apiKeyEnv ? '' : 'KEN_API_KEY_ENV or --api-key-env: the name of the variable that holds the key',
-		].filter((line) => line !== '')
+		const missing = [model ? null : MODEL, baseUrl ? null : BASE_URL, apiKeyEnv ? null : API_KEY_ENV].filter(
+			(setting) => setting !== null,
+		)
 		const lines = [
 			"ken sends your project's code to the model you choose, so it has no default model. Set these:",
-			...missing.map((line) => `  ${line}`),
-			EXAMPLE,
+			...missing.map((setting) => `  ${setting.name} or ${setting.flag}: ${setting.means}`),
+			`For example: ${MODEL_EXAMPLE}`,
 		]
-		return { kind: 'unset', message: lines.join('\n') }
+		return { kind: 'unset', message: lines.join('\n'), missing }
 	}
-	if (!URL.canParse(baseUrl)) return { kind: 'unset', message: `The base URL "${baseUrl}" is not a URL.` }
+	if (!URL.canParse(baseUrl)) {
+		return { kind: 'unset', message: `The base URL "${baseUrl}" is not a URL.`, missing: [] }
+	}
 	if (!env[apiKeyEnv]) {
 		return {
 			kind: 'unset',
 			message: `KEN_API_KEY_ENV names ${apiKeyEnv}, but ${apiKeyEnv} is not set. Put the key in it.`,
+			missing: [],
 		}
 	}
 	return { kind: 'ok', config: { model, baseUrl, apiKeyEnv } }

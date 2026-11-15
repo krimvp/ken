@@ -63,6 +63,12 @@ export function gitRepository(root: string): Repository {
 			return { kind: 'ok', commit: hash as CommitHash }
 		},
 
+		async firstCommit(signal) {
+			const run = await git(['rev-list', '--max-parents=0', 'HEAD'], signal)
+			const oldest = run.kind === 'ok' ? (run.stdout.trim().split('\n').at(-1) ?? '') : ''
+			return HASH.test(oldest) ? (oldest as CommitHash) : null
+		},
+
 		async userEmail(signal) {
 			const run = await git(['config', '--get', 'user.email'], signal)
 			const email = run.kind === 'ok' ? run.stdout.trim() : ''

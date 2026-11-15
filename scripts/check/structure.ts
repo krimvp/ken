@@ -25,9 +25,24 @@ export const MODULES: Record<string, Module> = {
 		imports: ['repo', 'checks', 'record'],
 		packages: ['aigent'],
 	},
-	cli: {
-		job: 'Runs ken in the terminal: a chat, one question for scripts, or the project record.',
+	history: {
+		job: "The reader's own log of questions asked and the answers shown, kept outside the project.",
 		imports: ['agent', 'record', 'repo'],
+		packages: [],
+	},
+	page: {
+		job: 'The page in the browser: plain HTML, CSS and JavaScript that shows a question, its steps and its checked answer.',
+		imports: [],
+		packages: [],
+	},
+	server: {
+		job: 'Serves the page on 127.0.0.1 and runs the questions it sends, one at a time.',
+		imports: ['agent', 'history', 'page', 'record', 'repo'],
+		packages: [],
+	},
+	cli: {
+		job: 'Runs ken in the terminal: a chat, one question for scripts, the project record, or the page.',
+		imports: ['agent', 'record', 'repo', 'server'],
 		packages: [],
 	},
 }

@@ -3,5 +3,12 @@
 // passed the quote check, or in a clear reason why there is none.
 export type { Answer, Change } from './answer/answer.ts'
 export type { ChatEvent, Outcome } from './chat-event.ts'
-export { type ModelConfig, type ModelFlags, readModelConfig } from './model-config.ts'
+export {
+	MODEL_EXAMPLE,
+	type ModelConfig,
+	type ModelFlags,
+	type ModelSetting,
+	type ModelUnset,
+	readModelConfig,
+} from './model-config.ts'
 export { type Chat, startChat } from './start-chat.ts'

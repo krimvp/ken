@@ -1,8 +1,9 @@
 import { createServer } from 'node:http'
 import { after } from 'node:test'
 
-// One scripted reply per chat request: text, or one tool call.
-export type Turn = { text: string } | { tool: string; args: Record<string, unknown> }
+// One scripted reply per chat request: text, one tool call, or no reply at all. hang is called when that request
+// arrives, and the request then stays open until the caller gives up on it.
+export type Turn = { text: string } | { tool: string; args: Record<string, unknown> } | { hang: () => void }
 
 export type ChatRequest = { messages: { role: string; content: unknown }[] }
 
@@ -20,6 +21,7 @@ export async function scriptedModel(script: Turn[]): Promise<{ baseUrl: string; 
 		const turn = script[requests.length]
 		if (!turn) return void res.writeHead(500).end('the script has no turn for this request')
 		requests.push(JSON.parse(raw))
+		if ('hang' in turn) return turn.hang()
 		const delta =
 			'text' in turn
 				? { role: 'assistant', content: turn.text }

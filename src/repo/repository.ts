@@ -55,6 +55,9 @@ export interface Repository {
 		head: CommitHash,
 		signal?: AbortSignal,
 	): Promise<{ kind: 'ok'; commit: CommitHash } | Unrelated>
+	// The oldest commit with no parent that HEAD reaches. Every clone of the project has it, so it names the project.
+	// Null when the repository has no commits yet.
+	firstCommit(signal?: AbortSignal): Promise<CommitHash | null>
 	// The email of the person who runs ken in this repository, from git config. Null when none is set.
 	userEmail(signal?: AbortSignal): Promise<string | null>
 	log(range: Range, signal?: AbortSignal): Promise<{ kind: 'ok'; commits: Commit[] } | TooLarge>
