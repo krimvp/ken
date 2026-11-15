@@ -4,7 +4,26 @@ ken explains a software project to the developer who owns it. It tells you what 
 
 ## Status
 
-Nothing runs yet. The plan is in [docs/plan.md](docs/plan.md).
+Slices 0 and 1 of [the plan](docs/plan.md) run: a chat in the terminal about one repository. The model reads the files and the git history with tools that cannot change the project. It must send its answer through a tool that checks every quote against git, and it gets three tries. An accepted answer lists the commits in scope, read from git, and the changed lines that no quote covers. ken does not keep a record of past answers yet, and has no page.
+
+## Run it
+
+ken sends your project's code to the model you name, so it has no default model. Set three variables, in the environment or in `.env`:
+
+```sh
+KEN_MODEL=gpt-oss:120b                # the model to ask
+KEN_BASE_URL=https://ollama.com/v1    # its OpenAI-compatible endpoint
+KEN_API_KEY_ENV=OLLAMA_API_KEY        # the name of the variable that holds the key
+```
+
+Then, from this checkout, chat about the repository in the current folder, or ask one question:
+
+```sh
+npm run ken -- chat
+npm run ken -- ask "What did this branch do?" --repo ../my-project --json
+```
+
+`ask` prints the answer and exits with code 0 when the answer passed the checks. `--json` prints it as one JSON object for scripts.
 
 ## Develop
 
