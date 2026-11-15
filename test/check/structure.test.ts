@@ -20,7 +20,8 @@ const cases: { name: string; files: Record<string, string>; expected: string[] }
 			...sevenFiles,
 			'src/git/index.ts': "import { readFile } from 'node:fs'\nimport git from 'simple-git'\nimport './file-0.ts'",
 			'src/answer/index.ts': "import { log } from '../git/index.ts'\nexport * from './inner/write.ts'",
-			'src/answer/inner/write.ts': "import type { X } from '@scope/pkg/types'\nconst m = await import('../index.ts')",
+			'src/answer/inner/write.ts':
+				"import type { X } from '@scope/pkg/types'\nconst m = await import('../index.ts')\nconst ends = ['from', 'to']",
 		},
 		expected: [],
 	},

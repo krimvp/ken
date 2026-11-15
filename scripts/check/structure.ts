@@ -41,7 +41,7 @@ const MAX_FILES = 8
 
 // shortcut: a regex scan per line, so it also matches import text in comments and strings and misses a specifier that
 // sits on its own line. Switch to ts.preProcessFile if that ever gives a wrong finding.
-const SPECIFIER = /\b(?:from|import)\s*\(?\s*['"]([^'"]+)['"]/g
+const SPECIFIER = /\b(?:from|import)(?:\s+|\s*\(\s*)['"]([^'"]+)['"]/g
 
 export function checkStructure(root: string, modules: Record<string, Module>): string[] {
 	const src = path.join(root, 'src')
