@@ -18,7 +18,7 @@ import { type RecordArgs, type Recorded, recordAnswer } from './record-answer.ts
 export const MAX_REJECTIONS = 3
 const MAX_LISTED_HUNKS = 40
 // Two short sentences. A longer summary pushes the checked part of the answer off the reader's first screen.
-const MAX_SUMMARY_CHARS = 280
+export const MAX_SUMMARY_CHARS = 280
 
 // What one question has seen of the answer tool. The session makes a new one for each question.
 export type AnswerRound = { rejections: number; answer: Answer | null; emit: (event: ChatEvent) => void }
