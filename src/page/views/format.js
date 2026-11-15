@@ -69,12 +69,12 @@ export function codeLines(lines, numbers, kinds = []) {
 		.join('')
 }
 
-// The lines of a quote, under a line that names the commit ken found them at.
-export function quoteBody(quote, where = '') {
+// The lines of a quote, under a line that names the commit ken found them at, unless its row names it already.
+export function quoteBody(quote, where = '', named = false) {
 	const lines = quote.text.split('\n')
 	const numbers = lines.map((_, k) => quote.startLine + k)
-	return `<p class="q-source">${where}At commit <code>${short(quote.commit)}</code></p>
-		<pre class="code"><code>${codeLines(lines, numbers)}</code></pre>`
+	const source = named ? '' : `<p class="q-source">${where}At commit <code>${short(quote.commit)}</code></p>`
+	return `${source}<pre class="code"><code>${codeLines(lines, numbers)}</code></pre>`
 }
 
 // At rest a quote is one row: the file, the lines, and the first quoted line, with the commit when the answer quotes
@@ -91,7 +91,7 @@ export function quoteRows(quotes, key, { ui, commits }) {
 				<button class="q-row" data-act="quote" data-item="${key}" data-quote="${j}" data-key="${id}" aria-expanded="${open || chosen}"${ui.wide ? ' aria-controls="panel"' : ''}>
 					<span class="q-path">${esc(quote.path)}</span><span class="q-lines">${lineSpan(quote.startLine, quote.endLine)}${at}</span><span class="q-first">${esc(first.trim())}</span>
 				</button>
-				${open && !ui.wide ? quoteBody(quote) : ''}
+				${open && !ui.wide ? quoteBody(quote, '', commits) : ''}
 			</li>`
 		})
 		.join('')}</ul>`
