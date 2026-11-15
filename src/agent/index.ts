@@ -7,7 +7,6 @@ export {
 	MODEL_EXAMPLE,
 	type ModelConfig,
 	type ModelFlags,
-	type ModelSetting,
 	type ModelUnset,
 	readModelConfig,
 } from './model-config.ts'
