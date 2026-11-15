@@ -89,7 +89,7 @@ export function quoteRows(quotes, key, { ui, commits }) {
 			const at = commits ? `<span class="q-commit">at <code>${short(quote.commit)}</code></span>` : ''
 			return `<li class="q${chosen ? ' chosen' : ''}">
 				<button class="q-row" data-act="quote" data-item="${key}" data-quote="${j}" data-key="${id}" aria-expanded="${open || chosen}"${ui.wide ? ' aria-controls="panel"' : ''}>
-					<span class="q-path">${esc(quote.path)}</span><span class="q-lines">${lineSpan(quote.startLine, quote.endLine)}${at}</span><span class="q-first">${esc(first.trim())}</span>
+					<span class="q-path">${esc(quote.path)}</span><span class="q-lines"><span class="nowrap">${lineSpan(quote.startLine, quote.endLine)}</span>${at}</span><span class="q-first">${esc(first.trim())}</span>
 				</button>
 				${open && !ui.wide ? quoteBody(quote, '', commits) : ''}
 			</li>`

@@ -101,7 +101,8 @@ function smallestText(svg) {
 	return sizes.length === 0 ? SMALLEST_TEXT : Math.min(...sizes)
 }
 
-// The frame around the box fades the cut edge while part of a wide drawing is out of sight.
+// Shrinks a drawing to the column, but never so far that its smallest text drops under SMALLEST_TEXT. The frame around
+// the box fades the cut edge while part of a wide drawing is out of sight.
 function fit(box, drawing) {
 	const frame = box.parentElement
 	const svg = box.querySelector('svg')
@@ -113,7 +114,9 @@ function fit(box, drawing) {
 	const natural = svg.viewBox.baseVal.width
 	const style = getComputedStyle(box)
 	const room = box.clientWidth - Number.parseFloat(style.paddingLeft) - Number.parseFloat(style.paddingRight)
-	const scale = Math.min(1, Math.max(SMALLEST_TEXT / drawing.smallest, room / natural))
+	// A drawing taller than the screen less the top bar and some room shrinks too, as far as the same floor allows.
+	const tall = (innerHeight - 160) / svg.viewBox.baseVal.height
+	const scale = Math.min(1, Math.max(SMALLEST_TEXT / drawing.smallest, Math.min(room / natural, tall)))
 	svg.style.width = `${natural * scale}px`
 	frame.classList.toggle('wide', natural * scale > room + 1)
 	const atEnd = () => frame.classList.toggle('at-end', box.scrollLeft + box.clientWidth >= box.scrollWidth - 1)
@@ -152,9 +155,13 @@ function inLines(label, most) {
 	const shown = (words) => words.replaceAll(/#\d+;/g, '######').length
 	const lines = []
 	for (const word of label.split(' ')) {
-		const last = lines.at(-1)
-		if (last !== undefined && shown(`${last} ${word}`) <= most) lines[lines.length - 1] = `${last} ${word}`
-		else lines.push(word)
+		// A long word such as "desk.ask(chat," may break after a code, here after "(" or ",", and never inside one.
+		for (const [i, piece] of word.split(/(?<=#\d+;)/).entries()) {
+			const last = lines.at(-1)
+			const joined = i === 0 ? `${last} ${piece}` : `${last}${piece}`
+			if (last !== undefined && shown(joined) <= most) lines[lines.length - 1] = joined
+			else lines.push(piece)
+		}
 	}
 	return lines.join('<br>')
 }

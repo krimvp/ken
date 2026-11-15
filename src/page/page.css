@@ -644,6 +644,7 @@ a.strip {
 /* Quote rows: at rest they show the file, the lines and the first quoted line */
 .quotes {
 	display: grid;
+	grid-template-columns: minmax(0, 1fr);
 	gap: var(--space-1);
 	margin-top: var(--space-3);
 }
@@ -698,13 +699,15 @@ a.strip {
 }
 
 .q-lines {
+	min-width: 0;
 	color: var(--color-note);
-	white-space: nowrap;
 	font-variant-numeric: tabular-nums;
 }
 
 .q-commit {
+	display: inline-block;
 	margin-left: 0.5em;
+	white-space: nowrap;
 }
 
 .q-first {
@@ -1367,12 +1370,19 @@ a.strip {
 		padding: var(--space-4);
 	}
 
+	/* A long path pushes the line numbers and the commit onto the next line, never past the screen edge. */
 	.q-row {
-		grid-template-columns: auto minmax(0, 1fr);
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0 var(--space-3);
+	}
+
+	.q-path {
+		min-width: 0;
 	}
 
 	.q-first {
-		grid-column: 1 / -1;
+		flex-basis: 100%;
 	}
 
 	.drawing {
