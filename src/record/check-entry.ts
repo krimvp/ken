@@ -1,7 +1,7 @@
 // The gate in front of the project record. A writer hands in a draft, and this turns it into an entry or says what to
 // fix: every text is present and short enough, every quote passes checkQuote and is stored as verified, commits and
 // authors are read from git and never taken from the writer, and every id an entry names is in the record.
-import { checkQuote, explainQuote, type Quote, type VerifiedQuote } from '../checks/index.ts'
+import { checkQuote, explainQuote, type Label, type Quote, type VerifiedQuote } from '../checks/index.ts'
 import { type Repository, resolveRange } from '../repo/index.ts'
 import {
 	type Decision,
@@ -9,7 +9,6 @@ import {
 	type EntryId,
 	entryId,
 	type Kind,
-	type Label,
 	type Note,
 	type RecordEntry,
 	type Topic,

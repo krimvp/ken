@@ -1,10 +1,10 @@
 // The plan's rule for an answer: ken accepts it only when every quote passes checkQuote and every statement carries a
 // label this slice allows. One bad quote rejects the whole answer. Only then does ken read the change facts from git.
-import { checkCoverage, checkQuote, explainQuote, type Quote } from '../../checks/index.ts'
-import type { Label, Statement } from '../../record/index.ts'
+import { checkCoverage, checkLabel, checkQuote, explainQuote, type Quote } from '../../checks/index.ts'
+import type { Statement } from '../../record/index.ts'
 import { type Repository, resolveRange } from '../../repo/index.ts'
 import { scopeProblem } from '../tools/exploration-tools.ts'
-import { type Answer, type Change, LABELS } from './answer.ts'
+import type { Answer, Change } from './answer.ts'
 
 export type AnswerDraft = {
 	summary: string
@@ -22,7 +22,7 @@ export async function checkAnswer(repo: Repository, draft: AnswerDraft, signal: 
 	const statements: Statement[] = []
 	for (const [index, statement] of draft.statements.entries()) {
 		const where = `Statement ${index + 1}`
-		const label = labelOf(statement.label)
+		const label = checkLabel(statement.label)
 		if (label.kind === 'refused') problems.push(`${where}: ${label.problem}`)
 		const checks = await Promise.all(statement.quotes.map((quote) => checkQuote(repo, quote, signal)))
 		const quotes = checks.flatMap((check, at) => {
@@ -73,17 +73,4 @@ async function changeOf(
 		kind: 'ok',
 		change: { base: scope.base, head: scope.head, commits: logged.commits, covered, uncovered, binary },
 	}
-}
-
-function labelOf(raw: string): { kind: 'ok'; label: Label } | { kind: 'refused'; problem: string } {
-	const wanted = raw.trim().toLowerCase().replaceAll(' ', '-')
-	const label = LABELS.find((known) => known === wanted)
-	if (label) return { kind: 'ok', label }
-	if (wanted === 'recorded' || wanted === 'from-the-session') {
-		return {
-			kind: 'refused',
-			problem: `the label "${raw}" is for a decision someone logged when they made it, and ken has no logged decisions yet. Use "inferred".`,
-		}
-	}
-	return { kind: 'refused', problem: `"${raw}" is not a label. Use "inferred" or "found-by-search".` }
 }

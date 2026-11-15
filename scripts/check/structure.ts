@@ -11,7 +11,7 @@ type Module = { job: string; imports: string[]; packages: string[] }
 export const MODULES: Record<string, Module> = {
 	repo: { job: "Reads a project's files and git history, and never writes to them.", imports: [], packages: [] },
 	checks: {
-		job: 'Checks an answer against git: its quotes exist, and it covers every changed hunk.',
+		job: 'Checks an answer: its quotes exist in git, its labels are allowed, and it covers every changed hunk.',
 		imports: ['repo'],
 		packages: [],
 	},

@@ -1,6 +1,7 @@
 // The project record: what ken has learned about the code, the same for every reader. It holds pieces of work,
 // decisions, topics and notes in .ken/record/, which the owner commits. No model writes it directly: every entry
 // passes checkEntry, and the store only grows. Nothing here talks to a model.
+export type { Label } from '../checks/index.ts'
 export type { EntryDraft } from './check-entry.ts'
 export { describeEntry, entryLine } from './describe-entry.ts'
 export type {
@@ -8,7 +9,6 @@ export type {
 	Entry,
 	EntryId,
 	Kind,
-	Label,
 	Note,
 	RecordEntry,
 	Statement,
