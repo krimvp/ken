@@ -438,6 +438,50 @@ button {
 	font-size: var(--text-sm);
 }
 
+/* A diagram leads a high-level answer. The drawing keeps its natural size, so its text stays readable, and its box
+   scrolls sideways when it is wider than the column. */
+.diagram + .diagram {
+	margin-top: var(--space-6);
+}
+
+.diagram-title {
+	margin-top: var(--space-1);
+	font-size: var(--text-base);
+	font-weight: 650;
+	line-height: var(--leading-tight);
+	overflow-wrap: anywhere;
+}
+
+.drawing {
+	margin-top: var(--space-3);
+	padding: var(--space-4);
+	overflow-x: auto;
+	border: 1px solid var(--color-border);
+	border-radius: var(--radius-md);
+	background: var(--color-card);
+	text-align: center;
+}
+
+.drawing svg {
+	display: inline-block;
+	max-width: none;
+	height: auto;
+	text-align: initial;
+}
+
+.drawing :is(.node, .edgeLabel, .actor, .messageText) {
+	cursor: pointer;
+}
+
+.drawing-note {
+	color: var(--color-muted);
+	text-align: left;
+}
+
+.elements {
+	margin-top: var(--space-2);
+}
+
 .summary {
 	margin-top: var(--space-1);
 	font-size: var(--text-base);
@@ -492,6 +536,10 @@ button {
 	scroll-margin-top: var(--top);
 }
 
+.elements .st {
+	padding: var(--space-3) 0;
+}
+
 .st-n {
 	color: var(--color-muted);
 	font-variant-numeric: tabular-nums;
@@ -527,7 +575,8 @@ button {
 	border-radius: 50%;
 }
 
-.st-text .label {
+.st-text .label,
+.diagram-title .label {
 	margin-right: var(--space-2);
 }
 

@@ -2,11 +2,20 @@
 // hunks no quote covers, and the commits. On a wide screen it fills the panel; on a narrow one it follows the answer.
 import { codeLines, count, esc, gitDay, LABELS, label, lineSpan, list, prose, quoteBody, short } from './format.js'
 
-const LIMIT = 'ken checks that each quote is in its file at its commit. It does not check the sentences or the summary.'
 const MAX_DIFF_LINES = 60
 
+function elementsOf(q) {
+	return q.answer.diagrams.flatMap((diagram) => diagram.elements)
+}
+
 function quotesOf(q) {
-	return [...q.answer.statements, ...decisionsOf(q)].flatMap((item) => item.quotes)
+	return [...elementsOf(q), ...q.answer.statements, ...decisionsOf(q)].flatMap((item) => item.quotes)
+}
+
+function limit(q) {
+	const what =
+		q.answer.diagrams.length > 0 ? 'the sentences, the summary or the arrows' : 'the sentences or the summary'
+	return `ken checks that each quote is in its file at its commit. It does not check ${what}.`
 }
 
 function decisionsOf(q) {
@@ -23,7 +32,8 @@ function changedLines(hunk) {
 
 // One line for when the full check is out of view: beside an opened quote, and under the summary on a narrow screen.
 export function checkStrip(q) {
-	const parts = [`${count(quotesOf(q).length, 'quote', 'quotes')} found`, 'sentences not checked']
+	const unchecked = q.answer.diagrams.length > 0 ? 'sentences and arrows not checked' : 'sentences not checked'
+	const parts = [`${count(quotesOf(q).length, 'quote', 'quotes')} found`, unchecked]
 	const change = q.answer.change
 	if (change) {
 		const total = change.covered.length + change.uncovered.length
@@ -42,13 +52,13 @@ export function checksHtml(q, ui) {
 			? ''
 			: `<p class="muted">The quote check sent back ${count(back, 'earlier answer', 'earlier answers')} first.</p>`
 	return `<div class="panel-head"><h2>What ken checked</h2></div>
-		<p class="panel-limit">${LIMIT}</p>
+		<p class="panel-limit">${limit(q)}</p>
 		<section class="check" id="check-quotes">
 			<h3>Quotes</h3>
 			<p>${quotes.length} of ${count(quotes.length, 'quote', 'quotes')} found ${at}.</p>
-			${inDecisions(q)}
+			${whereQuotes(q)}
 			${backLine}
-			<p class="muted">Not checked: the sentences and the summary.</p>
+			${notChecked(q)}
 			<p><button class="link small" data-act="key" data-key="key" aria-expanded="${ui.keyOpen}">${ui.keyOpen ? 'Hide what the labels mean' : 'What the labels mean'}</button></p>
 			${ui.keyOpen ? labelKey() : ''}
 		</section>
@@ -57,13 +67,22 @@ export function checksHtml(q, ui) {
 }
 
 // The list of statements counts only their own quotes, so say where the others are.
-function inDecisions(q) {
+function whereQuotes(q) {
 	const decisions = decisionsOf(q)
-	if (decisions.length === 0) return ''
-	const inStatements = q.answer.statements.reduce((n, s) => n + s.quotes.length, 0)
-	const inDecisionsCount = decisions.reduce((n, d) => n + d.quotes.length, 0)
-	const where = decisions.length === 1 ? 'the decision' : 'the decisions'
-	return `<p class="muted small">${inStatements} in the statements, ${inDecisionsCount} in ${where}.</p>`
+	const sum = (items) => items.reduce((n, item) => n + item.quotes.length, 0)
+	const places = [
+		[sum(elementsOf(q)), q.answer.diagrams.length === 1 ? 'the diagram' : 'the diagrams'],
+		[sum(q.answer.statements), 'the statements'],
+		[sum(decisions), decisions.length === 1 ? 'the decision' : 'the decisions'],
+	].filter(([n]) => n > 0)
+	if (places.length < 2) return ''
+	return `<p class="muted small">${list(places.map(([n, where]) => `${n} in ${where}`))}.</p>`
+}
+
+function notChecked(q) {
+	if (q.answer.diagrams.length === 0) return '<p class="muted">Not checked: the sentences and the summary.</p>'
+	return `<p class="muted">Not checked: the sentences, the summary and the arrows.</p>
+		<p class="muted small">An arrow in a diagram is a claim, like a sentence. ken found the lines it quotes. It did not check that the arrow is true.</p>`
 }
 
 function labelKey() {
@@ -166,9 +185,18 @@ function commitsSection(q) {
 export function quoteCardHtml(q, ui, items) {
 	const at = items.findIndex(({ key }) => key === ui.chosen.key)
 	const { kind, item, n } = items[at]
-	const title = kind === 'decision' ? 'Decision' : `Statement ${n} of ${q.answer.statements.length}`
-	const text =
-		kind === 'decision' ? `<strong>${prose(item.question)}</strong> Chosen: ${prose(item.chosen)}` : prose(item.text)
+	const title = {
+		element: `Number ${item.number} in the diagram`,
+		decision: 'Decision',
+		statement: `Statement ${n} of ${q.answer.statements.length}`,
+	}[kind]
+	const text = {
+		element: prose(item.text),
+		decision: `<strong>${prose(item.question)}</strong> Chosen: ${prose(item.chosen)}`,
+		statement: prose(item.text),
+	}[kind]
+	// A box only shows where a part is defined, so it has no label; an arrow is a claim and has one.
+	const means = kind === 'element' && item.label === null ? null : item.label
 	return `<div class="panel-head"><h2>${title}</h2>
 			<div class="panel-nav">
 				<button class="quiet-button" data-act="step" data-by="-1" data-key="prev"${at === 0 ? ' disabled' : ''}>Previous</button>
@@ -177,7 +205,7 @@ export function quoteCardHtml(q, ui, items) {
 			</div></div>
 		<p class="strip">${checkStrip(q)}</p>
 		<p class="card-text">${text}</p>
-		<p class="label-means">${label(item.label)}<span>${esc(LABELS[item.label]?.means ?? '')}</span></p>
+		${means === null ? '' : `<p class="label-means">${label(means)}<span>${esc(LABELS[means]?.means ?? '')}</span></p>`}
 		${item.quotes
 			.map((quote, j) => {
 				const chosen = j === ui.chosen.quote ? ' chosen' : ''

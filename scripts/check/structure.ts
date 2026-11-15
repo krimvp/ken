@@ -38,7 +38,7 @@ export const MODULES: Record<string, Module> = {
 	page: {
 		job: 'The page in the browser: plain HTML, CSS and JavaScript that shows a question, its steps and its checked answer.',
 		imports: [],
-		packages: [],
+		packages: ['mermaid'],
 	},
 	server: {
 		job: 'Serves the page on 127.0.0.1 and runs the questions it sends, one at a time.',

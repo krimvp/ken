@@ -20,7 +20,8 @@
 		"ken": "src/cli/main.ts"
 	},
 	"dependencies": {
-		"aigent": "file:vendor/aigent-0.0.0.tgz"
+		"aigent": "file:vendor/aigent-0.0.0.tgz",
+		"mermaid": "11.17.2"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.6.4",

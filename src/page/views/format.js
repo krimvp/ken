@@ -72,6 +72,24 @@ export function quoteBody(quote, where = '') {
 		<pre class="code"><code>${codeLines(lines, numbers)}</code></pre>`
 }
 
+// At rest a quote is one row: the file, the lines, and the first quoted line. Opened, it shows all its lines.
+export function quoteRows(quotes, key, ui) {
+	return `<ul class="quotes">${quotes
+		.map((quote, j) => {
+			const id = `${key}-q${j}`
+			const open = ui.openQuotes.has(id)
+			const chosen = ui.wide && ui.chosen?.key === key && ui.chosen.quote === j
+			const first = quote.text.split('\n').find((line) => line.trim() !== '') ?? ''
+			return `<li class="q${chosen ? ' chosen' : ''}">
+				<button class="q-row" data-act="quote" data-item="${key}" data-quote="${j}" data-key="${id}" aria-expanded="${open}">
+					<span class="q-path">${esc(quote.path)}</span><span class="q-lines">${lineSpan(quote.startLine, quote.endLine)}</span><span class="q-first">${esc(first.trim())}</span>
+				</button>
+				${open ? quoteBody(quote) : ''}
+			</li>`
+		})
+		.join('')}</ul>`
+}
+
 export const LABELS = {
 	inferred: {
 		name: 'Inferred',

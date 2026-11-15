@@ -1,8 +1,10 @@
 // ken's page: one state object and one render per frame, with no framework. The thread on the left holds the words;
 // the panel on the right holds what ken checked. Under 1100 pixels the panel goes away and the same things open in
 // place. The page talks only to the server that sent it.
+import { fillDrawings } from './draw-diagrams.js'
 import { answerHtml, itemsOf } from './views/answer.js'
 import { checksHtml, quoteCardHtml } from './views/checks.js'
+import { elementKey } from './views/diagram.js'
 import { count, duration, esc, prose, when } from './views/format.js'
 import {
 	emptyAfterHtml,
@@ -16,6 +18,7 @@ import {
 
 const $ = (selector) => document.querySelector(selector)
 const wideQuery = matchMedia('(min-width: 1100px)')
+const darkQuery = matchMedia('(prefers-color-scheme: dark)')
 const EARLIER_SHOWN = 3
 
 const freshUi = () => ({
@@ -294,7 +297,10 @@ function render() {
 		? `reads <code class="wide-only" title="${esc(state.project)}">${esc(state.project)}</code><code class="narrow-only">${esc(folder)}</code>`
 		: ''
 	$('#menu').innerHTML = menuHtml()
+	const across = [...document.querySelectorAll('.drawing')].map((box) => box.scrollLeft)
 	$('#thread').innerHTML = threadHtml()
+	fillDrawings($('#thread'), schedule)
+	for (const [i, box] of document.querySelectorAll('.drawing').entries()) box.scrollLeft = across[i] ?? 0
 	const canAsk = state.model?.kind === 'ok'
 	$('#ask').hidden = !canAsk
 	$('#send').disabled = state.running !== null
@@ -327,6 +333,26 @@ function choose(key, quote) {
 	render()
 	$('#panel').scrollTop = 0
 	if (ui.chosen) $(`#panel-q${quote}`)?.scrollIntoView({ block: 'nearest' })
+}
+
+// A box or an arrow in a drawing does what the first quote row of its numbered row does. Every label in a drawing
+// starts with its element's number, so the smallest part of the drawing around the click that holds one label names it.
+function chooseInDrawing(target) {
+	const box = target.closest('.drawing')
+	for (let el = target; box && el !== box; el = el.parentElement) {
+		if ((el.textContent.match(/\d+\. /g) ?? []).length > 1) return
+		const number = Number(el.textContent.trim().match(/^(\d+)\. /)?.[1])
+		if (!number) continue
+		const index = Number(box.dataset.diagram)
+		const key = elementKey(index, number)
+		const element = state.open.answer.diagrams[index]?.elements.find((each) => each.number === number)
+		if (element?.quotes.length > 0) {
+			if (state.ui.wide) return choose(key, 0)
+			state.ui.openQuotes.add(`${key}-q0`)
+			render()
+		}
+		return $(`#item-${key}`)?.scrollIntoView({ block: 'nearest' })
+	}
 }
 
 function closeChosen() {
@@ -420,6 +446,7 @@ document.addEventListener('click', (event) => {
 		render()
 	}
 	if (el && !el.disabled) void actions[el.dataset.act](el)
+	else if (state.open?.answer) chooseInDrawing(event.target)
 })
 
 // A file's diff is drawn when the reader opens it.
@@ -473,6 +500,7 @@ $('#question').addEventListener('keydown', (event) => {
 
 $('#question').addEventListener('input', resizeBox)
 wideQuery.addEventListener('change', render)
+darkQuery.addEventListener('change', render)
 setInterval(tick, 1000)
 
 try {

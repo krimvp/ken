@@ -10,7 +10,7 @@ import {
 	startChat,
 } from '../agent/index.ts'
 import { kenHome, openHistory } from '../history/index.ts'
-import { PAGE_FOLDER } from '../page/index.ts'
+import { MERMAID_FILE, PAGE_FOLDER } from '../page/index.ts'
 import { fileRecordStore } from '../record/index.ts'
 import { findRoot, gitRepository } from '../repo/index.ts'
 import { refusal } from './guard-request.ts'
@@ -22,10 +22,14 @@ export type KenServer = { url: string; root: string; model: string | null; close
 
 const MAX_BODY_BYTES = 64 * 1024
 const MAX_QUESTION_CHARS = 4000
+// Mermaid puts a <style> element and style attributes in every drawing it makes, so styles may be inline. Nothing else
+// is widened: scripts, images, fonts and requests still come only from this server, so a style cannot fetch anything
+// from another host.
 const HEADERS = {
 	'cache-control': 'no-store',
 	'x-content-type-options': 'nosniff',
-	'content-security-policy': "default-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+	'content-security-policy':
+		"default-src 'self'; style-src 'self' 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
 }
 
 export async function openServer(options: {
@@ -54,7 +58,7 @@ export async function openServer(options: {
 	}
 	const desk = questionDesk(history, fileRecordStore(root, repo))
 	const shown = root.startsWith(`${homedir()}${path.sep}`) ? `~${root.slice(homedir().length)}` : root
-	const files = await readPageFiles(PAGE_FOLDER)
+	const files = await readPageFiles(PAGE_FOLDER, { '/mermaid.min.js': MERMAID_FILE })
 	let port = 0
 
 	async function route(request: IncomingMessage, response: ServerResponse) {

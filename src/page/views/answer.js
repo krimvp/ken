@@ -1,7 +1,8 @@
-// The answered question in the thread: the agent's summary, the decisions, the statements with their quote rows, and
-// the agent's closing note. The agent wrote the words; ken checked only that each quote is in its file.
+// The answered question in the thread: the agent's diagrams, its summary, the decisions, the statements with their quote
+// rows, and the agent's closing note. The agent wrote the words; ken checked only that each quote is in its file.
 import { checkStrip, checksHtml } from './checks.js'
-import { count, esc, label, lineSpan, prose, quoteBody } from './format.js'
+import { diagramHtml, elementKey } from './diagram.js'
+import { count, esc, label, prose, quoteRows } from './format.js'
 
 const UNDO = {
 	easy: 'Easy to undo.',
@@ -13,9 +14,15 @@ export function decisionsOf(q) {
 	return q.recorded.filter((entry) => entry.kind === 'decision')
 }
 
-// Every item that carries quotes, by the key the page uses for it: "d0" for a decision, "s3" for a statement.
+// Every item that carries quotes, in the order the page shows them, by the key the page uses for it: "g0n3" for
+// element 3 of the first diagram, "d0" for a decision, "s3" for a statement.
 export function itemsOf(q) {
 	return [
+		...q.answer.diagrams.flatMap((diagram, i) =>
+			diagram.elements
+				.filter((element) => element.quotes.length > 0)
+				.map((element) => ({ key: elementKey(i, element.number), kind: 'element', item: element })),
+		),
 		...decisionsOf(q).map((d, i) => ({ key: `d${i}`, kind: 'decision', item: d })),
 		...q.answer.statements.map((s, i) => ({ key: `s${i}`, kind: 'statement', item: s, n: i + 1 })),
 	]
@@ -25,8 +32,8 @@ export function answerHtml(q, ui) {
 	const a = q.answer
 	const quotes = a.statements.reduce((n, s) => n + s.quotes.length, 0)
 	const allOpen = itemsOf(q).every(({ key, item }) => item.quotes.every((_, j) => ui.openQuotes.has(`${key}-q${j}`)))
-	// A diagram, when an answer has one, goes here: under the question, above the summary.
 	return `
+		${a.diagrams.map((diagram, i) => diagramHtml(diagram, i, ui)).join('')}
 		<p class="caption">The agent's summary. Not checked.</p>
 		<p class="summary${ui.summaryOpen ? '' : ' capped'}" id="summary">${prose(a.summary)}</p>
 		<p hidden id="summary-more"><button class="link small" data-act="summary" data-key="summary">Show all of the summary</button></p>
@@ -78,24 +85,6 @@ function decisionHtml(d, key, ui) {
 		</dl>
 		${quoteRows(d.quotes, key, ui)}
 	</article>`
-}
-
-// At rest a quote is one row: the file, the lines, and the first quoted line. Opened, it shows all its lines.
-export function quoteRows(quotes, key, ui) {
-	return `<ul class="quotes">${quotes
-		.map((quote, j) => {
-			const id = `${key}-q${j}`
-			const open = ui.openQuotes.has(id)
-			const chosen = ui.wide && ui.chosen?.key === key && ui.chosen.quote === j
-			const first = quote.text.split('\n').find((line) => line.trim() !== '') ?? ''
-			return `<li class="q${chosen ? ' chosen' : ''}">
-				<button class="q-row" data-act="quote" data-item="${key}" data-quote="${j}" data-key="${id}" aria-expanded="${open}">
-					<span class="q-path">${esc(quote.path)}</span><span class="q-lines">${lineSpan(quote.startLine, quote.endLine)}</span><span class="q-first">${esc(first.trim())}</span>
-				</button>
-				${open ? quoteBody(quote) : ''}
-			</li>`
-		})
-		.join('')}</ul>`
 }
 
 function labelLine(statements) {
