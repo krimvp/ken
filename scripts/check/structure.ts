@@ -10,6 +10,11 @@ type Module = { job: string; imports: string[]; packages: string[] }
 // node: built-ins are always allowed. Add a module here before you create its folder.
 export const MODULES: Record<string, Module> = {
 	repo: { job: "Reads a project's files and git history, and never writes to them.", imports: [], packages: [] },
+	checks: {
+		job: 'Checks an answer against git: its quotes exist, and it covers every changed hunk.',
+		imports: ['repo'],
+		packages: [],
+	},
 }
 
 const MAX_FILES = 8
