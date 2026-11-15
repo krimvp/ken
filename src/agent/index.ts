@@ -1,0 +1,7 @@
+// ken's chat engine and the only module that talks to a model. It starts an aigent session on one repository, the
+// model explores with tools that only read, and each question streams events that end in an answer whose quotes all
+// passed the quote check, or in a clear reason why there is none.
+export type { Answer, Change, Label, Statement } from './answer/answer.ts'
+export type { ChatEvent, Outcome } from './chat-event.ts'
+export { type ModelConfig, type ModelFlags, readModelConfig } from './model-config.ts'
+export { type Chat, startChat } from './start-chat.ts'

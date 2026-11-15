@@ -15,6 +15,11 @@ export const MODULES: Record<string, Module> = {
 		imports: ['repo'],
 		packages: [],
 	},
+	agent: {
+		job: 'Runs a chat with a model that explores the project with read-only tools and answers only with checked quotes.',
+		imports: ['repo', 'checks'],
+		packages: ['aigent'],
+	},
 }
 
 const MAX_FILES = 8
