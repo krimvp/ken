@@ -1,0 +1,1181 @@
+/* ken's page. The tokens come from tokens.css; these are the page's own. */
+:root {
+	--text-md: 1rem;
+	--top: 3.25rem;
+	--color-add: #1f6b3a;
+	--color-del: #8c2b1c;
+	--color-warn-bg: #fbf3e4;
+	--color-warn-border: #b8913f;
+}
+
+@media (prefers-color-scheme: dark) {
+	:root {
+		--color-add: #7fc79a;
+		--color-del: #eda497;
+		--color-warn-bg: #2a2418;
+		--color-warn-border: #9c7f42;
+	}
+}
+
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+html {
+	-webkit-text-size-adjust: 100%;
+	text-size-adjust: 100%;
+}
+
+body {
+	margin: 0;
+	background: var(--color-bg);
+	color: var(--color-text);
+	font-family: var(--font-text);
+	font-size: var(--text-md);
+	line-height: var(--leading-text);
+}
+
+p,
+ul,
+ol,
+dl,
+dd,
+h1,
+h2,
+h3,
+figure {
+	margin: 0;
+}
+
+ul,
+ol {
+	padding: 0;
+	list-style: none;
+}
+
+code {
+	font-family: var(--font-code);
+	font-size: max(0.9em, 0.875rem);
+	overflow-wrap: anywhere;
+}
+
+button,
+textarea {
+	font: inherit;
+	color: inherit;
+}
+
+button {
+	cursor: pointer;
+}
+
+:focus-visible {
+	outline: 2px solid var(--color-focus);
+	outline-offset: 2px;
+	border-radius: var(--radius-sm);
+}
+
+.muted {
+	color: var(--color-muted);
+}
+
+.small {
+	font-size: var(--text-sm);
+	line-height: 1.5;
+}
+
+/* A text button: it looks like a link and says what it does. */
+.link {
+	padding: 0;
+	border: 0;
+	background: none;
+	color: var(--color-accent);
+	font-size: inherit;
+	text-align: left;
+	text-decoration: underline;
+	text-decoration-thickness: 1px;
+	text-underline-offset: 0.18em;
+}
+
+.link:hover {
+	text-decoration-thickness: 2px;
+}
+
+.quiet-button,
+.primary {
+	padding: var(--space-2) var(--space-4);
+	border: 1px solid var(--color-border);
+	border-radius: var(--radius-sm);
+	background: var(--color-card);
+	font-size: var(--text-sm);
+	font-weight: 600;
+	line-height: 1.5;
+}
+
+.quiet-button:hover {
+	border-color: var(--color-muted);
+}
+
+.primary {
+	border-color: var(--color-accent);
+	background: var(--color-accent);
+	color: var(--color-bg);
+	font-size: var(--text-md);
+}
+
+.primary[disabled] {
+	opacity: 0.55;
+	cursor: default;
+}
+
+/* The top bar */
+.top {
+	position: sticky;
+	top: 0;
+	z-index: 5;
+	display: flex;
+	align-items: center;
+	gap: var(--space-4);
+	min-height: var(--top);
+	padding: var(--space-2) var(--space-6);
+	border-bottom: 1px solid var(--color-border);
+	background: var(--color-bg);
+}
+
+.brand {
+	font-size: var(--text-base);
+	font-weight: 700;
+	letter-spacing: -0.01em;
+}
+
+.project {
+	min-width: 0;
+	color: var(--color-muted);
+	font-size: var(--text-sm);
+	overflow-wrap: anywhere;
+}
+
+.project code {
+	color: var(--color-text);
+}
+
+.top-menu {
+	position: relative;
+	margin-left: auto;
+	font-size: var(--text-sm);
+}
+
+.menu {
+	position: absolute;
+	top: calc(100% + var(--space-2));
+	right: 0;
+	width: min(30rem, calc(100vw - 2 * var(--gutter)));
+	max-height: calc(100vh - var(--top) - var(--space-6));
+	overflow-y: auto;
+	padding: var(--space-4) var(--space-5) var(--space-2);
+	border: 1px solid var(--color-border);
+	border-radius: var(--radius-md);
+	background: var(--color-card);
+	font-size: var(--text-md);
+	box-shadow: 0 6px 24px rgb(0 0 0 / 0.14);
+}
+
+.menu-head {
+	color: var(--color-muted);
+	font-size: var(--text-sm);
+}
+
+.menu .row:last-child {
+	border-bottom: 0;
+}
+
+/* Two columns: the thread, and the panel with what ken checked */
+.page {
+	display: grid;
+	grid-template-columns: minmax(0, 58fr) minmax(0, 42fr);
+	gap: var(--space-7);
+	max-width: 96rem;
+	margin: 0 auto;
+	padding: 0 var(--space-6);
+}
+
+.page.single {
+	display: block;
+	max-width: calc(44rem + 2 * var(--space-6));
+}
+
+.chat {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	min-height: calc(100vh - var(--top));
+}
+
+#thread {
+	flex: 1;
+	padding-top: var(--space-5);
+}
+
+.panel {
+	position: sticky;
+	top: var(--top);
+	height: calc(100vh - var(--top));
+	min-width: 0;
+	overflow-y: auto;
+	padding: var(--space-6) 0 var(--space-7) var(--space-6);
+	border-left: 1px solid var(--color-border);
+}
+
+.page.single .panel {
+	display: none;
+}
+
+/* The question box, pinned under the thread. The fade above it keeps a line it covers from looking cut in half. */
+.composer {
+	position: sticky;
+	bottom: 0;
+	padding: var(--space-3) 0;
+	border-top: 1px solid var(--color-border);
+	background: var(--color-bg);
+}
+
+.composer::before {
+	content: "";
+	position: absolute;
+	right: 0;
+	bottom: 100%;
+	left: 0;
+	height: var(--space-6);
+	background: linear-gradient(to bottom, transparent, var(--color-bg));
+	pointer-events: none;
+}
+
+.composer-label {
+	display: block;
+	margin-bottom: var(--space-1);
+	font-size: var(--text-sm);
+	font-weight: 600;
+}
+
+.page:not(.first-visit) .composer-label {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip-path: inset(50%);
+}
+
+.page.first-visit .composer {
+	position: static;
+	border-top: 0;
+}
+
+.page.first-visit .composer::before {
+	display: none;
+}
+
+.composer-row {
+	display: flex;
+	gap: var(--space-2);
+	align-items: flex-end;
+}
+
+.composer textarea {
+	flex: 1;
+	min-width: 0;
+	min-height: 2.75rem;
+	max-height: 10rem;
+	padding: var(--space-2) var(--space-3);
+	border: 1px solid var(--color-muted);
+	border-radius: var(--radius-sm);
+	background: var(--color-card);
+	line-height: 1.5;
+	resize: none;
+}
+
+.composer textarea::placeholder {
+	color: var(--color-muted);
+	opacity: 1;
+}
+
+.composer .primary {
+	min-height: 2.75rem;
+}
+
+.composer-hint {
+	margin-top: var(--space-1);
+	color: var(--color-muted);
+	font-size: var(--text-sm);
+}
+
+.page:not(.first-visit) .composer-hint {
+	display: none;
+}
+
+/* An earlier question, folded to one row */
+.row {
+	display: block;
+	width: 100%;
+	padding: var(--space-3) 0;
+	border: 0;
+	border-bottom: 1px solid var(--color-border);
+	background: none;
+	text-align: left;
+}
+
+.row-q {
+	display: block;
+	font-weight: 600;
+	line-height: 1.4;
+	overflow-wrap: anywhere;
+}
+
+.row:hover .row-q {
+	text-decoration: underline;
+	text-underline-offset: 0.18em;
+}
+
+.row-meta {
+	display: block;
+	color: var(--color-muted);
+	font-size: var(--text-sm);
+}
+
+.earlier-head {
+	color: var(--color-muted);
+	font-size: var(--text-sm);
+}
+
+/* The open question */
+.turn {
+	padding: var(--space-6) 0;
+	scroll-margin-top: var(--top);
+}
+
+.earlier + .turn {
+	border-top: 1px solid var(--color-border);
+}
+
+.asked {
+	color: var(--color-muted);
+	font-size: var(--text-sm);
+}
+
+.question {
+	font-size: var(--text-h2);
+	font-weight: 650;
+	line-height: var(--leading-tight);
+	letter-spacing: -0.01em;
+	overflow-wrap: anywhere;
+}
+
+.run-line {
+	margin-top: var(--space-2);
+	color: var(--color-muted);
+	font-size: var(--text-sm);
+}
+
+.working-head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: 0 var(--space-3);
+	margin-top: var(--space-4);
+	font-weight: 600;
+}
+
+.working-head .small {
+	font-weight: 400;
+}
+
+.stream {
+	margin-top: var(--space-4);
+	line-height: 1.6;
+	overflow-wrap: anywhere;
+}
+
+.who {
+	display: block;
+	color: var(--color-muted);
+	font-size: var(--text-sm);
+}
+
+.caret {
+	display: inline-block;
+	width: 0.5em;
+	height: 1.05em;
+	margin-left: 2px;
+	background: var(--color-muted);
+	vertical-align: text-bottom;
+	animation: blink 1.1s steps(1) infinite;
+}
+
+@keyframes blink {
+	50% {
+		opacity: 0;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.caret {
+		animation: none;
+	}
+}
+
+.actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-3);
+	margin-top: var(--space-4);
+}
+
+/* The answer */
+.caption {
+	margin-top: var(--space-5);
+	color: var(--color-muted);
+	font-size: var(--text-sm);
+}
+
+.summary {
+	margin-top: var(--space-1);
+	font-size: var(--text-base);
+	line-height: 1.6;
+	overflow-wrap: anywhere;
+}
+
+.summary.capped {
+	display: -webkit-box;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 4;
+	overflow: hidden;
+}
+
+.strip {
+	margin-top: var(--space-3);
+	padding: var(--space-2) var(--space-3);
+	border-radius: var(--radius-sm);
+	background: var(--color-code-bg);
+	color: var(--color-muted);
+	font-size: var(--text-sm);
+	line-height: 1.5;
+}
+
+.list-head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: var(--space-1) var(--space-4);
+	margin-top: var(--space-6);
+	padding-bottom: var(--space-2);
+	border-bottom: 1px solid var(--color-border);
+}
+
+.list-head h3 {
+	font-size: var(--text-md);
+	font-weight: 650;
+}
+
+.list-note {
+	flex-basis: 100%;
+	color: var(--color-muted);
+	font-size: var(--text-sm);
+}
+
+.st {
+	display: grid;
+	grid-template-columns: 1.75rem minmax(0, 1fr);
+	padding: var(--space-4) 0;
+	border-bottom: 1px solid var(--color-border);
+	scroll-margin-top: var(--top);
+}
+
+.st-n {
+	color: var(--color-muted);
+	font-variant-numeric: tabular-nums;
+	line-height: 1.6;
+}
+
+.st-text {
+	line-height: 1.6;
+	overflow-wrap: anywhere;
+}
+
+/* Labels. A dashed outline and a hollow dot: the agent's own reading, not something written down at the time. */
+.label {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4em;
+	padding: 0 0.5em;
+	border: 1px dashed var(--color-muted);
+	border-radius: var(--radius-sm);
+	color: var(--color-text);
+	font-size: var(--text-sm);
+	font-weight: 600;
+	line-height: 1.5;
+	white-space: nowrap;
+	vertical-align: 0.05em;
+}
+
+.label::before {
+	content: "";
+	width: 0.55em;
+	height: 0.55em;
+	border: 1.5px solid currentColor;
+	border-radius: 50%;
+}
+
+.st-text .label {
+	margin-right: var(--space-2);
+}
+
+.label-key {
+	display: grid;
+	gap: var(--space-3);
+	margin-top: var(--space-3);
+}
+
+.label-key div {
+	display: grid;
+	grid-template-columns: 9rem minmax(0, 1fr);
+	gap: var(--space-3);
+	align-items: baseline;
+	font-size: var(--text-sm);
+	line-height: 1.5;
+}
+
+.label-key dd {
+	color: var(--color-muted);
+}
+
+/* Quote rows: at rest they show the file, the lines and the first quoted line */
+.quotes {
+	display: grid;
+	gap: var(--space-1);
+	margin-top: var(--space-3);
+}
+
+.q {
+	border: 1px solid var(--color-border);
+	border-radius: var(--radius-sm);
+	background: var(--color-code-bg);
+}
+
+.q.chosen {
+	border-color: var(--color-accent);
+	box-shadow: inset 3px 0 0 var(--color-accent);
+}
+
+.q-row {
+	display: grid;
+	grid-template-columns: auto auto minmax(0, 1fr);
+	align-items: baseline;
+	gap: var(--space-3);
+	width: 100%;
+	padding: var(--space-1) var(--space-3);
+	border: 0;
+	background: none;
+	font-size: var(--text-sm);
+	line-height: 1.6;
+	text-align: left;
+}
+
+.q-path {
+	font-weight: 600;
+	overflow-wrap: anywhere;
+}
+
+.q-row:hover .q-path {
+	text-decoration: underline;
+	text-underline-offset: 0.18em;
+}
+
+.q-path::before {
+	content: "";
+	display: inline-block;
+	margin-right: 0.5em;
+	border-width: 0.3em 0 0.3em 0.45em;
+	border-style: solid;
+	border-color: transparent transparent transparent var(--color-muted);
+	vertical-align: 0.05em;
+}
+
+.q-row[aria-expanded="true"] .q-path::before {
+	transform: rotate(90deg);
+}
+
+.q-lines {
+	color: var(--color-muted);
+	white-space: nowrap;
+	font-variant-numeric: tabular-nums;
+}
+
+.q-first {
+	overflow: hidden;
+	color: var(--color-code-text);
+	font-family: var(--font-code);
+	font-size: var(--text-code);
+	white-space: pre;
+	text-overflow: ellipsis;
+}
+
+.q-row[aria-expanded="true"] .q-first {
+	display: none;
+}
+
+.q-source {
+	padding: var(--space-1) var(--space-3);
+	border-top: 1px solid var(--color-border);
+	color: var(--color-muted);
+	font-size: var(--text-sm);
+}
+
+.q-source code {
+	color: var(--color-code-text);
+}
+
+/* Code: a gutter of line numbers, and lines that wrap under their own number so a long line stays one line */
+.code {
+	overflow-x: auto;
+	margin: 0;
+	padding: var(--space-2) var(--space-3) var(--space-2) var(--space-2);
+	border-top: 1px solid var(--color-border);
+	color: var(--color-code-text);
+	font-family: var(--font-code);
+	font-size: var(--text-code);
+	line-height: var(--leading-code);
+	tab-size: 4;
+}
+
+.code > code {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr);
+	font-size: inherit;
+}
+
+.code .ln {
+	padding-right: 1.5ch;
+	color: var(--color-line-number);
+	text-align: right;
+	user-select: none;
+	font-variant-numeric: tabular-nums;
+}
+
+.code .lc {
+	min-width: 0;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+.code .add {
+	color: var(--color-add);
+}
+
+.code .del {
+	color: var(--color-del);
+}
+
+.code .more {
+	grid-column: 2;
+	white-space: normal;
+	color: var(--color-muted);
+	font-family: var(--font-text);
+	font-size: var(--text-sm);
+}
+
+/* A decision, right after the summary */
+.decision {
+	margin-top: var(--space-5);
+	padding: var(--space-4) var(--space-5);
+	border: 1px solid var(--color-border);
+	border-radius: var(--radius-md);
+	background: var(--color-card);
+}
+
+.kind {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: var(--space-2);
+	color: var(--color-muted);
+	font-size: var(--text-sm);
+}
+
+.decision-q {
+	margin-top: var(--space-1);
+	font-size: var(--text-base);
+	font-weight: 650;
+	line-height: 1.35;
+	overflow-wrap: anywhere;
+}
+
+.facts {
+	display: grid;
+	gap: var(--space-2);
+	margin-top: var(--space-3);
+}
+
+.facts div {
+	display: grid;
+	grid-template-columns: 6rem minmax(0, 1fr);
+	gap: var(--space-3);
+}
+
+.facts dt {
+	color: var(--color-muted);
+	font-size: var(--text-sm);
+	line-height: 1.75;
+}
+
+.facts dd {
+	overflow-wrap: anywhere;
+}
+
+.facts .why {
+	display: block;
+	color: var(--color-muted);
+	font-size: var(--text-sm);
+	line-height: 1.5;
+}
+
+.note {
+	margin-top: var(--space-5);
+	overflow-wrap: anywhere;
+}
+
+/* The panel */
+.panel-head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: var(--space-2) var(--space-4);
+}
+
+.panel h2 {
+	font-size: var(--text-base);
+	font-weight: 650;
+	line-height: var(--leading-tight);
+}
+
+.panel-limit {
+	margin-top: var(--space-2);
+	color: var(--color-muted);
+	font-size: var(--text-sm);
+}
+
+.panel-nav {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-2);
+}
+
+.panel-nav .quiet-button {
+	padding: var(--space-1) var(--space-3);
+	font-weight: 400;
+}
+
+/* The bar draws what the line above it says: the part of the changed hunks that a quote covers */
+.bar {
+	display: flex;
+	height: 0.75rem;
+	border: 1px solid var(--color-muted);
+	border-radius: 2px;
+	overflow: hidden;
+}
+
+.check {
+	margin-top: var(--space-5);
+	padding-top: var(--space-4);
+	border-top: 1px solid var(--color-border);
+	scroll-margin-top: var(--space-4);
+}
+
+.check h3 {
+	margin-bottom: var(--space-2);
+	font-size: var(--text-md);
+	font-weight: 650;
+}
+
+.check p + p,
+.check p + .bar,
+.check .bar + p {
+	margin-top: var(--space-2);
+}
+
+.big {
+	font-size: var(--text-base);
+	line-height: 1.4;
+}
+
+.bar span {
+	display: block;
+	background: var(--color-accent);
+}
+
+.files {
+	margin-top: var(--space-3);
+}
+
+.file {
+	border-bottom: 1px solid var(--color-border);
+}
+
+.file summary {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: space-between;
+	gap: 0 var(--space-3);
+	padding: var(--space-2) 0;
+	cursor: pointer;
+	font-size: var(--text-sm);
+}
+
+.file summary code {
+	font-weight: 600;
+}
+
+.file summary .count {
+	color: var(--color-muted);
+	white-space: nowrap;
+	font-variant-numeric: tabular-nums;
+}
+
+.hunk {
+	margin-bottom: var(--space-3);
+}
+
+.hunk-head {
+	margin-bottom: var(--space-1);
+	color: var(--color-muted);
+	font-size: var(--text-sm);
+}
+
+.hunk .code {
+	border: 1px solid var(--color-border);
+	border-radius: var(--radius-sm);
+	background: var(--color-code-bg);
+}
+
+.commits li {
+	display: grid;
+	grid-template-columns: 4.75rem minmax(0, 1fr);
+	gap: var(--space-2);
+	padding: var(--space-2) 0;
+	border-top: 1px solid var(--color-border);
+	font-size: var(--text-sm);
+	line-height: 1.5;
+	overflow-wrap: anywhere;
+}
+
+.commits .who {
+	display: block;
+}
+
+.card-text {
+	margin-top: var(--space-3);
+	font-size: var(--text-base);
+	line-height: 1.55;
+	overflow-wrap: anywhere;
+}
+
+.label-means {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: var(--space-1) var(--space-3);
+	margin-top: var(--space-3);
+	color: var(--color-muted);
+	font-size: var(--text-sm);
+}
+
+.panel .q {
+	margin-top: var(--space-3);
+}
+
+/* States without an answer */
+.notice {
+	margin-top: var(--space-5);
+	padding: var(--space-5);
+	border: 1px solid var(--color-border);
+	border-left: 4px solid var(--color-warn-border);
+	border-radius: var(--radius-sm);
+	background: var(--color-card);
+	overflow-wrap: anywhere;
+}
+
+.notice h3 {
+	font-size: var(--text-base);
+	font-weight: 650;
+	line-height: 1.35;
+}
+
+.notice > * + * {
+	margin-top: var(--space-3);
+}
+
+.notice pre {
+	padding: var(--space-3);
+	border-radius: var(--radius-sm);
+	background: var(--color-code-bg);
+	color: var(--color-code-text);
+	font-family: var(--font-code);
+	font-size: var(--text-code);
+	line-height: var(--leading-code);
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+.settings {
+	display: grid;
+	gap: var(--space-2);
+}
+
+.settings div {
+	display: grid;
+	grid-template-columns: 11rem minmax(0, 1fr);
+	gap: var(--space-3);
+}
+
+.tries > li {
+	padding: var(--space-3) 0;
+	border-top: 1px solid var(--color-border);
+}
+
+.tries .try {
+	display: block;
+	color: var(--color-muted);
+	font-size: var(--text-sm);
+}
+
+.tries ul {
+	padding-left: 1.1rem;
+	list-style: disc;
+}
+
+.panel-empty {
+	max-width: 28rem;
+	color: var(--color-muted);
+}
+
+.panel-empty h2 {
+	margin-bottom: var(--space-3);
+	color: var(--color-text);
+}
+
+.panel-empty ol {
+	margin-top: var(--space-3);
+	padding-left: 1.25rem;
+	list-style: decimal;
+}
+
+.panel-empty li {
+	margin-bottom: var(--space-2);
+}
+
+/* First visit */
+.welcome {
+	padding: var(--space-8) 0 var(--space-5);
+}
+
+.welcome h1 {
+	font-size: 2rem;
+	font-weight: 650;
+	line-height: var(--leading-tight);
+	letter-spacing: -0.02em;
+}
+
+.welcome .lead {
+	margin-top: var(--space-4);
+	font-size: var(--text-base);
+}
+
+.welcome-after h2 {
+	margin-top: var(--space-6);
+	font-size: var(--text-md);
+	font-weight: 650;
+}
+
+.starts li {
+	border-bottom: 1px solid var(--color-border);
+}
+
+.starts button {
+	display: block;
+	width: 100%;
+	padding: var(--space-3) 0;
+	border: 0;
+	background: none;
+	color: var(--color-accent);
+	text-align: left;
+}
+
+.starts button:hover {
+	text-decoration: underline;
+	text-underline-offset: 0.18em;
+}
+
+.limit {
+	margin: var(--space-6) 0 var(--space-7);
+	padding-left: var(--space-4);
+	border-left: 3px solid var(--color-accent);
+}
+
+.limit > * + * {
+	margin-top: var(--space-2);
+}
+
+/* Steps: one plain sentence per thing the agent did, and each answer ken sent back */
+.steps {
+	margin-top: var(--space-3);
+	padding: var(--space-2) 0 var(--space-2) var(--space-4);
+	border-left: 2px solid var(--color-border);
+	font-size: var(--text-sm);
+	line-height: 1.5;
+}
+
+.steps li {
+	padding: 2px 0;
+	overflow-wrap: anywhere;
+}
+
+.steps .tool {
+	color: var(--color-muted);
+}
+
+.steps .tool code {
+	color: var(--color-text);
+}
+
+.steps .said {
+	margin: var(--space-2) 0;
+}
+
+.steps .sent-back {
+	margin: var(--space-2) 0;
+	padding: var(--space-2) var(--space-3);
+	border-left: 3px solid var(--color-warn-border);
+	background: var(--color-warn-bg);
+}
+
+.steps .sent-back strong {
+	display: block;
+}
+
+.steps .sent-back ul {
+	margin-top: var(--space-1);
+	padding-left: 1.1rem;
+	list-style: disc;
+}
+
+.narrow-only {
+	display: none;
+}
+
+.nowrap {
+	white-space: nowrap;
+}
+
+@media (max-width: 1099px) {
+	.top {
+		padding: var(--space-2) var(--gutter);
+	}
+
+	.page,
+	.page.single {
+		display: block;
+		padding: 0 var(--gutter);
+	}
+
+	.panel {
+		display: none;
+	}
+
+	.narrow-only {
+		display: block;
+	}
+
+	:is(span, code).narrow-only {
+		display: inline;
+	}
+
+	.project {
+		overflow: hidden;
+		white-space: nowrap;
+		text-overflow: ellipsis;
+	}
+
+	.top-menu {
+		white-space: nowrap;
+	}
+
+	.code {
+		tab-size: 2;
+	}
+
+	.wide-only {
+		display: none;
+	}
+
+	#thread {
+		padding-top: var(--space-3);
+	}
+
+	.turn {
+		padding: var(--space-5) 0;
+	}
+
+	.question {
+		font-size: 1.25rem;
+	}
+
+	.summary {
+		font-size: 1.0625rem;
+		line-height: 1.55;
+	}
+
+	.composer-hint {
+		display: none;
+	}
+
+	.welcome {
+		padding-top: var(--space-6);
+	}
+
+	.welcome h1 {
+		font-size: 1.625rem;
+	}
+
+	.label-key div,
+	.facts div,
+	.settings div {
+		grid-template-columns: minmax(0, 1fr);
+		gap: 0;
+	}
+
+	.decision,
+	.notice {
+		padding: var(--space-4);
+	}
+
+	.q-row {
+		grid-template-columns: auto minmax(0, 1fr);
+	}
+
+	.q-first {
+		grid-column: 1 / -1;
+	}
+
+	.checks-inline {
+		margin-top: var(--space-6);
+		padding-top: var(--space-2);
+		border-top: 2px solid var(--color-border);
+	}
+
+	.checks-inline h2 {
+		font-size: var(--text-base);
+		font-weight: 650;
+	}
+}

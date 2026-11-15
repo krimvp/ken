@@ -1,4 +1,6 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
+import { homedir } from 'node:os'
+import path from 'node:path'
 import {
 	type Chat,
 	MODEL_EXAMPLE,
@@ -51,6 +53,7 @@ export async function openServer(options: {
 		model = config
 	}
 	const desk = questionDesk(history, fileRecordStore(root, repo))
+	const shown = root.startsWith(`${homedir()}${path.sep}`) ? `~${root.slice(homedir().length)}` : root
 	const files = await readPageFiles(PAGE_FOLDER)
 	let port = 0
 
@@ -64,7 +67,7 @@ export async function openServer(options: {
 				model.kind === 'ok'
 					? { kind: 'ok', name: model.name }
 					: { kind: 'unset', message: model.message, missing: model.missing, example: MODEL_EXAMPLE }
-			return sendJson(response, 200, { project: root, model: state })
+			return sendJson(response, 200, { project: shown, model: state })
 		}
 		if (where === 'GET /api/questions') return sendJson(response, 200, { questions: await desk.rows() })
 		if (where.startsWith('GET /api/questions/')) {
