@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict'
-import { existsSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { test } from 'node:test'
-import { type EntryDraft, fileRecordStore, noteFreshness } from '../../src/record/index.ts'
+import { describeEntry, type EntryDraft, fileRecordStore, noteFreshness } from '../../src/record/index.ts'
 import { gitRepository } from '../../src/repo/index.ts'
 import { buildRepository } from '../fixtures/build-repository.ts'
 
@@ -140,4 +140,26 @@ test('a note goes stale when its quoted code changes at HEAD, and stays fresh wh
 		assert.ok(written?.kind === 'topic' && note?.kind === 'note')
 		assert.deepEqual(await noteFreshness(builtRepo, written, note), expected)
 	}
+})
+
+// Written by ken at 90725fb, before a piece of work kept diagrams, on this file's repository.
+const OLD_WORK_LINE = String.raw`{"id":"b3e5d43f9434","kind":"work","title":"Retries wait","summary":"Retries now wait 100 ms.","range":{"base":"11db964a574b70e1d87686b8e7fee81cb14a306a","head":"ac026d46f80b8c52eeb8d85dbcf9a6d7a63bff69"},"commits":[{"hash":"ac026d46f80b8c52eeb8d85dbcf9a6d7a63bff69","by":"unknown"},{"hash":"b300476b7f00cb2a863c7e9c7f06a65ddbc5bb44","by":"unknown"},{"hash":"31827012466733268fbd888e60a2303641346be6","by":"collaborator"},{"hash":"64ca365a1f096278af5d084c364a63756ed402eb","by":"owner-agent"}],"first":"2026-01-02T00:00:00.000Z","last":"2026-01-05T00:00:00.000Z","statements":[{"text":"The loop sleeps after each attempt.","label":"inferred","quotes":[{"path":"src/retry.ts","commit":"ac026d46f80b8c52eeb8d85dbcf9a6d7a63bff69","startLine":4,"endLine":4,"text":"\t\tsleep(100)"}]}],"replaces":null,"at":"2026-11-15T21:40:07.202Z"}`
+
+test('a piece of work written before diagrams still reads, with no diagrams, and ken record can show it', async () => {
+	const store = emptyRecord()
+	mkdirSync(path.join(root, '.ken/record'), { recursive: true })
+	writeFileSync(path.join(root, '.ken/record/work.jsonl'), `${OLD_WORK_LINE}\n`)
+
+	const record = await store.read()
+	assert.deepEqual(record.problems, [])
+	const [work] = record.current
+	assert.ok(work?.kind === 'work', JSON.stringify(record))
+	assert.deepEqual(
+		[work.id, work.range.head, work.statements.length, work.diagrams],
+		['b3e5d43f9434', hashes[4], 1, []],
+	)
+	assert.match(
+		await describeEntry(repo, record, work),
+		/statement 1 \[inferred\]: The loop sleeps after each attempt\./,
+	)
 })

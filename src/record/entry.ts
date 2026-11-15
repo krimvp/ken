@@ -2,6 +2,7 @@
 // note. An entry holds only checked facts. Its quotes passed checkQuote, and its commits and authors come from git.
 import { createHash } from 'node:crypto'
 import type { Label, VerifiedQuote } from '../checks/index.ts'
+import type { Diagram } from '../diagram/index.ts'
 import type { Range } from '../repo/index.ts'
 
 // A short hash of the entry's content, so the same entry written twice has the same id.
@@ -16,8 +17,8 @@ export type Who = 'owner' | 'owner-agent' | 'collaborator' | 'unknown'
 export const UNDO = ['easy', 'some-work', 'hard'] as const
 export type Undo = (typeof UNDO)[number]
 
-// The accepted answer that explained the work is kept as its summary and statements, so it can be shown again
-// without a model. first and last are the dates of the oldest and newest commit.
+// The accepted answer that explained the work is kept as its summary, statements and diagrams, so it can be shown
+// again without a model. first and last are the dates of the oldest and newest commit.
 export type Work = {
 	kind: 'work'
 	title: string
@@ -27,6 +28,7 @@ export type Work = {
 	first: string
 	last: string
 	statements: Statement[]
+	diagrams: Diagram[]
 }
 
 export type Decision = {

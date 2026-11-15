@@ -2,6 +2,7 @@
 // fix: every text is present and short enough, every quote passes checkQuote and is stored as verified, commits and
 // authors are read from git and never taken from the writer, and every id an entry names is in the record.
 import { checkQuote, explainQuote, type Label, type Quote, type VerifiedQuote } from '../checks/index.ts'
+import { checkDiagrams, type DiagramDraft } from '../diagram/index.ts'
 import { type Repository, resolveRange } from '../repo/index.ts'
 import {
 	type Decision,
@@ -27,6 +28,7 @@ export type EntryDraft =
 			summary: string
 			range: { base: string; head: string }
 			statements: { text: string; label: Label; quotes: Quote[] }[]
+			diagrams?: DiagramDraft[]
 	  } & Replaces)
 	| ({
 			kind: 'decision'
@@ -100,6 +102,8 @@ export async function checkEntry(
 					quotes: await quotes(where, statement.quotes),
 				})
 			}
+			const diagrams = await checkDiagrams(repo, draft.diagrams ?? [], signal)
+			if (diagrams.kind === 'refused') problems.push(...diagrams.problems)
 			if (work.kind === 'refused') return { kind: 'refused', problems }
 			entry = {
 				kind: 'work',
@@ -107,6 +111,7 @@ export async function checkEntry(
 				summary: text('summary', draft.summary, MAX.summary),
 				...work.facts,
 				statements,
+				diagrams: diagrams.kind === 'ok' ? diagrams.diagrams : [],
 			} satisfies Work
 			break
 		}

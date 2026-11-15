@@ -22,12 +22,12 @@ export const MODULES: Record<string, Module> = {
 	},
 	record: {
 		job: 'The project record: an append-only store of pieces of work, decisions, topics and notes.',
-		imports: ['repo', 'checks'],
+		imports: ['repo', 'checks', 'diagram'],
 		packages: [],
 	},
 	agent: {
 		job: 'Runs a chat with a model that explores the project with read-only tools and answers only with checked quotes.',
-		imports: ['repo', 'checks', 'record'],
+		imports: ['repo', 'checks', 'diagram', 'record'],
 		packages: ['aigent'],
 	},
 	cli: {

@@ -1,4 +1,5 @@
 import type { VerifiedQuote } from '../checks/index.ts'
+import { diagramElements } from '../diagram/index.ts'
 import type { Repository } from '../repo/index.ts'
 import type { RecordEntry } from './entry.ts'
 import type { RecordRead } from './file-record-store.ts'
@@ -46,6 +47,13 @@ export async function describeEntry(
 					`statement ${index + 1} [${statement.label}]: ${statement.text}`,
 					...statement.quotes.flatMap(quoted),
 				)
+			}
+			for (const [index, diagram] of entry.diagrams.entries()) {
+				lines.push(`diagram ${index + 1}, ${diagram.kind} [${diagram.label}]: ${diagram.title}`)
+				for (const element of diagramElements(diagram)) {
+					const label = element.label === null ? '' : ` [${element.label}]`
+					lines.push(`  ${element.number}. ${element.text}${label}`, ...element.quotes.flatMap(quoted))
+				}
 			}
 			const decisions = record.current.filter((other) => other.kind === 'decision' && other.work === entry.id)
 			lines.push(

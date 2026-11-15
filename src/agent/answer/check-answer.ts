@@ -1,6 +1,8 @@
-// The plan's rule for an answer: ken accepts it only when every quote passes checkQuote and every statement carries a
-// label this slice allows. One bad quote rejects the whole answer. Only then does ken read the change facts from git.
+// The plan's rule for an answer: ken accepts it only when every quote passes checkQuote, every statement carries a
+// label this slice allows, and every diagram passes checkDiagrams. One bad quote rejects the whole answer. Only then
+// does ken read the change facts from git.
 import { checkCoverage, checkLabel, checkQuote, explainQuote, type Quote } from '../../checks/index.ts'
+import { checkDiagrams, type DiagramDraft, diagramElements } from '../../diagram/index.ts'
 import type { Statement } from '../../record/index.ts'
 import { type Repository, resolveRange } from '../../repo/index.ts'
 import { scopeProblem } from '../tools/exploration-tools.ts'
@@ -10,6 +12,7 @@ export type AnswerDraft = {
 	summary: string
 	scope: { base: string; head: string } | null
 	statements: { text: string; label: string; quotes: Quote[] }[]
+	diagrams: DiagramDraft[]
 }
 
 export type AnswerCheck = { kind: 'accepted'; answer: Answer } | { kind: 'rejected'; problems: string[] }
@@ -35,13 +38,20 @@ export async function checkAnswer(repo: Repository, draft: AnswerDraft, signal: 
 		})
 		if (label.kind === 'ok') statements.push({ text: statement.text, label: label.label, quotes })
 	}
-	if (problems.length > 0) return { kind: 'rejected', problems }
-	if (scope === null) return { kind: 'accepted', answer: { summary: draft.summary, statements, change: null } }
+	const checked = await checkDiagrams(repo, draft.diagrams, signal)
+	if (checked.kind === 'refused') problems.push(...checked.problems)
+	if (problems.length > 0 || checked.kind === 'refused') return { kind: 'rejected', problems }
+	const { diagrams } = checked
+	if (scope === null)
+		return { kind: 'accepted', answer: { summary: draft.summary, statements, diagrams, change: null } }
 
-	const quotes = statements.flatMap((statement) => statement.quotes)
+	const quotes = [
+		...statements.flatMap((statement) => statement.quotes),
+		...diagrams.flatMap((diagram) => diagramElements(diagram).flatMap((element) => element.quotes)),
+	]
 	const change = await changeOf(repo, scope, quotes, signal)
 	if (change.kind === 'refused') return { kind: 'rejected', problems: [`Scope: ${change.problem}`] }
-	return { kind: 'accepted', answer: { summary: draft.summary, statements, change: change.change } }
+	return { kind: 'accepted', answer: { summary: draft.summary, statements, diagrams, change: change.change } }
 }
 
 type Scope = { kind: 'ok'; base: Change['base']; head: Change['head'] }
