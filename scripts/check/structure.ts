@@ -8,7 +8,9 @@ type Module = { job: string; imports: string[]; packages: string[] }
 // The map of the code. Read this table first. Each folder directly under src/ has one entry: its job in one sentence,
 // the other modules it may import (always through their index.ts), and the npm packages it may import.
 // node: built-ins are always allowed. Add a module here before you create its folder.
-export const MODULES: Record<string, Module> = {}
+export const MODULES: Record<string, Module> = {
+	repo: { job: "Reads a project's files and git history, and never writes to them.", imports: [], packages: [] },
+}
 
 const MAX_FILES = 8
 
