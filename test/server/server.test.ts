@@ -33,6 +33,7 @@ const ANSWER: Turn = {
 		scope: { base, head },
 		summary: 'Each retry now waits before the next attempt.',
 		statements: [{ text: 'The loop sleeps after each attempt.', label: 'inferred', quotes: [SLEEP] }],
+		risks: [{ text: 'A caller that needs an answer at once now waits 100 ms.', label: 'inferred', quotes: [SLEEP] }],
 		diagrams: [
 			{
 				kind: 'component',
@@ -114,6 +115,11 @@ test('a question streams its steps and a checked answer with its diagram drawn, 
 	assert.match(lines[0].step, /^Read `src\/retry\.ts`, lines 1 to 3$/)
 	const accepted = lines.find((line) => line.kind === 'accepted')
 	assert.deepEqual(accepted.answer.statements[0].quotes, [{ ...SLEEP, startLine: 4, endLine: 4 }])
+	assert.deepEqual(
+		accepted.answer.risks[0].quotes,
+		[{ ...SLEEP, startLine: 4, endLine: 4 }],
+		'the risk arrives checked',
+	)
 	const [diagram] = accepted.answer.diagrams
 	assert.match(
 		diagram.mermaid,
@@ -175,13 +181,17 @@ test('a question streams its steps and a checked answer with its diagram drawn, 
 	)
 })
 
-test('a question saved before ken kept the HEAD still opens, with no HEAD of its own', async () => {
+test('a question saved before ken kept the HEAD still opens with no HEAD of its own, and an answer saved before risks opens with none looked for', async () => {
 	const home = tempFolder('ken-home-')
 	const old = { id: 'old-1', question: 'What changed?', askedAt: '2026-11-01T10:00:00.000Z', steps: [], usage: null }
+	// An answered question as ken wrote it at f3e1e61, before answers carried risks.
+	const statement = { text: 'The loop sleeps.', label: 'inferred', quotes: [{ ...SLEEP, startLine: 4, endLine: 4 }] }
+	const answer = { summary: 'Retries wait.', statements: [statement], diagrams: [], change: null }
+	const answered = { ...old, id: 'old-2', head, outcome: 'answered', answer, recorded: [], note: '' }
 	mkdirSync(path.join(home, 'projects', base), { recursive: true })
 	writeFileSync(
 		path.join(home, 'projects', base, 'history.jsonl'),
-		`${JSON.stringify({ ...old, outcome: 'stopped' })}\n`,
+		`${JSON.stringify({ ...old, outcome: 'stopped' })}\n${JSON.stringify(answered)}\n`,
 	)
 	const server = await open(home, null)
 
@@ -189,6 +199,8 @@ test('a question saved before ken kept the HEAD still opens, with no HEAD of its
 
 	const headNow = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim()
 	assert.deepEqual([view.entry.question, view.entry.head, view.head], ['What changed?', null, headNow])
+	const reopened = await json(server, '/api/questions/old-2')
+	assert.deepEqual([reopened.entry.answer.statements, reopened.entry.answer.risks], [[statement], null])
 })
 
 test('a second question about the same commits shows the decision the first one recorded', async () => {

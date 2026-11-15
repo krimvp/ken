@@ -33,6 +33,7 @@ test('ken ask --json prints the checked answer and what it recorded, and ken rec
 				work: { title: 'Fix total' },
 				summary: 'total now adds the items.',
 				statements: [{ text: 'total returns the sum of the items instead of 0.', label: 'inferred', quotes: [SUM] }],
+				risks: [{ text: 'A caller that passes text now gets a TypeError.', label: 'inferred', quotes: [SUM] }],
 				diagrams: [
 					{
 						kind: 'component',
@@ -68,8 +69,10 @@ test('ken ask --json prints the checked answer and what it recorded, and ken rec
 	assert.equal(code, 0, `${stderr}${stdout}`)
 	const result = JSON.parse(stdout)
 	assert.equal(result.outcome, 'answered')
-	assert.deepEqual(result.answer.statements[0].quotes, [
-		{ path: 'app.py', commit: head, startLine: 2, endLine: 2, text: '    return sum(items)' },
+	const verified = [{ path: 'app.py', commit: head, startLine: 2, endLine: 2, text: '    return sum(items)' }]
+	assert.deepEqual(result.answer.statements[0].quotes, verified)
+	assert.deepEqual(result.answer.risks, [
+		{ text: 'A caller that passes text now gets a TypeError.', label: 'inferred', quotes: verified },
 	])
 	assert.deepEqual(
 		result.answer.change.commits.map((commit: { subject: string }) => commit.subject),

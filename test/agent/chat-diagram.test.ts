@@ -30,6 +30,7 @@ function answer(call: typeof CALL): Turn {
 			work: { title: 'run saves' },
 			summary: 'run now saves its result through the store.',
 			statements: [{ text: 'run calls save with "done".', label: 'inferred', quotes: [CALL] }],
+			risks: [],
 			diagrams: [
 				{
 					kind: 'component',

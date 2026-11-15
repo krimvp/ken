@@ -48,6 +48,10 @@ export async function describeEntry(
 					...statement.quotes.flatMap(quoted),
 				)
 			}
+			if (entry.risks?.length === 0) lines.push('risks: none found')
+			for (const [index, risk] of (entry.risks ?? []).entries()) {
+				lines.push(`risk ${index + 1} [${risk.label}]: ${risk.text}`, ...risk.quotes.flatMap(quoted))
+			}
 			for (const [index, diagram] of entry.diagrams.entries()) {
 				lines.push(`diagram ${index + 1}, ${diagram.kind} [${diagram.label}]: ${diagram.title}`)
 				for (const element of diagramElements(diagram)) {

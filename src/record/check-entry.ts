@@ -28,6 +28,7 @@ export type EntryDraft =
 			summary: string
 			range: { base: string; head: string }
 			statements: { text: string; label: Label; quotes: Quote[] }[]
+			risks?: { text: string; label: Label; quotes: Quote[] }[]
 			diagrams?: DiagramDraft[]
 	  } & Replaces)
 	| ({
@@ -93,15 +94,21 @@ export async function checkEntry(
 			const work = await workFacts(repo, draft.range, signal)
 			if (work.kind === 'refused') problems.push(work.problem)
 			if (draft.statements.length === 0) problems.push('the piece of work needs at least one statement.')
-			const statements = []
-			for (const [index, statement] of draft.statements.slice(0, MAX.list).entries()) {
-				const where = `statement ${index + 1}`
-				statements.push({
-					text: text(where, statement.text, MAX.text),
-					label: statement.label,
-					quotes: await quotes(where, statement.quotes),
-				})
+			const claims = async (what: string, drafts: { text: string; label: Label; quotes: Quote[] }[]) => {
+				if (drafts.length > MAX.list) problems.push(`keep the ${what}s to ${MAX.list}; there are ${drafts.length}.`)
+				const checked = []
+				for (const [index, claim] of drafts.slice(0, MAX.list).entries()) {
+					const where = `${what} ${index + 1}`
+					checked.push({
+						text: text(where, claim.text, MAX.text),
+						label: claim.label,
+						quotes: await quotes(where, claim.quotes),
+					})
+				}
+				return checked
 			}
+			const statements = await claims('statement', draft.statements)
+			const risks = draft.risks === undefined ? null : await claims('risk', draft.risks)
 			const diagrams = await checkDiagrams(repo, draft.diagrams ?? [], signal)
 			if (diagrams.kind === 'refused') problems.push(...diagrams.problems)
 			if (work.kind === 'refused') return { kind: 'refused', problems }
@@ -111,6 +118,7 @@ export async function checkEntry(
 				summary: text('summary', draft.summary, MAX.summary),
 				...work.facts,
 				statements,
+				risks,
 				diagrams: diagrams.kind === 'ok' ? diagrams.diagrams : [],
 			} satisfies Work
 			break

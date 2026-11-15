@@ -28,6 +28,7 @@ function answer(quote: { path: string; commit: string; text: string }, label = '
 			scope: { base, head: 'HEAD' },
 			summary: 'Each retry now waits before the next attempt.',
 			statements: [{ text: 'The loop sleeps after each attempt.', label, quotes: [quote] }],
+			risks: [],
 		},
 	}
 }
@@ -76,6 +77,7 @@ test('a false quote is rejected with its reasons sent to the model, and a true q
 				quotes: [{ path: 'src/retry.ts', commit: head, startLine: 4, endLine: 4, text: '\t\tsleep(100)' }],
 			},
 		],
+		risks: [],
 		diagrams: [],
 		change: {
 			base,
@@ -189,6 +191,7 @@ test('an answer about a branch that is behind main covers only the hunks the bra
 				args: {
 					scope: { base: mainTip, head: branchTip },
 					summary: 'The branch adds one line to a.ts.',
+					risks: [],
 					statements: [
 						{
 							text: 'a.ts gains a line.',

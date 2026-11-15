@@ -125,9 +125,11 @@ function parseLine(line: string, kind: string): RecordEntry | null {
 	const { id, at, ...content } = value
 	if (content.kind !== kind || typeof at !== 'string' || contentId(content) !== id) return null
 	// The id is a hash of the content, and only append writes ids, so this line holds an entry that passed checkEntry.
-	// A piece of work written before ken kept diagrams has none; its id still matches, since it hashes the line as written.
+	// A piece of work written before ken kept diagrams or risks has none; its id still matches, since it hashes the line
+	// as written. Its risks are null, not an empty list, because nobody looked for them.
 	const entry = value as RecordEntry
-	return entry.kind === 'work' && !('diagrams' in content) ? { ...entry, diagrams: [] } : entry
+	if (entry.kind !== 'work') return entry
+	return { ...entry, diagrams: entry.diagrams ?? [], risks: entry.risks ?? null }
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {

@@ -145,7 +145,7 @@ test('a note goes stale when its quoted code changes at HEAD, and stays fresh wh
 // Written by ken at 90725fb, before a piece of work kept diagrams, on this file's repository.
 const OLD_WORK_LINE = String.raw`{"id":"b3e5d43f9434","kind":"work","title":"Retries wait","summary":"Retries now wait 100 ms.","range":{"base":"11db964a574b70e1d87686b8e7fee81cb14a306a","head":"ac026d46f80b8c52eeb8d85dbcf9a6d7a63bff69"},"commits":[{"hash":"ac026d46f80b8c52eeb8d85dbcf9a6d7a63bff69","by":"unknown"},{"hash":"b300476b7f00cb2a863c7e9c7f06a65ddbc5bb44","by":"unknown"},{"hash":"31827012466733268fbd888e60a2303641346be6","by":"collaborator"},{"hash":"64ca365a1f096278af5d084c364a63756ed402eb","by":"owner-agent"}],"first":"2026-01-02T00:00:00.000Z","last":"2026-01-05T00:00:00.000Z","statements":[{"text":"The loop sleeps after each attempt.","label":"inferred","quotes":[{"path":"src/retry.ts","commit":"ac026d46f80b8c52eeb8d85dbcf9a6d7a63bff69","startLine":4,"endLine":4,"text":"\t\tsleep(100)"}]}],"replaces":null,"at":"2026-11-15T21:40:07.202Z"}`
 
-test('a piece of work written before diagrams still reads, with no diagrams, and ken record can show it', async () => {
+test('a piece of work written before diagrams and risks still reads, with no diagrams and risks never looked for, and ken record can show it', async () => {
 	const store = emptyRecord()
 	mkdirSync(path.join(root, '.ken/record'), { recursive: true })
 	writeFileSync(path.join(root, '.ken/record/work.jsonl'), `${OLD_WORK_LINE}\n`)
@@ -155,11 +155,10 @@ test('a piece of work written before diagrams still reads, with no diagrams, and
 	const [work] = record.current
 	assert.ok(work?.kind === 'work', JSON.stringify(record))
 	assert.deepEqual(
-		[work.id, work.range.head, work.statements.length, work.diagrams],
-		['b3e5d43f9434', hashes[4], 1, []],
+		[work.id, work.range.head, work.statements.length, work.diagrams, work.risks],
+		['b3e5d43f9434', hashes[4], 1, [], null],
 	)
-	assert.match(
-		await describeEntry(repo, record, work),
-		/statement 1 \[inferred\]: The loop sleeps after each attempt\./,
-	)
+	const described = await describeEntry(repo, record, work)
+	assert.match(described, /statement 1 \[inferred\]: The loop sleeps after each attempt\./)
+	assert.doesNotMatch(described, /^risk/m, 'an old piece of work does not claim that no risks were found')
 })

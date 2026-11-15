@@ -17,8 +17,9 @@ export type Who = 'owner' | 'owner-agent' | 'collaborator' | 'unknown'
 export const UNDO = ['easy', 'some-work', 'hard'] as const
 export type Undo = (typeof UNDO)[number]
 
-// The accepted answer that explained the work is kept as its summary, statements and diagrams, so it can be shown
-// again without a model. first and last are the dates of the oldest and newest commit.
+// The accepted answer that explained the work is kept as its summary, statements, risks and diagrams, so it can be
+// shown again without a model. risks is null in a piece of work written before ken asked for them. first and last are
+// the dates of the oldest and newest commit.
 export type Work = {
 	kind: 'work'
 	title: string
@@ -28,6 +29,7 @@ export type Work = {
 	first: string
 	last: string
 	statements: Statement[]
+	risks: Statement[] | null
 	diagrams: Diagram[]
 }
 

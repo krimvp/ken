@@ -1,9 +1,9 @@
-// What an accepted answer adds to the project record: the piece of work it explains, the decisions it names, and its
-// topics with a note each. Every entry goes through the record's own check first, and a refused entry rejects the
+// What an accepted answer adds to the project record: the piece of work it explains, with its statements and risks,
+// the decisions it names, and its topics with a note each. Every entry goes through the record's own check first, and a refused entry rejects the
 // whole answer, the same way a bad quote does. A decision from the chat is always "inferred": the model worked it out.
 import type { Quote, VerifiedQuote } from '../../checks/index.ts'
 import { diagramDraft } from '../../diagram/index.ts'
-import type { EntryDraft, EntryId, RecordEntry, RecordStore, Undo } from '../../record/index.ts'
+import type { EntryDraft, EntryId, RecordEntry, RecordStore, Statement, Undo } from '../../record/index.ts'
 import type { Answer } from './answer.ts'
 
 export type RecordArgs = {
@@ -53,13 +53,14 @@ export async function recordAnswer(
 	let work = kept
 	if (args.work && !range) problems.push('Work: a piece of work needs a scope, the range of commits it covers.')
 	if (args.work && range && !kept) {
-		const statements = answer.statements.map((s) => ({ text: s.text, label: s.label, quotes: s.quotes.map(raw) }))
+		const claim = (s: Statement) => ({ text: s.text, label: s.label, quotes: s.quotes.map(raw) })
 		const entry = await add('Work', {
 			kind: 'work',
 			title: args.work.title,
 			summary: answer.summary,
 			range,
-			statements,
+			statements: answer.statements.map(claim),
+			...(answer.risks === null ? {} : { risks: answer.risks.map(claim) }),
 			diagrams: answer.diagrams.map(diagramDraft),
 		})
 		work = entry?.id ?? null

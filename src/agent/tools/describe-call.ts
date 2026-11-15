@@ -30,7 +30,10 @@ const SENTENCES: Record<string, (args: Said) => string> = {
 	},
 	answer: (args) => {
 		const statements = args.count('statements')
-		return `Sent an answer with ${statements} ${statements === 1 ? 'statement' : 'statements'} for ken to check`
+		const risks = args.count('risks')
+		const listed = [`${statements} ${statements === 1 ? 'statement' : 'statements'}`]
+		if (risks > 0) listed.push(`${risks} ${risks === 1 ? 'risk' : 'risks'}`)
+		return `Sent an answer with ${listed.join(' and ')} for ken to check`
 	},
 }
 

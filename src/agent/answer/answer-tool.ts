@@ -1,6 +1,7 @@
 // The one way an answer reaches the reader. The model sends it here, checkAnswer decides, and the result tells the
 // model what to fix. A question allows MAX_REJECTIONS rejected answers, so a model that cannot quote stops there
-// instead of trying forever.
+// instead of trying forever. A problem of form, which the model fixes without reading code again, comes back first and
+// does not use an attempt.
 import type { JsonObject, JsonValue, Tool } from 'aigent/plugin'
 import type { Quote } from '../../checks/index.ts'
 import { CARDINALITIES, DIAGRAM_BOUNDS, DIAGRAM_KINDS, type DiagramDraft } from '../../diagram/index.ts'
@@ -16,6 +17,8 @@ import { type RecordArgs, type Recorded, recordAnswer } from './record-answer.ts
 
 export const MAX_REJECTIONS = 3
 const MAX_LISTED_HUNKS = 40
+// Two short sentences. A longer summary pushes the checked part of the answer off the reader's first screen.
+const MAX_SUMMARY_CHARS = 280
 
 // What one question has seen of the answer tool. The session makes a new one for each question.
 export type AnswerRound = { rejections: number; answer: Answer | null; emit: (event: ChatEvent) => void }
@@ -32,6 +35,13 @@ export function answerTool(repo: Repository, store: RecordStore, round: () => An
 				return reply('An answer is already accepted for this question. Write your one or two closing sentences now.')
 			}
 			if (current.rejections >= MAX_REJECTIONS) return refuse('No attempts are left for this question. Stop now.')
+			const form = formProblems(args)
+			if (form.length > 0) {
+				const head = 'Answer sent back. This did not use one of your attempts. The reader saw nothing.'
+				return refuse(
+					[head, ...form.map((problem) => `- ${problem}`), 'Fix this and send the whole answer again.'].join('\n'),
+				)
+			}
 			const settled = await settle(repo, store, args, ctx.signal)
 			if (settled.kind === 'accepted') {
 				current.answer = settled.answer
@@ -43,6 +53,22 @@ export function answerTool(repo: Repository, store: RecordStore, round: () => An
 			return refuse(rejection(settled.problems, current.rejections))
 		},
 	}
+}
+
+function formProblems(args: JsonObject): string[] {
+	const problems: string[] = []
+	const summary = typeof args.summary === 'string' ? args.summary.trim() : ''
+	if (summary.length > MAX_SUMMARY_CHARS) {
+		problems.push(
+			`The summary has ${summary.length} characters. Keep it to ${MAX_SUMMARY_CHARS}: one or two short sentences that restate the answer. Put the detail in statements, decisions and risks.`,
+		)
+	}
+	if (args.scope !== undefined && args.risks === undefined) {
+		problems.push(
+			'An answer about a change needs risks: each thing that could go wrong or that the owner should watch, with the lines it starts from. If you looked and found none, send risks as an empty list.',
+		)
+	}
+	return problems
 }
 
 async function settle(
@@ -64,9 +90,11 @@ async function settle(
 }
 
 function confirmation(answer: Answer, recorded: Extract<Recorded, { kind: 'recorded' }>): string {
-	const quotes = answer.statements.reduce((sum, statement) => sum + statement.quotes.length, 0)
+	const claims = [...answer.statements, ...(answer.risks ?? [])]
+	const quotes = claims.reduce((sum, claim) => sum + claim.quotes.length, 0)
+	const risks = answer.risks === null ? '' : `${answer.risks.length} risks, `
 	const lines = [
-		`Answer accepted: ${answer.statements.length} statements, ${answer.diagrams.length} diagrams, ${quotes} quotes in the statements. ken shows it to the reader.`,
+		`Answer accepted: ${answer.statements.length} statements, ${risks}${answer.diagrams.length} diagrams, ${quotes} quotes in the statements and risks. ken shows it to the reader.`,
 	]
 	if (recorded.kept) {
 		lines.push(`Piece of work ${recorded.kept} already explains this range, so ken kept it and wrote no new one.`)
@@ -85,7 +113,7 @@ function confirmation(answer: Answer, recorded: Extract<Recorded, { kind: 'recor
 		if (binary.length > 0) lines.push(`Binary files, which no quote can cover: ${binary.join(', ')}.`)
 	}
 	lines.push(
-		'Now write one or two sentences to the reader: say what the answer left out, and offer to go deeper. Do not repeat the answer.',
+		'Now write one or two sentences to the reader that say what the answer left out. Say nothing else, and do not repeat the answer.',
 	)
 	return lines.join('\n')
 }
@@ -109,16 +137,15 @@ function draftOf(args: JsonObject): AnswerDraft {
 	return {
 		summary: read.text('summary'),
 		scope: scope && { base: scope.text('base'), head: scope.text('head') },
-		statements: listOf(args.statements).map((raw) => {
-			const statement = readArgs(raw, 'answer statement')
-			return {
-				text: statement.text('text'),
-				label: statement.text('label'),
-				quotes: listOf(raw.quotes).map(quoteOf),
-			}
-		}),
+		statements: listOf(args.statements).map((raw) => claimOf(raw, 'answer statement')),
+		risks: args.risks === undefined ? null : listOf(args.risks).map((raw) => claimOf(raw, 'answer risk')),
 		diagrams: optionalList(args.diagrams).map(diagramDraftOf),
 	}
+}
+
+function claimOf(raw: JsonObject, what: string) {
+	const claim = readArgs(raw, what)
+	return { text: claim.text('text'), label: claim.text('label'), quotes: listOf(raw.quotes).map(quoteOf) }
 }
 
 function diagramDraftOf(raw: JsonObject): DiagramDraft {
@@ -242,6 +269,21 @@ const QUOTE_SCHEMA = {
 		line: { type: 'integer', minimum: 1, description: 'The number of the first quoted line' },
 	},
 	required: ['path', 'commit', 'text'],
+	additionalProperties: false,
+} as const
+
+const CLAIM_SCHEMA = {
+	type: 'object',
+	properties: {
+		text: { type: 'string', description: 'One idea in one or two short sentences, in plain words' },
+		label: {
+			type: 'string',
+			description:
+				'"inferred" for what you worked out from the code or the diff, every reason why included. "found-by-search" for a relation between pieces of code, such as "this calls that", that you found by searching and did not prove.',
+		},
+		quotes: { type: 'array', minItems: 1, items: QUOTE_SCHEMA },
+	},
+	required: ['text', 'label', 'quotes'],
 	additionalProperties: false,
 } as const
 
@@ -437,24 +479,21 @@ const ANSWER_SCHEMA = {
 			description: `Basic diagrams that lead the answer, at most ${DIAGRAM_BOUNDS.diagrams}. ken draws them.`,
 			items: DIAGRAM_SCHEMA,
 		},
-		summary: { type: 'string', description: 'One to three sentences that answer the question from the top' },
+		summary: {
+			type: 'string',
+			description: `One or two short sentences, at most ${MAX_SUMMARY_CHARS} characters, that restate the answer from the top. Nothing in it that is not in a statement, a decision or a risk.`,
+		},
 		statements: {
 			type: 'array',
 			minItems: 1,
-			items: {
-				type: 'object',
-				properties: {
-					text: { type: 'string', description: 'One claim about the code, in plain words' },
-					label: {
-						type: 'string',
-						description:
-							'"inferred" for what you worked out from the code or the diff, every reason why included. "found-by-search" for a relation between pieces of code, such as "this calls that", that you found by searching and did not prove.',
-					},
-					quotes: { type: 'array', minItems: 1, items: QUOTE_SCHEMA },
-				},
-				required: ['text', 'label', 'quotes'],
-				additionalProperties: false,
-			},
+			description: 'Claims about the code, one idea each, the most important first',
+			items: CLAIM_SCHEMA,
+		},
+		risks: {
+			type: 'array',
+			description:
+				'Required when the answer has a scope. Each thing that could go wrong or that the owner should watch after the change, one per item, with the lines it starts from: often a caller or another user of a changed value outside the diff. An empty list says you looked and found none.',
+			items: CLAIM_SCHEMA,
 		},
 	},
 	required: ['summary', 'statements'],

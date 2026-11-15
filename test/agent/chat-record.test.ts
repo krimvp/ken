@@ -30,7 +30,7 @@ const TOPIC = { name: 'retry logic', quotes: [SLEEP], note: 'retry calls attempt
 function answer(extra: Record<string, unknown>): Turn {
 	return {
 		tool: 'ken__answer',
-		args: { scope: { base, head }, summary: 'Retries now wait 100 ms.', statements: [STATEMENT], ...extra },
+		args: { scope: { base, head }, summary: 'Retries now wait 100 ms.', statements: [STATEMENT], risks: [], ...extra },
 	}
 }
 
