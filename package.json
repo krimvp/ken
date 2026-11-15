@@ -7,6 +7,7 @@
 		"node": ">=22.19"
 	},
 	"scripts": {
+		"ken": "node --env-file-if-exists=.env src/cli/main.ts",
 		"typecheck": "tsc --noEmit",
 		"lint": "biome check --error-on-warnings .",
 		"format": "biome check --write .",
@@ -14,6 +15,9 @@
 		"check:structure": "node scripts/check/structure.ts",
 		"check:prose": "node scripts/check/prose.ts",
 		"check": "npm run typecheck && npm run lint && npm test && npm run check:structure && npm run check:prose"
+	},
+	"bin": {
+		"ken": "src/cli/main.ts"
 	},
 	"dependencies": {
 		"aigent": "file:vendor/aigent-0.0.0.tgz"

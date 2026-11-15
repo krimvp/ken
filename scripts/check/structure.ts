@@ -20,6 +20,7 @@ export const MODULES: Record<string, Module> = {
 		imports: ['repo', 'checks'],
 		packages: ['aigent'],
 	},
+	cli: { job: 'Runs ken in the terminal: a chat, or one question for scripts.', imports: ['agent'], packages: [] },
 }
 
 const MAX_FILES = 8
