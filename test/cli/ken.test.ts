@@ -22,18 +22,25 @@ function ken(args: string[], env: Record<string, string | undefined>) {
 	})
 }
 
-test('ken ask --json prints the checked answer, with its quote read from git', async () => {
+const SUM = { path: 'app.py', commit: head, text: '    return sum(items)' }
+
+test('ken ask --json prints the checked answer and what it recorded, and ken record reads it back with no model', async () => {
 	const model = await scriptedModel([
 		{
 			tool: 'ken__answer',
 			args: {
 				scope: { base, head },
+				work: { title: 'Fix total' },
 				summary: 'total now adds the items.',
-				statements: [
+				statements: [{ text: 'total returns the sum of the items instead of 0.', label: 'inferred', quotes: [SUM] }],
+				decisions: [
 					{
-						text: 'total returns the sum of the items instead of 0.',
-						label: 'inferred',
-						quotes: [{ path: 'app.py', commit: head, text: '    return sum(items)' }],
+						question: 'How does total add the items?',
+						chosen: "Python's built-in sum",
+						rejected: [],
+						undo: 'easy',
+						needs_owner: false,
+						quotes: [SUM],
 					},
 				],
 			},
@@ -60,6 +67,19 @@ test('ken ask --json prints the checked answer, with its quote read from git', a
 		['fix: add the items'],
 	)
 	assert.deepEqual(result.answer.change.uncovered, [])
+	assert.deepEqual(
+		result.recorded.map((entry: { kind: string }) => entry.kind),
+		['work', 'decision'],
+	)
+
+	const listed = await ken(['record', '--repo', root, '--json'], NO_KEN_VARIABLES)
+	assert.equal(listed.code, 0, listed.stderr)
+	assert.deepEqual(JSON.parse(listed.stdout), result.recorded)
+	const decision = result.recorded[1]
+	const one = await ken(['record', decision.id, '--repo', root, '--json'], NO_KEN_VARIABLES)
+	assert.deepEqual(JSON.parse(one.stdout), decision)
+	assert.equal(decision.label, 'inferred')
+	assert.equal((await ken(['record', 'no-such-id', '--repo', root], NO_KEN_VARIABLES)).code, 1)
 })
 
 test('ken refuses to start without a model, and says what to set', async () => {

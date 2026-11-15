@@ -1,14 +1,18 @@
 #!/usr/bin/env node
 // The ken command. "ken chat" talks about a repository in the terminal. "ken ask" answers one question and exits, as
 // text or as JSON for scripts. Exit code 0 means a checked answer, 1 means none, 2 means ken could not start.
+// "ken record" shows the project record and needs no model.
 import { createInterface } from 'node:readline/promises'
 import { parseArgs } from 'node:util'
 import { type Answer, type Chat, type ChatEvent, type Outcome, readModelConfig, startChat } from '../agent/index.ts'
+import type { RecordEntry } from '../record/index.ts'
 import { printQuestion } from './print-question.ts'
+import { printRecord } from './print-record.ts'
 
 const USAGE = `Usage:
   ken chat [--repo <path>]
   ken ask "<question>" [--repo <path>] [--json]
+  ken record [<id>] [--repo <path>] [--json]
 
 Name the model with --model, --base-url and --api-key-env,
 or with KEN_MODEL, KEN_BASE_URL and KEN_API_KEY_ENV.`
@@ -20,6 +24,7 @@ async function main(argv: string[]): Promise<number> {
 		return 2
 	}
 	const { values } = parsed
+	if (parsed.kind === 'record') return await printRecord(values.repo ?? process.cwd(), parsed.id, values.json === true)
 	const flags = { model: values.model, baseUrl: values['base-url'], apiKeyEnv: values['api-key-env'] }
 	const config = readModelConfig(flags, process.env)
 	if (config.kind !== 'ok') {
@@ -60,6 +65,7 @@ function parseCommand(argv: string[]) {
 	if (command === 'chat' && rest.length === 0 && !values.json) return { kind: 'chat', values } as const
 	if (command === 'ask' && rest.length === 1 && rest[0]) return { kind: 'ask', values, question: rest[0] } as const
 	if (command === 'ask') return { kind: 'usage', problem: 'ken ask takes one question, in quotes.' } as const
+	if (command === 'record' && rest.length <= 1) return { kind: 'record', values, id: rest[0] } as const
 	return {
 		kind: 'usage',
 		problem: command ? `ken does not know "${positionals.join(' ')}".` : 'Name a command.',
@@ -92,15 +98,19 @@ async function askForJson(chat: Chat, question: string): Promise<number> {
 	const result: {
 		outcome: Outcome | 'error'
 		answer: Answer | null
+		recorded: RecordEntry[]
 		rejected: Extract<ChatEvent, { kind: 'rejected' }>[]
 		usage: Extract<ChatEvent, { kind: 'usage' }> | null
 		text: string
 		error: string | null
-	} = { outcome: 'error', answer: null, rejected: [], usage: null, text: '', error: null }
+	} = { outcome: 'error', answer: null, recorded: [], rejected: [], usage: null, text: '', error: null }
 	for await (const event of chat.ask(question)) {
 		if (event.kind === 'text') result.text += event.delta
 		if (event.kind === 'rejected') result.rejected.push(event)
-		if (event.kind === 'accepted') result.answer = event.answer
+		if (event.kind === 'accepted') {
+			result.answer = event.answer
+			result.recorded = event.recorded
+		}
 		if (event.kind === 'usage') result.usage = event
 		if (event.kind === 'done') result.outcome = event.outcome
 		if (event.kind === 'error') result.error = event.message

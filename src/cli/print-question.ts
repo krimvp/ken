@@ -1,5 +1,6 @@
 import { styleText } from 'node:util'
 import type { Answer, ChatEvent } from '../agent/index.ts'
+import { entryLine } from '../record/index.ts'
 
 type Paint = (format: Parameters<typeof styleText>[0], text: string) => string
 
@@ -27,6 +28,10 @@ export async function printQuestion(events: AsyncIterable<ChatEvent>, out: NodeJ
 				break
 			case 'accepted':
 				line(`\n${formatAnswer(event.answer, paint)}`)
+				if (event.recorded.length > 0) {
+					line(paint('bold', `\nAdded to the project record (${event.recorded.length}):`))
+					for (const entry of event.recorded) line(`  ${entryLine(entry)}`)
+				}
 				break
 			case 'usage':
 				line(paint('dim', `\n${event.inputTokens} tokens in, ${event.outputTokens} out, ${event.seconds} s`))
