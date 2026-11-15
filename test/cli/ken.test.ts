@@ -109,11 +109,22 @@ test('ken refuses to start without a model, and says what to set', async () => {
 			},
 			names: ['KEN_NO_KEY'],
 		},
+		{
+			env: {
+				...NO_KEN_VARIABLES,
+				KEN_MODEL: 'm',
+				KEN_BASE_URL: 'http://127.0.0.1:9/v1',
+				KEN_API_KEY_ENV: 'KEN_SHORT_KEY',
+				KEN_SHORT_KEY: 'abc',
+			},
+			names: ['KEN_SHORT_KEY'],
+		},
 	]
 	for (const { env, names } of cases) {
 		const { code, stdout, stderr } = await ken(['ask', 'What changed?', '--repo', root], env)
-		assert.equal(code, 2)
+		assert.equal(code, 2, stderr)
 		assert.equal(stdout, '')
 		for (const name of names) assert.ok(stderr.includes(name), `the message names ${name}: ${stderr}`)
+		assert.doesNotMatch(stderr, /^\s+at /m, 'a plain message, not a stack trace')
 	}
 })

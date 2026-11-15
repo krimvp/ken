@@ -19,6 +19,8 @@ const API_KEY_ENV: ModelSetting = {
 	means: 'the name of the variable that holds the key',
 }
 
+const MIN_KEY_LENGTH = 8
+
 export const MODEL_EXAMPLE = 'KEN_MODEL=gpt-oss:120b KEN_BASE_URL=https://ollama.com/v1 KEN_API_KEY_ENV=OLLAMA_API_KEY'
 
 // missing lists the settings that are not given at all. It is empty when a setting is given but does not work.
@@ -45,10 +47,19 @@ export function readModelConfig(
 	if (!URL.canParse(baseUrl)) {
 		return { kind: 'unset', message: `The base URL "${baseUrl}" is not a URL.`, missing: [] }
 	}
-	if (!env[apiKeyEnv]) {
+	const key = env[apiKeyEnv]
+	if (!key) {
 		return {
 			kind: 'unset',
 			message: `KEN_API_KEY_ENV names ${apiKeyEnv}, but ${apiKeyEnv} is not set. Put the key in it.`,
+			missing: [],
+		}
+	}
+	// aigent hides the key wherever it appears in text, so it refuses a key short enough to match ordinary words.
+	if (key.length < MIN_KEY_LENGTH) {
+		return {
+			kind: 'unset',
+			message: `${apiKeyEnv} holds ${key.length} characters, and an API key has at least ${MIN_KEY_LENGTH}. Check that ${apiKeyEnv} holds the whole key.`,
 			missing: [],
 		}
 	}
