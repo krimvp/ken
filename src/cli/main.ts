@@ -99,13 +99,15 @@ async function askForJson(chat: Chat, question: string): Promise<number> {
 		outcome: Outcome | 'error'
 		answer: Answer | null
 		recorded: RecordEntry[]
+		tools: Extract<ChatEvent, { kind: 'tool' }>[]
 		rejected: Extract<ChatEvent, { kind: 'rejected' }>[]
 		usage: Extract<ChatEvent, { kind: 'usage' }> | null
 		text: string
 		error: string | null
-	} = { outcome: 'error', answer: null, recorded: [], rejected: [], usage: null, text: '', error: null }
+	} = { outcome: 'error', answer: null, recorded: [], tools: [], rejected: [], usage: null, text: '', error: null }
 	for await (const event of chat.ask(question)) {
 		if (event.kind === 'text') result.text += event.delta
+		if (event.kind === 'tool') result.tools.push(event)
 		if (event.kind === 'rejected') result.rejected.push(event)
 		if (event.kind === 'accepted') {
 			result.answer = event.answer
