@@ -42,8 +42,10 @@ test('a diagram within the rules is accepted and numbered; one over the bounds, 
 	assert.deepEqual(diagram.arrows[0]?.from, 'app', 'an arrow names the box as the box spells it')
 	assert.deepEqual(diagram.arrows[0]?.quotes[0]?.startLine, 3)
 
-	const nine = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i']
-	assert.match(await refusal(component(nine, [{ from: 'a', to: 'b' }])), /9 boxes; keep it to 8/)
+	const seven = ['a', 'b', 'c', 'd', 'e', 'f', 'g']
+	assert.match(await refusal(component(seven, [{ from: 'a', to: 'b' }])), /7 boxes; keep it to 6/)
+	const nineArrows = Array.from({ length: 9 }, () => ({ from: 'app', to: 'store' }))
+	assert.match(await refusal(component(['app', 'store'], nineArrows)), /9 arrows; keep it to 8/)
 	assert.match(await refusal(component(['app', 'store'], [{ from: 'app', to: 'disk' }])), /arrow 1 .*"disk"/)
 	assert.match(
 		await refusal(component(['app', 'store'], [{ from: 'app', to: 'store', quotes: [] }])),

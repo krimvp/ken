@@ -9,8 +9,8 @@ import type { Arrow, Diagram, DiagramDraft, DiagramKind } from './diagram.ts'
 // everything, and the reader is better served by two diagrams or by prose.
 export const DIAGRAM_BOUNDS = {
 	diagrams: 3,
-	nodes: 8,
-	edges: 10,
+	nodes: 6,
+	edges: 8,
 	fields: 6,
 	quotes: 3,
 	title: 80,
