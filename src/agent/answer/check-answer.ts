@@ -1,6 +1,6 @@
 // The plan's rule for an answer: ken accepts it only when every quote passes checkQuote and every statement carries a
 // label this slice allows. One bad quote rejects the whole answer. Only then does ken read the change facts from git.
-import { checkCoverage, checkQuote, type Quote, type QuoteCheck } from '../../checks/index.ts'
+import { checkCoverage, checkQuote, explainQuote, type Quote } from '../../checks/index.ts'
 import { type Repository, resolveRange } from '../../repo/index.ts'
 import { scopeProblem } from '../tools/exploration-tools.ts'
 import { type Answer, type Change, LABELS, type Label, type Statement } from './answer.ts'
@@ -28,7 +28,7 @@ export async function checkAnswer(repo: Repository, draft: AnswerDraft, signal: 
 			if (check.kind === 'verified') return [check.quote]
 			const quote = statement.quotes[at]
 			problems.push(
-				`${where}, quote ${at + 1} (${quote?.path} at ${quote?.commit}): ${whyNot(check, quote?.text ?? '')}`,
+				`${where}, quote ${at + 1} (${quote?.path} at ${quote?.commit}): ${explainQuote(check, quote?.text ?? '')}`,
 			)
 			return []
 		})
@@ -85,30 +85,4 @@ function labelOf(raw: string): { kind: 'ok'; label: Label } | { kind: 'refused';
 		}
 	}
 	return { kind: 'refused', problem: `"${raw}" is not a label. Use "inferred" or "found-by-search".` }
-}
-
-function whyNot(check: Exclude<QuoteCheck, { kind: 'verified' }>, text: string): string {
-	switch (check.kind) {
-		case 'not-found': {
-			const numbered = /^\s*[+-]?\s*\d+\t/m.test(text) ? ' Leave out the line numbers and the + or - signs.' : ''
-			if (check.closest.length === 0) {
-				return `these lines are not in the file at that commit, and no line holds the first quoted line. Read the file again and copy the lines.${numbered}`
-			}
-			// As JSON strings, so the model sees the exact spaces and tabs that start each line, which models often miscount.
-			const closest = check.closest.map((line) => `line ${line.line}: ${JSON.stringify(line.text)}`).join('\n  ')
-			return `these lines are not in the file at that commit. Lines that hold the first quoted line, as JSON strings:\n  ${closest}\nEach quoted line must match the file line exactly, with the same spaces or tabs at its start.${numbered}`
-		}
-		case 'empty':
-			return 'the quote holds no code.'
-		case 'refused':
-			return `${check.reason}.`
-		case 'no-commit':
-			return `there is no commit "${check.ref}".`
-		case 'no-file':
-			return 'there is no such file at that commit.'
-		case 'too-large':
-			return 'the file is too large to check.'
-		default:
-			return check satisfies never
-	}
 }

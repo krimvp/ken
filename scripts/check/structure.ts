@@ -15,12 +15,21 @@ export const MODULES: Record<string, Module> = {
 		imports: ['repo'],
 		packages: [],
 	},
+	record: {
+		job: 'The project record: an append-only store of pieces of work, decisions, topics and notes.',
+		imports: ['repo', 'checks'],
+		packages: [],
+	},
 	agent: {
 		job: 'Runs a chat with a model that explores the project with read-only tools and answers only with checked quotes.',
-		imports: ['repo', 'checks'],
+		imports: ['repo', 'checks', 'record'],
 		packages: ['aigent'],
 	},
-	cli: { job: 'Runs ken in the terminal: a chat, or one question for scripts.', imports: ['agent'], packages: [] },
+	cli: {
+		job: 'Runs ken in the terminal: a chat, one question for scripts, or the project record.',
+		imports: ['agent', 'record', 'repo'],
+		packages: [],
+	},
 }
 
 const MAX_FILES = 8
