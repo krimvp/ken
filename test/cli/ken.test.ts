@@ -33,6 +33,15 @@ test('ken ask --json prints the checked answer and what it recorded, and ken rec
 				work: { title: 'Fix total' },
 				summary: 'total now adds the items.',
 				statements: [{ text: 'total returns the sum of the items instead of 0.', label: 'inferred', quotes: [SUM] }],
+				diagrams: [
+					{
+						kind: 'component',
+						title: 'What total uses',
+						label: 'found-by-search',
+						boxes: [{ name: 'total' }, { name: 'sum' }],
+						arrows: [{ from: 'total', to: 'sum', text: 'calls', quotes: [SUM] }],
+					},
+				],
 				decisions: [
 					{
 						question: 'How does total add the items?',
@@ -67,6 +76,12 @@ test('ken ask --json prints the checked answer and what it recorded, and ken rec
 		['fix: add the items'],
 	)
 	assert.deepEqual(result.answer.change.uncovered, [])
+	const [diagram] = result.answer.diagrams
+	assert.deepEqual(
+		[diagram.kind, diagram.arrows[0].number, diagram.arrows[0].label],
+		['component', 3, 'found-by-search'],
+	)
+	assert.match(diagram.mermaid, /^flowchart LR\n.*"3\. calls"/s, 'the JSON carries the Mermaid text that draws it')
 	assert.deepEqual(
 		result.recorded.map((entry: { kind: string }) => entry.kind),
 		['work', 'decision'],

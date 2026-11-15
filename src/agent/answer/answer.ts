@@ -1,13 +1,10 @@
 // What ken tells its reader, as checked data. Every statement carries a label from the plan and at least one quote
-// that passed checkQuote. An answer about a change also carries the change facts, which ken reads from git and the
-// model never supplies.
+// that passed checkQuote, and so does every arrow, message and relation in its diagrams. An answer about a change also
+// carries the change facts, which ken reads from git and the model never supplies.
 import type { ChangedHunk } from '../../checks/index.ts'
-import type { Label, Statement } from '../../record/index.ts'
+import type { Diagram } from '../../diagram/index.ts'
+import type { Statement } from '../../record/index.ts'
 import type { Commit, CommitHash } from '../../repo/index.ts'
-
-// The plan has four labels. "recorded" and "from-the-session" need decisions logged by coding agents and their
-// saved transcripts, which arrive in slice 5, so until then a statement may carry only these two.
-export const LABELS = ['inferred', 'found-by-search'] as const satisfies Label[]
 
 export type Change = {
 	base: CommitHash
@@ -19,4 +16,4 @@ export type Change = {
 }
 
 // change is null when the question was not about a range of commits.
-export type Answer = { summary: string; statements: Statement[]; change: Change | null }
+export type Answer = { summary: string; statements: Statement[]; diagrams: Diagram[]; change: Change | null }

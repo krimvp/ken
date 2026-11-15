@@ -7,6 +7,7 @@ import { parseArgs } from 'node:util'
 import { type Answer, type Chat, type ChatEvent, type Outcome, readModelConfig, startChat } from '../agent/index.ts'
 import type { RecordEntry } from '../record/index.ts'
 import { openPage } from './open-page.ts'
+import { withMermaid } from './print-diagram.ts'
 import { printQuestion } from './print-question.ts'
 import { printRecord } from './print-record.ts'
 
@@ -116,7 +117,7 @@ async function askForJson(chat: Chat, question: string): Promise<number> {
 		if (event.kind === 'tool') result.tools.push(event)
 		if (event.kind === 'rejected') result.rejected.push(event)
 		if (event.kind === 'accepted') {
-			result.answer = event.answer
+			result.answer = withMermaid(event.answer)
 			result.recorded = event.recorded
 		}
 		if (event.kind === 'usage') result.usage = event

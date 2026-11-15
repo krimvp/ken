@@ -2,6 +2,7 @@
 // topics with a note each. Every entry goes through the record's own check first, and a refused entry rejects the
 // whole answer, the same way a bad quote does. A decision from the chat is always "inferred": the model worked it out.
 import type { Quote, VerifiedQuote } from '../../checks/index.ts'
+import { diagramDraft } from '../../diagram/index.ts'
 import type { EntryDraft, EntryId, RecordEntry, RecordStore, Undo } from '../../record/index.ts'
 import type { Answer } from './answer.ts'
 
@@ -59,6 +60,7 @@ export async function recordAnswer(
 			summary: answer.summary,
 			range,
 			statements,
+			diagrams: answer.diagrams.map(diagramDraft),
 		})
 		work = entry?.id ?? null
 	}

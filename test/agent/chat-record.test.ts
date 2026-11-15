@@ -109,3 +109,23 @@ test('a topic named like one in the record, in another case and spacing, is refu
 	const topics = (await store.read()).entries.filter((e) => e.kind === 'topic')
 	assert.equal(topics.length, 1)
 })
+
+test('decisions sent as JSON text are stored, raw tabs in its quotes included, and JSON text that lacks a field is rejected with the field named', async () => {
+	const { undo, ...withoutUndo } = DECISION
+	const waits = { ...DECISION, question: 'Does a retry wait after the last attempt too?' }
+	const { events, requests } = await ask([
+		answer({ decisions: JSON.stringify([withoutUndo]) }),
+		// The quote holds tab-indented code. A model that writes the tabs raw inside the JSON text makes it invalid JSON.
+		answer({ decisions: JSON.stringify([waits]).replaceAll('\\t', '\t') }),
+		{ text: 'Done.' },
+	])
+
+	assert.deepEqual(
+		events.filter((event) => event.kind === 'rejected' || event.kind === 'accepted').map((event) => event.kind),
+		['rejected', 'accepted'],
+	)
+	const toModel = toolResults(requests[1])[0] ?? ''
+	assert.ok(toModel.includes('decisions, item 1 needs "undo"'), `the model is told what is missing: ${toModel}`)
+	const stored = accepted(events).recorded.find((entry) => entry.kind === 'decision')
+	assert.deepEqual(stored?.kind === 'decision' && [stored.question, stored.undo], [waits.question, undo])
+})

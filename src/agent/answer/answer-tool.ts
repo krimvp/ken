@@ -3,6 +3,7 @@
 // instead of trying forever.
 import type { JsonObject, JsonValue, Tool } from 'aigent/plugin'
 import type { Quote } from '../../checks/index.ts'
+import { CARDINALITIES, DIAGRAM_BOUNDS, DIAGRAM_KINDS, type DiagramDraft } from '../../diagram/index.ts'
 import { type RecordEntry, type RecordStore, UNDO } from '../../record/index.ts'
 import type { Repository } from '../../repo/index.ts'
 import type { ChatEvent } from '../chat-event.ts'
@@ -10,6 +11,7 @@ import { hunkHeader } from '../tools/diff-tool.ts'
 import { readArgs, refuse, reply } from '../tools/tool-edge.ts'
 import type { Answer } from './answer.ts'
 import { type AnswerDraft, checkAnswer } from './check-answer.ts'
+import { allowJsonText, readJsonText } from './json-text.ts'
 import { type RecordArgs, type Recorded, recordAnswer } from './record-answer.ts'
 
 export const MAX_REJECTIONS = 3
@@ -22,34 +24,49 @@ export function answerTool(repo: Repository, store: RecordStore, round: () => An
 	return {
 		name: 'answer',
 		description:
-			'Send your answer to the reader. ken checks every quote against git and rejects the whole answer if one quote is not in its file at its commit. It stores the piece of work, the decisions and the topics you send in the project record. Call it once, when you have read the code the answer rests on.',
-		parameters: ANSWER_SCHEMA,
+			'Send your answer to the reader. ken checks every quote against git and rejects the whole answer if one quote is not in its file at its commit. ken draws the diagrams you send. It stores the piece of work, its diagrams, the decisions and the topics you send in the project record. Call it once, when you have read the code the answer rests on.',
+		parameters: PARAMETERS,
 		async execute(args, ctx) {
 			const current = round()
 			if (current.answer) {
 				return reply('An answer is already accepted for this question. Write your one or two closing sentences now.')
 			}
 			if (current.rejections >= MAX_REJECTIONS) return refuse('No attempts are left for this question. Stop now.')
-			const check = await checkAnswer(repo, draftOf(args), ctx.signal)
-			const recorded =
-				check.kind === 'accepted' ? await recordAnswer(store, check.answer, recordArgsOf(args), ctx.signal) : check
-			if (check.kind === 'accepted' && recorded.kind === 'recorded') {
-				current.answer = check.answer
-				current.emit({ kind: 'accepted', answer: check.answer, recorded: recorded.entries })
-				return reply(confirmation(check.answer, recorded))
+			const settled = await settle(repo, store, args, ctx.signal)
+			if (settled.kind === 'accepted') {
+				current.answer = settled.answer
+				current.emit({ kind: 'accepted', answer: settled.answer, recorded: settled.recorded.entries })
+				return reply(confirmation(settled.answer, settled.recorded))
 			}
-			const problems = recorded.kind === 'recorded' ? [] : recorded.problems
 			current.rejections += 1
-			current.emit({ kind: 'rejected', attempt: current.rejections, problems })
-			return refuse(rejection(problems, current.rejections))
+			current.emit({ kind: 'rejected', attempt: current.rejections, problems: settled.problems })
+			return refuse(rejection(settled.problems, current.rejections))
 		},
 	}
+}
+
+async function settle(
+	repo: Repository,
+	store: RecordStore,
+	raw: JsonObject,
+	signal: AbortSignal,
+): Promise<
+	| { kind: 'accepted'; answer: Answer; recorded: Extract<Recorded, { kind: 'recorded' }> }
+	| { kind: 'rejected'; problems: string[] }
+> {
+	const read = readJsonText(ANSWER_SCHEMA, raw)
+	if (read.kind === 'refused') return { kind: 'rejected', problems: read.problems }
+	const check = await checkAnswer(repo, draftOf(read.args), signal)
+	if (check.kind === 'rejected') return check
+	const recorded = await recordAnswer(store, check.answer, recordArgsOf(read.args), signal)
+	if (recorded.kind === 'refused') return { kind: 'rejected', problems: recorded.problems }
+	return { kind: 'accepted', answer: check.answer, recorded }
 }
 
 function confirmation(answer: Answer, recorded: Extract<Recorded, { kind: 'recorded' }>): string {
 	const quotes = answer.statements.reduce((sum, statement) => sum + statement.quotes.length, 0)
 	const lines = [
-		`Answer accepted: ${answer.statements.length} statements, ${quotes} quotes. ken shows it to the reader.`,
+		`Answer accepted: ${answer.statements.length} statements, ${answer.diagrams.length} diagrams, ${quotes} quotes in the statements. ken shows it to the reader.`,
 	]
 	if (recorded.kept) {
 		lines.push(`Piece of work ${recorded.kept} already explains this range, so ken kept it and wrote no new one.`)
@@ -100,12 +117,57 @@ function draftOf(args: JsonObject): AnswerDraft {
 				quotes: listOf(raw.quotes).map(quoteOf),
 			}
 		}),
+		diagrams: optionalList(args.diagrams).map(diagramDraftOf),
+	}
+}
+
+function diagramDraftOf(raw: JsonObject): DiagramDraft {
+	const diagram = readArgs(raw, 'answer diagram')
+	const kind = DIAGRAM_KINDS.find((known) => known === diagram.text('kind'))
+	if (!kind) throw new Error('answer: a diagram kind is not in DIAGRAM_KINDS, so its schema and its reader disagree')
+	const node = (each: JsonObject) => ({
+		name: readArgs(each, 'answer diagram node').text('name'),
+		quotes: optionalList(each.quotes).map(quoteOf),
+	})
+	const edge = (each: JsonObject) => {
+		const read = readArgs(each, 'answer diagram edge')
+		return {
+			from: read.text('from'),
+			to: read.text('to'),
+			text: read.text('text'),
+			label: read.optionalText('label'),
+			quotes: optionalList(each.quotes).map(quoteOf),
+		}
+	}
+	return {
+		kind,
+		title: diagram.text('title'),
+		label: diagram.text('label'),
+		boxes: optionalList(raw.boxes).map((each) => ({
+			...node(each),
+			group: readArgs(each, 'answer box').optionalText('group'),
+		})),
+		arrows: optionalList(raw.arrows).map(edge),
+		participants: optionalList(raw.participants).map(node),
+		messages: optionalList(raw.messages).map(edge),
+		entities: optionalList(raw.entities).map((each) => ({
+			...node(each),
+			fields: optionalList(each.fields).map((rawField) => {
+				const field = readArgs(rawField, 'answer field')
+				return { name: field.text('name'), type: field.text('type') }
+			}),
+		})),
+		relations: optionalList(raw.relations).map((each) => {
+			const cardinality = CARDINALITIES.find((known) => known === readArgs(each, 'answer relation').text('cardinality'))
+			if (!cardinality)
+				throw new Error('answer: a cardinality is not in CARDINALITIES, so its schema and reader disagree')
+			return { ...edge(each), cardinality }
+		}),
 	}
 }
 
 function recordArgsOf(args: JsonObject): RecordArgs {
 	const work = args.work === undefined ? null : { title: readArgs(objectOf(args.work), 'answer work').text('title') }
-	const optionalList = (value: JsonValue | undefined) => (value === undefined ? [] : listOf(value))
 	return {
 		work,
 		decisions: optionalList(args.decisions).map((raw) => {
@@ -145,6 +207,10 @@ function quoteOf(raw: JsonObject): Quote {
 		text: quote.text('text'),
 		...(line === undefined ? {} : { line }),
 	}
+}
+
+function optionalList(value: JsonValue | undefined): JsonObject[] {
+	return value === undefined ? [] : listOf(value)
 }
 
 function listOf(value: JsonValue | undefined): JsonObject[] {
@@ -224,6 +290,128 @@ const TOPIC_SCHEMA = {
 	additionalProperties: false,
 } as const
 
+const NAME = { type: 'string', description: 'A short name, unique in the diagram' } as const
+const DEFINED_AT = {
+	type: 'array',
+	description: 'Optional: the lines where it is defined, such as its header or its declaration',
+	items: QUOTE_SCHEMA,
+} as const
+const EDGE_PROPERTIES = {
+	from: { type: 'string', description: 'The name of the box, participant or entity it starts at' },
+	to: { type: 'string', description: 'The name of the one it ends at' },
+	text: {
+		type: 'string',
+		description:
+			'A few words: a verb such as "calls", "reads" or "writes to" for an arrow, what is sent for a message, how the two relate for a relation',
+	},
+	label: {
+		type: 'string',
+		description:
+			'Leave it out to use the diagram label. "found-by-search" when you found this by searching and did not prove it.',
+	},
+	quotes: {
+		type: 'array',
+		description: 'At least one: the lines that show the call, the message or the link',
+		items: QUOTE_SCHEMA,
+	},
+} as const
+const EDGE_SCHEMA = {
+	type: 'object',
+	properties: EDGE_PROPERTIES,
+	required: ['from', 'to', 'text', 'quotes'],
+	additionalProperties: false,
+} as const
+
+const DIAGRAM_SCHEMA = {
+	type: 'object',
+	properties: {
+		kind: {
+			type: 'string',
+			enum: DIAGRAM_KINDS,
+			description:
+				'"component": how parts fit together, with boxes and arrows. "sequence": what happens in order, with participants and messages. "entity-relationship": what data there is and how it relates, with entities and relations.',
+		},
+		title: { type: 'string', description: 'What the diagram shows, in a few words' },
+		label: { type: 'string', description: 'The label for the diagram as a whole, chosen as for a statement' },
+		boxes: {
+			type: 'array',
+			description: `A component diagram's parts, at most ${DIAGRAM_BOUNDS.nodes}`,
+			items: {
+				type: 'object',
+				properties: {
+					name: NAME,
+					group: { type: 'string', description: 'Optional: a name several boxes share, such as a layer' },
+					quotes: DEFINED_AT,
+				},
+				required: ['name'],
+				additionalProperties: false,
+			},
+		},
+		arrows: {
+			type: 'array',
+			description: `A component diagram's arrows, at most ${DIAGRAM_BOUNDS.edges}`,
+			items: EDGE_SCHEMA,
+		},
+		participants: {
+			type: 'array',
+			description: `A sequence diagram's participants, left to right, at most ${DIAGRAM_BOUNDS.nodes}`,
+			items: {
+				type: 'object',
+				properties: { name: NAME, quotes: DEFINED_AT },
+				required: ['name'],
+				additionalProperties: false,
+			},
+		},
+		messages: {
+			type: 'array',
+			description: `A sequence diagram's messages, in the order they happen, at most ${DIAGRAM_BOUNDS.edges}`,
+			items: EDGE_SCHEMA,
+		},
+		entities: {
+			type: 'array',
+			description: `An entity-relationship diagram's entities, at most ${DIAGRAM_BOUNDS.nodes}`,
+			items: {
+				type: 'object',
+				properties: {
+					name: NAME,
+					fields: {
+						type: 'array',
+						description: `The fields that matter, at most ${DIAGRAM_BOUNDS.fields}`,
+						items: {
+							type: 'object',
+							properties: { name: { type: 'string' }, type: { type: 'string' } },
+							required: ['name', 'type'],
+							additionalProperties: false,
+						},
+					},
+					quotes: DEFINED_AT,
+				},
+				required: ['name'],
+				additionalProperties: false,
+			},
+		},
+		relations: {
+			type: 'array',
+			description: `An entity-relationship diagram's relations, at most ${DIAGRAM_BOUNDS.edges}`,
+			items: {
+				type: 'object',
+				properties: {
+					...EDGE_PROPERTIES,
+					cardinality: {
+						type: 'string',
+						enum: CARDINALITIES,
+						description: 'How many of the first entity relate to how many of the second',
+					},
+				},
+				required: ['from', 'to', 'text', 'cardinality', 'quotes'],
+				additionalProperties: false,
+			},
+		},
+	},
+	required: ['kind', 'title', 'label'],
+	additionalProperties: false,
+} as const
+
 const ANSWER_SCHEMA = {
 	type: 'object',
 	properties: {
@@ -243,6 +431,11 @@ const ANSWER_SCHEMA = {
 			properties: { base: { type: 'string' }, head: { type: 'string' } },
 			required: ['base', 'head'],
 			additionalProperties: false,
+		},
+		diagrams: {
+			type: 'array',
+			description: `Basic diagrams that lead the answer, at most ${DIAGRAM_BOUNDS.diagrams}. ken draws them.`,
+			items: DIAGRAM_SCHEMA,
 		},
 		summary: { type: 'string', description: 'One to three sentences that answer the question from the top' },
 		statements: {
@@ -267,3 +460,5 @@ const ANSWER_SCHEMA = {
 	required: ['summary', 'statements'],
 	additionalProperties: false,
 } as const
+
+const PARAMETERS = allowJsonText(ANSWER_SCHEMA)

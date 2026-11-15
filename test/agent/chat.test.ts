@@ -76,6 +76,7 @@ test('a false quote is rejected with its reasons sent to the model, and a true q
 				quotes: [{ path: 'src/retry.ts', commit: head, startLine: 4, endLine: 4, text: '\t\tsleep(100)' }],
 			},
 		],
+		diagrams: [],
 		change: {
 			base,
 			head,

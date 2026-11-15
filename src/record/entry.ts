@@ -1,15 +1,12 @@
 // The four kinds of entry in the project record, as the plan names them: a piece of work, a decision, a topic and a
 // note. An entry holds only checked facts. Its quotes passed checkQuote, and its commits and authors come from git.
 import { createHash } from 'node:crypto'
-import type { VerifiedQuote } from '../checks/index.ts'
+import type { Label, VerifiedQuote } from '../checks/index.ts'
+import type { Diagram } from '../diagram/index.ts'
 import type { Range } from '../repo/index.ts'
 
 // A short hash of the entry's content, so the same entry written twice has the same id.
 export type EntryId = string & { readonly __brand: 'EntryId' }
-
-// The plan's four labels. In this slice a statement carries inferred or found-by-search, and a decision only inferred.
-// recorded and from-the-session arrive with slice 5.
-export type Label = 'recorded' | 'from-the-session' | 'inferred' | 'found-by-search'
 
 export type Statement = { text: string; label: Label; quotes: VerifiedQuote[] }
 
@@ -20,8 +17,8 @@ export type Who = 'owner' | 'owner-agent' | 'collaborator' | 'unknown'
 export const UNDO = ['easy', 'some-work', 'hard'] as const
 export type Undo = (typeof UNDO)[number]
 
-// The accepted answer that explained the work is kept as its summary and statements, so it can be shown again
-// without a model. first and last are the dates of the oldest and newest commit.
+// The accepted answer that explained the work is kept as its summary, statements and diagrams, so it can be shown
+// again without a model. first and last are the dates of the oldest and newest commit.
 export type Work = {
 	kind: 'work'
 	title: string
@@ -31,6 +28,7 @@ export type Work = {
 	first: string
 	last: string
 	statements: Statement[]
+	diagrams: Diagram[]
 }
 
 export type Decision = {
@@ -40,6 +38,7 @@ export type Decision = {
 	rejected: { option: string; reason: string }[]
 	undo: Undo
 	needsOwner: boolean
+	// A decision says why, which is never a relation found by searching, so it is never "found-by-search".
 	label: Exclude<Label, 'found-by-search'>
 	quotes: VerifiedQuote[]
 	work: EntryId | null

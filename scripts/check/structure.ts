@@ -11,18 +11,23 @@ type Module = { job: string; imports: string[]; packages: string[] }
 export const MODULES: Record<string, Module> = {
 	repo: { job: "Reads a project's files and git history, and never writes to them.", imports: [], packages: [] },
 	checks: {
-		job: 'Checks an answer against git: its quotes exist, and it covers every changed hunk.',
+		job: 'Checks an answer: its quotes exist in git, its labels are allowed, and it covers every changed hunk.',
 		imports: ['repo'],
+		packages: [],
+	},
+	diagram: {
+		job: 'Diagrams as checked data: boxes and arrows that rest on quotes, and their Mermaid text.',
+		imports: ['repo', 'checks'],
 		packages: [],
 	},
 	record: {
 		job: 'The project record: an append-only store of pieces of work, decisions, topics and notes.',
-		imports: ['repo', 'checks'],
+		imports: ['repo', 'checks', 'diagram'],
 		packages: [],
 	},
 	agent: {
 		job: 'Runs a chat with a model that explores the project with read-only tools and answers only with checked quotes.',
-		imports: ['repo', 'checks', 'record'],
+		imports: ['repo', 'checks', 'diagram', 'record'],
 		packages: ['aigent'],
 	},
 	history: {
@@ -42,7 +47,7 @@ export const MODULES: Record<string, Module> = {
 	},
 	cli: {
 		job: 'Runs ken in the terminal: a chat, one question for scripts, the project record, or the page.',
-		imports: ['agent', 'record', 'repo', 'server'],
+		imports: ['agent', 'diagram', 'record', 'repo', 'server'],
 		packages: [],
 	},
 }
@@ -51,7 +56,7 @@ const MAX_FILES = 8
 
 // shortcut: a regex scan per line, so it also matches import text in comments and strings and misses a specifier that
 // sits on its own line. Switch to ts.preProcessFile if that ever gives a wrong finding.
-const SPECIFIER = /\b(?:from|import)\s*\(?\s*['"]([^'"]+)['"]/g
+const SPECIFIER = /\b(?:from|import)(?:\s+|\s*\(\s*)['"]([^'"]+)['"]/g
 
 export function checkStructure(root: string, modules: Record<string, Module>): string[] {
 	const src = path.join(root, 'src')
