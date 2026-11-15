@@ -3,6 +3,7 @@ import type { Answer, Chat, ChatEvent } from '../agent/index.ts'
 import { withDrawings } from '../diagram/index.ts'
 import { entryFrom, type History, type HistoryEntry } from '../history/index.ts'
 import type { EntryId, RecordEntry, RecordRead, RecordStore } from '../record/index.ts'
+import type { Repository } from '../repo/index.ts'
 
 // One row in the page's list of questions. hunks is null when the answer was not about a range of commits.
 export type QuestionRow = {
@@ -16,15 +17,15 @@ export type QuestionRow = {
 }
 
 // An entry from the history, with the project record entries its answer stands on (see entriesOf). Its diagrams carry
-// their drawings.
-export type QuestionView = { entry: HistoryEntry; recorded: RecordEntry[] }
+// their drawings. head is the project's HEAD now, which the page compares with the entry's own.
+export type QuestionView = { entry: HistoryEntry; recorded: RecordEntry[]; head: string | null }
 
 // What the page receives while a question runs: each chat event, then the saved entry as the last line. An accepted
 // answer's diagrams carry their drawings, and its recorded entries are the ones it stands on.
 export type QuestionLine = ChatEvent | { kind: 'saved'; view: QuestionView }
 
 // Runs the page's questions one at a time and keeps each in the reader's history, together with what it ended in.
-export function questionDesk(history: History, record: RecordStore) {
+export function questionDesk(history: History, record: RecordStore, repo: Repository) {
 	let running: { stop: AbortSignal; done: Promise<void> } | null = null
 
 	// A question the reader stopped can still be winding down. Wait for it, so the next request finds it in the history.
@@ -41,7 +42,7 @@ export function questionDesk(history: History, record: RecordStore) {
 		let finish = () => {}
 		running = { stop, done: new Promise((resolve) => (finish = resolve)) }
 		try {
-			const asked = { id: randomUUID(), question, askedAt: new Date().toISOString() }
+			const asked = { id: randomUUID(), question, askedAt: new Date().toISOString(), head: await headNow() }
 			const events: ChatEvent[] = []
 			for await (const event of chat.ask(question, stop)) {
 				events.push(event)
@@ -62,10 +63,16 @@ export function questionDesk(history: History, record: RecordStore) {
 		}
 	}
 
+	async function headNow(): Promise<string | null> {
+		const resolved = await repo.resolve('HEAD')
+		return resolved.kind === 'ok' ? resolved.commit : null
+	}
+
 	async function viewOf(entry: HistoryEntry): Promise<QuestionView> {
-		if (entry.outcome !== 'answered') return { entry, recorded: [] }
+		const head = await headNow()
+		if (entry.outcome !== 'answered') return { entry, recorded: [], head }
 		const drawn = { ...entry, answer: withDrawings(entry.answer) }
-		return { entry: drawn, recorded: entriesOf(entry.answer, entry.recorded, await record.read()) }
+		return { entry: drawn, recorded: entriesOf(entry.answer, entry.recorded, await record.read()), head }
 	}
 
 	async function rows(): Promise<QuestionRow[]> {

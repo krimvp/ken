@@ -20,17 +20,20 @@ export type Ending =
 	| { outcome: Exclude<Outcome, 'answered'> | 'stopped' }
 	| { outcome: 'error'; error: string }
 
+// head is the project's HEAD when the question was asked, so a reopened answer can say the project has moved on. It is
+// null in entries saved before ken kept it.
 export type HistoryEntry = {
 	id: string
 	question: string
 	askedAt: string
+	head: string | null
 	steps: Step[]
 	usage: Usage | null
 } & Ending
 
 // Folds the events of one question into its entry. stopped says the reader stopped it before it ended.
 export function entryFrom(
-	asked: { id: string; question: string; askedAt: string },
+	asked: { id: string; question: string; askedAt: string; head: string | null },
 	events: ChatEvent[],
 	stopped: boolean,
 ): HistoryEntry {

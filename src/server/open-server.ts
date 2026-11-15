@@ -56,7 +56,7 @@ export async function openServer(options: {
 	} else {
 		model = config
 	}
-	const desk = questionDesk(history, fileRecordStore(root, repo))
+	const desk = questionDesk(history, fileRecordStore(root, repo), repo)
 	const shown = root.startsWith(`${homedir()}${path.sep}`) ? `~${root.slice(homedir().length)}` : root
 	const files = await readPageFiles(PAGE_FOLDER, { '/mermaid.min.js': MERMAID_FILE })
 	let port = 0

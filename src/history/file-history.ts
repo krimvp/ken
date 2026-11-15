@@ -71,8 +71,9 @@ function parseLine(line: string): HistoryEntry | null {
 		OUTCOMES.has(outcome) &&
 		Array.isArray(steps)
 	if (!fine) return null
-	// An answer saved before answers carried diagrams has none.
+	// An answer saved before answers carried diagrams has none, and an entry saved before ken kept the HEAD has none.
 	if (isObject(value.answer) && !Array.isArray(value.answer.diagrams)) value.answer.diagrams = []
+	if (typeof value.head !== 'string') value.head = null
 	return value as HistoryEntry
 }
 

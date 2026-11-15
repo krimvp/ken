@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { request as httpRequest } from 'node:http'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -167,6 +167,28 @@ test('a question streams its steps and a checked answer with its diagram drawn, 
 	const reopened = await json(later, `/api/questions/${saved.entry.id}`)
 	assert.deepEqual(reopened.entry.answer, accepted.answer, 'the reopened answer carries the same drawings')
 	assert.deepEqual(reopened.recorded, saved.recorded)
+	const recordCommit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: clone, encoding: 'utf8' }).trim()
+	assert.deepEqual(
+		[reopened.entry.head, reopened.head],
+		[head, recordCommit],
+		'the answer keeps the HEAD it was asked at, and the view says where HEAD is now',
+	)
+})
+
+test('a question saved before ken kept the HEAD still opens, with no HEAD of its own', async () => {
+	const home = tempFolder('ken-home-')
+	const old = { id: 'old-1', question: 'What changed?', askedAt: '2026-11-01T10:00:00.000Z', steps: [], usage: null }
+	mkdirSync(path.join(home, 'projects', base), { recursive: true })
+	writeFileSync(
+		path.join(home, 'projects', base, 'history.jsonl'),
+		`${JSON.stringify({ ...old, outcome: 'stopped' })}\n`,
+	)
+	const server = await open(home, null)
+
+	const view = await json(server, '/api/questions/old-1')
+
+	const headNow = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim()
+	assert.deepEqual([view.entry.question, view.entry.head, view.head], ['What changed?', null, headNow])
 })
 
 test('a second question about the same commits shows the decision the first one recorded', async () => {
