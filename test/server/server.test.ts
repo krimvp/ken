@@ -169,6 +169,31 @@ test('a question streams its steps and a checked answer with its diagram drawn, 
 	assert.deepEqual(reopened.recorded, saved.recorded)
 })
 
+test('a second question about the same commits shows the decision the first one recorded', async () => {
+	const work = { work: { title: 'Retries wait' } }
+	const first: Turn = { tool: 'ken__answer', args: { ...ANSWER.args, ...work } }
+	// The prompt tells the model not to send a decision the record already has.
+	const again: Turn = { tool: 'ken__answer', args: { ...ANSWER.args, ...work, decisions: [] } }
+	const model = await scriptedModel([first, { text: 'Done.' }, again, { text: 'Done.' }])
+	const repo = tempFolder('ken-clone-')
+	execFileSync('git', ['clone', '--quiet', root, repo])
+	const server = await open(tempFolder('ken-home-'), model.baseUrl, repo)
+
+	await ask(server, 'What did the last commit do?')
+	const lines = await ask(server, 'What did the last commit do, in short?')
+
+	const decisions = (recorded: { kind: string; question?: string }[]) =>
+		recorded.filter((entry) => entry.kind === 'decision').map((entry) => entry.question)
+	const shown = ['How long does a retry wait?']
+	assert.deepEqual(decisions(lines.find((line) => line.kind === 'accepted').recorded), shown, 'while the note streams')
+	assert.deepEqual(decisions(lines.at(-1).view.recorded), shown, 'once saved')
+	const { questions } = await json(server, '/api/questions')
+	assert.deepEqual(
+		questions.map((row: { decisions: number }) => row.decisions),
+		[1, 1],
+	)
+})
+
 test('closing the request stops the question, and the server then takes the next one', {
 	timeout: 10_000,
 }, async () => {
