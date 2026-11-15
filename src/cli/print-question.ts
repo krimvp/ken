@@ -20,7 +20,7 @@ export async function printQuestion(events: AsyncIterable<ChatEvent>, out: NodeJ
 				midLine = !event.delta.endsWith('\n')
 				break
 			case 'tool':
-				line(paint('dim', `  ${event.name} ${event.summary}`))
+				line(paint('dim', `  ${event.step}`))
 				break
 			case 'rejected':
 				line(paint('yellow', `Answer ${event.attempt} was rejected:`))

@@ -1,11 +1,11 @@
 import { createSession, type RunResult } from 'aigent'
-import type { JsonObject, JsonValue } from 'aigent/plugin'
 import { fileRecordStore } from '../record/index.ts'
 import { findRoot, gitRepository } from '../repo/index.ts'
 import { type AnswerRound, answerTool, MAX_REJECTIONS } from './answer/answer-tool.ts'
 import type { ChatEvent } from './chat-event.ts'
 import type { ModelConfig } from './model-config.ts'
 import { SYSTEM_PROMPT } from './system-prompt.ts'
+import { describeCall } from './tools/describe-call.ts'
 import { diffTool } from './tools/diff-tool.ts'
 import { explorationTools } from './tools/exploration-tools.ts'
 import { recordIndex, recordTool } from './tools/record-tool.ts'
@@ -65,11 +65,8 @@ export async function startChat(options: {
 		const unsubscribe = session.subscribe((event) => {
 			if (event.type === 'text') events.push({ kind: 'text', delta: event.delta })
 			if (event.type === 'tool_start') {
-				events.push({
-					kind: 'tool',
-					name: event.call.name.replace(`${PLUGIN}__`, ''),
-					summary: summarize(event.call.args),
-				})
+				const name = event.call.name.replace(`${PLUGIN}__`, '')
+				events.push({ kind: 'tool', name, step: describeCall(name, event.call.args) })
 			}
 			// The answer tool has told the model it is out of attempts. Stopping here keeps a model that ignores that
 			// from spending more turns.
@@ -110,18 +107,6 @@ function endOf(result: RunResult, round: AnswerRound): ChatEvent {
 	if (result.stop === 'error') return { kind: 'error', message: result.message }
 	if (result.stop === 'aborted') return { kind: 'error', message: 'The question was stopped before it had an answer.' }
 	return { kind: 'done', outcome: result.stop === 'max_turns' ? 'out-of-turns' : 'no-answer' }
-}
-
-function summarize(args: JsonObject): string {
-	return Object.entries(args)
-		.map(([name, value]) => `${name}=${brief(value)}`)
-		.join(' ')
-}
-
-function brief(value: JsonValue): string {
-	if (Array.isArray(value)) return `[${value.length}]`
-	const text = (typeof value === 'string' ? value : JSON.stringify(value)).replaceAll(/\s+/g, ' ')
-	return text.length > 60 ? `${text.slice(0, 57)}...` : text
 }
 
 // Turns aigent's listener calls into the stream ask returns.

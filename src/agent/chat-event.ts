@@ -6,7 +6,8 @@ import type { Answer } from './answer/answer.ts'
 
 export type ChatEvent =
 	| { kind: 'text'; delta: string }
-	| { kind: 'tool'; name: string; summary: string }
+	// step is the call as one plain sentence for the reader, such as "Read `src/cli.ts`, lines 100 to 180".
+	| { kind: 'tool'; name: string; step: string }
 	| { kind: 'rejected'; attempt: number; problems: string[] }
 	// recorded holds the entries this answer added to the project record; an entry already there is not repeated.
 	| { kind: 'accepted'; answer: Answer; recorded: RecordEntry[] }
