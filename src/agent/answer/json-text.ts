@@ -63,15 +63,16 @@ function readValue(schema: Schema, raw: JsonValue, where: string, problems: stri
 				problems.push(`${where} must be an object.`)
 				return value
 			}
-			for (const name of schema.required ?? []) {
-				if (value[name] === undefined) problems.push(`${where} needs "${name}".`)
-			}
 			const read: Record<string, JsonValue> = {}
 			for (const [name, item] of Object.entries(value)) {
 				const property = schema.properties?.[name]
+				if (property && isBlank(property, item)) continue
 				if (property) read[name] = readValue(property, item, `${where}, ${name}`, problems)
 				else if (schema.additionalProperties === false) problems.push(`${where} has "${name}", which it does not take.`)
 				else read[name] = item
+			}
+			for (const name of schema.required ?? []) {
+				if (read[name] === undefined) problems.push(`${where} needs "${name}".`)
 			}
 			return read
 		}
@@ -94,6 +95,11 @@ function readValue(schema: Schema, raw: JsonValue, where: string, problems: stri
 		default:
 			return value
 	}
+}
+
+// Models fill a list or an object they mean to leave out with "" as often as they leave it out, so "" is not given.
+function isBlank(schema: Schema, value: JsonValue): boolean {
+	return (schema.type === 'array' || schema.type === 'object') && typeof value === 'string' && value.trim() === ''
 }
 
 // undefined means the value was text that does not parse as JSON.
