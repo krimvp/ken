@@ -1,5 +1,6 @@
-// The answered question in the thread: the agent's diagrams, its summary, the decisions, the statements with their quote
-// rows, and the agent's closing note. The agent wrote the words; ken checked only that each quote is in its file.
+// The answered question in the thread: the agent's diagrams, its summary, the decisions, the risks and the statements
+// with their quote rows, and the agent's closing note. The agent wrote the words; ken checked only that each quote is
+// in its file.
 import { checkStrip, checksHtml } from './checks.js'
 import { diagramHtml, elementKey } from './diagram.js'
 import { count, esc, LABELS, label, prose, quoteRows } from './format.js'
@@ -14,7 +15,7 @@ export function decisionsOf(q) {
 }
 
 // Every item that carries quotes, in the order the page shows them, by the key the page uses for it: "g0n3" for
-// element 3 of the first diagram, "d0" for a decision, "s3" for a statement.
+// element 3 of the first diagram, "d0" for a decision, "r0" for a risk, "s3" for a statement.
 export function itemsOf(q) {
 	return [
 		...q.answer.diagrams.flatMap((diagram, i) =>
@@ -23,6 +24,7 @@ export function itemsOf(q) {
 				.map((element) => ({ key: elementKey(i, element.number), kind: 'element', item: element })),
 		),
 		...decisionsOf(q).map((d, i) => ({ key: `d${i}`, kind: 'decision', item: d })),
+		...(q.answer.risks ?? []).map((r, i) => ({ key: `r${i}`, kind: 'risk', item: r, n: i + 1 })),
 		...q.answer.statements.map((s, i) => ({ key: `s${i}`, kind: 'statement', item: s, n: i + 1 })),
 	]
 }
@@ -44,6 +46,7 @@ export function answerHtml(q, ui) {
 		${a.diagrams.map((diagram, i) => diagramHtml(diagram, i, rows)).join('')}
 		${summaryHtml(a.summary, ui)}
 		${decisionsHtml(decisionsOf(q), rows)}
+		${risksHtml(a.risks, rows)}
 		<div class="list-head">
 			<h3>${count(a.statements.length, 'statement', 'statements')}, ${count(quotes, 'quote', 'quotes')}</h3>
 			<button class="link small" data-act="all-quotes" data-key="all-quotes">${allOpen ? 'Close all quotes' : 'Open all quotes'}</button>
@@ -51,7 +54,7 @@ export function answerHtml(q, ui) {
 			<p class="list-note wide-only">ken found every quote in git. It did not check the sentences.</p>
 		</div>
 		<a class="strip narrow-only" href="#checks-inline" title="See what ken checked">${checkStrip(q)}</a>
-		<ol>${a.statements.map((s, i) => statementHtml(s, i, rows, marked)).join('')}</ol>
+		<ol>${a.statements.map((s, i) => claimHtml(s, `s${i}`, i, rows, marked)).join('')}</ol>
 		${noteHtml(q)}
 		<section class="checks-inline narrow-only" id="checks-inline" aria-label="What ken checked">${ui.wide ? '' : checksHtml(q, ui)}</section>`
 }
@@ -72,14 +75,31 @@ function summaryHtml(summary, ui) {
 		<p class="summary">${prose(text)}${more}</p>`
 }
 
-function statementHtml(s, i, rows, marked) {
-	return `<li class="st" id="item-s${i}">
+// A statement or a risk: its number, its text with its label when the label is marked, and its quote rows.
+function claimHtml(claim, key, i, rows, marked) {
+	return `<li class="st" id="item-${key}">
 		<span class="st-n">${i + 1}</span>
 		<div>
-			<p class="st-text">${marked.has(s.label) ? label(s.label) : ''}${prose(s.text)}</p>
-			${quoteRows(s.quotes, `s${i}`, rows)}
+			<p class="st-text">${marked.has(claim.label) ? label(claim.label) : ''}${prose(claim.text)}</p>
+			${quoteRows(claim.quotes, key, rows)}
 		</div>
 	</li>`
+}
+
+// The risks follow the decisions, built like the statements. An answer about a change always says something here, even
+// that the agent found none; an answer with no word on risks (null) shows nothing.
+function risksHtml(risks, rows) {
+	if (risks === null) return ''
+	if (risks.length === 0) {
+		return `<div class="list-head"><h3>No risks found</h3><p class="list-note">The agent says it looked for what could go wrong and found nothing to watch.</p></div>`
+	}
+	return `<section aria-labelledby="risks-head">
+		<div class="list-head">
+			<h3 id="risks-head">${risks.length === 1 ? 'A risk to watch' : `${risks.length} risks to watch`}</h3>
+			<p class="list-note">${labelLine(risks)}</p>
+		</div>
+		<ol>${risks.map((r, i) => claimHtml(r, `r${i}`, i, rows, markedLabels(risks))).join('')}</ol>
+	</section>`
 }
 
 // Each decision folds to one line, the question and the option the code took. The line opens the decision in place.

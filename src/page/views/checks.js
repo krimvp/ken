@@ -11,7 +11,9 @@ function elementsOf(q) {
 }
 
 function quotesOf(q) {
-	return [...elementsOf(q), ...q.answer.statements, ...decisionsOf(q)].flatMap((item) => item.quotes)
+	return [...elementsOf(q), ...q.answer.statements, ...(q.answer.risks ?? []), ...decisionsOf(q)].flatMap(
+		(item) => item.quotes,
+	)
 }
 
 function limit(q) {
@@ -79,6 +81,7 @@ function whereQuotes(q) {
 	const sum = (items) => items.reduce((n, item) => n + item.quotes.length, 0)
 	const places = [
 		[sum(elementsOf(q)), q.answer.diagrams.length === 1 ? 'the diagram' : 'the diagrams'],
+		[sum(q.answer.risks ?? []), q.answer.risks?.length === 1 ? 'the risk' : 'the risks'],
 		[sum(q.answer.statements), 'the statements'],
 		[sum(decisions), decisions.length === 1 ? 'the decision' : 'the decisions'],
 	].filter(([n]) => n > 0)
@@ -205,6 +208,7 @@ function commitsSection(q) {
 function titleOf(q, { kind, item, n }) {
 	if (kind === 'element') return `Number ${item.number} in the diagram`
 	if (kind === 'decision') return 'Decision'
+	if (kind === 'risk') return `Risk ${n} of ${q.answer.risks.length}`
 	return `Statement ${n} of ${q.answer.statements.length}`
 }
 

@@ -1,6 +1,6 @@
 import { styleText } from 'node:util'
 import type { Answer, ChatEvent } from '../agent/index.ts'
-import { entryLine } from '../record/index.ts'
+import { entryLine, type RecordEntry } from '../record/index.ts'
 import { formatDiagram, formatQuote } from './print-diagram.ts'
 
 export type Paint = (format: Parameters<typeof styleText>[0], text: string) => string
@@ -28,7 +28,7 @@ export async function printQuestion(events: AsyncIterable<ChatEvent>, out: NodeJ
 				for (const problem of event.problems) line(`  - ${problem.replaceAll('\n', '\n    ')}`)
 				break
 			case 'accepted':
-				line(`\n${formatAnswer(event.answer, paint)}`)
+				line(`\n${formatAnswer(event.answer, event.recorded, paint)}`)
 				if (event.recorded.length > 0) {
 					line(paint('bold', `\nAdded to the project record (${event.recorded.length}):`))
 					for (const entry of event.recorded) line(`  ${entryLine(entry)}`)
@@ -57,13 +57,20 @@ export async function printQuestion(events: AsyncIterable<ChatEvent>, out: NodeJ
 	return answered
 }
 
-export function formatAnswer(answer: Answer, paint: Paint): string {
+// The order of the page: the summary, the diagrams, the decisions, the risks, then the other statements.
+export function formatAnswer(answer: Answer, recorded: RecordEntry[], paint: Paint): string {
 	const lines = [paint('bold', answer.summary), '']
 	for (const diagram of answer.diagrams) lines.push(...formatDiagram(diagram, paint), '')
-	for (const [index, statement] of answer.statements.entries()) {
-		lines.push(`${index + 1}. ${statement.text} ${paint('cyan', `[${statement.label}]`)}`)
-		for (const quote of statement.quotes) lines.push(...formatQuote(quote, paint))
+	const decisions = recorded.flatMap((entry) => (entry.kind === 'decision' ? [entry] : []))
+	if (decisions.length > 0) {
+		lines.push(paint('bold', `Decisions (${decisions.length}):`))
+		for (const [index, d] of decisions.entries()) lines.push(`${index + 1}. ${d.question} Chosen: ${d.chosen}`)
+		lines.push('')
 	}
+	if (answer.risks?.length === 0) lines.push(paint('bold', 'Risks: the agent looked and found none.'), '')
+	if (answer.risks?.length)
+		lines.push(paint('bold', `Risks (${answer.risks.length}):`), ...claims(answer.risks, paint), '')
+	lines.push(paint('bold', `Statements (${answer.statements.length}):`), ...claims(answer.statements, paint))
 	if (answer.change) {
 		const { commits, covered, uncovered, binary } = answer.change
 		lines.push('', paint('bold', `Commits in scope, from git (${commits.length}):`))
@@ -84,4 +91,11 @@ export function formatAnswer(answer: Answer, paint: Paint): string {
 		for (const path of binary) lines.push(`  - ${path}, a binary file`)
 	}
 	return lines.join('\n')
+}
+
+function claims(list: Answer['statements'], paint: Paint): string[] {
+	return list.flatMap((claim, index) => [
+		`${index + 1}. ${claim.text} ${paint('cyan', `[${claim.label}]`)}`,
+		...claim.quotes.flatMap((quote) => formatQuote(quote, paint)),
+	])
 }
