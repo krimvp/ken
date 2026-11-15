@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="color-scheme" content="light dark" />
+		<title>ken</title>
+		<meta
+			name="description"
+			content="ken is a local tool that explains a software project to the developer who owns it, and quotes the code behind each answer. Early work, not released."
+		/>
+		<link rel="stylesheet" href="style.css" />
+	</head>
+	<body>
+		<main>
+			<header class="intro">
+				<h1>ken</h1>
+				<p class="lead">
+					ken is a local tool that explains a software project to the developer who owns it, and quotes the code
+					behind each answer.
+				</p>
+				<p>
+					It is for projects where coding agents write most of the code. You come back after a few hours or a few
+					weeks, and you need to know your own project again without reading every diff.
+				</p>
+			</header>
+
+			<section aria-labelledby="problem">
+				<h2 id="problem">The problem</h2>
+				<p>
+					Agents write code faster than a person can absorb it. After a week away you may no longer know how parts
+					of your own project work, or why they were built that way. In
+					<a href="https://www.anthropic.com/research/AI-assistance-coding-skills">a trial by Anthropic</a>,
+					developers who used AI help scored about 50% on a comprehension quiz, against 67% for those who coded by
+					hand.
+				</p>
+			</section>
+
+			<section aria-labelledby="how">
+				<h2 id="how">Ask in a chat, keep the answer as a card</h2>
+				<p>
+					You ask ken what changed, why it was done that way, or how a part works now. An agent reads your files,
+					searches the code and reads the git history to answer. Each answer also lands on a page beside the chat as
+					a card with the quoted code. Over time the page becomes the record of what you understand.
+				</p>
+
+				<figure class="example">
+					<figcaption>Example. The project, the file and the commit are made up.</figcaption>
+					<p class="ask"><span class="ask-who">You asked</span> Why does an upload stop after three tries?</p>
+					<article class="card" aria-label="Example card">
+						<p class="card-label">
+							<span class="label">Inferred</span>
+							<span class="label-note">Worked out from the diff. Nobody recorded the reason.</span>
+						</p>
+						<p class="card-statement">
+							The upload stops after three tries so that a server that is down cannot hold up the rest of the sync.
+						</p>
+						<div class="quote">
+							<p class="quote-source">
+								<code>src/sync/upload.ts</code>
+								<span>at <code>a41c9e2</code>, lines 18 to 28</span>
+							</p>
+							<pre class="quote-code" style="counter-reset: line 17"><code><span class="line">const MAX_TRIES = 3</span>
+<span class="line">const WAIT_MS = 500</span>
+<span class="line"></span>
+<span class="line">let tries = 0</span>
+<span class="line">while (tries &lt; MAX_TRIES) {</span>
+<span class="line">  tries++</span>
+<span class="line">  const res = await put(url, body)</span>
+<span class="line">  if (res.ok) return res</span>
+<span class="line">  await sleep(WAIT_MS * tries)</span>
+<span class="line">}</span>
+<span class="line">throw new UploadError(url, tries)</span></code></pre>
+						</div>
+					</article>
+				</figure>
+			</section>
+
+			<section aria-labelledby="check">
+				<h2 id="check">Why you can check an answer</h2>
+				<p>
+					ken quotes the code behind every claim. Each quote names a file, a commit and the exact lines. A checker
+					reads those lines from git at that commit. If the text is not there, ken rejects the answer and the agent
+					tries again.
+				</p>
+				<p>
+					What changed, who changed it and when come from git, never from the model's memory. ken also lists each
+					changed hunk that its answer does not cover.
+				</p>
+				<p>Every statement carries one of four labels, so you can tell a recorded fact from a guess.</p>
+				<dl class="labels">
+					<div>
+						<dt><span class="label">Recorded</span></dt>
+						<dd>You or an agent logged the decision when it was made.</dd>
+					</div>
+					<div>
+						<dt><span class="label">From the session</span></dt>
+						<dd>Read later from a saved agent transcript, and quoted.</dd>
+					</div>
+					<div>
+						<dt><span class="label">Inferred</span></dt>
+						<dd>Worked out from the diff alone. Nobody wrote the reason down.</dd>
+					</div>
+					<div>
+						<dt><span class="label">Found by search</span></dt>
+						<dd>A link between pieces of code, such as "this calls that", that the agent found by searching and did not prove.</dd>
+					</div>
+				</dl>
+				<p class="limit">
+					The check proves that the quoted code exists. It does not prove that the sentence about it is true. That is
+					why the card shows the quote next to the statement, so you can read both and judge. In the example above, the code
+					shows the limit of three tries. The reason is ken's guess, and the label says so.
+				</p>
+			</section>
+
+			<section aria-labelledby="map">
+				<h2 id="map">What it learns about you <span class="label label-planned">Planned</span></h2>
+				<p>
+					ken will keep an understanding map. It is a plain file in your home directory with one entry for each topic
+					you have met: how well you know it, how ken knows that, and a hash of the topic's quoted code. When that
+					code changes, ken will mark the topic as changed since you understood it, whoever made the change. Answers
+					will then shrink to one line for what you know and lead with what changed. You can open the file and correct it. None
+					of this is built yet.
+				</p>
+			</section>
+
+			<section aria-labelledby="not">
+				<h2 id="not">What it is not</h2>
+				<ul class="nots">
+					<li>It is not a hosted service. It runs on your machine and needs no account.</li>
+					<li>
+						It does not change your code. Its tools only read the project. The only files it writes are its own, in
+						<code>.ken/</code> in the project and <code>~/.ken/</code> in your home directory.
+					</li>
+					<li>It does not quiz you, and it does not block a push or a merge.</li>
+					<li>
+						It is not tied to one coding tool. Code from Claude Code, Codex, a collaborator or you all ends up in git,
+						and git is what ken reads.
+					</li>
+					<li>
+						It runs on a model you choose, including open-weight models. ken does not start until you name a provider
+						and a model, and the code it reads goes to that provider.
+					</li>
+				</ul>
+			</section>
+
+			<section aria-labelledby="status">
+				<h2 id="status">Where it stands</h2>
+				<p>
+					ken is early work and is not released. There is nothing to install yet. Work started on 15 November 2026.
+					It is built in seven steps, and each step ends with something that runs:
+				</p>
+				<ol class="steps" start="0">
+					<li>The repository, and a way to run the chat engine from it.</li>
+					<li>Tools that read files, search the code and read git history, with the quote checker and a chat in the terminal.</li>
+					<li>The project record, which keeps pieces of work, decisions and topics across restarts.</li>
+					<li>The page, with the chat on one side and the cards on the other.</li>
+					<li>The understanding map.</li>
+					<li>A command any coding agent can call to log a decision while it works.</li>
+					<li>A list of what is open: decisions that need your opinion, and changed topics you have not looked at.</li>
+				</ol>
+				<p>
+					After step 3 comes a test. On real agent work, ken has to give a more useful answer than a plain chat with a
+					coding agent. If it does not, the design changes before steps 4 to 6 are built.
+				</p>
+				<p>The code is at <a href="https://github.com/krimvp/ken">github.com/krimvp/ken</a>. The repository is private for now.</p>
+			</section>
+		</main>
+	</body>
+</html>
