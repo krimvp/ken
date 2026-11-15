@@ -18,4 +18,6 @@ export type {
 	Repository,
 	SearchMatch,
 	TooLarge,
+	Unrelated,
 } from './repository.ts'
+export { resolveRange } from './resolve-range.ts'

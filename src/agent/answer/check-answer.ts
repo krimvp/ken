@@ -1,7 +1,8 @@
 // The plan's rule for an answer: ken accepts it only when every quote passes checkQuote and every statement carries a
 // label this slice allows. One bad quote rejects the whole answer. Only then does ken read the change facts from git.
 import { checkCoverage, checkQuote, type Quote, type QuoteCheck } from '../../checks/index.ts'
-import type { Repository } from '../../repo/index.ts'
+import { type Repository, resolveRange } from '../../repo/index.ts'
+import { scopeProblem } from '../tools/exploration-tools.ts'
 import { type Answer, type Change, LABELS, type Label, type Statement } from './answer.ts'
 
 export type AnswerDraft = {
@@ -49,11 +50,9 @@ async function resolveScope(
 	scope: { base: string; head: string },
 	signal: AbortSignal,
 ): Promise<Scope | { kind: 'refused'; problem: string }> {
-	const base = await repo.resolve(scope.base, signal)
-	if (base.kind !== 'ok') return { kind: 'refused', problem: whyNot(base, '') }
-	const head = await repo.resolve(scope.head, signal)
-	if (head.kind !== 'ok') return { kind: 'refused', problem: whyNot(head, '') }
-	return { kind: 'ok', base: base.commit, head: head.commit }
+	const resolved = await resolveRange(repo, scope, signal)
+	if (resolved.kind !== 'ok') return { kind: 'refused', problem: scopeProblem(resolved) }
+	return { kind: 'ok', ...resolved.range }
 }
 
 async function changeOf(

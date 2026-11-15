@@ -4,11 +4,14 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { after } from 'node:test'
 
-// null deletes the file. A file left out keeps its content from the commit before.
+// null deletes the file. A file left out keeps its content from the parent commit. parent is the index of an earlier
+// commit to build on, which starts a second line of history; by default a commit builds on the one before it.
 export type FixtureCommit = {
 	message: string
 	files: Record<string, string | Uint8Array | null>
 	author?: { name: string; email: string }
+	parent?: number
+	body?: string
 }
 
 export const OWNER = { name: 'Ada Owner', email: 'ada@example.com' }
@@ -28,7 +31,10 @@ export function buildRepository(commits: FixtureCommit[]): { root: string; hashe
 		}).trim()
 
 	git(['init', '--quiet', '--initial-branch=main'])
-	const hashes = commits.map(({ message, files, author = OWNER }, day) => {
+	git(['config', 'user.email', OWNER.email])
+	const hashes: string[] = []
+	for (const [day, { message, files, author = OWNER, parent, body }] of commits.entries()) {
+		if (parent !== undefined) git(['checkout', '--quiet', '--detach', hashes[parent] ?? ''])
 		for (const [file, content] of Object.entries(files)) {
 			const full = path.join(root, file)
 			if (content === null) {
@@ -40,7 +46,8 @@ export function buildRepository(commits: FixtureCommit[]): { root: string; hashe
 		}
 		const date = `${FIRST_DAY + day * 86400} +0000`
 		git(['add', '--all'])
-		git(['commit', '--quiet', '--no-verify', '--message', message], {
+		const bodyArgs = body === undefined ? [] : ['--message', body]
+		git(['commit', '--quiet', '--no-verify', '--message', message, ...bodyArgs], {
 			GIT_AUTHOR_NAME: author.name,
 			GIT_AUTHOR_EMAIL: author.email,
 			GIT_AUTHOR_DATE: date,
@@ -48,7 +55,7 @@ export function buildRepository(commits: FixtureCommit[]): { root: string; hashe
 			GIT_COMMITTER_EMAIL: author.email,
 			GIT_COMMITTER_DATE: date,
 		})
-		return git(['rev-parse', 'HEAD'])
-	})
+		hashes.push(git(['rev-parse', 'HEAD']))
+	}
 	return { root, hashes }
 }

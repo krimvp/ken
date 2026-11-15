@@ -71,6 +71,7 @@ test('log lists who changed what and when, and leaves out commits and paths in .
 				email: OWNER.email,
 				date: '2026-01-04T00:00:00.000Z',
 				subject: 'refactor: rename total and drop part',
+				coAuthors: [],
 				paths: ['logo.png', 'src/app.ts', 'src/new_name.py', 'src/old_name.py'],
 			},
 			{
@@ -79,6 +80,7 @@ test('log lists who changed what and when, and leaves out commits and paths in .
 				email: COLLABORATOR.email,
 				date: '2026-01-02T00:00:00.000Z',
 				subject: 'feat: greet loudly',
+				coAuthors: [],
 				paths: ['src/app.ts'],
 			},
 		],

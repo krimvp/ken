@@ -7,7 +7,16 @@ export type RepoPath = string & { readonly __brand: 'RepoPath' }
 
 export type Range = { base: CommitHash; head: CommitHash }
 
-export type Commit = { hash: string; author: string; email: string; date: string; subject: string; paths: string[] }
+// coAuthors holds the value of each Co-authored-by trailer, such as "Claude <noreply@anthropic.com>".
+export type Commit = {
+	hash: string
+	author: string
+	email: string
+	date: string
+	subject: string
+	coAuthors: string[]
+	paths: string[]
+}
 
 // Lines keep the diff's own prefix: "+" added, "-" removed, "\" for git's "No newline at end of file".
 export type Hunk = { oldStart: number; oldLength: number; newStart: number; newLength: number; lines: string[] }
@@ -25,6 +34,7 @@ export type Refused = { kind: 'refused'; reason: string }
 export type NoCommit = { kind: 'no-commit'; ref: string }
 export type NoFile = { kind: 'no-file'; path: string; commit: CommitHash }
 export type TooLarge = { kind: 'too-large'; limitBytes: number }
+export type Unrelated = { kind: 'unrelated'; base: CommitHash; head: CommitHash }
 
 export interface Repository {
 	resolve(ref: string, signal?: AbortSignal): Promise<{ kind: 'ok'; commit: CommitHash } | Refused | NoCommit>
@@ -39,6 +49,14 @@ export interface Repository {
 		pattern: string,
 		signal?: AbortSignal,
 	): Promise<{ kind: 'ok'; matches: SearchMatch[] } | { kind: 'bad-pattern'; message: string } | TooLarge>
+	// The commit where head split from base. Unrelated when the two share no history.
+	mergeBase(
+		base: CommitHash,
+		head: CommitHash,
+		signal?: AbortSignal,
+	): Promise<{ kind: 'ok'; commit: CommitHash } | Unrelated>
+	// The email of the person who runs ken in this repository, from git config. Null when none is set.
+	userEmail(signal?: AbortSignal): Promise<string | null>
 	log(range: Range, signal?: AbortSignal): Promise<{ kind: 'ok'; commits: Commit[] } | TooLarge>
 	diff(range: Range, signal?: AbortSignal): Promise<{ kind: 'ok'; files: FileDiff[] } | TooLarge>
 	blame(

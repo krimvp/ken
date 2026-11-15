@@ -35,10 +35,10 @@ const TRUE_QUOTE = { path: 'src/retry.ts', commit: 'HEAD', text: '\t\tsleep(100)
 // Wrong indentation is the miss real models make most: the file indents with two tabs.
 const FALSE_QUOTE = { path: 'src/retry.ts', commit: 'HEAD', text: '    sleep(100)' }
 
-async function ask(script: Turn[]) {
+async function ask(script: Turn[], directory = path.join(root, 'src')) {
 	const model = await scriptedModel(script)
 	const started = await startChat({
-		directory: path.join(root, 'src'),
+		directory,
 		model: { model: 'scripted', baseUrl: model.baseUrl, apiKeyEnv: KEY_ENV },
 	})
 	if (started.kind !== 'ok') throw new Error(started.message)
@@ -86,6 +86,7 @@ test('a false quote is rejected with its reasons sent to the model, and a true q
 					email: OWNER.email,
 					date: '2026-01-02T00:00:00.000Z',
 					subject: 'feat: wait between attempts',
+					coAuthors: [],
 					paths: ['README.md', 'src/retry.ts'],
 				},
 			],
@@ -171,4 +172,41 @@ test('a ref or path that starts with "-" or leaves the repository is refused and
 		assert.ok(!result.includes('outside secret'), `call ${index + 1} shows nothing from outside the repository`)
 	}
 	assert.equal(existsSync(written), false, 'git never ran with an option the model wrote')
+})
+
+test('an answer about a branch that is behind main covers only the hunks the branch changed', async () => {
+	const branch = buildRepository([
+		{ message: 'feat: start', files: { 'a.ts': 'one\n', 'b.ts': 'two\n' } },
+		{ message: 'feat: the branch adds a line', files: { 'a.ts': 'one\nbranch\n' } },
+		{ message: 'feat: main moves on', parent: 0, files: { 'b.ts': 'two\nmain\n' } },
+	])
+	const [start = '', branchTip = '', mainTip = ''] = branch.hashes
+	const { events } = await ask(
+		[
+			{
+				tool: 'ken__answer',
+				args: {
+					scope: { base: mainTip, head: branchTip },
+					summary: 'The branch adds one line to a.ts.',
+					statements: [
+						{
+							text: 'a.ts gains a line.',
+							label: 'inferred',
+							quotes: [{ path: 'a.ts', commit: branchTip, text: 'branch' }],
+						},
+					],
+				},
+			},
+			{ text: 'Done.' },
+		],
+		branch.root,
+	)
+
+	const accepted = events.find((event) => event.kind === 'accepted')
+	const change = accepted?.kind === 'accepted' ? accepted.answer.change : null
+	assert.equal(change?.base, start, 'the change starts where the branch split from main')
+	assert.deepEqual(
+		[...(change?.covered ?? []), ...(change?.uncovered ?? [])].map((hunk) => hunk.path),
+		['a.ts'],
+	)
 })

@@ -2,7 +2,16 @@
 // the project. Every ref and path the model sends goes through repo's resolve or parsePath before git sees it, and
 // every result is short text with a size limit.
 import type { Tool, ToolResult } from 'aigent/plugin'
-import { type CommitHash, parsePath, type RepoPath, type Repository } from '../../repo/index.ts'
+import {
+	type CommitHash,
+	type NoCommit,
+	parsePath,
+	type Refused,
+	type RepoPath,
+	type Repository,
+	resolveRange,
+	type Unrelated,
+} from '../../repo/index.ts'
 import { readArgs, refuse, reply, short } from './tool-edge.ts'
 
 const MAX_READ_LINES = 400
@@ -198,11 +207,15 @@ export async function rangeAt(
 	head: string,
 	signal: AbortSignal,
 ): Promise<{ kind: 'ok'; base: CommitHash; head: CommitHash } | Refusal> {
-	const from = await commitAt(repo, base, signal)
-	if (from.kind !== 'ok') return from
-	const to = await commitAt(repo, head, signal)
-	if (to.kind !== 'ok') return to
-	return { kind: 'ok', base: from.commit, head: to.commit }
+	const resolved = await resolveRange(repo, { base, head }, signal)
+	if (resolved.kind === 'ok') return { kind: 'ok', ...resolved.range }
+	return { kind: 'refused', result: refuse(scopeProblem(resolved)) }
+}
+
+export function scopeProblem(problem: Refused | NoCommit | Unrelated): string {
+	if (problem.kind === 'refused') return `Refused: ${problem.reason}.`
+	if (problem.kind === 'no-commit') return `There is no commit "${problem.ref}".`
+	return `${short(problem.base)} and ${short(problem.head)} share no history, so there is no change between them.`
 }
 
 export function pathOf(raw: string): { kind: 'ok'; path: RepoPath } | Refusal {

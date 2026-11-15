@@ -7,7 +7,8 @@ import { MAX_OUTPUT_BYTES, runGit } from './run-git.ts'
 const OUTSIDE_RECORD = ['--', '.', ':(exclude).ken']
 
 const HASH = /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/
-const LOG_FORMAT = '--format=%x1e%H%x00%an%x00%ae%x00%at%x00%s'
+const LOG_FORMAT =
+	'--format=%x1e%H%x00%an%x00%ae%x00%at%x00%s%x00%(trailers:key=Co-authored-by,valueonly,separator=%x1f)'
 
 export function gitRepository(root: string): Repository {
 	const git = (args: string[], signal?: AbortSignal) => runGit(root, args, signal)
@@ -53,6 +54,19 @@ export function gitRepository(root: string): Repository {
 				return run.code === 1 ? { kind: 'ok', matches: [] } : { kind: 'bad-pattern', message: run.stderr }
 			}
 			return { kind: 'ok', matches: parseGrep(run.stdout, commit) }
+		},
+
+		async mergeBase(base, head, signal) {
+			const run = await git(['merge-base', base, head], signal)
+			const hash = run.kind === 'ok' ? run.stdout.trim() : ''
+			if (!HASH.test(hash)) return { kind: 'unrelated', base, head }
+			return { kind: 'ok', commit: hash as CommitHash }
+		},
+
+		async userEmail(signal) {
+			const run = await git(['config', '--get', 'user.email'], signal)
+			const email = run.kind === 'ok' ? run.stdout.trim() : ''
+			return email === '' ? null : email
 		},
 
 		async log({ base, head }, signal) {
@@ -116,14 +130,18 @@ function parseLog(stdout: string): Commit[] {
 		.split('\x1e')
 		.filter((record) => record !== '')
 		.map((record) => {
-			const [hash = '', author = '', email = '', time = '', subject = '', ...rest] = record.split('\0')
+			const [hash = '', author = '', email = '', time = '', subject = '', trailers = '', ...rest] = record.split('\0')
 			// git puts a newline between a commit's header and its list of paths.
 			const paths = rest
 				.join('\0')
 				.slice(1)
 				.split('\0')
 				.filter((path) => path !== '')
-			return { hash, author, email, date: isoDate(time), subject, paths }
+			const coAuthors = trailers
+				.split('\x1f')
+				.map((value) => value.trim())
+				.filter((value) => value !== '')
+			return { hash, author, email, date: isoDate(time), subject, coAuthors, paths }
 		})
 }
 
