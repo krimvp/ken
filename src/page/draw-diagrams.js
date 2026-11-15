@@ -73,10 +73,54 @@ function config() {
 			attributeBackgroundColorOdd: card,
 			attributeBackgroundColorEven: token('--color-code-bg'),
 		},
-		flowchart: { useMaxWidth: false, diagramPadding: 0 },
-		sequence: { useMaxWidth: false, mirrorActors: false, width: 120, actorMargin: 30, diagramMarginX: 0 },
-		er: { useMaxWidth: false },
+		// Tight spacing and wrapped messages, so a diagram at the bounds (6 parts, 8 arrows) fits the answer column at
+		// 1440 pixels: six sequence participants take 6 x 120 + 5 x 8 pixels before the drawing shrinks.
+		flowchart: { useMaxWidth: false, diagramPadding: 4, nodeSpacing: 24, rankSpacing: 36, wrappingWidth: 140 },
+		sequence: {
+			useMaxWidth: false,
+			mirrorActors: false,
+			wrap: true,
+			width: 120,
+			actorMargin: 8,
+			wrapPadding: 4,
+			messageMargin: 20,
+			boxMargin: 4,
+			height: 50,
+			diagramMarginX: 4,
+			diagramMarginY: 4,
+		},
+		er: { useMaxWidth: false, nodeSpacing: 24, rankSpacing: 30, entityPadding: 8, minEntityWidth: 60 },
 	}
+}
+
+// A drawing wider than its box shrinks until its smallest text is this many pixels, and scrolls sideways from there.
+const SMALLEST_TEXT = 14
+
+function smallestText(svg) {
+	const sizes = [...svg.querySelectorAll('text, tspan, span, div, p')]
+		.filter((el) => [...el.childNodes].some((node) => node.nodeType === Node.TEXT_NODE && node.textContent.trim()))
+		.map((el) => Number.parseFloat(getComputedStyle(el).fontSize))
+	return sizes.length === 0 ? SMALLEST_TEXT : Math.min(...sizes)
+}
+
+// The frame around the box fades the cut edge while part of a wide drawing is out of sight.
+function fit(box, drawing) {
+	const frame = box.parentElement
+	const svg = box.querySelector('svg')
+	if (!svg) {
+		frame.classList.remove('wide')
+		return
+	}
+	drawing.smallest ??= smallestText(svg)
+	const natural = svg.viewBox.baseVal.width
+	const style = getComputedStyle(box)
+	const room = box.clientWidth - Number.parseFloat(style.paddingLeft) - Number.parseFloat(style.paddingRight)
+	const scale = Math.min(1, Math.max(SMALLEST_TEXT / drawing.smallest, room / natural))
+	svg.style.width = `${natural * scale}px`
+	frame.classList.toggle('wide', natural * scale > room + 1)
+	const atEnd = () => frame.classList.toggle('at-end', box.scrollLeft + box.clientWidth >= box.scrollWidth - 1)
+	box.addEventListener('scroll', atEnd)
+	atEnd()
 }
 
 async function draw(mermaid, text) {
@@ -107,7 +151,7 @@ async function drawToFit(text, width) {
 
 // Fills each drawing box on the page from the drawings made so far, and starts the ones that are missing; redraw runs
 // once one is ready. A drawing is { kind: 'drawing' }, { kind: 'drawn', svg } or { kind: 'failed' }, kept by theme, box
-// width and Mermaid text, which the server wrote into data-mermaid.
+// width and Mermaid text, which the server wrote into data-mermaid. A drawn one also keeps the size of its smallest text.
 export function fillDrawings(root, redraw) {
 	for (const box of root.querySelectorAll('[data-mermaid]')) {
 		const text = box.dataset.mermaid
@@ -127,5 +171,6 @@ export function fillDrawings(root, redraw) {
 			drawing.kind === 'drawn'
 				? drawing.svg
 				: `<p class="drawing-note">${drawing.kind === 'failed' ? NOT_DRAWN : DRAWING}</p>`
+		fit(box, drawing)
 	}
 }

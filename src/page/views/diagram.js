@@ -12,7 +12,8 @@ export function diagramHtml(diagram, index, ui) {
 	return `<section class="diagram" aria-labelledby="${title}">
 		<p class="caption">The agent's diagram. ken found each quote; it did not check what the arrows say.</p>
 		<h3 class="diagram-title" id="${title}">${label(diagram.label)}${prose(diagram.title)}</h3>
-		<div class="drawing" data-diagram="${index}" data-mermaid="${esc(diagram.mermaid)}" role="img" aria-label="Diagram: ${esc(diagram.title)}. The numbered list under it says the same in words."></div>
+		<div class="drawing-frame"><div class="drawing" data-diagram="${index}" data-mermaid="${esc(diagram.mermaid)}" role="img" aria-label="Diagram: ${esc(diagram.title)}. The numbered list under it says the same in words."></div></div>
+		<p class="drawing-hint">The diagram is wider than the screen. Scroll it sideways to see the rest.</p>
 		<ol class="elements">${diagram.elements.map((element) => elementHtml(element, diagram, index, ui)).join('')}</ol>
 	</section>`
 }

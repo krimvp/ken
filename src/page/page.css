@@ -438,8 +438,8 @@ button {
 	font-size: var(--text-sm);
 }
 
-/* A diagram leads a high-level answer. The drawing keeps its natural size, so its text stays readable, and its box
-   scrolls sideways when it is wider than the column. */
+/* A diagram leads a high-level answer. The drawing shrinks to the column only as far as its text stays readable (see
+   draw-diagrams.js), and its box scrolls sideways past that. Then the frame fades the cut edge and a line says so. */
 .diagram + .diagram {
 	margin-top: var(--space-6);
 }
@@ -452,8 +452,40 @@ button {
 	overflow-wrap: anywhere;
 }
 
-.drawing {
+.drawing-frame {
+	position: relative;
 	margin-top: var(--space-3);
+}
+
+.drawing-frame::after {
+	content: "";
+	position: absolute;
+	top: 1px;
+	right: 1px;
+	bottom: 1px;
+	width: 3.5rem;
+	border-radius: 0 var(--radius-md) var(--radius-md) 0;
+	background: linear-gradient(to right, transparent, var(--color-card) 85%);
+	opacity: 0;
+	pointer-events: none;
+}
+
+.drawing-frame.wide:not(.at-end)::after {
+	opacity: 1;
+}
+
+.drawing-hint {
+	display: none;
+	margin-top: var(--space-1);
+	color: var(--color-muted);
+	font-size: var(--text-sm);
+}
+
+.drawing-frame.wide + .drawing-hint {
+	display: block;
+}
+
+.drawing {
 	padding: var(--space-4);
 	overflow-x: auto;
 	border: 1px solid var(--color-border);
@@ -1215,6 +1247,10 @@ button {
 
 	.q-first {
 		grid-column: 1 / -1;
+	}
+
+	.drawing {
+		padding: var(--space-2);
 	}
 
 	.checks-inline {
