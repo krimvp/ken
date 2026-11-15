@@ -10,6 +10,31 @@ The project record keeps what earlier answers found: pieces of work, the decisio
 
 Slice 3 adds the page. `ken open` starts a server on your machine and opens the page in your browser. You ask in a box at the bottom. While the agent works, the page shows each step it takes in plain words, and a Stop button. The answer comes as statements, each with its label and the code it quotes; open a quote to read all its lines. Beside the answer, ken shows what it checked: the quotes, the changed code that no quote covers (as diffs), and the commits, all read from git. The page keeps every question you ask, with its answer, in `~/.ken/projects/<first commit>/history.jsonl`. That file is yours and stays out of the project. Come back the next day and the page shows the answers again without asking the model.
 
+A high-level question, such as how the parts fit together or what happens when a request comes in, gets an answer that leads with one or two basic diagrams: boxes and arrows, the steps of a sequence, or the data and how it relates. The model sends the boxes and arrows as data, never diagram syntax. Every arrow must quote the lines that show it, and those quotes pass the same check as any other. ken writes the Mermaid text itself, and the page draws it. Under each drawing, a numbered row for each box and arrow shows the lines it quotes. ken checked that those lines exist. It did not check that an arrow is true, just as it does not check a sentence.
+
+How ken works today:
+
+```mermaid
+flowchart LR
+  reader(["You"])
+  page["The page<br/>ken open, on 127.0.0.1"]
+  agent["Chat agent<br/>a model with read-only tools"]
+  repo["The project's repository<br/>files and git history"]
+  checks["Three checks<br/>quotes exist at their commit<br/>change facts come from git<br/>the record only grows"]
+  record["Project record<br/>.ken/record/, shared"]
+  history["Your history<br/>~/.ken/, personal"]
+  reader -->|asks and reads| page
+  page -->|runs each question in| agent
+  agent -->|reads| repo
+  agent -->|sends every answer to| checks
+  checks -->|read quoted lines from| repo
+  checks -->|add what passed to| record
+  record -->|is shown at the start of each question to| agent
+  page -->|keeps each answer in| history
+```
+
+`ken chat` and `ken ask` take the place of the page in the terminal. They print a diagram as its numbered rows, and `--json` carries its Mermaid text.
+
 ## Run it
 
 ken sends your project's code to the model you name, so it has no default model. Set three variables, in the environment or in `.env`:
@@ -36,7 +61,7 @@ npm run ken -- record --repo ../my-project
 npm run ken -- record 3f9a2b1c4e5d --repo ../my-project --json
 ```
 
-`open` starts the page for the repository in the current folder, or the one you name, and opens it in your browser. It prints the address too, in case no browser opens. Press Ctrl-C to stop it. With no model set, the page still opens: it shows your earlier answers and says what to set.
+`open` starts the page for the repository in the current folder, or the one you name, and opens it in your browser. It prints the address too, in case no browser opens. Press Ctrl-C to stop it. With no model set, the page still opens: it shows your earlier answers and says what to set. Ask how the parts of a project fit together and the answer leads with a diagram; choose a numbered row, or a box or an arrow in the drawing, to read the code it rests on. The page draws with Mermaid, which ken serves from its own address.
 
 ```sh
 npm run ken -- open
