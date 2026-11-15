@@ -10,6 +10,7 @@ import { hunkHeader } from '../tools/diff-tool.ts'
 import { readArgs, refuse, reply } from '../tools/tool-edge.ts'
 import type { Answer } from './answer.ts'
 import { type AnswerDraft, checkAnswer } from './check-answer.ts'
+import { allowJsonText, readJsonText } from './json-text.ts'
 import { type RecordArgs, type Recorded, recordAnswer } from './record-answer.ts'
 
 export const MAX_REJECTIONS = 3
@@ -23,27 +24,42 @@ export function answerTool(repo: Repository, store: RecordStore, round: () => An
 		name: 'answer',
 		description:
 			'Send your answer to the reader. ken checks every quote against git and rejects the whole answer if one quote is not in its file at its commit. It stores the piece of work, the decisions and the topics you send in the project record. Call it once, when you have read the code the answer rests on.',
-		parameters: ANSWER_SCHEMA,
+		parameters: PARAMETERS,
 		async execute(args, ctx) {
 			const current = round()
 			if (current.answer) {
 				return reply('An answer is already accepted for this question. Write your one or two closing sentences now.')
 			}
 			if (current.rejections >= MAX_REJECTIONS) return refuse('No attempts are left for this question. Stop now.')
-			const check = await checkAnswer(repo, draftOf(args), ctx.signal)
-			const recorded =
-				check.kind === 'accepted' ? await recordAnswer(store, check.answer, recordArgsOf(args), ctx.signal) : check
-			if (check.kind === 'accepted' && recorded.kind === 'recorded') {
-				current.answer = check.answer
-				current.emit({ kind: 'accepted', answer: check.answer, recorded: recorded.entries })
-				return reply(confirmation(check.answer, recorded))
+			const settled = await settle(repo, store, args, ctx.signal)
+			if (settled.kind === 'accepted') {
+				current.answer = settled.answer
+				current.emit({ kind: 'accepted', answer: settled.answer, recorded: settled.recorded.entries })
+				return reply(confirmation(settled.answer, settled.recorded))
 			}
-			const problems = recorded.kind === 'recorded' ? [] : recorded.problems
 			current.rejections += 1
-			current.emit({ kind: 'rejected', attempt: current.rejections, problems })
-			return refuse(rejection(problems, current.rejections))
+			current.emit({ kind: 'rejected', attempt: current.rejections, problems: settled.problems })
+			return refuse(rejection(settled.problems, current.rejections))
 		},
 	}
+}
+
+async function settle(
+	repo: Repository,
+	store: RecordStore,
+	raw: JsonObject,
+	signal: AbortSignal,
+): Promise<
+	| { kind: 'accepted'; answer: Answer; recorded: Extract<Recorded, { kind: 'recorded' }> }
+	| { kind: 'rejected'; problems: string[] }
+> {
+	const read = readJsonText(ANSWER_SCHEMA, raw)
+	if (read.kind === 'refused') return { kind: 'rejected', problems: read.problems }
+	const check = await checkAnswer(repo, draftOf(read.args), signal)
+	if (check.kind === 'rejected') return check
+	const recorded = await recordAnswer(store, check.answer, recordArgsOf(read.args), signal)
+	if (recorded.kind === 'refused') return { kind: 'rejected', problems: recorded.problems }
+	return { kind: 'accepted', answer: check.answer, recorded }
 }
 
 function confirmation(answer: Answer, recorded: Extract<Recorded, { kind: 'recorded' }>): string {
@@ -267,3 +283,5 @@ const ANSWER_SCHEMA = {
 	required: ['summary', 'statements'],
 	additionalProperties: false,
 } as const
+
+const PARAMETERS = allowJsonText(ANSWER_SCHEMA)

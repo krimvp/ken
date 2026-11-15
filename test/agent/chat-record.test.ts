@@ -109,3 +109,22 @@ test('a topic named like one in the record, in another case and spacing, is refu
 	const topics = (await store.read()).entries.filter((e) => e.kind === 'topic')
 	assert.equal(topics.length, 1)
 })
+
+test('decisions sent as JSON text are stored, and JSON text that lacks a field is rejected with the field named', async () => {
+	const { undo, ...withoutUndo } = DECISION
+	const waits = { ...DECISION, question: 'Does a retry wait after the last attempt too?' }
+	const { events, requests } = await ask([
+		answer({ decisions: JSON.stringify([withoutUndo]) }),
+		answer({ decisions: JSON.stringify([waits]) }),
+		{ text: 'Done.' },
+	])
+
+	assert.deepEqual(
+		events.filter((event) => event.kind === 'rejected' || event.kind === 'accepted').map((event) => event.kind),
+		['rejected', 'accepted'],
+	)
+	const toModel = toolResults(requests[1])[0] ?? ''
+	assert.ok(toModel.includes('decisions, item 1 needs "undo"'), `the model is told what is missing: ${toModel}`)
+	const stored = accepted(events).recorded.find((entry) => entry.kind === 'decision')
+	assert.deepEqual(stored?.kind === 'decision' && [stored.question, stored.undo], [waits.question, undo])
+})
