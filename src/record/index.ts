@@ -2,6 +2,7 @@
 // decisions, topics and notes in .ken/record/, which the owner commits. No model writes it directly: every entry
 // passes checkEntry, and the store only grows. Nothing here talks to a model.
 export type { EntryDraft } from './check-entry.ts'
+export { describeEntry, entryLine } from './describe-entry.ts'
 export type {
 	Decision,
 	Entry,

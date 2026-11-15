@@ -1,9 +1,10 @@
 // The plan's rule for an answer: ken accepts it only when every quote passes checkQuote and every statement carries a
 // label this slice allows. One bad quote rejects the whole answer. Only then does ken read the change facts from git.
 import { checkCoverage, checkQuote, explainQuote, type Quote } from '../../checks/index.ts'
+import type { Label, Statement } from '../../record/index.ts'
 import { type Repository, resolveRange } from '../../repo/index.ts'
 import { scopeProblem } from '../tools/exploration-tools.ts'
-import { type Answer, type Change, LABELS, type Label, type Statement } from './answer.ts'
+import { type Answer, type Change, LABELS } from './answer.ts'
 
 export type AnswerDraft = {
 	summary: string

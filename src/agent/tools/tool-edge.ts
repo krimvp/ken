@@ -16,6 +16,11 @@ export function readArgs(args: JsonObject, tool: string) {
 		optionalText(name: string): string | undefined {
 			return args[name] === undefined || args[name] === '' ? undefined : text(name)
 		},
+		flag(name: string): boolean {
+			const value = args[name]
+			if (typeof value !== 'boolean') throw wrong(name, 'true or false')
+			return value
+		},
 		optionalLine(name: string): number | undefined {
 			const value = args[name]
 			if (value === undefined) return undefined

@@ -1,5 +1,6 @@
 import { createSession, type RunResult } from 'aigent'
 import type { JsonObject, JsonValue } from 'aigent/plugin'
+import { fileRecordStore } from '../record/index.ts'
 import { findRoot, gitRepository } from '../repo/index.ts'
 import { type AnswerRound, answerTool, MAX_REJECTIONS } from './answer/answer-tool.ts'
 import type { ChatEvent } from './chat-event.ts'
@@ -7,6 +8,7 @@ import type { ModelConfig } from './model-config.ts'
 import { SYSTEM_PROMPT } from './system-prompt.ts'
 import { diffTool } from './tools/diff-tool.ts'
 import { explorationTools } from './tools/exploration-tools.ts'
+import { recordIndex, recordTool } from './tools/record-tool.ts'
 
 export type Chat = {
 	root: string
@@ -30,6 +32,7 @@ export async function startChat(options: {
 		return { kind: 'no-repository', message: `${options.directory} is not inside a git repository.` }
 	}
 	const repo = gitRepository(found.root)
+	const store = fileRecordStore(found.root, repo)
 	let round: AnswerRound = { rejections: 0, answer: null, emit: () => {} }
 	const { model, baseUrl, apiKeyEnv } = options.model
 	const session = await createSession({
@@ -38,7 +41,12 @@ export async function startChat(options: {
 			{
 				name: PLUGIN,
 				description: "Reads the project's files and git history, and checks answers against them.",
-				tools: [...explorationTools(repo), diffTool(repo), answerTool(repo, () => round)],
+				tools: [
+					...explorationTools(repo),
+					diffTool(repo),
+					recordTool(store, repo),
+					answerTool(repo, store, () => round),
+				],
 			},
 		],
 		enabled: [PLUGIN],
@@ -72,8 +80,11 @@ export async function startChat(options: {
 			}
 		})
 		const started = performance.now()
+		const index = recordIndex(await store.read())
 		const run = session
-			.prompt(question, { signal: signal ? AbortSignal.any([signal, stop.signal]) : stop.signal })
+			.prompt(`${index}\n\nThe question: ${question}`, {
+				signal: signal ? AbortSignal.any([signal, stop.signal]) : stop.signal,
+			})
 			.catch((error: unknown): RunResult => ({ stop: 'error', message: String(error), turns: 0 }))
 			.then((result) => {
 				const seconds = Math.round((performance.now() - started) / 100) / 10
