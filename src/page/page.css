@@ -1107,7 +1107,7 @@ button {
 		text-overflow: ellipsis;
 	}
 
-	.top-menu {
+	.top-menu > .link {
 		white-space: nowrap;
 	}
 
