@@ -32,7 +32,7 @@ export const MODULES: Record<string, Module> = {
 	},
 	cli: {
 		job: 'Runs ken in the terminal: a chat, one question for scripts, or the project record.',
-		imports: ['agent', 'record', 'repo'],
+		imports: ['agent', 'diagram', 'record', 'repo'],
 		packages: [],
 	},
 }

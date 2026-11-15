@@ -1,8 +1,9 @@
 import { styleText } from 'node:util'
 import type { Answer, ChatEvent } from '../agent/index.ts'
 import { entryLine } from '../record/index.ts'
+import { formatDiagram, formatQuote } from './print-diagram.ts'
 
-type Paint = (format: Parameters<typeof styleText>[0], text: string) => string
+export type Paint = (format: Parameters<typeof styleText>[0], text: string) => string
 
 // Prints one question's events as they arrive. Colour only reaches a terminal: styleText leaves it out for a pipe.
 export async function printQuestion(events: AsyncIterable<ChatEvent>, out: NodeJS.WriteStream): Promise<boolean> {
@@ -58,16 +59,10 @@ export async function printQuestion(events: AsyncIterable<ChatEvent>, out: NodeJ
 
 export function formatAnswer(answer: Answer, paint: Paint): string {
 	const lines = [paint('bold', answer.summary), '']
+	for (const diagram of answer.diagrams) lines.push(...formatDiagram(diagram, paint), '')
 	for (const [index, statement] of answer.statements.entries()) {
 		lines.push(`${index + 1}. ${statement.text} ${paint('cyan', `[${statement.label}]`)}`)
-		for (const quote of statement.quotes) {
-			const span =
-				quote.startLine === quote.endLine ? `line ${quote.startLine}` : `lines ${quote.startLine}-${quote.endLine}`
-			lines.push(paint('dim', `   ${quote.path} @ ${quote.commit.slice(0, 7)}, ${span}`))
-			for (const [offset, text] of quote.text.split('\n').entries()) {
-				lines.push(`   ${paint('dim', String(quote.startLine + offset).padStart(5))}  ${text}`)
-			}
-		}
+		for (const quote of statement.quotes) lines.push(...formatQuote(quote, paint))
 	}
 	if (answer.change) {
 		const { commits, covered, uncovered, binary } = answer.change
