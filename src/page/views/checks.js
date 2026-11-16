@@ -40,7 +40,7 @@ function limit(q) {
 }
 
 function decisionsOf(q) {
-	return q.recorded.filter((entry) => entry.kind === 'decision')
+	return [...q.recorded.filter((entry) => entry.kind === 'decision'), ...(q.draft ?? [])]
 }
 
 function sentBack(q) {

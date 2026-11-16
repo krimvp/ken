@@ -24,8 +24,9 @@ const UNDO = { easy: 'Easy to undo.', 'some-work': 'Some work to undo.', hard: '
 // request.
 const SHOWN_CHARS = { wide: 240, narrow: 150 }
 
+// A draft answer, one that cites ken's snapshot of uncommitted work, keeps its decisions with it: the record has none.
 export function decisionsOf(q) {
-	return q.recorded.filter((entry) => entry.kind === 'decision')
+	return [...q.recorded.filter((entry) => entry.kind === 'decision'), ...(q.draft ?? [])]
 }
 
 // Every item that carries quotes, in the order the page shows them, by the key the page uses for it: "g0n3" for
@@ -252,7 +253,7 @@ function labelCounts(statements) {
 }
 
 // The most common label goes without a mark, since the line above the statements names it. The others are marked.
-function markedLabels(statements) {
+export function markedLabels(statements) {
 	return new Set(
 		labelCounts(statements)
 			.slice(1)
@@ -264,7 +265,7 @@ function sentence(text) {
 	return text.charAt(0).toUpperCase() + text.slice(1)
 }
 
-function labelLine(statements) {
+export function labelLine(statements) {
 	const [common, ...marked] = labelCounts(statements)
 	if (!common) return ''
 	const name = (each) => LABELS[each]?.name ?? each

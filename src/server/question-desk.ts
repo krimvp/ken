@@ -261,14 +261,15 @@ export function questionDesk(history: History, record: RecordStore, repo: Reposi
 	return { settled, busy, ask, note, notes, writing, rows, view, questionOf }
 }
 
-// "Open as a question" on a live note: the full answer on the change the note was about.
+// "Open as a question" on a live note: the full answer on the change the note was about. The first line is what the
+// page shows as the question; the lines under it are for the agent.
 function deeperOnNote(about: About, at: string, summary: string): string {
 	const short = (hash: string) => hash.slice(0, 7)
-	const what =
-		about.kind === 'commits'
-			? `the commits from ${short(about.base)} to ${short(about.head)}`
-			: `uncommitted work at ${at.slice(11, 16)} UTC. ken copied that work into commit ${short(about.snapshot)} in its own store, on top of HEAD ${short(about.head)}: read it with diff from ${short(about.base)} to ${short(about.snapshot)} and with read_file at ${short(about.snapshot)}, as you would a commit`
-	return `Go deeper on ken's live note about ${what}. The note said: ${summary}\nExplain that change in full: what it does, why it was done this way, and what to watch now.`
+	const when = at.slice(11, 16)
+	if (about.kind === 'commits') {
+		return `Go deeper on the live note of ${when} UTC about the commits from ${short(about.base)} to ${short(about.head)}.\nThe note said: ${summary}\nExplain that change in full: what it does, why it was done this way, and what to watch now.`
+	}
+	return `Go deeper on the live note of ${when} UTC about uncommitted work.\nken copied that work into commit ${short(about.snapshot)} in its own store, on top of HEAD ${short(about.head)}. Read it with diff from ${short(about.base)} to ${short(about.snapshot)} and with read_file at ${short(about.snapshot)}, as you would a commit.\nThe note said: ${summary}\nExplain that change in full: what it does, why it was done this way, and what to watch now.`
 }
 
 // The record entries an answer stands on: the ones it added, and the current decisions of its piece of work. An answer

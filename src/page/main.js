@@ -2,6 +2,7 @@
 // the panel on the right holds what ken checked. Under 1100 pixels the panel goes away and the same things open in
 // place. The page talks only to the server that sent it.
 import { fillDrawings } from './draw-diagrams.js'
+import { liveViewHtml } from './live/live-view.js'
 import { answerHtml, itemsOf } from './views/answer.js'
 import { allQuotesHtml, checksHtml, quoteCardHtml } from './views/checks.js'
 import { decisionsViewHtml } from './views/decisions.js'
@@ -68,10 +69,16 @@ const state = {
 	// The authors of recent commits, and the person and span the reader picked in the lens "What changed".
 	authors: [],
 	pick: { author: '', since: '' },
+	// Live mode as the server last told it, the quotes and decisions open in its notes, and the older notes unfolded.
+	live: null,
+	liveOn: false,
+	liveProblem: null,
+	liveUi: { ...freshUi(), wide: false },
+	unfolded: new Set(),
 }
 
 // The open decisions and quotes of the view on screen.
-const uiNow = () => (state.view === 'follow-up' ? state.followUi : state.ui)
+const uiNow = () => (state.view === 'follow-up' ? state.followUi : state.view === 'live' ? state.liveUi : state.ui)
 
 // What the page shows as the question until ken sends the one it wrote for a lens.
 const LENS_TITLES = {
@@ -81,6 +88,7 @@ const LENS_TITLES = {
 	person: 'What did they change?',
 	range: 'What happened?',
 	topic: 'What changed since I understood it?',
+	note: 'Go deeper on this note',
 }
 
 // A saved question as the page shows it: the history entry with its project record entries in place of their ids, and
@@ -108,6 +116,9 @@ function addEvent(q, event) {
 			break
 		case 'rejected':
 			q.steps.push({ kind: 'rejected', attempt: event.attempt, problems: event.problems })
+			break
+		case 'waiting':
+			q.steps.push({ kind: 'text', text: 'ken is finishing a live note. Your question starts when it ends.' })
 			break
 		case 'asked':
 			q.question = event.question
@@ -298,7 +309,12 @@ function menuHtml() {
 		waiting === 0
 			? ''
 			: `<button class="link" data-act="follow-up" data-key="follow-up"${current('follow-up')}>Open (${waiting})</button>`
-	const map = `${open}<button class="link" data-act="decisions" data-key="decisions"${current('decisions')}>Decisions</button><button class="link" data-act="map" data-key="map"${current('map')}>Your map</button>`
+	const mark = state.liveOn ? '<span class="live-dot" aria-hidden="true"></span>' : ''
+	const live =
+		state.model?.kind === 'ok'
+			? `<button class="link" data-act="live" data-key="live"${current('live')} aria-label="Live${state.liveOn ? ', on' : ''}">${mark}Live</button>`
+			: ''
+	const map = `${live}${open}<button class="link" data-act="decisions" data-key="decisions"${current('decisions')}>Decisions</button><button class="link" data-act="map" data-key="map"${current('map')}>Your map</button>`
 	if (n === 0) return map
 	const button = `${map}<button class="link" data-act="menu" data-key="menu" aria-expanded="${state.menuOpen}">Your questions (${n})</button>`
 	if (!state.menuOpen) return button
@@ -361,6 +377,10 @@ function movedHtml(q) {
 function threadHtml() {
 	if (state.view === 'map') return mapViewHtml(state.map)
 	if (state.view === 'decisions') return decisionsViewHtml(state.decisions)
+	if (state.view === 'live') {
+		const canAsk = state.model?.kind === 'ok' && !state.running
+		return liveViewHtml(state.live, state.liveUi, state.unfolded, canAsk, state.liveProblem)
+	}
 	if (state.view === 'follow-up') {
 		return openViewHtml(state.followUp, state.followUi, state.model?.kind === 'ok' && !state.running, state.followSaid)
 	}
@@ -547,6 +567,54 @@ function closeDecisions() {
 	$('[data-key="decisions"]')?.focus({ preventScroll: true })
 }
 
+// The Live view reads the server every few seconds, and the header's mark follows whether live mode is on.
+async function loadLive() {
+	try {
+		const live = await getJson('/api/live')
+		const changed = JSON.stringify(live) !== JSON.stringify(state.live)
+		state.live = live
+		state.liveOn = live.status !== 'off'
+		state.liveProblem = null
+		return changed
+	} catch (error) {
+		state.liveProblem = error.message
+		return true
+	}
+}
+
+async function liveAction(action) {
+	try {
+		const response = await fetch('/api/live', {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ action }),
+		})
+		const body = await response.json()
+		if (!response.ok) throw new Error(body.message)
+		state.live = body
+		state.liveOn = body.status !== 'off'
+		state.liveProblem = null
+	} catch (error) {
+		state.liveProblem = error.message
+	}
+	render()
+}
+
+async function showLive() {
+	state.view = 'live'
+	state.menuOpen = false
+	render()
+	await loadLive()
+	render()
+	window.scrollTo({ top: 0 })
+}
+
+function closeLive() {
+	state.view = 'question'
+	render()
+	$('[data-key="live"]')?.focus({ preventScroll: true })
+}
+
 async function showFollowUp() {
 	state.view = 'follow-up'
 	state.menuOpen = false
@@ -595,6 +663,18 @@ const actions = {
 	map: () => (state.view === 'map' ? closeMap() : showMap()),
 	decisions: () => (state.view === 'decisions' ? closeDecisions() : showDecisions()),
 	'decisions-close': closeDecisions,
+	live: () => (state.view === 'live' ? closeLive() : showLive()),
+	'live-close': closeLive,
+	'live-on': () => liveAction('on'),
+	'live-off': () => liveAction('off'),
+	'live-pause': () => liveAction('pause'),
+	'live-resume': () => liveAction('resume'),
+	'live-note-now': () => liveAction('note-now'),
+	'note-unfold'(el) {
+		toggle(state.unfolded, el.dataset.id)
+		render()
+	},
+	'note-question': (el) => send({ lens: { kind: 'note', id: el.dataset.id } }),
 	'follow-up': () => (state.view === 'follow-up' ? closeFollowUp() : showFollowUp()),
 	'open-close': closeFollowUp,
 	'explain-topic': (el) => send({ lens: { kind: 'topic', topic: el.dataset.topic } }),
@@ -731,6 +811,7 @@ document.addEventListener('keydown', (event) => {
 	}
 	if (state.view === 'map') return closeMap()
 	if (state.view === 'decisions') return closeDecisions()
+	if (state.view === 'live') return closeLive()
 	if (state.view === 'follow-up') return closeFollowUp()
 	if (closePanel()) return
 	if (ui.coverageOpen || ui.stepsOpen || ui.keyOpen || ui.openQuotes.size > 0 || ui.openDecisions.size > 0) {
@@ -792,6 +873,10 @@ $('#question').addEventListener('input', resizeBox)
 wideQuery.addEventListener('change', render)
 darkQuery.addEventListener('change', render)
 setInterval(tick, 1000)
+setInterval(async () => {
+	if (state.view !== 'live' && !state.liveOn) return
+	if (await loadLive()) render()
+}, 3000)
 
 try {
 	const [server, recent] = await Promise.all([
@@ -802,6 +887,7 @@ try {
 	])
 	state.project = server.project
 	state.model = server.model
+	state.liveOn = server.live === true
 	state.authors = recent.authors
 	const last = state.rows.at(-1)
 	if (last) await openQuestion(last.id)
