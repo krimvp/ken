@@ -150,8 +150,8 @@ test('a question streams its steps and a checked answer with its diagram drawn, 
 		[
 			[1, 'retry'],
 			[2, 'sleep'],
-			[3, 'retry calls sleep'],
-			[4, 'sleep returns to retry'],
+			[3, 'From retry to sleep: calls'],
+			[4, 'From sleep to retry: returns to'],
 		],
 	)
 	const saved = lines.at(-1).view
@@ -582,8 +582,8 @@ test('"I have decided" through the server reads only the decision and a note, so
 		needsOwner: true,
 		answer: { at: '2000-01-01T00:00:00.000Z', note: 'x' },
 	}
-	const { status, text } = await send(server, '/api/decided', { body: { decision: id, note: 'Fine.', ...forged } })
-		.response
+	const body = { decision: id, note: 'Make it double.', outcome: 'change', ...forged }
+	const { status, text } = await send(server, '/api/decided', { body }).response
 	assert.equal(status, 200, text)
 
 	assert.deepEqual(await openIds(), [])
@@ -594,10 +594,15 @@ test('"I have decided" through the server reads only the decision and a note, so
 		{
 			chosen: decision.chosen,
 			needsOwner: decision.needsOwner,
-			note: decision.answer?.note,
+			answer: decision.answer && { note: decision.answer.note, outcome: decision.answer.outcome },
 			replaces: decision.replaces,
 		},
-		{ chosen: 'A fixed 100 ms', needsOwner: false, note: 'Fine.', replaces: id },
+		{
+			chosen: 'A fixed 100 ms',
+			needsOwner: false,
+			answer: { note: 'Make it double.', outcome: 'change' },
+			replaces: id,
+		},
 	)
 	assert.notEqual(decision.answer?.at, forged.answer.at, 'ken sets when the owner answered')
 })

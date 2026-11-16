@@ -2,7 +2,7 @@
 // and what it cost open on request. Every older note folds to one line. The agent wrote the words; ken checked only
 // that each quote is in its file, at the commit or in its own snapshot of uncommitted work.
 import { decisionHtml } from '../views/answer.js'
-import { copiesOf, count, esc, label, prose, quoteRows, short, when } from '../views/format.js'
+import { copiesOf, count, duration, esc, label, prose, quoteRows, short, when, withCost } from '../views/format.js'
 
 // What a note explains: "Commit 7c7d8f5" with its subject, or "Uncommitted work, 06:40". A note that failed has no
 // commits to name, so it names the range.
@@ -33,10 +33,10 @@ function costHtml(entry) {
 	const parts = []
 	if (entry.usage) {
 		const tokens = entry.usage.inputTokens + entry.usage.outputTokens
-		parts.push(`This note took ${entry.usage.seconds} seconds and ${tokens.toLocaleString('en-US')} tokens.`)
+		parts.push(`This note took ${duration(entry.usage.seconds)} and ${tokens.toLocaleString('en-US')} tokens.`)
 	}
 	const sent = entry.steps.filter((step) => step.kind === 'rejected').length
-	if (sent > 0) parts.push(`ken sent ${count(sent, 'draft', 'drafts')} back first, because a quote did not match.`)
+	if (sent > 0) parts.push(`ken rejected ${count(sent, 'draft', 'drafts')} first, because a quote did not match.`)
 	return parts.length === 0 ? '' : `<p class="ln-cost">${parts.join(' ')}</p>`
 }
 
@@ -78,13 +78,16 @@ export function noteHtml(view, key, ui, canAsk, tags) {
 		? `${statements > 0 ? `<ol class="ln-list">${claimItems(a.statements, `${key}s`, rows)}</ol>` : ''}${costHtml(entry)}`
 		: ''
 	const ask = canAsk
-		? `<span class="ln-ask"><button class="quiet-button" data-act="note-question" data-id="${esc(entry.id)}" data-key="ask-${key}">Open as a question</button><span class="small muted">One more model run.</span></span>`
+		? withCost(
+				`<button class="quiet-button" data-act="note-question" data-id="${esc(entry.id)}" data-key="ask-${key}">Open as a question</button>`,
+				'One more model run.',
+			)
 		: ''
 	return `<article class="live-note">
 		<p class="ln-head">${noteHeadHtml(entry, tags)}</p>
-		<p class="small muted">The agent's note. ken checked its quotes.</p>
+		<p class="small muted">The note from ken's model. ken checked its quotes.</p>
 		<p class="summary">${prose(a.summary)}</p>
-		${risks.length > 0 ? `<h3 class="ln-sub">${risks.length === 1 ? 'A risk to watch' : `${risks.length} risks to watch`}</h3><ol class="ln-list">${claimItems(risks, `${key}r`, rows)}</ol>` : ''}
+		${risks.length > 0 ? `<section class="risks ln-risks"><h3 class="ln-sub">${risks.length === 1 ? 'A risk to watch' : `${risks.length} risks to watch`}</h3><ol class="ln-list">${claimItems(risks, `${key}r`, rows)}</ol></section>` : ''}
 		${decisions.length > 0 ? `<ul class="ln-decisions">${decisions.map((d, i) => decisionHtml(d, `${key}d${i}`, rows, all)).join('')}</ul>` : ''}
 		${rest}
 		<p class="ln-foot">${more}${ask}</p>

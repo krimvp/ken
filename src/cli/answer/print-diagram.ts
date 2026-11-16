@@ -35,7 +35,7 @@ export function formatQuote(quote: Quote, paint: Paint): string[] {
 // A quote of a session names no file and no commit: it says when the session ran and who wrote the lines.
 export function quoteSource(quote: Quote): string {
 	if ('session' in quote) {
-		return `from the session ${at(quote.at)}, ${quote.by === 'user' ? 'what you asked' : 'what the agent said'}`
+		return `from the session ${at(quote.at)}, ${quote.by === 'user' ? 'what you asked' : 'what your coding agent said'}`
 	}
 	return quote.path === null
 		? `commit message of ${quote.commit.slice(0, 7)}`

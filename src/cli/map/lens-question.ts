@@ -1,4 +1,4 @@
-import { openItems, openQuestion, personLens, rangeLens } from '../../follow-up/index.ts'
+import { onDay, openItems, openQuestion, personLens, rangeLens } from '../../follow-up/index.ts'
 import { kenHome, openHistory } from '../../history/index.ts'
 import { areaQuestion, catchUpQuestion } from '../../map/index.ts'
 import { fileRecordStore } from '../../record/index.ts'
@@ -26,7 +26,7 @@ export async function lensQuestion(
 	if (lens.kind === 'area') {
 		const area = parsePath(lens.path)
 		if (area.kind !== 'ok') return { kind: 'refused', message: `Name a folder or a file: ${area.reason}.` }
-		return { kind: 'ok', text: areaQuestion(area.path, states, record), empty: false }
+		return { kind: 'ok', text: areaQuestion(area.path, states, record, onDay), empty: false }
 	}
 	if (lens.kind === 'follow-up') return { kind: 'ok', ...openQuestion(await openItems(repo, record, states)) }
 	const history = await openHistory(kenHome(process.env), repo)
@@ -42,7 +42,7 @@ export async function lensQuestion(
 	const head = await repo.resolve('HEAD')
 	return {
 		kind: 'ok',
-		text: catchUpQuestion({ states, record, asked, head: head.kind === 'ok' ? head.commit : null }),
+		text: catchUpQuestion({ states, record, asked, head: head.kind === 'ok' ? head.commit : null, day: onDay }),
 		empty: false,
 	}
 }

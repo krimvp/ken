@@ -1,8 +1,8 @@
-// What is open, on the page: the decisions that need the reader's call, each with "I have decided" and a note, and the
+// What is open, on the page: the decisions that need the reader's call, each kept or sent for a change with a note, and the
 // topics whose code changed since the reader understood them, with the commits that changed them and who made each. ken
 // works the list out from the record, the map and git; the page only shows it.
 import { decisionHtml } from './answer.js'
-import { esc, prose, short, WHO, when } from './format.js'
+import { answeredHtml, esc, prose, short, WHO, when, withCost } from './format.js'
 import { linesText, onDay } from './map.js'
 
 export function openCount(open) {
@@ -14,10 +14,13 @@ function decisionItem(d, i, ui) {
 	return `<li class="o-decision">
 		<ul class="o-card">${decisionHtml(d, key, { ui, commits: true }, new Set(['recorded', 'inferred']))}</ul>
 		<form class="decide-form" data-id="${esc(d.id)}" autocomplete="off">
-			<label for="note-${key}">Your note, if you want one: what you decided, and why</label>
-			<textarea id="note-${key}" name="note" rows="2" maxlength="1200"></textarea>
-			<p class="small muted">"I have decided" saves your answer to this call, with your note, in the project record. The decision stays as it was, beside your answer. Nothing is edited.</p>
-			<button class="quiet-button" type="submit">I have decided</button>
+			<label for="note-${key}">Your note: why, and what to change if you want it changed</label>
+			<textarea id="note-${key}" name="note" rows="2" maxlength="1200" required></textarea>
+			<p class="small muted">This records that you made the call, with your note. It changes no code, and the decision stays as it was written.</p>
+			<div class="decide-buttons">
+				<button class="primary" type="submit" name="outcome" value="keep" formnovalidate>Keep what was chosen</button>
+				<button class="primary" type="submit" name="outcome" value="change">I want it changed</button>
+			</div>
 		</form>
 	</li>`
 }
@@ -35,7 +38,9 @@ function commitsHtml(commits) {
 function topicItem({ state, commits }, canAsk) {
 	const topic = esc(state.topic)
 	const explain = canAsk
-		? `<button class="quiet-button" data-act="explain-topic" data-topic="${topic}" data-key="explain-${topic}">Explain what changed</button>`
+		? withCost(
+				`<button class="quiet-button" data-act="explain-topic" data-topic="${topic}" data-key="explain-${topic}">Explain what changed</button>`,
+			)
 		: ''
 	return `<li class="t-row o-topic">
 		<p class="t-head"><span class="t-name">${topic}</span> <span class="t-state">You understood it ${onDay(state.entry.date)}</span></p>
@@ -57,14 +62,14 @@ export function openViewHtml(open, ui, canAsk, said, decided) {
 	const traces = decided
 		.map(
 			(d) =>
-				`<li class="o-decided"><p><strong>You decided:</strong> ${prose(d.question)}</p><p class="small">Saved. Your note and the decision are kept and cannot be edited. <button class="link" data-act="decision-show" data-id="${esc(d.id)}" data-key="show-${esc(d.id)}">See it in Decisions</button></p></li>`,
+				`<li class="o-decided"><p class="d-q">${prose(d.question)}</p><p>${answeredHtml(d.answer)}</p><p class="small">Saved in the project record. <button class="link" data-act="decision-show" data-id="${esc(d.id)}" data-key="show-${esc(d.id)}">See it in Decisions</button></p></li>`,
 		)
 		.join('')
 	const decisionList =
 		decisions.length + decided.length === 0
 			? ''
 			: `<h2 class="o-head">${decisions.length === 0 ? 'Decisions you answered' : `Decisions that need your call (${decisions.length})`}</h2>
-			${decisions.length === 0 ? '' : '<p class="small muted">The agent wrote these and marked them as yours to decide. ken checked their quotes, not their sentences.</p>'}
+			${decisions.length === 0 ? '' : `<p class="small muted">ken's model or your coding agent wrote each of these and marked it as yours to decide. ken checked their quotes, not their sentences.</p>`}
 			<ul class="o-list">${traces}${decisions.map((d, i) => decisionItem(d, i, ui)).join('')}</ul>`
 	const topicList =
 		topics.length === 0

@@ -56,6 +56,7 @@ const EVIDENCE_WORDS: Record<Evidence, string> = {
 	read: 'read an answer on it and found it too much',
 	said: 'said "I know this"',
 	wrote: 'wrote it by hand',
+	forgot: 'said they do not know it any more',
 }
 
 // One line per topic in plain words, for the terminal and for the model.

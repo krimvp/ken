@@ -15,7 +15,9 @@ import {
 	prose,
 	quoteBody,
 	quoteSource,
+	quoteTags,
 	short,
+	tagHtml,
 	when,
 } from './format.js'
 
@@ -80,18 +82,18 @@ export function checksHtml(q, ui) {
 	const places = [
 		[inGit.length, `in git ${at}`],
 		[inCopy, "in ken's copy of your uncommitted work"],
-		[fromSessions, 'in a saved session of the coding agent'],
+		[fromSessions, 'in a saved session of your coding agent'],
 	].filter(([n]) => n > 0)
 	const match =
 		places.length > 1
-			? `All ${all.length} quotes were found: ${list(places.map(([n, where]) => `${n} ${where}`))}.`
+			? `ken found all ${all.length} quotes: ${list(places.map(([n, where]) => `${n} ${where}`))}.`
 			: inGit.length === 0
-				? `${inCopy === 1 ? 'The quote is' : `All ${inCopy} quotes are`} in ken's copy of your uncommitted work.`
+				? `ken found ${inCopy === 1 ? 'the quote' : `all ${inCopy} quotes`} in its copy of your uncommitted work.`
 				: inGit.length === 1
-					? `The quote matches git, ${at}.`
+					? `ken found the quote in git, ${at}.`
 					: inGit.length === 2
-						? `Both quotes match git, ${at}.`
-						: `All ${inGit.length} quotes match git, ${at}.`
+						? `ken found both quotes in git, ${at}.`
+						: `ken found all ${inGit.length} quotes in git, ${at}.`
 	const gitLine = quotes.length === 0 ? '' : `<p>${match}</p>`
 	const fromMessages = quotes.filter((quote) => quote.path === null).length
 	const messageLine =
@@ -101,12 +103,12 @@ export function checksHtml(q, ui) {
 	const sessionLine =
 		fromSessions === 0
 			? ''
-			: `<p>${quotes.length === 0 ? `${fromSessions === 1 ? 'The quote is' : `All ${fromSessions} quotes are`} from a saved session of the coding agent. ` : ''}ken found the lines in the saved session. It did not check that they give the true reason.</p>`
+			: `<p>${quotes.length === 0 ? `${fromSessions === 1 ? 'The quote is' : `All ${fromSessions} quotes are`} from a saved session of your coding agent. ` : ''}ken found the lines in the saved session. It did not check that they give the true reason.</p>`
 	const back = sentBack(q)
 	const backLine =
 		back === 0
 			? ''
-			: `<p class="muted">ken rejected ${count(back, 'earlier draft', 'earlier drafts')} first, because a quote did not match.</p>`
+			: `<p class="muted">ken rejected ${count(back, 'draft', 'drafts')} first, because a quote did not match.</p>`
 	return `<div class="panel-head"><h2>What ken checked</h2></div>
 		<p class="panel-limit">${limit(q)}</p>
 		<section class="check" id="check-quotes">
@@ -190,7 +192,7 @@ function uncoveredFiles(change) {
 function coverageSection(q, ui) {
 	const change = q.answer.change
 	if (!change) {
-		return `<section class="check"><h3>Changed code</h3><p class="muted">Not checked. This answer is not about a set of commits, so there is no changed code to compare.</p></section>`
+		return `<section class="check"><h3>Changed code</h3><p class="muted">Nothing to compare. This answer is not about a commit.</p></section>`
 	}
 	const total = change.covered.length + change.uncovered.length
 	const uncovered = change.uncovered.length
@@ -284,7 +286,7 @@ function commitsSection(q) {
 	const marked = commits.length > 1
 	return `<section class="check" id="check-commits">
 		<h3>${commits.length === 1 ? 'The commit this answer covers' : `The ${commits.length} commits this answer covers`}</h3>
-		<p class="muted small">From git, not from the model.${by}</p>
+		<p class="muted small">From git, not from ken's model.${by}</p>
 		${messagesLine(change, own)}
 		<ol class="commits">${commits
 			.map(
@@ -315,16 +317,8 @@ function messagesLine(change, own) {
 	return `<p>${said}${merges}</p>`
 }
 
-// What a numbered part of a diagram is, as a node and as an edge.
-const PART = {
-	component: ['Box', 'Arrow'],
-	sequence: ['Participant', 'Message'],
-	'entity-relationship': ['Entity', 'Relation'],
-}
-
-function titleOf(q, { kind, item, n, diagram }) {
-	if (kind === 'element')
-		return `${PART[diagram.kind]?.[item.label === null ? 0 : 1] ?? 'Part'} ${item.number} of the diagram`
+function titleOf(q, { kind, item, n }) {
+	if (kind === 'element') return `Part ${item.number} of the diagram`
 	if (kind === 'decision') return `Decision ${n} of ${decisionsOf(q).length}`
 	if (kind === 'risk') return `Risk ${n} of ${q.answer.risks.length}`
 	return `Statement ${n} of ${q.answer.statements.length}`
@@ -335,10 +329,17 @@ function textOf({ kind, item }) {
 	return prose(item.text)
 }
 
-function quoteHtml(quote, j, chosen, copies) {
+function quoteHtml(quote, j, chosen, copies, tag) {
 	const source = isSession(quote) || quote.path === null ? quoteSource(quote) : `<code>${esc(quote.path)}</code>`
-	const where = `${source}, ${lineSpan(quote.startLine, quote.endLine)}. `
+	const where = `${tagHtml(tag)}${source}, ${lineSpan(quote.startLine, quote.endLine)}. `
 	return `<div class="q${chosen ? ' chosen' : ''}" id="panel-q${j}">${quoteBody(quote, where, false, copies)}</div>`
+}
+
+// An item's quotes in full, each with the tag its row carries. opened is the one the reader opened, or -1.
+function quotesHtml(q, quotes, prefix, opened) {
+	const copies = copiesOf(q)
+	const tags = quoteTags(quotes, { head: q.head, copies, change: q.answer.change })
+	return quotes.map((quote, j) => quoteHtml(quote, `${prefix}${j}`, j === opened, copies, tags[j])).join('')
 }
 
 // The panel when the reader opened a quote: its quotes in full come first, then what the label means. The item's own
@@ -355,7 +356,7 @@ export function quoteCardHtml(q, ui, items) {
 				<button class="quiet-button" data-act="step" data-by="1" data-key="next"${at === items.length - 1 ? ' disabled' : ''}>Next</button>
 				<button class="quiet-button" data-act="close" data-key="close">Close</button>
 			</div></div>
-		${item.quotes.map((quote, j) => quoteHtml(quote, j, j === ui.panel.quote, copiesOf(q))).join('')}
+		${quotesHtml(q, item.quotes, '', ui.panel.quote)}
 		${means === null ? '' : `<p class="label-means">${label(means)}<span>${prose(LABELS[means]?.means ?? '')}</span></p>`}`
 }
 
@@ -368,7 +369,7 @@ export function allQuotesHtml(q, items) {
 				(shown) => `<section class="all-item">
 					<h3>${titleOf(q, shown)}</h3>
 					<p class="card-text">${textOf(shown)}</p>
-					${shown.item.quotes.map((quote, j) => quoteHtml(quote, `${shown.key}-${j}`, false, copiesOf(q))).join('')}
+					${quotesHtml(q, shown.item.quotes, `${shown.key}-`, -1)}
 				</section>`,
 			)
 			.join('')}`

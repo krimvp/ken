@@ -1,14 +1,14 @@
 // ken's page: one state object and one render per frame, with no framework. The thread on the left holds the words;
 // the panel on the right holds what ken checked. Under 1100 pixels the panel goes away and the same things open in
 // place. The page talks only to the server that sent it.
-import { fillDrawings } from './draw-diagrams.js'
+import { fillDrawings, markPart } from './draw-diagrams.js'
 import { liveLook, liveViewHtml } from './live/live-view.js'
 import { answerHtml, isMoved, itemsOf } from './views/answer.js'
 import { allQuotesHtml, checksHtml, quoteCardHtml } from './views/checks.js'
 import { decisionsViewHtml } from './views/decisions.js'
 import { elementKey } from './views/diagram.js'
-import { count, duration, esc, folderHtml, prose, short, when } from './views/format.js'
-import { changedTopics, lensHtml, linesText, mapViewHtml } from './views/map.js'
+import { count, duration, esc, folderHtml, prose, short, when, withCost } from './views/format.js'
+import { changedLine, changedTopics, lensHtml, mapViewHtml } from './views/map.js'
 import { openCount, openViewHtml } from './views/open.js'
 import {
 	emptyAfterHtml,
@@ -33,15 +33,19 @@ const freshUi = () => ({
 	openQuotes: new Set(),
 	openDecisions: new Set(),
 	openParts: new Set(),
+	openElements: new Set(),
 	openFiles: new Set(),
 	stepsOpen: false,
 	keyOpen: false,
 	coverageOpen: false,
 	summaryOpen: false,
+	addedOpen: false,
+	paceOpen: false,
 	noteOpen: false,
 	openNotes: new Set(),
-	// The diagrams whose numbered list the page opened by itself, once, because the drawing did not fit.
-	partsShown: new Set(),
+	// The diagrams whose drawing does not fit the column, and those of them the reader asked to see anyway.
+	tooWide: new Set(),
+	drawingsShown: new Set(),
 	// The topics the reader knows whose entries they asked to see anyway, and the last map button they pressed.
 	unfolded: new Set(),
 	mapSaid: null,
@@ -62,9 +66,12 @@ const state = {
 	// "follow-up" what is open.
 	view: 'question',
 	map: null,
+	mapSaid: '',
 	decisions: null,
+	decisionsKey: false,
 	ui: freshUi(),
-	// What is open, with its own open decisions and quotes, and the line that says what the last button saved.
+	// What is open, with its own open decisions and quotes, the line that says what the last button saved, and the
+	// decisions the reader answered on this visit.
 	followUp: null,
 	followUi: freshUi(),
 	followSaid: '',
@@ -141,7 +148,7 @@ function addEvent(q, event) {
 			q.steps.push({ kind: 'rejected', attempt: event.attempt, problems: event.problems })
 			break
 		case 'waiting':
-			q.steps.push({ kind: 'text', text: 'ken is finishing a live note. Your question starts when it ends.' })
+			q.steps.push({ kind: 'text', text: 'ken is finishing a note for Live. Your question starts when it ends.' })
 			break
 		case 'asked':
 			q.question = event.question
@@ -299,11 +306,11 @@ function schedule() {
 
 function rowMeta(row) {
 	const ended = {
-		rejected: 'No answer: the quotes did not match the code',
+		rejected: 'No answer: ken rejected every draft',
 		stopped: 'You stopped it',
 		error: 'The model did not answer',
-		'no-answer': 'The agent sent no answer',
-		'out-of-turns': 'The agent ran out of turns',
+		'no-answer': "ken's model sent no answer",
+		'out-of-turns': "ken's model ran out of turns",
 	}[row.outcome]
 	if (ended) return `${when(row.askedAt)} · ${ended}`
 	const parts = [count(row.statements, 'statement', 'statements')]
@@ -320,9 +327,11 @@ function rowHtml(row) {
 		<span class="row-q">${esc(firstLine(row.question))}</span><span class="row-meta">${current ? 'Open now · ' : ''}${rowMeta(row)}</span></button>`
 }
 
-// A lens's question is a line the reader asked and the list ken wrote under it.
+// A lens's question is a line the reader asked and the list ken wrote under it. A question on a live note saved before
+// ken gave it a title line holds the whole prompt in its first line, so its title is that line's first sentence.
 function firstLine(question) {
-	return question.split('\n')[0]
+	const first = question.split('\n')[0]
+	return first.startsWith("Go deeper on ken's live note") ? first.split(/(?<=\.) /)[0] : first
 }
 
 // The header: the views, and the reader's questions in a menu. On a phone the views go into the menu too, beside the
@@ -365,10 +374,10 @@ function runLine(q, ui) {
 	const tools = q.steps.filter((step) => step.kind === 'tool').length
 	const back = q.steps.filter((step) => step.kind === 'rejected').length
 	const parts = []
-	if (q.live) parts.push('The agent is writing a closing note')
+	if (q.live) parts.push("ken's model is writing a closing note")
 	if (q.usage && q.steps.length > 0) parts.push(duration(q.usage.seconds))
-	if (back > 0 && q.answer) parts.push(`ken rejected ${count(back, 'earlier draft', 'earlier drafts')}`)
-	else if (back > 0) parts.push(`${count(back, 'answer', 'answers')} sent back`)
+	if (back > 0) parts.push(`ken rejected ${count(back, 'draft', 'drafts')}`)
+
 	if (tools + back > 0) {
 		parts.push(
 			`<button class="link" data-act="steps" data-key="steps" aria-expanded="${ui.stepsOpen}">${ui.stepsOpen ? 'Hide the steps' : `Show the ${count(tools, 'step', 'steps')}`}</button>`,
@@ -389,21 +398,23 @@ function turnHtml(q, ui) {
 	else body = runLine(q, ui) + endedHtml(q)
 	return `<article class="turn" id="turn">
 		<p class="asked">You asked ${when(q.askedAt)}</p>
-		${questionHtml(q.question)}
+		${questionHtml(q.question, ui)}
 		${movedHtml(q)}
 		${body}
 	</article>`
 }
 
 // A lens's question is its first line and the list ken wrote under it, each item a line that starts with "- ". Any
-// other line is for the agent alone, such as where ken keeps a snapshot.
-function questionHtml(question) {
-	const [first, ...listed] = question.split('\n')
-	const items = listed
-		.filter((line) => line.startsWith('- '))
-		.map((line) => `<li>${prose(line.slice(2))}</li>`)
-		.join('')
-	return `<h2 class="question">${prose(first)}</h2>${items ? `<ul class="asked-list">${items}</ul>` : ''}`
+// other line is for the agent alone, such as where ken keeps a snapshot. The list folds to one line.
+function questionHtml(question, ui) {
+	const [, ...listed] = question.split('\n')
+	const first = firstLine(question)
+	const items = listed.filter((line) => line.startsWith('- ')).map((line) => `<li>${prose(line.slice(2))}</li>`)
+	const fold =
+		items.length === 0
+			? ''
+			: `<p class="asked-fold"><button class="link small" data-act="added" data-key="added" aria-expanded="${ui.addedOpen}">${ui.addedOpen ? 'Hide what ken added' : `What ken added to your question, from git (${count(items.length, 'line', 'lines')})`}</button></p>${ui.addedOpen ? `<ul class="asked-list">${items.join('')}</ul>` : ''}`
+	return `<h2 class="question">${prose(first)}</h2>${fold}`
 }
 
 // One notice for an answer older than HEAD. When a topic it names changed since the reader understood it, the notice
@@ -412,17 +423,17 @@ function movedHtml(q) {
 	if (!isMoved(q)) return ''
 	const again =
 		state.model?.kind === 'ok' && !state.running
-			? ' <button class="link" data-act="again" data-key="moved-again">Ask again</button>'
+			? ` ${withCost('<button class="link" data-act="again" data-key="moved-again">Ask again</button>')}`
 			: ''
 	const changed = q.answer ? changedTopics(q) : []
-	const lines = changed.map((t) => `${esc(t.topic)} changed since you understood it: ${linesText(t.changed)}.`)
+	const lines = changed.map(changedLine)
 	const head = changed.length > 0 ? '<strong>Out of date.</strong> ' : ''
 	return `<p class="moved${changed.length > 0 ? ' stale' : ''}">${head}Asked when the project was at <code>${short(q.head)}</code>. It is at <code>${short(q.headNow)}</code> now, so the code may have changed since. ${lines.join(' ')}${again}</p>`
 }
 
 function threadHtml() {
-	if (state.view === 'map') return mapViewHtml(state.map)
-	if (state.view === 'decisions') return decisionsViewHtml(state.decisions)
+	if (state.view === 'map') return mapViewHtml(state.map, state.model?.kind === 'ok' && !state.running, state.mapSaid)
+	if (state.view === 'decisions') return decisionsViewHtml(state.decisions, state.decisionsKey)
 	if (state.view === 'live') {
 		const canAsk = state.model?.kind === 'ok' && !state.running
 		const seen = { seen: state.liveSeen, hideAsk: state.hideAsk }
@@ -471,15 +482,13 @@ function render() {
 		const box = document.querySelector(`.decide-form[data-id="${CSS.escape(id)}"] textarea`)
 		if (box) box.value = note
 	}
-	const tooWide = fillDrawings($('#thread'), schedule)
-	// A drawing that does not fit opens its numbered list once, so the parts cut off at the edge can be read in words.
-	const unseen = tooWide.filter((index) => !ui.partsShown.has(index))
-	for (const index of unseen) {
-		ui.partsShown.add(index)
-		ui.openParts.add(index)
-	}
-	if (unseen.length > 0) schedule()
+	// A drawing that does not fit gives its place to its numbered list, so no part is cut off at the edge.
+	const tooWide = fillDrawings($('#thread'), schedule).filter((index) => !ui.tooWide.has(index))
+	for (const index of tooWide) ui.tooWide.add(index)
+	if (tooWide.length > 0) schedule()
 	for (const [i, box] of document.querySelectorAll('.drawing').entries()) box.scrollLeft = across[i] ?? 0
+	const part = ui.wide && ui.panel.kind === 'quote' && ui.panel.key.match(/^g(\d+)n(\d+)$/)
+	if (part) markPart($('#thread'), part[1], part[2])
 	const canAsk = state.model?.kind === 'ok'
 	$('#ask').hidden = !canAsk || state.view !== 'question'
 	$('#send').disabled = state.running !== null
@@ -504,6 +513,9 @@ function render() {
 					: emptyAfterHtml(lensHtml('start', pick))
 	for (const input of document.querySelectorAll('.area-form input')) input.value = typed
 	$('#question').placeholder = ui.wide ? 'Ask what changed, why, or how a part works.' : 'Ask what changed, and why.'
+	$('#ask-cost').innerHTML = canAsk
+		? `A question is one run of ken's model, <code>${esc(state.model.name)}</code>. It usually takes about a minute, and the code ken reads goes to that model.`
+		: ''
 	panel.innerHTML = panelHtml()
 	panel.scrollTop = scroll
 	if (focused) document.querySelector(`[data-key="${CSS.escape(focused)}"]`)?.focus({ preventScroll: true })
@@ -582,9 +594,23 @@ async function postMap(signal) {
 	render()
 }
 
+// A button on the map's own page: it appends a line, then the map is read again and a line says what was saved.
+async function mapTopic(signal, topic, said) {
+	try {
+		await post('/api/map', { signal, topics: [topic] })
+		state.map = await getJson('/api/map')
+		state.mapSaid = said
+	} catch (error) {
+		state.mapSaid = error.message
+	}
+	await loadFollowUp()
+	render()
+}
+
 async function showMap() {
 	state.view = 'map'
 	state.menuOpen = false
+	state.mapSaid = ''
 	state.map = null
 	render()
 	try {
@@ -728,6 +754,10 @@ const actions = {
 	map: () => (state.view === 'map' ? closeMap() : showMap()),
 	decisions: () => (state.view === 'decisions' ? closeDecisions() : showDecisions()),
 	'decisions-close': closeDecisions,
+	'dv-key'() {
+		state.decisionsKey = !state.decisionsKey
+		render()
+	},
 	'decision-show': (el) => showDecisions(el.dataset.id),
 	live: () => (state.view === 'live' ? closeLive() : showLive()),
 	'live-close': closeLive,
@@ -736,6 +766,10 @@ const actions = {
 	'live-pause': () => liveAction('pause'),
 	'live-resume': () => liveAction('resume'),
 	'live-note-now': () => liveAction('note-now'),
+	pace() {
+		state.liveUi.paceOpen = !state.liveUi.paceOpen
+		render()
+	},
 	'note-unfold'(el) {
 		toggle(state.unfolded, el.dataset.id)
 		render()
@@ -759,6 +793,10 @@ const actions = {
 			`Saved. Your map says you know ${el.dataset.topic}, as the code is now.`,
 		),
 	'map-close': closeMap,
+	'map-topic-know': (el) =>
+		mapTopic('know', el.dataset.topic, `Saved. Your map says you know ${el.dataset.topic}, as the code is now.`),
+	'map-topic-forgot': (el) =>
+		mapTopic('forgot', el.dataset.topic, `Saved. Your map says you do not know ${el.dataset.topic} any more.`),
 	'map-know': () => postMap('know'),
 	'map-too-much': () => postMap('too-much'),
 	'map-deeper'() {
@@ -809,7 +847,10 @@ const actions = {
 		const keys = itemsOf(state.open).flatMap(({ key, item }) => item.quotes.map((_, j) => `${key}-q${j}`))
 		const allOpen = keys.every((key) => ui.openQuotes.has(key))
 		ui.openQuotes = allOpen ? new Set() : new Set(keys)
-		if (!allOpen) for (const key of keys.filter((each) => each.startsWith('d'))) ui.openDecisions.add(key.split('-')[0])
+		if (!allOpen) {
+			for (const key of keys.filter((each) => each.startsWith('d'))) ui.openDecisions.add(key.split('-')[0])
+			for (const index of state.open.answer.diagrams.keys()) ui.openParts.add(index)
+		}
 		render()
 	},
 	decision(el) {
@@ -820,6 +861,14 @@ const actions = {
 		toggle(state.ui.openParts, Number(el.dataset.diagram))
 		render()
 	},
+	drawing(el) {
+		state.ui.drawingsShown.add(Number(el.dataset.diagram))
+		render()
+	},
+	element(el) {
+		state.ui.openElements.add(el.dataset.item)
+		render()
+	},
 	step(el) {
 		const items = itemsOf(state.open)
 		const at = items.findIndex(({ key }) => key === state.ui.panel.key) + Number(el.dataset.by)
@@ -828,6 +877,10 @@ const actions = {
 	close: closePanel,
 	summary() {
 		state.ui.summaryOpen = true
+		render()
+	},
+	added() {
+		state.ui.addedOpen = !state.ui.addedOpen
 		render()
 	},
 	note() {
@@ -917,11 +970,10 @@ document.addEventListener('submit', (event) => {
 	if (!form) return
 	event.preventDefault()
 	if (form.matches('.decide-form')) {
-		const body = { decision: form.dataset.id, note: form.elements.note.value }
-		const question = state.followUp.decisions.find((d) => d.id === form.dataset.id)?.question ?? ''
+		const body = { decision: form.dataset.id, note: form.elements.note.value, outcome: event.submitter?.value }
 		void followUpSaved(async () => {
 			const { decided } = await post('/api/decided', body)
-			state.followDecided = [{ id: decided.id, question }, ...state.followDecided]
+			state.followDecided = [decided, ...state.followDecided]
 		}, '')
 		return
 	}

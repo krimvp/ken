@@ -16,7 +16,7 @@ const BASE_URL: ModelSetting = {
 const API_KEY_ENV: ModelSetting = {
 	name: 'KEN_API_KEY_ENV',
 	flag: '--api-key-env',
-	means: 'the name of the variable that holds the key',
+	means: 'the name of the environment variable that holds your API key (not the key itself)',
 }
 
 const MIN_KEY_LENGTH = 8

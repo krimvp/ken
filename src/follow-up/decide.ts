@@ -1,12 +1,13 @@
-import type { RecordEntry, RecordStore } from '../record/index.ts'
+import type { Outcome, RecordEntry, RecordStore } from '../record/index.ts'
 import type { OpenDecision } from './open-items.ts'
 
-// The owner's "I have decided" on a decision that waits on them. The caller names the decision and may give a note, and
-// nothing else: ken copies the decision as the record holds it, so the answer cannot change what was decided. The new
-// entry goes through the record's own gate and replaces the old one, which stays readable.
+// The owner's answer to a decision that waits on them: keep what was chosen, or have it changed. The caller names the
+// decision, the outcome and a note, and nothing else: ken copies the decision as the record holds it, so the answer
+// cannot change what was decided. The new entry goes through the record's own gate and replaces the old one, which
+// stays readable.
 export async function decide(
 	store: RecordStore,
-	answer: { id: string; note: string; now: Date },
+	answer: { id: string; note: string; outcome: Outcome; now: Date },
 	signal?: AbortSignal,
 ): Promise<{ kind: 'decided'; entry: RecordEntry } | { kind: 'refused'; problem: string }> {
 	const decision = (await store.read()).current.find((entry) => entry.id === answer.id)
@@ -22,7 +23,7 @@ export async function decide(
 				quotes: quotes.map(asDrafted),
 				topic: topic ?? undefined,
 				needsOwner: false,
-				answer: { at: answer.now.toISOString(), note: note === '' ? null : note },
+				answer: { at: answer.now.toISOString(), note: note === '' ? null : note, outcome: answer.outcome },
 				replaces: id,
 			},
 		],

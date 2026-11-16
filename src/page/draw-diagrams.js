@@ -260,10 +260,30 @@ function backLabels(svg) {
 	}
 }
 
+// Marks the part of a drawing whose quotes the panel shows. Every label in a drawing starts with its part's number, so
+// the innermost label that does names it: a box or an entity is its node, an arrow its label, a message its line of
+// text and the box behind it.
+export function markPart(root, index, number) {
+	const box = root.querySelector(`.drawing[data-diagram="${index}"]`)
+	const starts = (el) => el.textContent.trim().startsWith(`${number}. `)
+	const label = [...(box?.querySelectorAll('text, span, p') ?? [])].find(
+		(el) => starts(el) && ![...el.children].some(starts),
+	)
+	if (!label) return
+	if (label.matches('text.messageText')) {
+		label.classList.add('is-open')
+		label.previousElementSibling?.classList.add('is-open')
+		return
+	}
+	;(label.closest('g.node, g.edgeLabel, g.relationshipLabel') ?? label.closest('g'))?.classList.add('is-open')
+}
+
 // Returns the numbers of the diagrams whose drawing is too wide for its box.
 export function fillDrawings(root, redraw) {
 	const tooWide = []
 	for (const box of root.querySelectorAll('[data-mermaid]')) {
+		// A drawing that gave its place to its list has no width to draw at.
+		if (box.closest('[hidden]')) continue
 		const text = box.dataset.mermaid
 		const style = getComputedStyle(box)
 		const padding = Number.parseFloat(style.paddingLeft) + Number.parseFloat(style.paddingRight)

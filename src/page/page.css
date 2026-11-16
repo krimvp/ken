@@ -329,8 +329,12 @@ html {
 	text-align: left;
 }
 
+/* A long question shows its first two lines in the menu. */
 .row-q {
-	display: block;
+	display: -webkit-box;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 2;
+	overflow: hidden;
 	font-weight: 600;
 	line-height: 1.4;
 	overflow-wrap: anywhere;
@@ -443,6 +447,10 @@ html {
 
 /* A diagram leads a high-level answer. The drawing shrinks to the column only as far as its text stays readable (see
    draw-diagrams.js), and its box scrolls sideways past that. Then the frame fades the cut edge and a line says so. */
+.diagram {
+	margin-top: var(--space-5);
+}
+
 .diagram + .diagram {
 	margin-top: var(--space-6);
 }
@@ -511,6 +519,22 @@ html {
 /* Mermaid writes its own styles under the drawing's id, so these start from #thread to win. A message label sits on a
    box in the colour of the card (see backLabels), so no lifeline runs through its text. The three kinds share one look:
    square boxes, 1 pixel borders, thin lines, and no grid inside a table. */
+/* The part of the drawing whose quotes the panel shows. */
+#thread .drawing svg .is-open :is(rect, polygon, path),
+#thread .drawing svg rect.is-open {
+	stroke: var(--color-focus);
+	stroke-width: 3px;
+}
+
+#thread .drawing svg .is-open :is(span, p, text, tspan),
+#thread .drawing svg text.is-open {
+	font-weight: 700;
+}
+
+#thread .drawing svg :is(.edgeLabel, .relationshipLabel).is-open :is(span, p) {
+	outline: 2px solid var(--color-focus);
+}
+
 #thread .drawing svg .label-back {
 	fill: var(--color-card);
 }
@@ -636,6 +660,10 @@ a.strip {
 
 .elements .st {
 	padding: var(--space-3) 0;
+}
+
+.elements .st.folded {
+	padding: var(--space-2) 0;
 }
 
 .st-n {
@@ -934,6 +962,15 @@ span.label-from-the-session {
 	padding: 0 0 var(--space-4) 1.25rem;
 }
 
+.d-card .quotes {
+	margin-top: var(--space-3);
+}
+
+.map-foot {
+	margin-top: var(--space-5);
+	overflow-wrap: anywhere;
+}
+
 .d-call {
 	margin-bottom: var(--space-2);
 	font-weight: 600;
@@ -1199,10 +1236,11 @@ span.label-from-the-session {
 	margin-top: var(--space-3);
 }
 
-/* A long line wraps, so its last character, often the \ that carries the command on, is never out of sight. The
-   wrapped part is indented, so it does not read as a line of its own. */
+/* A long line wraps after its "=", so its last character, often the \ that carries the command on, is never out of
+   sight. The wrapped part is indented, so it does not read as a line of its own. */
 .notice pre.command {
 	margin-top: var(--space-2);
+	overflow-wrap: normal;
 }
 
 .command span {
@@ -1414,7 +1452,7 @@ span.label-from-the-session {
 		line-height: 1.55;
 	}
 
-	.composer-hint {
+	.composer-hint .keys {
 		display: none;
 	}
 
@@ -1599,7 +1637,7 @@ span.label-from-the-session {
 }
 
 .area-form input {
-	width: 11rem;
+	width: 14rem;
 	min-width: 0;
 	min-height: 2.75rem;
 	padding: var(--space-2) var(--space-3);
@@ -1640,7 +1678,6 @@ span.label-from-the-session {
 }
 
 .dv-list {
-	max-width: var(--measure);
 	margin-top: var(--space-5);
 	border-top: 1px solid var(--color-border);
 }
@@ -1648,7 +1685,6 @@ span.label-from-the-session {
 .dv-row {
 	display: grid;
 	gap: var(--space-1);
-	max-width: var(--measure);
 	padding: var(--space-4) 0;
 	border-bottom: 1px solid var(--color-border);
 	overflow-wrap: anywhere;
@@ -1724,6 +1760,11 @@ span.label-from-the-session {
 }
 
 @media (max-width: 1099px) {
+	.map-bar .map-buttons li {
+		display: grid;
+		justify-items: start;
+	}
+
 	.map-view,
 	.decisions-view {
 		padding-top: var(--space-5);
@@ -1813,8 +1854,10 @@ span.label-from-the-session {
 	resize: vertical;
 }
 
-.decide-form .quiet-button {
-	min-height: 2.75rem;
+.decide-buttons {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-2);
 }
 
 .o-commits {
@@ -1829,7 +1872,8 @@ span.label-from-the-session {
 	margin-top: var(--space-1);
 }
 
-.o-topic .map-buttons {
+.o-topic .map-buttons,
+.t-row .map-buttons {
 	margin-top: var(--space-3);
 }
 
@@ -1899,7 +1943,6 @@ span.label-from-the-session {
 }
 
 .live-view {
-	max-width: var(--measure);
 	padding: var(--space-5) 0 var(--space-6);
 }
 
@@ -1937,6 +1980,11 @@ span.label-from-the-session {
 	color: var(--color-note);
 	font-size: var(--text-sm);
 	line-height: 1.5;
+}
+
+.now-line {
+	margin-top: var(--space-3);
+	font-size: var(--text-note);
 }
 
 .ln-count {
@@ -2084,6 +2132,17 @@ q.subject {
 	font-weight: 650;
 }
 
+/* A note's risks are amber, as in an answer, with the room of a note. */
+.ln-risks {
+	margin-top: var(--space-3);
+	padding: var(--space-3) var(--space-4);
+}
+
+.ln-risks .st {
+	padding: var(--space-2) 0 0;
+	border-bottom: 0;
+}
+
 .ln-list {
 	display: grid;
 	gap: var(--space-3);
@@ -2101,7 +2160,7 @@ q.subject {
 	gap: var(--space-2) var(--space-4);
 }
 
-.ln-ask {
+.with-cost {
 	display: inline-flex;
 	flex-wrap: wrap;
 	align-items: center;
@@ -2127,13 +2186,11 @@ q.subject {
 	cursor: pointer;
 }
 
+/* A folded note: its head line, then up to two lines of its gist. */
 .ln-line {
 	display: block;
-	overflow: hidden;
 	color: var(--color-note);
 	font-size: var(--text-note);
-	white-space: nowrap;
-	text-overflow: ellipsis;
 }
 
 .ln-folded:hover .ln-about,
@@ -2142,7 +2199,10 @@ q.subject {
 }
 
 .ln-gist {
-	margin-left: var(--space-2);
+	display: -webkit-box;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 2;
+	overflow: hidden;
 }
 
 .ln-fold {
@@ -2208,19 +2268,6 @@ q.subject {
 
 	.top-menu {
 		flex: none;
-	}
-
-	/* A folded note keeps its time and its "Committed since" mark on a phone. Only the gist is cut. */
-	.ln-line {
-		white-space: normal;
-	}
-
-	.ln-gist {
-		display: block;
-		overflow: hidden;
-		margin-left: 0;
-		white-space: nowrap;
-		text-overflow: ellipsis;
 	}
 }
 

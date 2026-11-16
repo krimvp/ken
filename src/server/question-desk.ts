@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type { Answer, Chat, ChatEvent } from '../agent/index.ts'
 import { withDrawings } from '../diagram/index.ts'
-import { type LensFacts, openItems, personLens, rangeLens, topicQuestion } from '../follow-up/index.ts'
+import { type LensFacts, onDay, openItems, personLens, rangeLens, topicQuestion } from '../follow-up/index.ts'
 import { entryFrom, type History, type HistoryEntry } from '../history/index.ts'
 import type { About } from '../live/index.ts'
 import { areaQuestion, catchUpQuestion, deeperQuestion, type TopicState, type UnderstandingMap } from '../map/index.ts'
@@ -222,13 +222,13 @@ export function questionDesk(history: History, record: RecordStore, repo: Reposi
 		}
 		if (kind === 'catch-up') {
 			const [{ states }, read, asked] = await Promise.all([map.read(new Date()), record.read(), history.list()])
-			return { kind: 'ok', text: catchUpQuestion({ states, record: read, asked, head: await headNow() }) }
+			return { kind: 'ok', text: catchUpQuestion({ states, record: read, asked, head: await headNow(), day: onDay }) }
 		}
 		if (kind === 'area') {
 			const area = parsePath(String(fieldOf(lens, 'path') ?? ''))
 			if (area.kind !== 'ok') return { kind: 'refused', problem: `Name a folder or a file: ${area.reason}.` }
 			const [{ states }, read] = await Promise.all([map.read(new Date()), record.read()])
-			return { kind: 'ok', text: areaQuestion(area.path, states, read) }
+			return { kind: 'ok', text: areaQuestion(area.path, states, read, onDay) }
 		}
 		if (kind === 'person' || kind === 'range') {
 			const since = String(fieldOf(lens, 'since') ?? '')

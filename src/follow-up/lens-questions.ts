@@ -1,7 +1,8 @@
 // The questions slice 6 writes for the agent, each a line the reader asks and ken's list under it, as the lenses of
-// slice 4 do. The page and the terminal show the list before the agent explains it. empty says the list holds nothing
-// to explain, so ken does not ask the agent at all.
-import { linesText, type TopicState } from '../map/index.ts'
+// slice 4 do: the list speaks to the reader, and LIST_SAID tells the model who "you" is. The page and the terminal
+// show the list before the agent explains it. empty says the list holds nothing to explain, so ken does not ask the
+// agent at all.
+import { LIST_SAID, linesText, type TopicState } from '../map/index.ts'
 import type { RecordRead, Who } from '../record/index.ts'
 import type { Repository } from '../repo/index.ts'
 import type { ChangeCommit, OpenItems, OpenTopic } from './open-items.ts'
@@ -56,26 +57,27 @@ export async function rangeLens(
 const MAX_LISTED = 20
 
 const WHO: Record<Who, string> = {
-	owner: 'me',
-	'owner-agent': 'my agent',
+	owner: 'you',
+	'owner-agent': 'your coding agent',
 	collaborator: 'a collaborator',
 	unknown: 'git cannot tell who',
 }
 
 export function openQuestion(open: OpenItems): LensQuestion {
 	const decisions = open.decisions.map(
-		(d) => `- A decision needs my call: ${d.question} Chosen: ${d.chosen} It is decision ${d.id} in the record.`,
+		(d) =>
+			`- A decision needs your call: ${d.question} What was chosen: "${d.chosen}" It is decision ${d.id} in the record.`,
 	)
 	const topics = open.topics.map(
 		({ state, commits }) =>
-			`- ${state.topic} changed since I understood it ${onDay(state.entry.date)}: ${state.changed.map(linesText).join(', ')}. ${commitsSaid(commits)}`,
+			`- ${state.topic} changed since you understood it ${onDay(state.entry.date)}: ${state.changed.map(linesText).join(', ')}. ${commitsSaid(commits)}`,
 	)
 	const list = [...decisions, ...topics]
 	if (list.length === 0) {
-		const none = '- Nothing is open: no decision waits on me, and no topic I understood has changed since.'
-		return { text: ['What is open for me in this project?', none].join('\n'), empty: true }
+		const none = '- Nothing is open: no decision waits on you, and no topic you understood has changed since.'
+		return { text: ['What is open for me in this project?', LIST_SAID, none].join('\n'), empty: true }
 	}
-	return { text: ['What is open for me in this project?', ...list].join('\n'), empty: false }
+	return { text: ['What is open for me in this project?', LIST_SAID, ...list].join('\n'), empty: false }
 }
 
 // "Explain what changed" on one topic of the open list.
@@ -83,6 +85,7 @@ export function topicQuestion({ state, commits }: OpenTopic): LensQuestion {
 	return {
 		text: [
 			`What changed in ${state.topic} since I understood it ${onDay(state.entry.date)}?`,
+			LIST_SAID,
 			`- Its code changed since: ${state.changed.map(linesText).join(', ')}.`,
 			...(commits.length === 0 ? ['- ken found no commit to its files since then.'] : commits.map(commitLine)),
 		].join('\n'),
@@ -104,13 +107,14 @@ export function personQuestion({ author, range, commits, topics }: PersonChanges
 				]
 	const known = topics.map(
 		({ state, commits: touched }) =>
-			`- ${state.topic}, which I understood ${onDay(state.entry.date)}: their ${touched.map(short).join(', ')} touched its files, and ${state.kind === 'unchanged' || state.changed.length === 0 ? 'its quoted lines are as I knew them' : `its code changed since: ${state.changed.map(linesText).join(', ')}`}.`,
+			`- You understood ${state.topic} ${onDay(state.entry.date)}. ${author.name}'s ${touched.map(short).join(', ')} touched its files, and ${state.kind === 'unchanged' || state.changed.length === 0 ? 'its quoted lines are as you knew them' : `its code changed since: ${state.changed.map(linesText).join(', ')}`}.`,
 	)
 	return {
 		text: [
 			`What did ${author.name} change in the topics I know, ${when}?`,
+			LIST_SAID,
 			...made,
-			...(known.length > 0 ? known : commits.length > 0 ? ['- None of their commits touched a topic I know.'] : []),
+			...(known.length > 0 ? known : commits.length > 0 ? ['- None of their commits touched a topic you know.'] : []),
 		].join('\n'),
 		empty: known.length === 0,
 	}
@@ -120,7 +124,7 @@ export function personQuestion({ author, range, commits, topics }: PersonChanges
 export function rangeQuestion(range: TimeRange, record: RecordRead, userEmail: string | null): LensQuestion {
 	const when = sinceWords(range.since)
 	if (range.commits.length === 0) {
-		return { text: [`What happened ${when}?`, `- No commit landed ${when}.`].join('\n'), empty: true }
+		return { text: [`What happened ${when}?`, LIST_SAID, `- No commit landed ${when}.`].join('\n'), empty: true }
 	}
 	const authors = authorsOf(range.commits, userEmail)
 	const inRange = new Set<string>(range.commits.map((commit) => commit.hash))
@@ -130,6 +134,7 @@ export function rangeQuestion(range: TimeRange, record: RecordRead, userEmail: s
 	return {
 		text: [
 			`What happened ${when}, from ${short(range.base)} to ${short(range.head)}?`,
+			LIST_SAID,
 			`- ${count(range.commits.length)}: ${authors.map((author) => `${author.commits} by ${author.name}`).join(', ')}.`,
 			...(range.fromFirst ? [fromFirst(range)] : []),
 			...(work.length === 0

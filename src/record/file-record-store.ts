@@ -132,10 +132,11 @@ function parseLine(line: string, kind: string): RecordEntry | null {
 	// A piece of work written before ken kept diagrams or risks has none; its id still matches, since it hashes the line
 	// as written. Its risks are null, not an empty list, because nobody looked for them. A decision written before ken
 	// asked for a reason has none, one written before decisions named a topic has none, and one written before the owner
-	// could answer has no answer.
+	// could answer has no answer. An answer saved before ken asked whether the owner keeps the choice has no outcome.
 	const entry = value as RecordEntry
 	if (entry.kind === 'decision') {
-		return { ...entry, reason: entry.reason ?? null, topic: entry.topic ?? null, answer: entry.answer ?? null }
+		const answer = entry.answer && { ...entry.answer, outcome: entry.answer.outcome ?? null }
+		return { ...entry, reason: entry.reason ?? null, topic: entry.topic ?? null, answer: answer ?? null }
 	}
 	if (entry.kind !== 'work') return entry
 	return { ...entry, diagrams: entry.diagrams ?? [], risks: entry.risks ?? null }

@@ -32,7 +32,7 @@ export function list(items) {
 export function duration(seconds) {
 	const whole = Math.round(seconds)
 	if (whole < 60) return `${whole} s`
-	return `${Math.floor(whole / 60)} min ${whole % 60} s`
+	return `${Math.floor(whole / 60)} min${whole % 60 === 0 ? '' : ` ${whole % 60} s`}`
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -62,6 +62,11 @@ export function day(date, now = new Date()) {
 	return `${d} ${MONTHS[month - 1]}${year === now.getFullYear() ? '' : ` ${year}`}`
 }
 
+// A button that runs ken's model, with what that costs beside it.
+export function withCost(button, cost = 'One model run.') {
+	return `<span class="with-cost">${button}<span class="small muted">${cost}</span></span>`
+}
+
 export function lineSpan(start, end) {
 	return start === end ? `line ${start}` : `lines ${start} to ${end}`
 }
@@ -85,7 +90,7 @@ export function codeLines(lines, numbers, kinds = []) {
 // is from the message of its commit, so it names the commit and no file.
 export function quoteSource(quote) {
 	if (isSession(quote)) {
-		const who = quote.by === 'user' ? 'what you asked' : 'what the agent said'
+		const who = quote.by === 'user' ? 'what you asked' : 'what your coding agent said'
 		return `Session ${when(quote.at)}, ${who}`
 	}
 	return quote.path === null ? `Commit message of <code>${short(quote.commit)}</code>` : esc(quote.path)
@@ -126,25 +131,39 @@ export function quoteBody(quote, where = '', named = false, copies = NONE) {
 	return `${source}<pre class="code"><code>${codeLines(lines, numbers)}</code></pre>`
 }
 
+// When an item quotes one file at more than one commit, each quote of it gets a tag, so the rows of a changed line tell
+// apart. ken's copy of uncommitted work sits on top of HEAD, so a quote of it is "now"; failing that, a quote at the HEAD
+// the question was asked at is "now". Every other quote of that file is older: "before". With neither, the commits of
+// the change the answer explains give the order, newest first and then the commit it starts from: the newest is
+// "after", since later commits may have changed it again. A file whose commits ken cannot place gets no tag.
+export function quoteTags(quotes, { head = null, copies = NONE, change = null }) {
+	const order = change ? [...change.commits.map((commit) => commit.hash), change.base] : []
+	return quotes.map((quote) => {
+		if (isSession(quote) || quote.path === null) return null
+		const commits = new Set(
+			quotes.filter((other) => !isSession(other) && other.path === quote.path).map((other) => other.commit),
+		)
+		if (commits.size < 2) return null
+		const newest = [...commits].some((commit) => copies.has(commit)) ? copies : new Set([head])
+		if ([...commits].some((commit) => newest.has(commit))) return newest.has(quote.commit) ? 'now' : 'before'
+		if (![...commits].every((commit) => order.includes(commit))) return null
+		const first = Math.min(...[...commits].map((commit) => order.indexOf(commit)))
+		return order.indexOf(quote.commit) === first ? 'after' : 'before'
+	})
+}
+
+export function tagHtml(tag) {
+	return tag ? `<span class="q-then">${tag}</span>` : ''
+}
+
 // At rest a quote is one row: the file, the lines, and the first quoted line, with the commit when the answer quotes
 // more than one. Opened, it shows all its lines: in place, or in the panel on a wide screen, where only the row whose
-// quote the panel shows reads as open. When an item quotes one file at two commits, the row at the HEAD the question
-// was asked at reads "now" and the other "before", so the two rows of a changed line tell apart. When the answer quotes
-// ken's copy of uncommitted work, that copy is "now": the work sits on top of HEAD.
-export function quoteRows(quotes, key, { ui, commits, head = null, copies = NONE }) {
-	const newest = copies.size > 0 ? copies : new Set([head])
-	const paths = quotes.filter((quote) => !isSession(quote) && quote.path !== null)
-	const twice = new Set(
-		paths
-			.filter((quote) => paths.some((other) => other.path === quote.path && other.commit !== quote.commit))
-			.map((quote) => quote.path),
-	)
+// quote the panel shows reads as open.
+export function quoteRows(quotes, key, { ui, commits, head = null, copies = NONE, change = null }) {
+	const tags = quoteTags(quotes, { head, copies, change })
 	return `<ul class="quotes">${quotes
 		.map((quote, j) => {
-			const then =
-				twice.has(quote.path) && head
-					? `<span class="q-then">${newest.has(quote.commit) ? 'now' : 'before'}</span>`
-					: ''
+			const then = tagHtml(tags[j])
 			const id = `${key}-q${j}`
 			const chosen = ui.wide && ui.panel.kind === 'quote' && ui.panel.key === key && ui.panel.quote === j
 			const open = !ui.wide && ui.openQuotes.has(id)
@@ -173,16 +192,16 @@ export const LABELS = {
 	'from-the-session': {
 		name: 'From the session',
 		means:
-			"The reason is quoted from your agent's saved session. ken found the lines there. It did not check that they give the true reason.",
+			"The reason is quoted from your coding agent's saved session. ken found the lines there. It did not check that they give the true reason.",
 	},
 	inferred: {
 		name: 'Inferred',
-		means: 'Worked out by the agent from the code or the diff. No commit message or session says so.',
+		means: "Worked out by ken's model from the code or the diff. No commit message or session says so.",
 	},
 	'found-by-search': {
 		name: 'Found by search',
 		means:
-			'A link between pieces of code, such as "this calls that", that the agent found by searching and did not prove.',
+			'A link between pieces of code, such as "this calls that", that ken\'s model found by searching and did not prove.',
 	},
 }
 
@@ -190,10 +209,18 @@ export function label(name) {
 	return `<span class="label label-${esc(name)}">${esc(LABELS[name]?.name ?? name)}</span>`
 }
 
+// The owner's answer to a decision, said back to them. An answer saved before ken asked for an outcome has none.
+const OUTCOME = { keep: 'You kept what was chosen', change: 'You asked for a change', null: 'You decided' }
+
+export function answeredHtml(answer) {
+	const note = answer.note ? ` Your note: ${prose(answer.note)}` : ''
+	return `<strong>${OUTCOME[answer.outcome ?? 'null']} ${at(answer.at)}.</strong>${note}`
+}
+
 // The record's "who did it" for a commit, said to the reader.
 export const WHO = {
 	owner: 'you',
-	'owner-agent': 'your agent',
+	'owner-agent': 'your coding agent',
 	collaborator: 'a collaborator',
 	unknown: 'git cannot tell who',
 }

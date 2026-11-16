@@ -73,13 +73,13 @@ export function formatAnswer(answer: Answer, entries: Entry[], paint: Paint): st
 	if (decisions.length > 0) {
 		lines.push(paint('bold', `Decisions (${decisions.length}):`))
 		for (const [index, d] of decisions.entries()) {
-			lines.push(`${index + 1}. ${d.question} Chosen: ${d.chosen} ${paint('cyan', `[${d.label}]`)}`)
+			lines.push(`${index + 1}. ${d.question} ${paint('cyan', `[${d.label}]`)}`, `   Chosen: ${d.chosen}`)
 			if (d.reason)
 				lines.push(`   Why: ${d.reason.text}`, ...d.reason.quotes.flatMap((quote) => formatQuote(quote, paint)))
 		}
 		lines.push('')
 	}
-	if (answer.risks?.length === 0) lines.push(paint('bold', 'Risks: the agent looked and found none.'), '')
+	if (answer.risks?.length === 0) lines.push(paint('bold', "Risks: ken's model looked and found none."), '')
 	if (answer.risks?.length)
 		lines.push(paint('bold', `Risks (${answer.risks.length}):`), ...claims(answer.risks, paint), '')
 	const said = answer.change ? 'What the change did' : 'Statements'

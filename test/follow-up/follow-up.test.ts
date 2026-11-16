@@ -114,7 +114,15 @@ test('a decision that needs the owner is open until "I have decided", which adds
 	assert.deepEqual(await openNow(), [waiting?.id], 'only the decision that needs the owner is open')
 
 	const now = new Date('2026-11-16T12:00:00Z')
-	const decided = await decide(record, { id: waiting?.id ?? '', note: '  Keep it until users complain. ', now })
+	const unsaid = await decide(record, { id: waiting?.id ?? '', note: ' ', outcome: 'change', now })
+	assert.equal(unsaid.kind, 'refused', 'wanting a change needs a note that says what to change')
+	assert.deepEqual(await openNow(), [waiting?.id], 'a refused answer leaves the decision open')
+	const decided = await decide(record, {
+		id: waiting?.id ?? '',
+		note: '  Keep it until users complain. ',
+		outcome: 'keep',
+		now,
+	})
 	if (decided.kind !== 'decided') assert.fail(decided.problem)
 
 	assert.deepEqual(await openNow(), [])
@@ -123,7 +131,11 @@ test('a decision that needs the owner is open until "I have decided", which adds
 	if (old?.kind !== 'decision' || decided.entry.kind !== 'decision') return assert.fail('both entries are decisions')
 	assert.deepEqual(
 		{ replaces: decided.entry.replaces, needsOwner: decided.entry.needsOwner, answer: decided.entry.answer },
-		{ replaces: old.id, needsOwner: false, answer: { at: now.toISOString(), note: 'Keep it until users complain.' } },
+		{
+			replaces: old.id,
+			needsOwner: false,
+			answer: { at: now.toISOString(), note: 'Keep it until users complain.', outcome: 'keep' },
+		},
 	)
 	assert.deepEqual(contentOf(decided.entry), contentOf(old), 'the answer keeps what was decided')
 	assert.deepEqual(
@@ -132,9 +144,9 @@ test('a decision that needs the owner is open until "I have decided", which adds
 		'the old entry stays readable, and the new one replaces it',
 	)
 
-	const again = await decide(record, { id: waiting?.id ?? '', note: '', now })
+	const again = await decide(record, { id: waiting?.id ?? '', note: '', outcome: 'keep', now })
 	assert.equal(again.kind, 'refused', 'a decision answered once does not wait on the owner')
-	const settledAnswer = await decide(record, { id: settled?.id ?? '', note: '', now })
+	const settledAnswer = await decide(record, { id: settled?.id ?? '', note: '', outcome: 'keep', now })
 	assert.equal(settledAnswer.kind, 'refused', 'a decision that never waited on the owner cannot be answered')
 })
 
@@ -170,7 +182,8 @@ test('"I have decided" on a decision an agent logged keeps who logged it, the co
 		cwd: root,
 	})
 
-	const decided = await decide(record, { id: logged?.id ?? '', note: '', now: new Date('2026-11-16T12:00:00Z') })
+	const now = new Date('2026-11-16T12:00:00Z')
+	const decided = await decide(record, { id: logged?.id ?? '', note: '', outcome: 'keep', now })
 	if (decided.kind !== 'decided') return assert.fail(decided.problem)
 	if (decided.entry.kind !== 'decision') return assert.fail('the answer is a decision')
 	assert.deepEqual(

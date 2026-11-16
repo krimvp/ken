@@ -131,4 +131,13 @@ test('a line a person changed by hand counts, a line that does not parse is skip
 	assert.equal((await map.read(NOW)).states[0]?.kind, 'unchanged')
 	await map.learn('deeper', ['retry logic'], NOW)
 	assert.equal((await map.read(NOW)).states[0]?.kind, 'met', '"Go deeper" after "I know this": the newest line wins')
+
+	await map.learn('know', ['retry logic'], NOW)
+	await map.learn('forgot', ['retry logic'], NOW)
+	const [forgotten] = (await map.read(NOW)).states
+	assert.deepEqual(
+		forgotten?.kind === 'met' && [forgotten.entry.depth, forgotten.entry.evidence],
+		['heard-of', 'forgot'],
+		'"I do not know this any more" drops the understanding and the depth',
+	)
 })

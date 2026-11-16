@@ -1,7 +1,7 @@
 // The reader's understanding map on the page: the line under an answer that says which topics its buttons update, the
 // one line a topic the reader knows folds to, and the "Your map" view. ken works out each topic's state from the map
 // file and the code at HEAD; the page only shows it.
-import { day, esc, list, WHO } from './format.js'
+import { day, esc, list, WHO, withCost } from './format.js'
 
 // A map line holds a day and no time: "on 16 Nov", or "earlier today". Its twin is onDay in src/follow-up/when.ts.
 export function onDay(date) {
@@ -14,12 +14,17 @@ function sinceDay(date) {
 	return said === 'today' ? 'earlier today' : said
 }
 
-const DEPTH = { 'heard-of': 'Has heard of it', 'can-follow': 'Can follow it', 'could-change': 'Could change it' }
+const DEPTH = {
+	'heard-of': 'You have heard of it.',
+	'can-follow': 'You can follow it.',
+	'could-change': 'You could change it.',
+}
 const EVIDENCE = {
 	asked: 'You asked about it',
 	read: 'You said an answer was too much',
 	said: 'You said "I know this"',
 	wrote: 'You wrote it by hand',
+	forgot: 'You said you do not know it any more',
 }
 
 export function linesText(lines) {
@@ -40,6 +45,11 @@ export function foldedTopics(q, ui) {
 	)
 }
 
+// The one way the page says a topic the reader knew has changed, under an answer and in its out-of-date notice.
+export function changedLine(t) {
+	return `${esc(t.topic)} changed since you understood it ${onDay(t.entry.date)}: ${linesText(t.changed)}.`
+}
+
 // The topics of this answer whose code changed since the reader understood them, each as "topic: the lines".
 export function changedTopics(q) {
 	return (q.topics ?? []).filter((t) => (t.kind === 'changed' || t.kind === 'long-ago') && t.changed.length > 0)
@@ -52,14 +62,12 @@ export function knownHtml(q, ui, named, moved) {
 		if (t.kind === 'unchanged' && named.has(t.topic)) {
 			const open = ui.unfolded.has(t.topic)
 			return [
-				`<p class="known">You know ${esc(t.topic)}. ken compared the quoted lines with git: unchanged since ${sinceDay(t.entry.date)}. <button class="link" data-act="unfold" data-topic="${esc(t.topic)}" data-key="unfold-${esc(t.topic)}" aria-expanded="${open}">${open ? 'Fold it again' : 'Show it anyway'}</button></p>`,
+				`<p class="known">You said you know ${esc(t.topic)}, and the lines quoted here have not changed since ${sinceDay(t.entry.date)}, so its entries are folded. <button class="link" data-act="unfold" data-topic="${esc(t.topic)}" data-key="unfold-${esc(t.topic)}" aria-expanded="${open}">${open ? 'Fold them again' : 'Show them anyway'}</button></p>`,
 			]
 		}
 		if ((t.kind === 'changed' || t.kind === 'long-ago') && t.changed.length > 0) {
 			if (moved) return []
-			return [
-				`<p class="known changed">${esc(t.topic)} changed since you understood it ${onDay(t.entry.date)}: ${linesText(t.changed)}.</p>`,
-			]
+			return [`<p class="known changed">${changedLine(t)}</p>`]
 		}
 		if (t.kind === 'long-ago') {
 			return [
@@ -91,7 +99,7 @@ export function mapBarHtml(q, ui, running) {
 		<ul class="map-buttons">
 			<li><button class="quiet-button" data-act="map-know" data-key="map-know">I know this</button><span>Later answers show it as one line.</span></li>
 			<li><button class="quiet-button" data-act="map-too-much" data-key="map-too-much">Too much</button><span>The next answer on it is shorter.</span></li>
-			<li>${deeper}<span>ken asks for more detail.</span></li>
+			<li>${deeper}<span>The next answer on it goes into more detail. One model run.</span></li>
 		</ul>
 		${said}
 	</section>`
@@ -105,19 +113,34 @@ const STATE = {
 	'long-ago': 'Understood a while ago',
 }
 
-function topicHtml(t) {
+// Each topic has the buttons that fit its state: a changed one those of "Waiting on you", an understood one a way to
+// say the reader no longer knows it, and one not understood yet "I know this".
+function topicHtml(t, canAsk) {
 	const how =
-		t.kind === 'never-met' ? '' : `${DEPTH[t.entry.depth]} · ${EVIDENCE[t.entry.evidence]} ${onDay(t.entry.date)}`
-	const lines = t.changed?.length > 0 ? `<p class="t-lines">Changed: ${linesText(t.changed)}</p>` : ''
+		t.kind === 'never-met' ? '' : `${DEPTH[t.entry.depth]} ${EVIDENCE[t.entry.evidence]} ${onDay(t.entry.date)}.`
+	const changed = t.changed?.length > 0
+	const lines = changed ? `<p class="t-lines">Changed: ${linesText(t.changed)}</p>` : ''
+	const topic = esc(t.topic)
+	const button = (act, text) =>
+		`<button class="quiet-button" data-act="${act}" data-topic="${topic}" data-key="${act}-${topic}">${text}</button>`
+	const understood = t.kind === 'unchanged' || t.kind === 'changed' || t.kind === 'long-ago'
+	const buttons = [
+		...(changed && canAsk ? [withCost(button('explain-topic', 'Explain what changed'))] : []),
+		...(changed ? [button('map-topic-know', 'I know this change')] : []),
+		...(understood ? [button('map-topic-forgot', 'I do not know this any more')] : []),
+		...(understood ? [] : [button('map-topic-know', 'I know this')]),
+	]
 	return `<li class="t-row t-${t.kind}">
-		<p class="t-head"><span class="t-name">${esc(t.topic)}</span> <span class="t-state">${STATE[t.kind]}</span></p>
+		<p class="t-head"><span class="t-name">${topic}</span> <span class="t-state">${STATE[t.kind]}</span></p>
 		<p class="t-how small">${how}</p>
 		${lines}
+		<div class="map-buttons">${buttons.join('')}</div>
 	</li>`
 }
 
 // The "Your map" view: every topic the reader has met, the newest first, then the ones they have not, and the file.
-export function mapViewHtml(map) {
+// said is the line that says what the last button saved.
+export function mapViewHtml(map, canAsk, said) {
 	if (!map) return '<section class="map-view"><h1>Your map</h1><p class="muted">Reading your map.</p></section>'
 	const met = map.states.filter((t) => t.kind !== 'never-met')
 	met.sort((a, b) => (a.entry.date < b.entry.date ? 1 : a.entry.date > b.entry.date ? -1 : 0))
@@ -129,14 +152,11 @@ export function mapViewHtml(map) {
 	return `<section class="map-view">
 		<h1>Your map</h1>
 		<p class="lead">What ken thinks you understand in this project, topic by topic. When a topic's code changes, ken says so here, whoever changed it.</p>
-		${met.length === 0 ? '<p class="t-empty">You have not met any topic yet. Ask how a part of the project works, then press "I know this" under the answer.</p>' : `<ul class="t-list">${met.map(topicHtml).join('')}</ul>`}
+		${said ? `<p class="map-said" role="status">${esc(said)}</p>` : ''}
+		${met.length === 0 ? '<p class="t-empty">You have not met any topic yet. Ask how a part of the project works, then press "I know this" under the answer.</p>' : `<ul class="t-list">${met.map((t) => topicHtml(t, canAsk)).join('')}</ul>`}
 		${unmet.length === 0 ? '' : `<p class="t-unmet"><strong>Not met yet:</strong> ${list(unmet.map((t) => esc(t.topic)))}.</p>`}
 		${problems}
-		<div class="limit">
-			<p>The map is a plain file on this computer, outside the project:</p>
-			<p><code>${esc(map.file)}</code></p>
-			<p class="muted">To correct it, add a line to the file. ken reads the newest line for each topic. To see each topic's hash and an example line, run <code>ken map</code> in a terminal.</p>
-		</div>
+		<p class="map-foot small muted">The map is a plain file on this computer, outside the project: <code>${esc(map.file)}</code>. Each button adds a line to it, and you can add one by hand: ken reads the newest line for each topic. Run <code>ken map</code> in a terminal to see each topic's hash and an example line.</p>
 		<p class="actions"><button class="quiet-button" data-act="map-close" data-key="map-close">Back</button></p>
 	</section>`
 }
@@ -164,7 +184,7 @@ export function lensHtml(where, pick) {
 	return `<div class="lenses lenses-${where}">
 		${catchUp}
 		<form class="area-form" data-area="${where}" autocomplete="off">
-			<label for="area-${where}">Work in an area today</label>
+			<label for="area-${where}">I'm about to work in</label>
 			<span class="area-row"><input id="area-${where}" name="path" placeholder="for example src/server" spellcheck="false" /><button class="quiet-button" type="submit"${off}>What do I need to know?</button></span>
 		</form>
 		<form class="change-form" autocomplete="off">
@@ -172,5 +192,6 @@ export function lensHtml(where, pick) {
 			<span class="area-row"><select id="who-${where}" name="author">${option('', 'by everyone', pick.author)}${people.join('')}</select><select name="since" aria-label="When">${spans.map(([value, text]) => option(value, text, since)).join('')}</select><button class="quiet-button" type="submit"${off}>Explain</button></span>
 		</form>
 		${pick.author ? '<p class="small muted lens-note">For one person, ken lists only the topics you know that their commits touched.</p>' : ''}
+		<p class="small muted lens-note">Each of these is one run of ken's model.</p>
 	</div>`
 }
