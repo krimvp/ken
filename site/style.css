@@ -103,8 +103,7 @@ h2 {
 	margin: 0 0 var(--space-4);
 }
 
-p,
-dl {
+p {
 	margin: 0 0 var(--space-4);
 }
 
@@ -146,15 +145,20 @@ code {
 	border-left: 3px solid var(--color-accent);
 }
 
-/* A screenshot of ken's page, at 2x. On a wide screen the picture grows past the text column, up to 50rem, so that
-   the product's text shows at its own size. Under 34rem the page loads a capture taken at a phone's width. */
+/* A screenshot of ken's page, at 2x. On a wide screen the frame grows past the text column to 796 pixels, the width
+   of the widest capture, so that the product's text shows at its own size and every frame has the same width. A
+   narrower capture sits in the middle of its frame. Under 34rem the page loads a capture taken at a phone's width. */
 .shot {
 	margin: var(--space-6) 0;
 }
 
 .shot a {
 	display: block;
-	margin-inline: calc(50% - min(25rem, 50vw - var(--gutter)));
+	margin-inline: calc(50% - min(24.875rem, 50vw - var(--gutter)));
+	border: 1px solid color-mix(in srgb, var(--color-muted) 45%, transparent);
+	border-radius: var(--radius-md);
+	overflow: hidden;
+	background: var(--color-bg);
 }
 
 .shot img {
@@ -162,8 +166,6 @@ code {
 	max-width: 100%;
 	height: auto;
 	margin: 0 auto;
-	border: 1px solid color-mix(in srgb, var(--color-muted) 45%, transparent);
-	border-radius: var(--radius-md);
 }
 
 .shot figcaption {
@@ -174,7 +176,7 @@ code {
 }
 
 @media (prefers-color-scheme: dark) {
-	.shot img {
+	.shot a {
 		border-color: var(--color-muted);
 	}
 }
@@ -200,6 +202,11 @@ code {
 
 .flow-boxes .flow-checks {
 	fill: var(--color-label-bg);
+}
+
+/* The model provider is the one box off your machine. */
+.flow-boxes .flow-off {
+	stroke-dasharray: 5 4;
 }
 
 .flow-titles text {
@@ -273,19 +280,14 @@ code {
 
 .labels {
 	display: grid;
-	gap: var(--space-4);
+	gap: var(--space-2);
+	margin: 0 0 var(--space-4);
+	padding: 0;
+	list-style: none;
 }
 
-.labels div {
-	display: grid;
-	grid-template-columns: 10.5rem 1fr;
-	gap: var(--space-3);
-	align-items: baseline;
-}
-
-.labels dt,
-.labels dd {
-	margin: 0;
+.labels .label {
+	margin-right: 0.25em;
 }
 
 footer {
@@ -320,14 +322,9 @@ footer p + p {
 		font-size: 1.1875rem;
 	}
 
-	.labels div {
-		grid-template-columns: 1fr;
-		gap: var(--space-2);
-	}
-
 	section {
-		margin-top: var(--space-6);
-		padding-top: var(--space-5);
+		margin-top: var(--space-5);
+		padding-top: var(--space-4);
 	}
 
 	/* ken's own diagrams scroll sideways on a phone, so a capture of one cannot be read there. */
