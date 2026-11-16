@@ -7,31 +7,44 @@ export function elementKey(index, number) {
 	return `g${index}n${number}`
 }
 
-// Only a sequence diagram numbers its messages in the order they happen. Elsewhere a number only names a part.
+// Only a sequence diagram numbers its messages in the order they happen. Elsewhere a number only names a part. When
+// some numbers have no quote, the caption says which ones open.
 const NUMBERS = {
-	sequence: 'Each number opens its quote.',
-	component: 'Each number names a part and opens its quote.',
-	'entity-relationship': 'Each number names a part and opens its quote.',
+	sequence: ['Each number opens its quote.', 'A numbered arrow with a quote opens it.'],
+	component: [
+		'Each number names a part and opens its quote.',
+		'Each number names a part. A number with a quote opens it.',
+	],
+	'entity-relationship': [
+		'Each number names a part and opens its quote.',
+		'Each number names a part. A number with a quote opens it.',
+	],
 }
 
 // The title, then the drawing, then one line that says who drew it and opens the numbered list. A drawing that does not
-// fit the column at its smallest text gives its place to the list, with a way to see it anyway. On a narrow screen each
-// part of the list folds to its words, and its quotes open under it.
+// fit the column at its smallest text gives its place to the list, with a way to see it anyway: the list then shows the
+// boxes, and the arrows behind one link, so the rest of the answer comes sooner. On a narrow screen each part of the
+// list folds to its words, and its quotes open under it.
 export function diagramHtml(diagram, index, rows) {
 	const { ui } = rows
 	const title = `diagram-${index}-title`
 	const instead = ui.tooWide.has(index) && !ui.drawingsShown.has(index)
 	const open = instead || ui.openParts.has(index)
-	const said = `Drawn by ken's model. ken did not check the arrows. ${NUMBERS[diagram.kind] ?? ''}`
+	const every = diagram.elements.every((element) => element.quotes.length > 0)
+	const said = `Drawn by ken's model. ken did not check the arrows. ${NUMBERS[diagram.kind]?.[every ? 0 : 1] ?? ''}`
+	const arrowsShown = !instead || ui.openParts.has(index)
+	const listed = arrowsShown ? diagram.elements : diagram.elements.filter((element) => element.label === null)
+	const arrows = diagram.elements.length - diagram.elements.filter((element) => element.label === null).length
 	const toggle = instead
-		? `<p class="parts-toggle">The drawing is wider than your screen, so its ${diagram.elements.length} parts are listed here. <button class="link" data-act="drawing" data-diagram="${index}" data-key="drawing-${index}">See the drawing</button></p>`
+		? `<p class="parts-toggle">The drawing is wider than your screen, so its parts are listed here. <button class="link" data-act="drawing" data-diagram="${index}" data-key="drawing-${index}">See the drawing</button></p>`
 		: `<p class="caption parts-toggle">${said} <button class="link" data-act="parts" data-diagram="${index}" data-key="parts-${index}" aria-expanded="${open}">${open ? 'Hide the list' : `List the ${diagram.elements.length} parts and their quotes`}</button></p>`
 	return `<section class="diagram" aria-labelledby="${title}">
 		<h3 class="diagram-title" id="${title}">${label(diagram.label)}${prose(diagram.title)}</h3>
 		<div class="drawing-frame"${instead ? ' hidden' : ''}><div class="drawing" data-diagram="${index}" data-mermaid="${esc(diagram.mermaid)}" role="img" aria-label="Diagram: ${esc(diagram.title)}. The numbered list says the same in words."></div></div>
 		<p class="drawing-hint">The drawing is wider than the screen. Scroll it sideways to see the rest.</p>
 		${toggle}
-		${open ? `<ol class="elements">${diagram.elements.map((element) => elementHtml(element, diagram, index, rows)).join('')}</ol>` : ''}
+		${open ? `<ol class="elements">${listed.map((element) => elementHtml(element, diagram, index, rows)).join('')}</ol>` : ''}
+		${instead && arrows > 0 ? `<p class="parts-more"><button class="link" data-act="parts" data-diagram="${index}" data-key="arrows-${index}" aria-expanded="${arrowsShown}">${arrowsShown ? 'Hide the arrows' : `Show the ${arrows} arrows`}</button></p>` : ''}
 	</section>`
 }
 
@@ -44,11 +57,11 @@ function elementHtml(element, diagram, index, rows) {
 	const more =
 		n === 0 || shown
 			? ''
-			: ` <button class="link small nowrap" data-act="element" data-item="${key}" data-key="el-${key}">${n === 1 ? 'Show its quote' : `Show its ${n} quotes`}</button>`
+			: `<p class="el-more"><button class="link small" data-act="element" data-item="${key}" data-key="el-${key}">${n === 1 ? 'Show its quote' : `Show its ${n} quotes`}</button></p>`
 	return `<li class="st${shown ? '' : ' folded'}" id="item-${key}">
 		<span class="st-n">${element.number}</span>
 		<div>
-			<p class="st-text">${own}${prose(element.text)}${more}</p>
+			<p class="st-text">${own}${prose(element.text)}</p>${more}
 			${shown && n > 0 ? quoteRows(element.quotes, key, rows) : ''}
 		</div>
 	</li>`

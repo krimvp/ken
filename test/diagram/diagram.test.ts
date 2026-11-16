@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { checkDiagrams, type DiagramDraft, mermaidText } from '../../src/diagram/index.ts'
+import { checkDiagrams, type DiagramDraft, diagramElements, mermaidText } from '../../src/diagram/index.ts'
 import { gitRepository } from '../../src/repo/index.ts'
 import { buildRepository } from '../fixtures/build-repository.ts'
 
@@ -162,4 +162,25 @@ test('the Mermaid text of each kind has one line per element with its number, an
 		const numbered = labels.filter((label) => /^\d+\. /.test(label))
 		assert.deepEqual(numbered.sort(), expected.sort(), `${kind}: one label per element, with its number`)
 	}
+})
+
+test('an arrow whose text ends on a word such as "to" drops it, under the drawing and in it, and keeps every other word', async () => {
+	const draft = component(
+		['app', 'store'],
+		[
+			{ from: 'app', to: 'store' },
+			{ from: 'store', to: 'app' },
+		],
+	)
+	const texts = ['appends each question to', 'to']
+	const checked = await checkDiagrams(repo, [
+		{ ...draft, arrows: draft.arrows.map((arrow, i) => ({ ...arrow, text: texts[i] ?? '' })) },
+	])
+	assert.ok(checked.kind === 'ok', JSON.stringify(checked))
+	const [diagram] = checked.diagrams
+	assert.ok(diagram)
+
+	const lines = diagramElements(diagram).flatMap((element) => (element.label === null ? [] : [element.text]))
+	assert.deepEqual(lines, ['From app to store: appends each question', 'From store to app: to'])
+	assert.match(mermaidText(diagram), /\|"3\. appends each question"\|/)
 })

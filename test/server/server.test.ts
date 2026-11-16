@@ -151,7 +151,7 @@ test('a question streams its steps and a checked answer with its diagram drawn, 
 			[1, 'retry'],
 			[2, 'sleep'],
 			[3, 'From retry to sleep: calls'],
-			[4, 'From sleep to retry: returns to'],
+			[4, 'From sleep to retry: returns'],
 		],
 	)
 	const saved = lines.at(-1).view

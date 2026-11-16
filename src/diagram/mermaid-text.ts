@@ -2,6 +2,7 @@
 // syntax: ids are made from element numbers, and every label passes through safe, which writes each character outside
 // letters, digits, spaces, "." "_" and "-" as an entity code such as #34;. Mermaid draws the code as the character.
 import type { Cardinality, ComponentDiagram, Diagram, EntityDiagram, SequenceDiagram } from './diagram.ts'
+import { edgeText } from './diagram-elements.ts'
 
 export function mermaidText(diagram: Diagram): string {
 	switch (diagram.kind) {
@@ -29,7 +30,7 @@ function componentText(diagram: ComponentDiagram): string {
 		lines.push('  end')
 	}
 	for (const arrow of diagram.arrows) {
-		lines.push(`  ${id(arrow.from)} -->|"${numbered(arrow.number, arrow.text)}"| ${id(arrow.to)}`)
+		lines.push(`  ${id(arrow.from)} -->|"${numbered(arrow.number, edgeText(arrow.text))}"| ${id(arrow.to)}`)
 	}
 	return lines.join('\n')
 }
@@ -40,7 +41,7 @@ function sequenceText(diagram: SequenceDiagram): string {
 	for (const each of diagram.participants)
 		lines.push(`  participant ${id(each.name)} as ${numbered(each.number, each.name)}`)
 	for (const message of diagram.messages) {
-		lines.push(`  ${id(message.from)}->>${id(message.to)}: ${numbered(message.number, message.text)}`)
+		lines.push(`  ${id(message.from)}->>${id(message.to)}: ${numbered(message.number, edgeText(message.text))}`)
 	}
 	return lines.join('\n')
 }
@@ -67,7 +68,9 @@ function entityText(diagram: EntityDiagram): string {
 	}
 	for (const relation of diagram.relations) {
 		const ends = ENDS[relation.cardinality]
-		lines.push(`  ${id(relation.from)} ${ends} ${id(relation.to)} : "${numbered(relation.number, relation.text)}"`)
+		lines.push(
+			`  ${id(relation.from)} ${ends} ${id(relation.to)} : "${numbered(relation.number, edgeText(relation.text))}"`,
+		)
 	}
 	return lines.join('\n')
 }
