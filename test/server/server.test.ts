@@ -387,7 +387,7 @@ function questionPrompt(request: { messages: { role: string; content: unknown }[
 	return typeof message?.content === 'string' ? message.content : JSON.stringify(message?.content)
 }
 
-test('a decision logged with ken decide shows in the decisions view as recorded, with who logged it, and joins the piece of work whose commits came after it', async () => {
+test('a decision logged with ken decide shows in the decisions view as recorded, with who logged it, joins the piece of work whose commits came after it, and is marked replaced by a later decision on the same question', async () => {
 	const built = buildRepository([
 		{ message: 'feat: start', files: { 'src/retry.ts': `${RETRY}\t}\n}\n` } },
 		{ message: 'feat: wait between attempts', files: { 'src/retry.ts': `${RETRY}\t\tsleep(100)\n\t}\n}\n` } },
@@ -415,6 +415,15 @@ test('a decision logged with ken decide shows in the decisions view as recorded,
 	const [joined] = (await json(server, '/api/decisions')).decisions
 	const id = added.kind === 'appended' ? added.entries[0]?.entry.id : null
 	assert.deepEqual(joined.work, { id, title: 'Retry waits' })
+	assert.equal(joined.replacedBy, null)
+
+	const later = ['decide', '--question', 'how long does a retry wait?', '--chosen', 'A wait that doubles']
+	execFileSync('node', [KEN, ...later, ...why, '--repo', built.root], { stdio: 'ignore' })
+	const [newer, older] = (await json(server, '/api/decisions')).decisions
+	assert.deepEqual(
+		[newer.decision.chosen, newer.replacedBy, older.decision.chosen, older.replacedBy],
+		['A wait that doubles', null, 'A fixed 100 ms', newer.decision.id],
+	)
 })
 
 test('what looks like a secret in a saved session reaches the model, the history and the record hidden, in each form ken hides, and the lines around it stay as they were', async () => {
