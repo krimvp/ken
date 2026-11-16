@@ -19,6 +19,7 @@ import {
 	optionalList,
 	RISK_SCHEMA,
 	sentBack,
+	WEIGHT_RULE,
 	withoutDescriptions,
 } from './answer-tool.ts'
 import { allowJsonText, readJsonText } from './json-text.ts'
@@ -88,7 +89,7 @@ export function riskPassQuestion(held: Held, later: Later[]): string {
 		'',
 		'Before you call revise_answer, write what you found in steps 2, 3 and 4, one short line each: the two decisions, the line or the behaviour, and what happens. These lines are not part of the answer.',
 		'Then call revise_answer once:',
-		'- risks: each new risk, and each risk above that you rewrite, with replaces set to its number. A risk is one or two sentences: what can happen, who hits it (a host, an operator, a reader of results, a later developer) and when (always, on resume, only for runs made before this change, only under load). Quote the place it rests on, and give it its weight: "serious" when someone is hurt in normal use, "minor" otherwise.',
+		`- risks: each new risk, and each risk above that you rewrite, with replaces set to its number. A risk is one or two sentences: what can happen, who hits it (a host, an operator, a reader of results, a later developer) and when (always, on resume, only for runs made before this change, only under load). Quote the place it rests on, and give it its weight: ${WEIGHT_RULE}.`,
 		'- withdraw: each risk above that the code shows does not happen, with what the code shows instead.',
 		`- order: the numbers of all the risks the answer keeps, the heaviest first, by who hits each and when. A risk above keeps its number; the risks you send are ${risks.length + 1}, ${risks.length + 2} and on, in the order you send them. A minor or speculative risk goes last, or withdraw it.`,
 		'- decisions: a decision your answer missed, with its quotes.',

@@ -532,6 +532,11 @@ export const CLAIM_SCHEMA = {
 	additionalProperties: false,
 } as const
 
+// The model weighs each risk. The page shows the serious ones first and folds the minor ones, so the words say what
+// "hurt" means: a judge found that a model told only "hurt in normal use" weighed every risk of a change minor.
+export const WEIGHT_RULE =
+	'"serious" when someone who uses the thing in the normal way is hurt by it: they lose work, get a wrong result or a failure, or find refused what worked before. "minor" when it needs a rare case or costs little'
+
 const CLAIM = withoutDescriptions(CLAIM_SCHEMA)
 export const RISK_SCHEMA = {
 	...CLAIM,
@@ -540,7 +545,7 @@ export const RISK_SCHEMA = {
 		weight: {
 			type: 'string',
 			enum: WEIGHTS,
-			description: '"serious" when someone is hurt in normal use, "minor" otherwise',
+			description: WEIGHT_RULE,
 		},
 	},
 	required: [...CLAIM.required, 'weight'],

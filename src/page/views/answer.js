@@ -190,7 +190,7 @@ function foldHtml(group, head, ui, body) {
 // The serious risks, numbered first. When the model weighed none serious, the box says so, and the minor ones wait in
 // their fold.
 function seriousHtml(serious, minor, rows, marked, labels) {
-	const note = `A risk is something ken's model thinks could go wrong. ken's model weighs each one: serious when someone is hurt in normal use, minor otherwise. ${RISK_MARKS.means}${labels ? ` ${labels}` : ''}`
+	const note = `A risk is something ken's model thinks could go wrong. ken's model weighs each one. Serious: someone who uses the code in the normal way loses work, gets a wrong result or a failure, or finds refused what worked before. Minor: it needs a rare case or costs little. ${RISK_MARKS.means}${labels ? ` ${labels}` : ''}`
 	if (serious.length === 0 && minor === 0) {
 		return `<div class="list-head"><h3>ken's model found no risks</h3><p class="list-note">ken's model says it looked for what could go wrong and found nothing to watch.</p></div>`
 	}
@@ -215,7 +215,7 @@ function seriousHtml(serious, minor, rows, marked, labels) {
 
 function minorHtml(minor, rows, marked) {
 	return `<section class="risks minor" aria-label="Minor risks">
-		<p class="list-note">ken's model weighed these minor: they hurt no one in normal use. ${RISK_MARKS.means}</p>
+		<p class="list-note">ken's model weighed these minor: each needs a rare case or costs little. ${RISK_MARKS.means}</p>
 		<ol>${minor.map(({ item, key, n }) => claimHtml(item, key, n - 1, rows, marked)).join('')}</ol>
 	</section>`
 }

@@ -94,7 +94,7 @@ export function formatAnswer(answer: Answer, entries: Entry[], paint: Paint): st
 		const others = decisions.filter((d) => !d.needsOwner)
 		const weight = paint(
 			'dim',
-			"ken's model weighs each risk: serious when someone is hurt in normal use, minor otherwise.",
+			"ken's model weighs each risk. Serious: someone who uses the code in the normal way loses work, gets a wrong result or a failure, or finds refused what worked before. Minor: it needs a rare case or costs little.",
 		)
 		if (risks.length === 0) lines.push(paint('bold', "Risks: ken's model looked and found none."), '')
 		else
