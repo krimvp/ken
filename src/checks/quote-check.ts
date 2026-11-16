@@ -49,11 +49,7 @@ export async function checkQuote(repo: Repository, quote: Quote, signal?: AbortS
 	const where = { path: path === null ? null : path.path, commit: resolved.commit }
 	const wanted = quotedLines(quote.text)
 	const lines = source.text.split('\n')
-	const trimmed = lines.map((line) => line.trimEnd())
-	const starts: number[] = []
-	for (let index = 0; index + wanted.length <= trimmed.length; index++) {
-		if (wanted.every((line, offset) => trimmed[index + offset] === line)) starts.push(index + 1)
-	}
+	const starts = startsOf(lines, wanted)
 	const start = pickStart(starts, quote.line)
 	if (start === undefined) return { kind: 'not-found', ...where, closest: closestLines(lines, wanted) }
 	const endLine = start + wanted.length - 1
@@ -64,11 +60,22 @@ export async function checkQuote(repo: Repository, quote: Quote, signal?: AbortS
 	}
 }
 
-function quotedLines(text: string): string[] {
+// The rule every quote follows: it is whole lines, in order. A line's end may differ in spaces, its start may not.
+export function quotedLines(text: string): string[] {
 	const lines = text.split('\n').map((line) => line.trimEnd())
 	const first = lines.findIndex((line) => line !== '')
 	const last = lines.findLastIndex((line) => line !== '')
 	return lines.slice(first, last + 1)
+}
+
+// The line number, from 1, of each place where the wanted lines start.
+export function startsOf(lines: string[], wanted: string[]): number[] {
+	const trimmed = lines.map((line) => line.trimEnd())
+	const starts: number[] = []
+	for (let index = 0; index + wanted.length <= trimmed.length; index++) {
+		if (wanted.every((line, offset) => trimmed[index + offset] === line)) starts.push(index + 1)
+	}
+	return starts
 }
 
 function pickStart(starts: number[], hint: number | undefined): number | undefined {
