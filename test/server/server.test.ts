@@ -175,6 +175,8 @@ test('a question streams its steps and a checked answer with its diagram drawn, 
 			outcome: 'answered',
 			statements: 1,
 			decisions: 1,
+			calls: 1,
+			risks: 1,
 			hunks: { uncovered: 0, total: 1 },
 		},
 	])

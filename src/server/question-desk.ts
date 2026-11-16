@@ -5,7 +5,8 @@ import { entryFrom, type History, type HistoryEntry } from '../history/index.ts'
 import type { EntryId, RecordEntry, RecordRead, RecordStore } from '../record/index.ts'
 import type { Repository } from '../repo/index.ts'
 
-// One row in the page's list of questions. hunks is null when the answer was not about a range of commits.
+// One row in the page's list of questions. calls counts the decisions the agent wants the reader to decide. risks is
+// null when the answer did not look for risks, and hunks when it was not about a range of commits.
 export type QuestionRow = {
 	id: string
 	question: string
@@ -13,6 +14,8 @@ export type QuestionRow = {
 	outcome: HistoryEntry['outcome']
 	statements: number
 	decisions: number
+	calls: number
+	risks: number | null
 	hunks: { uncovered: number; total: number } | null
 }
 
@@ -80,13 +83,17 @@ export function questionDesk(history: History, record: RecordStore, repo: Reposi
 		const [entries, read] = await Promise.all([history.list(), record.read()])
 		return entries.map((entry) => {
 			const row = { id: entry.id, question: entry.question, askedAt: entry.askedAt, outcome: entry.outcome }
-			if (entry.outcome !== 'answered') return { ...row, statements: 0, decisions: 0, hunks: null }
-			const { statements, change } = entry.answer
+			if (entry.outcome !== 'answered')
+				return { ...row, statements: 0, decisions: 0, calls: 0, risks: null, hunks: null }
+			const { statements, risks, change } = entry.answer
 			const total = change ? change.covered.length + change.uncovered.length : 0
+			const decisions = entriesOf(entry.answer, entry.recorded, read).filter((stored) => stored.kind === 'decision')
 			return {
 				...row,
 				statements: statements.length,
-				decisions: entriesOf(entry.answer, entry.recorded, read).filter((stored) => stored.kind === 'decision').length,
+				decisions: decisions.length,
+				calls: decisions.filter((decision) => decision.needsOwner).length,
+				risks: risks === null ? null : risks.length,
 				hunks: change && { uncovered: change.uncovered.length, total },
 			}
 		})
