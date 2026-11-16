@@ -66,8 +66,8 @@ export const MODULES: Record<string, Module> = {
 		packages: [],
 	},
 	cli: {
-		job: 'Runs ken in the terminal: a chat, one question for scripts, the project record, the map, what is open, the page, a logged decision, or saved sessions.',
-		imports: ['agent', 'diagram', 'follow-up', 'history', 'map', 'record', 'repo', 'server', 'transcripts'],
+		job: 'Runs ken in the terminal: a chat, one question for scripts, the project record, the map, what is open, the page, live notes, a logged decision, or saved sessions.',
+		imports: ['agent', 'diagram', 'follow-up', 'history', 'live', 'map', 'record', 'repo', 'server', 'transcripts'],
 		packages: [],
 	},
 }

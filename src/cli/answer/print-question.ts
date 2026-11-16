@@ -1,6 +1,6 @@
 import { styleText } from 'node:util'
 import type { Answer, ChatEvent } from '../../agent/index.ts'
-import { entryLine, type RecordEntry } from '../../record/index.ts'
+import { type Entry, entryLine } from '../../record/index.ts'
 import { formatDiagram, formatQuote } from './print-diagram.ts'
 
 export type Paint = (format: Parameters<typeof styleText>[0], text: string) => string
@@ -57,11 +57,12 @@ export async function printQuestion(events: AsyncIterable<ChatEvent>, out: NodeJ
 	return answered
 }
 
-// The order of the page: the summary, the diagrams, the decisions, the risks, then the other statements.
-export function formatAnswer(answer: Answer, recorded: RecordEntry[], paint: Paint): string {
+// The order of the page: the summary, the diagrams, the decisions, the risks, then the other statements. entries are
+// the record entries the answer stands on, or a draft's decisions, which the record does not hold.
+export function formatAnswer(answer: Answer, entries: Entry[], paint: Paint): string {
 	const lines = [paint('bold', answer.summary), '']
 	for (const diagram of answer.diagrams) lines.push(...formatDiagram(diagram, paint), '')
-	const decisions = recorded.flatMap((entry) => (entry.kind === 'decision' ? [entry] : []))
+	const decisions = entries.flatMap((entry) => (entry.kind === 'decision' ? [entry] : []))
 	if (decisions.length > 0) {
 		lines.push(paint('bold', `Decisions (${decisions.length}):`))
 		for (const [index, d] of decisions.entries()) {
@@ -89,7 +90,7 @@ export function formatAnswer(answer: Answer, recorded: RecordEntry[], paint: Pai
 	}
 	if (answer.change) {
 		const { commits, covered, uncovered, binary } = answer.change
-		lines.push('', paint('bold', `Commits in scope, from git (${commits.length}):`))
+		if (commits.length > 0) lines.push('', paint('bold', `Commits in scope, from git (${commits.length}):`))
 		for (const commit of commits) {
 			lines.push(`  ${commit.hash.slice(0, 7)} ${commit.date.slice(0, 10)} ${commit.author}: ${commit.subject}`)
 		}

@@ -4,7 +4,8 @@
 // "ken record" shows the project record and "ken map" the reader's understanding map. "ken decide" logs a decision a
 // coding agent makes as it works, and "ken sessions" reads the sessions Claude Code saved for the project. None of
 // these needs a model. "ken open" serves the page on 127.0.0.1. The lenses print their list with no model, then ask
-// the agent when one is set.
+// the agent when one is set. "ken live" writes notes in the terminal while a coding agent works, as "ken open --live"
+// does on the page.
 import { createInterface } from 'node:readline/promises'
 import { parseArgs } from 'node:util'
 import { type Answer, type Chat, type ChatEvent, type Outcome, readModelConfig, startChat } from '../agent/index.ts'
@@ -12,6 +13,7 @@ import { withDrawings } from '../diagram/index.ts'
 import type { RecordEntry } from '../record/index.ts'
 import { printQuestion } from './answer/print-question.ts'
 import { decide } from './decide.ts'
+import { watchLive } from './live.ts'
 import { lensQuestion } from './map/lens-question.ts'
 import { mapOf, printMap } from './map/print-map.ts'
 import { openPage } from './open-page.ts'
@@ -28,7 +30,8 @@ const USAGE = `Usage:
   ken follow-up [--repo <path>]
   ken who <author> [--since <day or Nd>] [--repo <path>]
   ken since <day or Nd> [--repo <path>]
-  ken open [--repo <path>] [--port <n>]
+  ken open [--repo <path>] [--port <n>] [--live]
+  ken live [--repo <path>]
   ken decide --question <text> --chosen <text> --reason <text> --undo <how easy> [...]
   ken decide --json < decision.json
   ken sessions [<id>] [--repo <path>] [--json]
@@ -50,8 +53,15 @@ async function main(argv: string[]): Promise<number> {
 		return await printSessions(values.repo ?? process.cwd(), parsed.id, values.json === true)
 	if (parsed.kind === 'map') return await printMap(values.repo ?? process.cwd(), values.json === true)
 	const flags = { model: values.model, baseUrl: values['base-url'], apiKeyEnv: values['api-key-env'] }
-	if (parsed.kind === 'open')
-		return await openPage({ directory: values.repo ?? process.cwd(), port: values.port, flags })
+	if (parsed.kind === 'open') {
+		return await openPage({
+			directory: values.repo ?? process.cwd(),
+			port: values.port,
+			flags,
+			live: values.live === true,
+		})
+	}
+	if (parsed.kind === 'live') return await watchLive({ directory: values.repo ?? process.cwd(), flags })
 	const directory = values.repo ?? process.cwd()
 	const lens = parsed.kind === 'chat' || parsed.kind === 'ask' ? null : await lensQuestion(parsed, directory)
 	if (lens?.kind === 'refused') {
@@ -90,6 +100,7 @@ function parseCommand(argv: string[]) {
 		json: { type: 'boolean' },
 		port: { type: 'string' },
 		since: { type: 'string' },
+		live: { type: 'boolean' },
 		model: { type: 'string' },
 		'base-url': { type: 'string' },
 		'api-key-env': { type: 'string' },
@@ -120,6 +131,7 @@ function parseCommand(argv: string[]) {
 		return { kind: 'since', values, since: rest[0] } as const
 	}
 	if (command === 'open' && rest.length === 0 && !values.json) return { kind: 'open', values } as const
+	if (command === 'live' && rest.length === 0 && !values.json && !values.live) return { kind: 'live', values } as const
 	return {
 		kind: 'usage',
 		problem: command ? `ken does not know "${positionals.join(' ')}".` : 'Name a command.',
