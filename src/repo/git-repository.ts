@@ -1,5 +1,7 @@
+import { lstat, readFile } from 'node:fs/promises'
+import path from 'node:path'
 import { parseDiff } from './parse-diff.ts'
-import type { BlameLine, Commit, CommitHash, Repository, SearchMatch } from './repository.ts'
+import type { BlameLine, Commit, CommitHash, Repository, SearchMatch, Uncommitted } from './repository.ts'
 import { MAX_OUTPUT_BYTES, runGit } from './run-git.ts'
 
 // ken commits its own record to .ken/. Those bookkeeping commits are not changes to explain (plan risk: "The record's
@@ -7,11 +9,15 @@ import { MAX_OUTPUT_BYTES, runGit } from './run-git.ts'
 const OUTSIDE_RECORD = ['--', '.', ':(exclude).ken']
 
 const HASH = /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/
+// A new file larger than this is not read to count its lines.
+const MAX_COUNTED_BYTES = 1024 * 1024
 const LOG_FORMAT =
 	'--format=%x1e%H%x00%P%x00%an%x00%ae%x00%at%x00%s%x00%(trailers:key=Co-authored-by,valueonly,separator=%x1f)'
 
-export function gitRepository(root: string): Repository {
-	const git = (args: string[], signal?: AbortSignal) => runGit(root, args, signal)
+// alternate is a folder of git objects this repository may also read, such as ken's store of snapshots of uncommitted
+// work, so a commit there reads like one of the project's own.
+export function gitRepository(root: string, options: { alternate?: string } = {}): Repository {
+	const git = (args: string[], signal?: AbortSignal) => runGit(root, args, signal, options.alternate ?? null)
 	const tooLarge = { kind: 'too-large', limitBytes: MAX_OUTPUT_BYTES } as const
 
 	async function isFile(commit: CommitHash, path: string, signal?: AbortSignal) {
@@ -138,6 +144,43 @@ export function gitRepository(root: string): Repository {
 			return { kind: 'ok', files: parseDiff(numstat.stdout, patch.stdout) }
 		},
 
+		async branch(signal) {
+			const run = await git(['symbolic-ref', '--quiet', '--short', 'HEAD'], signal)
+			return run.kind === 'ok' && run.stdout.trim() !== '' ? run.stdout.trim() : null
+		},
+
+		// Plumbing only: diff-index and ls-files never write the index, where git status and git diff may refresh it.
+		async uncommitted(signal) {
+			const [numstat, others] = await Promise.all([
+				git(['diff-index', '--numstat', '-z', '--no-renames', 'HEAD', ...OUTSIDE_RECORD], signal),
+				git(['ls-files', '--others', '--exclude-standard', '-z', ...OUTSIDE_RECORD], signal),
+			])
+			if (numstat.kind === 'too-large' || others.kind === 'too-large') return tooLarge
+			if (numstat.kind === 'failed' || others.kind === 'failed') return { kind: 'ok', files: [] }
+			const files: Uncommitted[] = []
+			for (const record of numstat.stdout.split('\0')) {
+				const [added = '', removed = '', file = ''] = record.split('\t')
+				if (file === '') continue
+				const copy = await workingCopy(root, file)
+				// A file git lists only because its timestamps moved has no changed line.
+				if (added === '0' && removed === '0' && copy !== null) continue
+				files.push({
+					path: file,
+					change: copy === null ? 'deleted' : 'changed',
+					added: added === '-' ? null : Number(added),
+					removed: removed === '-' ? null : Number(removed),
+					bytes: copy?.bytes ?? null,
+					modifiedAt: copy?.modifiedAt ?? null,
+				})
+			}
+			for (const file of others.stdout.split('\0').filter((name) => name !== '')) {
+				const copy = await workingCopy(root, file)
+				if (copy === null) continue
+				files.push({ path: file, change: 'new', added: copy.lines, removed: 0, ...copy })
+			}
+			return { kind: 'ok', files }
+		},
+
 		async blame(commit, path, { start, end }, signal) {
 			if (!Number.isInteger(start) || !Number.isInteger(end) || start < 1 || end < start) {
 				return { kind: 'bad-lines', message: `lines ${start} to ${end} are not a range of line numbers from 1` }
@@ -151,6 +194,19 @@ export function gitRepository(root: string): Repository {
 			return { kind: 'ok', lines: parseBlame(run.stdout) }
 		},
 	}
+}
+
+// The size, last change and line count of a file in the working tree, or null when it is gone. lines is null for a
+// binary file and for one too large to read.
+async function workingCopy(root: string, file: string) {
+	const info = await lstat(path.join(root, file)).catch(() => null)
+	if (info === null) return null
+	const facts = { bytes: info.size, modifiedAt: info.mtimeMs }
+	if (!info.isFile() || info.size > MAX_COUNTED_BYTES) return { ...facts, lines: null }
+	const text = await readFile(path.join(root, file))
+	if (text.includes(0)) return { ...facts, lines: null }
+	const breaks = text.reduce((n, byte) => (byte === 10 ? n + 1 : n), 0)
+	return { ...facts, lines: text.length > 0 && text.at(-1) !== 10 ? breaks + 1 : breaks }
 }
 
 function parseGrep(stdout: string, commit: CommitHash): SearchMatch[] {

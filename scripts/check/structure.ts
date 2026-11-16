@@ -40,6 +40,11 @@ export const MODULES: Record<string, Module> = {
 		imports: ['map', 'record', 'repo'],
 		packages: [],
 	},
+	live: {
+		job: "Watches the project while a coding agent works in it: HEAD, the branch and the uncommitted files, snapshots of uncommitted work in ken's own store, and when ken writes a note.",
+		imports: ['repo', 'transcripts'],
+		packages: [],
+	},
 	agent: {
 		job: 'Runs a chat with a model that explores the project and its saved sessions with read-only tools, and answers only with checked quotes.',
 		imports: ['repo', 'checks', 'diagram', 'map', 'record', 'transcripts'],

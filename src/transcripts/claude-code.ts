@@ -34,29 +34,39 @@ export function claudeCodeTranscripts(root: string, env: Record<string, string |
 	const where = path.join(projects, root.replaceAll(/[^A-Za-z0-9]/g, '-'))
 	const hide = secretHider(env)
 
-	async function sessions(signal?: AbortSignal): Promise<SessionList> {
+	// The session files, the one saved to last first.
+	async function files() {
 		let names: string[]
 		try {
 			names = await readdir(where)
 		} catch (error) {
-			if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return { sessions: [], older: 0 }
+			if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return []
 			throw error
 		}
-		const files = []
+		const found = []
 		for (const name of names) {
 			const id = name.endsWith('.jsonl') ? sessionId(name.slice(0, -'.jsonl'.length)) : null
 			if (id === null) continue
-			const info = await stat(path.join(where, name))
-			if (info.isFile()) files.push({ id, changed: info.mtimeMs })
+			const info = await stat(path.join(where, name)).catch(() => null)
+			if (info?.isFile()) found.push({ id, changed: info.mtimeMs, bytes: info.size })
 		}
-		files.sort((a, b) => b.changed - a.changed)
+		return found.sort((a, b) => b.changed - a.changed)
+	}
+
+	async function latest() {
+		const [newest] = await files()
+		return newest ? { id: newest.id, bytes: newest.bytes, changedAt: newest.changed } : null
+	}
+
+	async function sessions(signal?: AbortSignal): Promise<SessionList> {
+		const found = await files()
 		const listed: Session[] = []
-		for (const { id } of files.slice(0, MAX_SESSIONS)) {
+		for (const { id } of found.slice(0, MAX_SESSIONS)) {
 			const read = await session(id, signal)
 			if (read) listed.push(read.session)
 		}
 		listed.sort((a, b) => (b.started ?? '').localeCompare(a.started ?? ''))
-		return { sessions: listed, older: Math.max(0, files.length - MAX_SESSIONS) }
+		return { sessions: listed, older: Math.max(0, found.length - MAX_SESSIONS) }
 	}
 
 	async function session(raw: string, signal?: AbortSignal): Promise<SessionRead | null> {
@@ -84,7 +94,7 @@ export function claudeCodeTranscripts(root: string, env: Record<string, string |
 		}
 	}
 
-	return { tool: 'Claude Code', where, sessions, session }
+	return { tool: 'Claude Code', where, sessions, session, latest }
 }
 
 function sessionId(raw: string): SessionId | null {

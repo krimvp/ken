@@ -30,6 +30,18 @@ export type FileDiff =
 
 export type SearchMatch = { path: string; line: number; text: string }
 
+// A file whose working copy differs from HEAD, or that git neither tracks nor ignores ("new"). added and removed count
+// lines against HEAD, and are null for a binary file and for a new file too large to count. bytes and modifiedAt are
+// the working copy's size and last change in milliseconds, null for a deleted file.
+export type Uncommitted = {
+	path: string
+	change: 'changed' | 'deleted' | 'new'
+	added: number | null
+	removed: number | null
+	bytes: number | null
+	modifiedAt: number | null
+}
+
 export type BlameLine = { line: number; commit: string; author: string; email: string; date: string; text: string }
 
 export type Refused = { kind: 'refused'; reason: string }
@@ -72,6 +84,11 @@ export interface Repository {
 	// commit is newer. The commit date, not the author date, so a commit rebased onto the line counts from when it landed.
 	before(head: CommitHash, moment: string, signal?: AbortSignal): Promise<CommitHash | null>
 	diff(range: Range, signal?: AbortSignal): Promise<{ kind: 'ok'; files: FileDiff[] } | TooLarge>
+	// The branch HEAD is on, or null when HEAD is detached.
+	branch(signal?: AbortSignal): Promise<string | null>
+	// The files with uncommitted changes, ken's own .ken/ left out. It reads the working tree and the index and writes
+	// neither.
+	uncommitted(signal?: AbortSignal): Promise<{ kind: 'ok'; files: Uncommitted[] } | TooLarge>
 	blame(
 		commit: CommitHash,
 		path: RepoPath,

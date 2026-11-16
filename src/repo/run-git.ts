@@ -10,13 +10,25 @@ export type GitRun =
 
 const execFileAsync = promisify(execFile)
 
-// An argument array, never a shell string, so no argument is ever parsed by a shell.
-export async function runGit(root: string, args: string[], signal?: AbortSignal): Promise<GitRun> {
+// An argument array, never a shell string, so no argument is ever parsed by a shell. GIT_OPTIONAL_LOCKS=0 stops a read,
+// such as a diff against the working tree, from writing a refreshed index back into the project. alternate is a folder
+// of objects git may also read, such as ken's snapshot store; git never writes there or anywhere else from here.
+export async function runGit(
+	root: string,
+	args: string[],
+	signal?: AbortSignal,
+	alternate: string | null = null,
+): Promise<GitRun> {
 	try {
 		const { stdout } = await execFileAsync('git', args, {
 			cwd: root,
 			encoding: 'utf8',
 			maxBuffer: MAX_OUTPUT_BYTES,
+			env: {
+				...process.env,
+				GIT_OPTIONAL_LOCKS: '0',
+				...(alternate === null ? {} : { GIT_ALTERNATE_OBJECT_DIRECTORIES: alternate }),
+			},
 			...(signal ? { signal } : {}),
 		})
 		return { kind: 'ok', stdout }

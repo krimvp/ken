@@ -38,4 +38,7 @@ export interface Transcripts {
 	sessions(signal?: AbortSignal): Promise<SessionList>
 	// One session whole: every entry, with each message in full. Null when the project has no session with this id.
 	session(id: string, signal?: AbortSignal): Promise<SessionRead | null>
+	// The session saved to last, from the file's size and time alone, without reading it, so a caller can poll it and
+	// read the session only when it grew. Null when there is none.
+	latest(): Promise<{ id: SessionId; bytes: number; changedAt: number } | null>
 }
