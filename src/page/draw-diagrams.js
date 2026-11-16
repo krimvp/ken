@@ -98,7 +98,7 @@ const SMALLEST_TEXT = 14
 
 // A drawing is at most this much shorter than the window, so the caption above it and the head of the next part of the
 // answer fit on one screen with it.
-const ROOM_AROUND = 280
+const ROOM_AROUND = 360
 
 function tallest() {
 	return innerHeight - ROOM_AROUND
