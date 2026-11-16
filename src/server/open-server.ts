@@ -9,6 +9,7 @@ import {
 	readModelConfig,
 	startChat,
 } from '../agent/index.ts'
+import { authorsOf, decide, openItems, timeRange } from '../follow-up/index.ts'
 import { kenHome, openHistory } from '../history/index.ts'
 import { type MapSignal, openMap } from '../map/index.ts'
 import { MERMAID_FILE, PAGE_FOLDER } from '../page/index.ts'
@@ -22,6 +23,8 @@ import { fieldOf, type QuestionLine, questionDesk } from './question-desk.ts'
 export type KenServer = { url: string; root: string; model: string | null; close(): Promise<void> }
 
 const MAX_BODY_BYTES = 64 * 1024
+// The person lens offers the authors of this many days.
+const RECENT_DAYS = 90
 // Mermaid puts a <style> element and style attributes in every drawing it makes, so styles may be inline. Nothing else
 // is widened: scripts, images, fonts and requests still come only from this server, so a style cannot fetch anything
 // from another host.
@@ -61,6 +64,7 @@ export async function openServer(options: {
 		model = config
 	}
 	const desk = questionDesk(history, record, repo, map)
+	const openNow = async () => openItems(repo, await record.read(), (await map.read(new Date())).states)
 	const shown = root.startsWith(`${homedir()}${path.sep}`) ? `~${root.slice(homedir().length)}` : root
 	const files = await readPageFiles(PAGE_FOLDER, { '/mermaid.min.js': MERMAID_FILE })
 	let port = 0
@@ -86,6 +90,25 @@ export async function openServer(options: {
 			const states = await map.learn(signal.signal, signal.topics, new Date())
 			return sendJson(response, 200, { states })
 		}
+		if (where === 'GET /api/open') return sendJson(response, 200, await openNow())
+		if (where === 'GET /api/authors') {
+			const recent = await timeRange(repo, { kind: 'days', days: RECENT_DAYS }, new Date())
+			const commits = recent.kind === 'ok' ? recent.range.commits : []
+			return sendJson(response, 200, { days: RECENT_DAYS, authors: authorsOf(commits, await repo.userEmail()) })
+		}
+		if (where === 'POST /api/decided') {
+			const body = await readJson(request)
+			if (body.kind !== 'ok') return sendJson(response, 400, { message: body.problem })
+			// Only the decision's id and the note are read: ken copies the rest from the record.
+			const id = fieldOf(body.value, 'decision')
+			const note = fieldOf(body.value, 'note') ?? ''
+			if (typeof id !== 'string' || typeof note !== 'string') {
+				return sendJson(response, 400, { message: 'Send the id of the decision, and a note as text if you like.' })
+			}
+			const decided = await decide(record, { id, note, now: new Date() })
+			if (decided.kind !== 'decided') return sendJson(response, 409, { message: decided.problem })
+			return sendJson(response, 200, { decided: decided.entry, open: await openNow() })
+		}
 		if (where.startsWith('GET /api/questions/')) {
 			const view = await desk.view(url.pathname.slice('/api/questions/'.length))
 			return view ? sendJson(response, 200, view) : sendJson(response, 404, { message: 'There is no such question.' })
@@ -94,7 +117,13 @@ export async function openServer(options: {
 			if (model.kind !== 'ok') return sendJson(response, 503, { message: model.message })
 			const body = await readJson(request)
 			const asked = body.kind === 'ok' ? await desk.questionOf(body.value) : body
-			if (asked.kind !== 'ok') return sendJson(response, 400, { message: asked.problem })
+			if (asked.kind === 'refused') return sendJson(response, 400, { message: asked.problem })
+			if (asked.kind === 'empty') {
+				return sendJson(response, 422, {
+					message: 'There is nothing here for the agent to explain.',
+					question: asked.text,
+				})
+			}
 			const question = { text: asked.text }
 			await desk.settled()
 			if (desk.busy()) {

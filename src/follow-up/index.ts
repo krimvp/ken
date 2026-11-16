@@ -2,7 +2,15 @@
 // project record, the understanding map and git, so the list stands with no model. Two lenses look at the work from one
 // side each, one person or one span of time, and write the question the agent then answers.
 export { decide } from './decide.ts'
-export { type LensQuestion, openQuestion, personQuestion, rangeQuestion, topicQuestion } from './lens-questions.ts'
+export {
+	type LensFacts,
+	type LensQuestion,
+	openQuestion,
+	personLens,
+	rangeLens,
+	rangeQuestion,
+	topicQuestion,
+} from './lens-questions.ts'
 export {
 	type ChangeCommit,
 	type ChangedTopic,

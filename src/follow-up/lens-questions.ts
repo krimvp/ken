@@ -1,13 +1,56 @@
 // The questions slice 6 writes for the agent, each a line the reader asks and ken's list under it, as the lenses of
 // slice 4 do. The page and the terminal show the list before the agent explains it. empty says the list holds nothing
 // to explain, so ken does not ask the agent at all.
-import { linesText } from '../map/index.ts'
+import { linesText, type TopicState } from '../map/index.ts'
 import type { RecordRead, Who } from '../record/index.ts'
+import type { Repository } from '../repo/index.ts'
 import type { ChangeCommit, OpenItems, OpenTopic } from './open-items.ts'
-import { authorsOf, type PersonChanges } from './person.ts'
-import type { Since, TimeRange } from './time-range.ts'
+import { authorsOf, findAuthor, type PersonChanges, personChanges } from './person.ts'
+import { type Since, sinceOf, type TimeRange, timeRange } from './time-range.ts'
 
 export type LensQuestion = { text: string; empty: boolean }
+
+// What a lens reads besides git: the record, the reader's map now, and the reader's last question, if any.
+export type LensFacts = {
+	record: RecordRead
+	states: TopicState[]
+	lastQuestion: { askedAt: string; head: string | null } | undefined
+}
+
+type Written = { kind: 'ok'; question: LensQuestion } | { kind: 'refused'; problem: string }
+
+// since is what the reader typed or picked: "14d", "2026-11-01" or "question".
+export async function personLens(
+	repo: Repository,
+	facts: LensFacts,
+	asked: { author: string; since: string },
+	now: Date,
+	signal?: AbortSignal,
+): Promise<Written> {
+	const since = sinceOf(asked.since, facts.lastQuestion)
+	if (since.kind !== 'ok') return since
+	const range = await timeRange(repo, since.since, now, signal)
+	if (range.kind !== 'ok') return range
+	const userEmail = await repo.userEmail(signal)
+	const author = findAuthor(authorsOf(range.range.commits, userEmail), asked.author)
+	if (author.kind !== 'ok') return author
+	const changes = personChanges(range.range, author.author, { ...facts, userEmail })
+	return { kind: 'ok', question: personQuestion(changes) }
+}
+
+export async function rangeLens(
+	repo: Repository,
+	facts: LensFacts,
+	asked: string,
+	now: Date,
+	signal?: AbortSignal,
+): Promise<Written> {
+	const since = sinceOf(asked, facts.lastQuestion)
+	if (since.kind !== 'ok') return since
+	const range = await timeRange(repo, since.since, now, signal)
+	if (range.kind !== 'ok') return range
+	return { kind: 'ok', question: rangeQuestion(range.range, facts.record, await repo.userEmail(signal)) }
+}
 
 const MAX_LISTED = 20
 
@@ -55,7 +98,8 @@ export function personQuestion({ author, range, commits, topics }: PersonChanges
 			: [
 					`- ${author.name} <${author.email}> (${who}) made ${count(commits.length)} from ${short(range.base)} to ${short(range.head)}:`,
 					...commits.slice(0, MAX_LISTED).map((c) => `- ${short(c.hash)} on ${c.date.slice(0, 10)}: ${c.subject}`),
-					...(commits.length > MAX_LISTED ? [`- and ${count(commits.length - MAX_LISTED)} older`] : []),
+					...(commits.length > MAX_LISTED ? [`- and ${commits.length - MAX_LISTED} older ones`] : []),
+					...(range.fromFirst ? [fromFirst(range)] : []),
 				]
 	const known = topics.map(
 		({ state, commits: touched }) =>
@@ -82,12 +126,11 @@ export function rangeQuestion(range: TimeRange, record: RecordRead, userEmail: s
 	const work = record.current.flatMap((entry) =>
 		entry.kind === 'work' && entry.commits.some((commit) => inRange.has(commit.hash)) ? [entry] : [],
 	)
-	const first = `- No commit is older than the start, so the range starts at the first commit, ${short(range.base)}, and leaves it out.`
 	return {
 		text: [
 			`What happened ${when}, from ${short(range.base)} to ${short(range.head)}?`,
 			`- ${count(range.commits.length)}: ${authors.map((author) => `${author.commits} by ${author.name}`).join(', ')}.`,
-			...(range.fromFirst ? [first] : []),
+			...(range.fromFirst ? [fromFirst(range)] : []),
 			...(work.length === 0
 				? ['- The record has no piece of work in this range yet.']
 				: work
@@ -105,6 +148,10 @@ export function sinceWords(since: Since): string {
 	if (since.kind === 'days') return since.days === 1 ? 'in the last day' : `in the last ${since.days} days`
 	if (since.kind === 'day') return `since ${since.day}`
 	return 'since my last question'
+}
+
+function fromFirst(range: TimeRange): string {
+	return `- No commit is older than the start, so the range starts at the first commit, ${short(range.base)}, and leaves it out.`
 }
 
 function commitsSaid(commits: ChangeCommit[]): string {

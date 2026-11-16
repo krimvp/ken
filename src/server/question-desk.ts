@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type { Answer, Chat, ChatEvent } from '../agent/index.ts'
 import { withDrawings } from '../diagram/index.ts'
+import { type LensFacts, openItems, personLens, rangeLens, topicQuestion } from '../follow-up/index.ts'
 import { entryFrom, type History, type HistoryEntry } from '../history/index.ts'
 import { areaQuestion, catchUpQuestion, deeperQuestion, type TopicState, type UnderstandingMap } from '../map/index.ts'
 import { type EntryId, type RecordEntry, type RecordRead, type RecordStore, sameName } from '../record/index.ts'
@@ -127,11 +128,17 @@ export function questionDesk(history: History, record: RecordStore, repo: Reposi
 		return entry ? await viewOf(entry) : null
 	}
 
-	// The page sends a question, or a lens for ken to write the question from: catch up, an area, or "Go deeper" on
-	// the topics of an answer, which also tells the map the reader needs more on them.
+	async function lensFacts(): Promise<LensFacts> {
+		const [{ states }, read, asked] = await Promise.all([map.read(new Date()), record.read(), history.list()])
+		return { record: read, states, lastQuestion: asked.at(-1) }
+	}
+
+	// The page sends a question, or a lens for ken to write the question from: catch up, an area, "Go deeper" on the
+	// topics of an answer, which also tells the map the reader needs more on them, a person, a time range, or "Explain
+	// what changed" on a topic of the open list. "empty" is a lens whose list holds nothing to explain.
 	async function questionOf(
 		body: unknown,
-	): Promise<{ kind: 'ok'; text: string } | { kind: 'refused'; problem: string }> {
+	): Promise<{ kind: 'ok' | 'empty'; text: string } | { kind: 'refused'; problem: string }> {
 		const lens = fieldOf(body, 'lens')
 		const kind = fieldOf(lens, 'kind')
 		if (lens === undefined) {
@@ -152,11 +159,36 @@ export function questionDesk(history: History, record: RecordStore, repo: Reposi
 			const [{ states }, read] = await Promise.all([map.read(new Date()), record.read()])
 			return { kind: 'ok', text: areaQuestion(area.path, states, read) }
 		}
+		if (kind === 'person' || kind === 'range') {
+			const since = String(fieldOf(lens, 'since') ?? '')
+			const written =
+				kind === 'person'
+					? await personLens(
+							repo,
+							await lensFacts(),
+							{ author: String(fieldOf(lens, 'author') ?? ''), since },
+							new Date(),
+						)
+					: await rangeLens(repo, await lensFacts(), since, new Date())
+			if (written.kind !== 'ok') return written
+			return { kind: written.question.empty ? 'empty' : 'ok', text: written.question.text }
+		}
+		if (kind === 'topic') {
+			const { record: read, states } = await lensFacts()
+			const open = (await openItems(repo, read, states)).topics.find(({ state }) =>
+				sameName(state.topic, String(fieldOf(lens, 'topic') ?? '')),
+			)
+			if (!open) return { kind: 'refused', problem: 'That topic has not changed since you understood it.' }
+			return { kind: 'ok', text: topicQuestion(open).text }
+		}
 		const topics = fieldOf(lens, 'topics')
 		const asked = fieldOf(lens, 'question')
 		const names = Array.isArray(topics) ? topics.filter((topic) => typeof topic === 'string') : []
 		if (kind !== 'deeper' || names.length === 0 || names.length > MAX_TOPICS || typeof asked !== 'string') {
-			return { kind: 'refused', problem: 'Send a question, or a lens: catch-up, area with a path, or deeper.' }
+			return {
+				kind: 'refused',
+				problem: 'Send a question, or a lens: catch-up, area with a path, deeper, person, range or topic.',
+			}
 		}
 		await map.learn('deeper', names, new Date())
 		return { kind: 'ok', text: deeperQuestion(names, asked.slice(0, MAX_QUESTION_CHARS)) }
