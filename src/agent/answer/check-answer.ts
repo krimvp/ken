@@ -150,7 +150,7 @@ async function changeOf(
 	const { covered, uncovered, binary } = coverage
 	const messages = countMessages(logged.commits, quotes)
 	const used = await usedElsewhere(repo, scope, signal)
-	const followed = used.kind === 'ok' ? followedNames(used.used, quotes) : null
+	const followed = used.kind === 'ok' ? await followedNames(repo, used.used, quotes, signal) : null
 	const { base, head } = scope
 	const facts = { base, head, commits: logged.commits, covered, uncovered, binary, messages }
 	return { kind: 'ok', change: { ...facts, usedElsewhere: followed } }
