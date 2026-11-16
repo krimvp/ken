@@ -754,6 +754,12 @@ span.label-from-the-session {
 	color: var(--color-note);
 }
 
+/* A risk mark's name is longer than the label column, so its meaning goes below it */
+.marks div {
+	grid-template-columns: minmax(0, 1fr);
+	gap: var(--space-1);
+}
+
 /* Quote rows: at rest they show the file, the lines and the first quoted line */
 .quotes {
 	display: grid;

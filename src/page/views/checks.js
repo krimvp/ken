@@ -180,7 +180,7 @@ export function labelKey(names) {
 // The two marks ken sets on a risk, when this answer's risks carry them.
 function marksKey(q) {
 	if (!(q.answer.risks ?? []).some((risk) => risk.checked !== undefined)) return ''
-	return `<dl class="label-key">
+	return `<dl class="label-key marks">
 		<div><dt><span class="label label-recorded">${RISK_MARKS.outside}</span></dt><dd>A quote of the risk lies wholly outside the lines the change touched, at its last commit. ${RISK_MARKS.means}</dd></div>
 		<div><dt><span class="label label-inferred">${RISK_MARKS.inside}</span></dt><dd>No quote of the risk lies wholly outside the lines the change touched.</dd></div>
 	</dl>`
