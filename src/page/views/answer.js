@@ -145,7 +145,7 @@ export function answerHtml(q, ui, running) {
 		<p class="caption">The summary from ken's model. Not checked.</p>
 		<p class="summary">${summary}</p>
 		${needsHtml(q)}
-		${leftOutHtml(a)}
+		${leftOutHtml(a, ui)}
 		${withdrawnHtml(a, ui, rows)}
 		${knownHtml(q, ui, named, isMoved(q))}
 		<a class="strip narrow-only" href="#checks-inline" title="See what ken checked">${checkStrip(q)}</a>
@@ -260,15 +260,18 @@ function weighedHtml(risks, ui, rows, marked, labels) {
 	</section>`
 }
 
-// How many points of the model's draft it found no line to quote for. An answer not made from a draft has no count.
-function leftOutHtml(a) {
+// How many points of the model's draft it found no line to quote for, a fold that opens to the model's names for them.
+// An answer not made from a draft has no count, and one saved before ken kept the names shows the count alone.
+function leftOutHtml(a, ui) {
 	const n = a.leftOut ?? 0
 	if (n === 0) return ''
-	const said =
-		n === 1
-			? '1 point of the draft had no line to quote and was'
-			: `${n} points of the draft had no line to quote and were`
-	return `<p class="caption">${said} left out. The draft is in the steps.</p>`
+	const head = n === 1 ? '1 point of the draft had no line to quote' : `${n} points of the draft had no line to quote`
+	const points = a.leftOutPoints ?? []
+	if (points.length === 0)
+		return `<p class="caption">${head}, so the answer leaves it out. The draft is in the steps.</p>`
+	const body = `<p class="caption">ken's model named ${n === 1 ? 'it' : 'them'} this way, and left ${n === 1 ? 'it' : 'them'} out of the answer. Its words, not checked.</p>
+		<ul class="left-out">${points.map((point) => `<li>${prose(point)}</li>`).join('')}</ul>`
+	return `<div class="folds left-out">${foldHtml('left-out', head, ui, body)}</div>`
 }
 
 // The risks the second look took out: one line with the count, which opens to each risk, why it was withdrawn and the

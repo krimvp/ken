@@ -848,7 +848,7 @@ const actions = {
 		const allOpen = keys.every((key) => ui.openQuotes.has(key))
 		ui.openQuotes = allOpen ? new Set() : new Set(keys)
 		if (!allOpen) {
-			ui.openGroups = new Set(['risks', 'decisions', 'statements', 'withdrawn'])
+			ui.openGroups = new Set(['risks', 'decisions', 'statements', 'withdrawn', 'left-out'])
 			for (const key of keys.filter((each) => each.startsWith('d'))) ui.openDecisions.add(key.split('-')[0])
 			for (const index of state.open.answer.diagrams.keys()) ui.openParts.add(index)
 		}

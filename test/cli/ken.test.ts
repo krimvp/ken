@@ -127,7 +127,7 @@ test('ken ask --json prints the checked answer, what it recorded and the closing
 	assert.equal((await ken(['record', 'no-such-id', '--repo', root], NO_KEN_VARIABLES)).code, 1)
 })
 
-test('ken ask prints the risks in the order the answer gives them, whatever their weight, each with its weight, and says how many points of the draft it left out', async () => {
+test('ken ask prints the risks in the order the answer gives them, whatever their weight, each with its weight, and names the points of the draft it left out', async () => {
 	const risk = (text: string, weight: string) => ({ text, label: 'inferred', quotes: [SUM], weight })
 	const model = await scriptedModel([
 		DRAFT,
@@ -173,7 +173,7 @@ test('ken ask prints the risks in the order the answer gives them, whatever thei
 		['minor', 'serious', 'minor', 'serious'],
 		'each risk carries the weight the model gave it',
 	)
-	assert.match(stdout, /1 point of the draft had no line to quote/)
+	assert.match(stdout, /1 point of the draft had no line to quote[^\n]*\n.*- a guess about who reads the reports/)
 })
 
 test('ken ask prints a risk that quotes a later commit after the open one, marked fixed since in that commit', async () => {

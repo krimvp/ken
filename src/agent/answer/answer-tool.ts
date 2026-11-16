@@ -229,7 +229,9 @@ async function settle(
 		statements: claims(check.answer.statements),
 		risks: check.answer.risks && claims(check.answer.risks),
 		topics,
-		...(Array.isArray(leftOut) ? { leftOut: leftOut.length } : {}),
+		...(Array.isArray(leftOut)
+			? { leftOut: leftOut.length, leftOutPoints: leftOut.filter((point) => typeof point === 'string') }
+			: {}),
 	}
 	return { kind: 'accepted', answer, decisions: check.decisions, recorded, args: read.args }
 }

@@ -79,7 +79,12 @@ export function formatAnswer(answer: Answer, entries: Entry[], paint: Paint): st
 			leftOut === 1
 				? '1 point of the draft had no line to quote and was'
 				: `${leftOut} points of the draft had no line to quote and were`
-		lines.push(paint('dim', `${said} left out.`), '')
+		const points = answer.leftOutPoints ?? []
+		if (points.length === 0) lines.push(paint('dim', `${said} left out.`), '')
+		else {
+			const named = `${said} left out. ken's model named ${leftOut === 1 ? 'it' : 'them'} this way; ken did not check ${leftOut === 1 ? 'it' : 'them'}:`
+			lines.push(paint('dim', named), ...points.map((point) => paint('dim', `  - ${point}`)), '')
+		}
 	}
 	const withdrawn = answer.withdrawn ?? []
 	if (withdrawn.length > 0) {

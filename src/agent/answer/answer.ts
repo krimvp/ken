@@ -45,8 +45,9 @@ export type Withdrawn = { risk: Risk; reason: string; proof: VerifiedQuote[] }
 // belong to. They are the topics the reader's three buttons act on. risks is null when the answer says nothing about risks, as for a question about how a part
 // works or an answer saved before ken asked for them; an empty list means the agent looked and found none. change is
 // null when the question was not about a range of commits. leftOut counts the points of the model's draft that it
-// found no line to quote for and left out; only an answer made from a draft has it. withdrawn holds what the second
-// look took out; only an answer it revised has it.
+// found no line to quote for and left out, and leftOutPoints names them in the model's words, which ken does not
+// check; only an answer made from a draft has them, and one saved before ken kept the names has only the count.
+// withdrawn holds what the second look took out; only an answer it revised has it.
 export type Answer = {
 	summary: string
 	statements: Claim[]
@@ -55,5 +56,6 @@ export type Answer = {
 	diagrams: Diagram[]
 	change: Change | null
 	leftOut?: number
+	leftOutPoints?: string[]
 	withdrawn?: Withdrawn[]
 }
