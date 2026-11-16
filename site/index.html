@@ -21,12 +21,14 @@
 				</p>
 				<p>
 					The lines come from your code, a commit message or your coding agent's saved session. ken looks up each
-					quote before you see the answer. An answer with a quote ken cannot find goes back to the model, and you
-					never see it. ken checks where a quote is, not whether the sentence is true.
+					quote before you see the answer, and never shows you an answer with a quote it cannot find. It checks
+					where a quote is, not whether the sentence is true.
 				</p>
 				<p>
 					Why not ask your coding agent? Its answer is prose you take on trust, and it stays in that chat. ken's
-					answer points at lines you can open, and ken keeps it so you can find it again.
+					answer points at lines you can open, and ken keeps it so you can find it again. In ken's last two test
+					rounds, on pull requests it had never seen, fresh AI judges both times rated ken's answers narrowly better
+					overall than a plain chat's on the same model, for those checked quotes and that kept record.
 				</p>
 				<p class="status">
 					<strong>Early work, not released.</strong> Nothing to install, no license, private repository.
@@ -36,23 +38,30 @@
 			<figure class="shot">
 				<a href="images/ken-risk-with-quotes-wide.png">
 					<picture>
-						<source media="(max-width: 34rem) and (prefers-color-scheme: dark)" srcset="images/ken-risk-with-quotes-narrow-dark.png 2x" width="366" height="626" />
-						<source media="(max-width: 34rem)" srcset="images/ken-risk-with-quotes-narrow.png 2x" width="366" height="626" />
-						<source media="(prefers-color-scheme: dark)" srcset="images/ken-risk-with-quotes-wide-dark.png 2x" width="826" height="920" />
-						<img src="images/ken-risk-with-quotes-wide.png" srcset="images/ken-risk-with-quotes-wide.png 2x" width="826" height="920" alt="The question What did the last commit do, and why? Name the decisions it made and any risk I should know about. Under it, the summary from ken's model, one decision labelled Recorded, and the heading 3 risks to watch. Risk 1 is marked Quotes code outside the change: every fetchUser call where all 3 tries fail now waits about 1.4 s before it throws, up from 0.6 s, because retry still sleeps 800 ms after the last try. Its first quote is open and shows line 8 of src/user.ts at a32ffb8, where fetchUser calls retry. Two more quotes of src/retry.ts are folded." />
+						<source media="(max-width: 34rem) and (prefers-color-scheme: dark)" srcset="images/ken-risk-with-quotes-narrow-dark.png 2x" width="366" height="880" />
+						<source media="(max-width: 34rem)" srcset="images/ken-risk-with-quotes-narrow.png 2x" width="366" height="880" />
+						<source media="(prefers-color-scheme: dark)" srcset="images/ken-risk-with-quotes-wide-dark.png 2x" width="826" height="852" />
+						<img src="images/ken-risk-with-quotes-wide.png" srcset="images/ken-risk-with-quotes-wide.png 2x" width="826" height="852" alt="The question What did the last commit do, and why? Name the decisions it made and any risk I should know about. Under it, the summary from ken's model, not checked, tells the story: before a32ffb8, retry waited a fixed 200 ms between tries, so it kept hitting the API while the API was down. Now the wait doubles after each failed try, 200, 400, then 800 ms. The thing to watch is that retry still waits after the last try. Then come the line 3 risks, 1 of them serious, and the risks, heaviest first. Risk 1 is marked Quotes code outside the change and Serious: every fetchUser call where all 3 tries fail now waits about 1.4 s before it throws, up from 0.6 s. Its first quote is open and shows line 8 of src/user.ts at a32ffb8, where fetchUser calls retry. Two more quotes of src/retry.ts are folded." />
 					</picture>
 				</a>
-				<figcaption>Screenshot of ken's local page, answering a question about a commit in a small made-up project. The model was Claude Opus.</figcaption>
+				<figcaption>The first view of an answer, for a small made-up project. The model was Claude Opus.</figcaption>
 			</figure>
 
 			<section aria-labelledby="answer">
 				<h2 id="answer">What an answer holds</h2>
 				<p>
-					An answer has a short summary, then the decisions with their reasons, the risks, and plain statements. Ask
-					how parts fit together, or about a change that touches two or more parts, and the answer opens with a
-					diagram. Every arrow in the diagram quotes the lines that show it, and ken looks those up too.
+					Ask about a change, and ken asks its model for a free draft first. Then the model must back each decision
+					and risk with the lines it rests on, and the answer lists each point that had no line to quote. A second look tries
+					to rule each risk out. It can withdraw a risk only by quoting the line that rules it out, and the
+					withdrawn risk stays in view with that line.
 				</p>
-				<figure class="shot">
+				<p>
+					The answer opens on the model's story of the change, which ken does not check, then a diagram, the first
+					three risks, open ones first, and up to three decisions with their reasons. A risk fixed since is marked
+					with the commit, from git. A claim that something is missing or untested must name the text that would be
+					there, and ken shows its search for it. Every arrow in a diagram quotes its lines.
+				</p>
+				<figure class="shot shot-wide-only">
 					<a href="images/ken-answer-with-diagram-wide.png">
 						<picture>
 							<source media="(max-width: 34rem) and (prefers-color-scheme: dark)" srcset="images/ken-answer-with-diagram-narrow-dark.png 2x" width="520" height="350" />
@@ -64,25 +73,25 @@
 					<figcaption>Screenshot of the first diagram in ken's answer to "What are the main parts of ken, and how do they connect?" The model was Claude Opus.</figcaption>
 				</figure>
 				<p>
-					Each decision carries a label that says where its reason comes from. ken sets that label from the quotes,
-					so a model cannot mark its own guess as recorded.
+					ken labels each decision by where its reason comes from, using the quotes, so a model cannot mark its own
+					guess as recorded.
 				</p>
 				<ul class="labels">
 					<li>
 						<span class="label label-recorded">Recorded</span>
-						<span>Written down at the time, in a commit message or by your coding agent with <code>ken decide</code>.</span>
+						<span>Written down at the time, in a commit message or with <code>ken decide</code>.</span>
 					</li>
 					<li>
 						<span class="label label-session">From the session</span>
-						<span>Quoted from your coding agent's saved session.</span>
+						<span>Quoted from a saved session.</span>
 					</li>
 					<li>
 						<span class="label">Inferred</span>
-						<span>Worked out by the model from the code.</span>
+						<span>Worked out by the model.</span>
 					</li>
 					<li>
 						<span class="label label-search">Found by search</span>
-						<span>A link between two pieces of code that rests on a text search. Nobody proved it.</span>
+						<span>A link between two pieces of code that rests on a text search.</span>
 					</li>
 				</ul>
 			</section>
@@ -90,14 +99,13 @@
 			<section aria-labelledby="keep">
 				<h2 id="keep">Find every answer again</h2>
 				<p>
-					ken keeps your questions and its answers on your machine, under "Your questions". It adds the decisions,
-					their reasons and what each piece of work did to the project record in <code>.ken/record/</code>. You
-					commit the record with the project, so a collaborator and their coding agents can read it.
+					ken keeps your questions and its answers on your machine, under "Your questions". The decisions, their
+					reasons and what each piece of work did go into the project record in <code>.ken/record/</code>, which
+					you commit, so a collaborator and their coding agents can read it.
 				</p>
 				<p>
 					"Waiting on you" brings back the decisions a coding agent left open for you, and the code that changed
-					since you said you understood it. Answer a decision with "Keep what was chosen" or "I want it changed".
-					ken saves your answer and changes no code.
+					since you said you understood it. ken saves your answer and changes no code.
 				</p>
 				<figure class="shot shot-wide-only">
 					<a href="images/ken-decisions-wide.png">
@@ -116,8 +124,8 @@
 				<h2 id="live">Live mode</h2>
 				<p>
 					Live mode runs beside your coding agent. When a commit lands, or uncommitted work goes quiet, ken writes a
-					short note on what changed, and looks up its quotes. Each note is a model call, so live mode is off until
-					you turn it on, and the page shows what it spends.
+					short note on what changed and looks up its quotes. It is off until you turn it on, and the page shows
+					what it spends.
 				</p>
 			</section>
 
@@ -221,18 +229,16 @@
 					</svg>
 				</figure>
 				<p>
-					ken runs on your machine and only reads. It never edits your code, commits or pushes. It writes only in
-					<code>.ken/</code> in the project and <code>~/.ken/</code> on your machine.
+					ken runs on your machine and only reads. It never edits your code, commits or pushes, and writes only in
+					<code>.ken/</code> and <code>~/.ken/</code>.
 				</p>
 				<p>
-					You choose the model. ken sends the code and session text the model reads to that model's provider. ken
-					hides what looks like a secret key in session text before the model sees it. It hides nothing in your code or git
-					history.
+					You choose the model. Its provider gets the code and session text the model reads. In session text, ken
+					first hides what looks like a secret key. It hides nothing in your code or git history.
 				</p>
 				<p>
-					ken works today with git repositories, Claude Code sessions and one developer. It uses an
-					OpenAI-compatible endpoint, or the <code>claude</code> command through a small local endpoint that ken
-					includes. It has been tried on glm-5.3, kimi-k3.1-pro and Claude Opus.
+					ken works today with git repositories, Claude Code sessions and one developer. It has been tried on
+					glm-5.3, kimi-k3.1-pro and Claude Opus.
 				</p>
 			</section>
 		</main>

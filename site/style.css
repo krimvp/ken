@@ -344,7 +344,7 @@ footer p + p {
 		padding-top: var(--space-4);
 	}
 
-	/* A phone skips the capture of Decisions, to keep the page short. */
+	/* A phone skips the captures of a diagram and of Decisions, to keep the page short. */
 	.shot-wide-only {
 		display: none;
 	}
