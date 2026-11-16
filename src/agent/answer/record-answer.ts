@@ -19,7 +19,7 @@ export type Recorded =
 
 export async function recordAnswer(
 	store: RecordStore,
-	answer: Answer,
+	answer: Omit<Answer, 'topics'>,
 	decisions: CheckedDecision[],
 	args: RecordArgs,
 	signal: AbortSignal,
@@ -60,15 +60,7 @@ export async function recordAnswer(
 		})
 		work = entry?.id ?? null
 	}
-	for (const [index, decision] of decisions.entries()) {
-		await add(`Decision ${index + 1}`, {
-			kind: 'decision',
-			...decision,
-			reason: { text: decision.reason.text, quotes: decision.reason.quotes.map(raw) },
-			quotes: decision.quotes.map(raw),
-			work,
-		})
-	}
+	// Topics go first, so a decision can name a topic this answer adds.
 	for (const [index, topic] of args.topics.entries()) {
 		const where = `Topic ${index + 1}`
 		const entry = await add(where, {
@@ -78,6 +70,15 @@ export async function recordAnswer(
 			replaces: topic.replaces,
 		})
 		if (entry) await add(`${where}, its note`, { kind: 'note', topic: entry.id, text: topic.note })
+	}
+	for (const [index, decision] of decisions.entries()) {
+		await add(`Decision ${index + 1}`, {
+			kind: 'decision',
+			...decision,
+			reason: { text: decision.reason.text, quotes: decision.reason.quotes.map(raw) },
+			quotes: decision.quotes.map(raw),
+			work,
+		})
 	}
 	if (problems.length > 0) return { kind: 'refused', problems }
 

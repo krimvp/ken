@@ -2,7 +2,8 @@ import { randomUUID } from 'node:crypto'
 import type { Answer, Chat, ChatEvent } from '../agent/index.ts'
 import { withDrawings } from '../diagram/index.ts'
 import { entryFrom, type History, type HistoryEntry } from '../history/index.ts'
-import type { EntryId, RecordEntry, RecordRead, RecordStore } from '../record/index.ts'
+import type { TopicState, UnderstandingMap } from '../map/index.ts'
+import { type EntryId, type RecordEntry, type RecordRead, type RecordStore, sameName } from '../record/index.ts'
 import type { Repository } from '../repo/index.ts'
 
 // One row in the page's list of questions. calls counts the decisions the agent wants the reader to decide. risks is
@@ -20,15 +21,23 @@ export type QuestionRow = {
 }
 
 // An entry from the history, with the project record entries its answer stands on (see entriesOf). Its diagrams carry
-// their drawings. head is the project's HEAD now, which the page compares with the entry's own.
-export type QuestionView = { entry: HistoryEntry; recorded: RecordEntry[]; head: string | null }
+// their drawings. head is the project's HEAD now, which the page compares with the entry's own. topics holds the state
+// of each topic the answer names for this reader now, from the understanding map; the page folds every entry of a
+// topic whose state is "unchanged" into one line.
+export type QuestionView = { entry: HistoryEntry; recorded: RecordEntry[]; head: string | null; topics: TopicState[] }
+
+type Accepted = Extract<ChatEvent, { kind: 'accepted' }>
 
 // What the page receives while a question runs: each chat event, then the saved entry as the last line. An accepted
-// answer's diagrams carry their drawings, and its recorded entries are the ones it stands on.
-export type QuestionLine = ChatEvent | { kind: 'saved'; view: QuestionView }
+// answer's diagrams carry their drawings, its recorded entries are the ones it stands on, and it carries its topics'
+// states as a view does.
+export type QuestionLine =
+	| Exclude<ChatEvent, Accepted>
+	| (Accepted & { topics: TopicState[] })
+	| { kind: 'saved'; view: QuestionView }
 
 // Runs the page's questions one at a time and keeps each in the reader's history, together with what it ended in.
-export function questionDesk(history: History, record: RecordStore, repo: Repository) {
+export function questionDesk(history: History, record: RecordStore, repo: Repository, map: UnderstandingMap) {
 	let running: { stop: AbortSignal; done: Promise<void> } | null = null
 
 	// A question the reader stopped can still be winding down. Wait for it, so the next request finds it in the history.
@@ -55,7 +64,8 @@ export function questionDesk(history: History, record: RecordStore, repo: Reposi
 				}
 				const added = event.recorded.map((stored) => stored.id)
 				const recorded = entriesOf(event.answer, added, await record.read())
-				send({ ...event, answer: withDrawings(event.answer), recorded })
+				const topics = await topicsOf(event.answer.topics)
+				send({ ...event, answer: withDrawings(event.answer), recorded, topics })
 			}
 			const entry = entryFrom(asked, events, stop.aborted)
 			await history.add(entry)
@@ -73,9 +83,16 @@ export function questionDesk(history: History, record: RecordStore, repo: Reposi
 
 	async function viewOf(entry: HistoryEntry): Promise<QuestionView> {
 		const head = await headNow()
-		if (entry.outcome !== 'answered') return { entry, recorded: [], head }
+		if (entry.outcome !== 'answered') return { entry, recorded: [], head, topics: [] }
 		const drawn = { ...entry, answer: withDrawings(entry.answer) }
-		return { entry: drawn, recorded: entriesOf(entry.answer, entry.recorded, await record.read()), head }
+		const recorded = entriesOf(entry.answer, entry.recorded, await record.read())
+		return { entry: drawn, recorded, head, topics: await topicsOf(entry.answer.topics) }
+	}
+
+	// In the order the answer names them. A topic the record no longer has is left out.
+	async function topicsOf(names: string[]): Promise<TopicState[]> {
+		const { states } = await map.read(new Date())
+		return names.flatMap((name) => states.find((state) => sameName(state.topic, name)) ?? [])
 	}
 
 	async function rows(): Promise<QuestionRow[]> {

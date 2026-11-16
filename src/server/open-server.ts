@@ -10,6 +10,7 @@ import {
 	startChat,
 } from '../agent/index.ts'
 import { kenHome, openHistory } from '../history/index.ts'
+import { type MapSignal, openMap } from '../map/index.ts'
 import { MERMAID_FILE, PAGE_FOLDER } from '../page/index.ts'
 import { fileRecordStore } from '../record/index.ts'
 import { findRoot, gitRepository } from '../repo/index.ts'
@@ -47,16 +48,20 @@ export async function openServer(options: {
 		return { kind: 'refused', message: `${root} has no commits yet, so ken has nothing to read.` }
 	}
 	const { history } = opened
+	const record = fileRecordStore(root, repo)
+	const mapped = await openMap(kenHome(options.env), repo, record)
+	if (mapped.kind !== 'ok') throw new Error(`${root} has a history but no first commit`)
+	const { map } = mapped
 	const config = readModelConfig(options.flags, options.env)
 	let model: { kind: 'ok'; chat: Chat; name: string } | ModelUnset
 	if (config.kind === 'ok') {
-		const started = await startChat({ directory: root, model: config.config })
+		const started = await startChat({ directory: root, model: config.config, map })
 		if (started.kind !== 'ok') return { kind: 'refused', message: started.message }
 		model = { kind: 'ok', chat: started.chat, name: config.config.model }
 	} else {
 		model = config
 	}
-	const desk = questionDesk(history, fileRecordStore(root, repo), repo)
+	const desk = questionDesk(history, record, repo, map)
 	const shown = root.startsWith(`${homedir()}${path.sep}`) ? `~${root.slice(homedir().length)}` : root
 	const files = await readPageFiles(PAGE_FOLDER, { '/mermaid.min.js': MERMAID_FILE })
 	let port = 0
@@ -74,6 +79,14 @@ export async function openServer(options: {
 			return sendJson(response, 200, { project: shown, model: state })
 		}
 		if (where === 'GET /api/questions') return sendJson(response, 200, { questions: await desk.rows() })
+		if (where === 'GET /api/map') return sendJson(response, 200, { file: map.file, ...(await map.read(new Date())) })
+		if (where === 'POST /api/map') {
+			const body = await readJson(request)
+			const signal = body.kind === 'ok' ? mapSignalOf(body.value) : body
+			if (signal.kind !== 'ok') return sendJson(response, 400, { message: signal.problem })
+			const states = await map.learn(signal.signal, signal.topics, new Date())
+			return sendJson(response, 200, { states })
+		}
 		if (where.startsWith('GET /api/questions/')) {
 			const view = await desk.view(url.pathname.slice('/api/questions/'.length))
 			return view ? sendJson(response, 200, view) : sendJson(response, 404, { message: 'There is no such question.' })
@@ -137,9 +150,9 @@ export async function openServer(options: {
 	return { kind: 'ok', server: { url: `http://127.0.0.1:${port}/`, root, model: name, close } }
 }
 
-async function readQuestion(
+async function readJson(
 	request: IncomingMessage,
-): Promise<{ kind: 'ok'; text: string } | { kind: 'refused'; problem: string }> {
+): Promise<{ kind: 'ok'; value: unknown } | { kind: 'refused'; problem: string }> {
 	let size = 0
 	const chunks: Buffer[] = []
 	for await (const chunk of request) {
@@ -147,18 +160,43 @@ async function readQuestion(
 		if (size > MAX_BODY_BYTES) return { kind: 'refused', problem: 'The request is too large.' }
 		chunks.push(chunk)
 	}
-	let body: unknown
 	try {
-		body = JSON.parse(Buffer.concat(chunks).toString('utf8'))
+		return { kind: 'ok', value: JSON.parse(Buffer.concat(chunks).toString('utf8')) }
 	} catch {
-		return { kind: 'refused', problem: 'Send the question as JSON: {"question": "..."}.' }
+		return { kind: 'refused', problem: 'Send the request as JSON.' }
 	}
-	const text = typeof body === 'object' && body !== null && 'question' in body ? body.question : undefined
+}
+
+async function readQuestion(
+	request: IncomingMessage,
+): Promise<{ kind: 'ok'; text: string } | { kind: 'refused'; problem: string }> {
+	const body = await readJson(request)
+	if (body.kind !== 'ok') return body
+	const text = fieldOf(body.value, 'question')
 	if (typeof text !== 'string' || text.trim() === '') return { kind: 'refused', problem: 'The question is empty.' }
 	if (text.length > MAX_QUESTION_CHARS) {
 		return { kind: 'refused', problem: `Keep the question under ${MAX_QUESTION_CHARS} characters.` }
 	}
 	return { kind: 'ok', text: text.trim() }
+}
+
+// The three buttons under an answer. A question marks its topics itself, so the page cannot send "asked".
+const BUTTONS: MapSignal[] = ['know', 'too-much', 'deeper']
+
+function mapSignalOf(
+	body: unknown,
+): { kind: 'ok'; signal: MapSignal; topics: string[] } | { kind: 'refused'; problem: string } {
+	const signal = BUTTONS.find((each) => each === fieldOf(body, 'signal'))
+	const topics = fieldOf(body, 'topics')
+	if (!signal) return { kind: 'refused', problem: `Send a signal: ${BUTTONS.join(', ')}.` }
+	if (!Array.isArray(topics) || topics.length === 0 || !topics.every((topic) => typeof topic === 'string')) {
+		return { kind: 'refused', problem: 'Send the names of the topics as a list.' }
+	}
+	return { kind: 'ok', signal, topics }
+}
+
+function fieldOf(body: unknown, name: string): unknown {
+	return typeof body === 'object' && body !== null ? Reflect.get(body, name) : undefined
 }
 
 function sendJson(response: ServerResponse, status: number, value: unknown) {

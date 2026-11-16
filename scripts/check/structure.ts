@@ -32,7 +32,7 @@ export const MODULES: Record<string, Module> = {
 	},
 	agent: {
 		job: 'Runs a chat with a model that explores the project with read-only tools and answers only with checked quotes.',
-		imports: ['repo', 'checks', 'diagram', 'record'],
+		imports: ['repo', 'checks', 'diagram', 'map', 'record'],
 		packages: ['aigent'],
 	},
 	history: {
@@ -47,7 +47,7 @@ export const MODULES: Record<string, Module> = {
 	},
 	server: {
 		job: 'Serves the page on 127.0.0.1 and runs the questions it sends, one at a time.',
-		imports: ['agent', 'diagram', 'history', 'page', 'record', 'repo'],
+		imports: ['agent', 'diagram', 'history', 'map', 'page', 'record', 'repo'],
 		packages: [],
 	},
 	cli: {
