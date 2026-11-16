@@ -2258,3 +2258,12 @@ q.subject {
 	outline: 2px solid var(--color-focus);
 	outline-offset: 4px;
 }
+
+.q-then {
+	margin-right: var(--space-2);
+	padding: 0 var(--space-1);
+	border-radius: var(--radius-sm);
+	background: var(--color-label-bg);
+	color: var(--color-label-text);
+	font-weight: 600;
+}

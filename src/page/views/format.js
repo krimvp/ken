@@ -111,10 +111,19 @@ export function quoteBody(quote, where = '', named = false) {
 
 // At rest a quote is one row: the file, the lines, and the first quoted line, with the commit when the answer quotes
 // more than one. Opened, it shows all its lines: in place, or in the panel on a wide screen, where only the row whose
-// quote the panel shows reads as open.
-export function quoteRows(quotes, key, { ui, commits }) {
+// quote the panel shows reads as open. When an item quotes one file at two commits, the row at the HEAD the question
+// was asked at reads "now" and the other "before", so the two rows of a changed line tell apart.
+export function quoteRows(quotes, key, { ui, commits, head = null }) {
+	const paths = quotes.filter((quote) => !isSession(quote) && quote.path !== null)
+	const twice = new Set(
+		paths
+			.filter((quote) => paths.some((other) => other.path === quote.path && other.commit !== quote.commit))
+			.map((quote) => quote.path),
+	)
 	return `<ul class="quotes">${quotes
 		.map((quote, j) => {
+			const then =
+				twice.has(quote.path) && head ? `<span class="q-then">${quote.commit === head ? 'now' : 'before'}</span>` : ''
 			const id = `${key}-q${j}`
 			const chosen = ui.wide && ui.panel.kind === 'quote' && ui.panel.key === key && ui.panel.quote === j
 			const open = !ui.wide && ui.openQuotes.has(id)
@@ -126,7 +135,7 @@ export function quoteRows(quotes, key, { ui, commits }) {
 					: ''
 			return `<li class="q${chosen ? ' chosen' : ''}">
 				<button class="q-row" data-act="quote" data-item="${key}" data-quote="${j}" data-key="${id}" aria-expanded="${ui.wide ? chosen : open}"${ui.wide ? ' aria-controls="panel"' : ''}>
-					<span class="q-path">${quoteSource(quote)}</span><span class="q-lines"><span class="nowrap">${quoteLines(quote)}</span>${at}</span>${first ? `<span class="q-first">${esc(first.trim())}</span>` : ''}
+					<span class="q-path">${quoteSource(quote)}</span><span class="q-lines">${then}<span class="nowrap">${quoteLines(quote)}</span>${at}</span>${first ? `<span class="q-first">${esc(first.trim())}</span>` : ''}
 				</button>
 				${open ? quoteBody(quote, '', commits) : ''}
 			</li>`

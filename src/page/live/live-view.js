@@ -83,7 +83,8 @@ function nowHtml(now, hideAsk) {
 			: `<ul class="now-files">${now.files.map(fileHtml).join('')}${now.moreFiles > 0 ? `<li class="muted">and ${now.moreFiles} more</li>` : ''}</ul>`
 	const commits = now.commits
 		.map(
-			(c) => `<li><code>${short(c.hash)}</code> ${prose(c.subject)} <span class="now-when">${when(c.date)}</span></li>`,
+			(c) =>
+				`<li><code>${short(c.hash)}</code> ${prose(c.subject)} <span class="now-when">· ${when(c.date)}</span></li>`,
 		)
 		.join('')
 	return `<section class="now" aria-labelledby="now-head">

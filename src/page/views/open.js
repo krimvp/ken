@@ -63,8 +63,8 @@ export function openViewHtml(open, ui, canAsk, said, decided) {
 	const decisionList =
 		decisions.length + decided.length === 0
 			? ''
-			: `<h2 class="o-head">Decisions that need your call (${decisions.length})</h2>
-			<p class="small muted">The agent wrote these and marked them as yours to decide. ken checked their quotes, not their sentences.</p>
+			: `<h2 class="o-head">${decisions.length === 0 ? 'Decisions you answered' : `Decisions that need your call (${decisions.length})`}</h2>
+			${decisions.length === 0 ? '' : '<p class="small muted">The agent wrote these and marked them as yours to decide. ken checked their quotes, not their sentences.</p>'}
 			<ul class="o-list">${traces}${decisions.map((d, i) => decisionItem(d, i, ui)).join('')}</ul>`
 	const topicList =
 		topics.length === 0

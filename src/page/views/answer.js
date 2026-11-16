@@ -76,7 +76,7 @@ export function answerHtml(q, ui, running) {
 	const allOpen = ui.wide
 		? ui.panel.kind === 'all'
 		: itemsOf(q).every(({ key, item }) => item.quotes.every((_, j) => ui.openQuotes.has(`${key}-q${j}`)))
-	const rows = { ui, commits: manyCommits(q) }
+	const rows = { ui, commits: manyCommits(q), head: q.head }
 	const risks = a.risks ? shownOf(a.risks, 'r', hidden) : []
 	const claims = [...statements, ...risks].map(({ item }) => item)
 	const marked = markedLabels(claims)
@@ -216,7 +216,9 @@ export function sourceLine(d) {
 	if (d.logged) {
 		const by = d.logged.by ? ` (${esc(d.logged.by)})` : ''
 		const head = d.logged.head ? `, at commit <code>${short(d.logged.head)}</code>` : ', before the first commit'
-		return `Your coding agent${by} logged this ${at(d.at)}${head}. ken did not check the reason.`
+		// An answered decision is a new entry, so its own time is when the owner answered, not when it was logged.
+		const time = d.answer ? '' : ` ${at(d.at)}`
+		return `Your coding agent${by} logged this${time}${head}. ken did not check the reason.`
 	}
 	const quotes = d.reason?.quotes ?? []
 	if (d.label === 'recorded') {

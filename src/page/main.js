@@ -150,6 +150,7 @@ function addEvent(q, event) {
 			q.answer = event.answer
 			q.recorded = event.recorded
 			q.topics = event.topics
+			if (event.draft) q.draft = event.draft
 			break
 		case 'usage':
 			q.usage = event
