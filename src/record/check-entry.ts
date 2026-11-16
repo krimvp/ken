@@ -41,6 +41,7 @@ export type EntryDraft =
 			needsOwner: boolean
 			quotes: Quote[]
 			work: string | null
+			topic?: string | undefined
 	  } & Replaces)
 	| ({ kind: 'topic'; name: string; quotes: Quote[] } & Replaces)
 	| ({ kind: 'note'; topic: string; text: string } & Replaces)
@@ -95,6 +96,12 @@ export async function checkEntry(
 		return found?.id ?? null
 	}
 	const replaces = draft.replaces === undefined ? null : named('replaces', draft.replaces, draft.kind)
+	// A name, not an id, so it keeps naming the topic after a newer entry replaces it.
+	const topicNamed = (name: string): string | null => {
+		const found = record.current.find((other) => other.kind === 'topic' && sameName(other.name, name))
+		if (found?.kind !== 'topic') problems.push(`topic names "${name}", which is not a topic in the record.`)
+		return found?.kind === 'topic' ? found.name : null
+	}
 
 	let entry: Entry
 	switch (draft.kind) {
@@ -148,6 +155,7 @@ export async function checkEntry(
 				label: decisionLabel(reasonQuotes),
 				quotes: await quotes('the decision', draft.quotes),
 				work: draft.work === null ? null : named('work', draft.work, 'work'),
+				topic: draft.topic === undefined ? null : topicNamed(draft.topic),
 			} satisfies Decision
 			break
 		}
@@ -191,7 +199,7 @@ export async function checkEntry(
 	return problems.length > 0 ? { kind: 'refused', problems } : { kind: 'ok', entry, replaces }
 }
 
-function sameName(a: string, b: string): boolean {
+export function sameName(a: string, b: string): boolean {
 	const normal = (name: string) =>
 		name
 			.toLowerCase()

@@ -1,13 +1,15 @@
 #!/usr/bin/env node
 // The ken command. "ken chat" talks about a repository in the terminal. "ken ask" answers one question and exits, as
 // text or as JSON for scripts. Exit code 0 means a checked answer, 1 means none, 2 means ken could not start.
-// "ken record" shows the project record and needs no model. "ken open" serves the page on 127.0.0.1.
+// "ken record" shows the project record and "ken map" the reader's understanding map; neither needs a model. "ken open"
+// serves the page on 127.0.0.1.
 import { createInterface } from 'node:readline/promises'
 import { parseArgs } from 'node:util'
 import { type Answer, type Chat, type ChatEvent, type Outcome, readModelConfig, startChat } from '../agent/index.ts'
 import { withDrawings } from '../diagram/index.ts'
 import type { RecordEntry } from '../record/index.ts'
 import { openPage } from './open-page.ts'
+import { printMap } from './print-map.ts'
 import { printQuestion } from './print-question.ts'
 import { printRecord } from './print-record.ts'
 
@@ -15,6 +17,7 @@ const USAGE = `Usage:
   ken chat [--repo <path>]
   ken ask "<question>" [--repo <path>] [--json]
   ken record [<id>] [--repo <path>] [--json]
+  ken map [--repo <path>] [--json]
   ken open [--repo <path>] [--port <n>]
 
 Name the model with --model, --base-url and --api-key-env,
@@ -28,6 +31,7 @@ async function main(argv: string[]): Promise<number> {
 	}
 	const { values } = parsed
 	if (parsed.kind === 'record') return await printRecord(values.repo ?? process.cwd(), parsed.id, values.json === true)
+	if (parsed.kind === 'map') return await printMap(values.repo ?? process.cwd(), values.json === true)
 	const flags = { model: values.model, baseUrl: values['base-url'], apiKeyEnv: values['api-key-env'] }
 	if (parsed.kind === 'open')
 		return await openPage({ directory: values.repo ?? process.cwd(), port: values.port, flags })
@@ -72,6 +76,7 @@ function parseCommand(argv: string[]) {
 	if (command === 'ask' && rest.length === 1 && rest[0]) return { kind: 'ask', values, question: rest[0] } as const
 	if (command === 'ask') return { kind: 'usage', problem: 'ken ask takes one question, in quotes.' } as const
 	if (command === 'record' && rest.length <= 1) return { kind: 'record', values, id: rest[0] } as const
+	if (command === 'map' && rest.length === 0) return { kind: 'map', values } as const
 	if (command === 'open' && rest.length === 0 && !values.json) return { kind: 'open', values } as const
 	return {
 		kind: 'usage',

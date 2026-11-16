@@ -36,7 +36,8 @@ export type Work = {
 // reason is why the option was chosen, with the lines it rests on, kept apart from quotes, which show what was chosen.
 // It is null in a decision written before ken asked for one. ken sets the label from the reason's quotes (see
 // decisionLabel), never the writer. A decision says why, which is never a relation found by searching, so it is never
-// "found-by-search". Slice 5 adds decisions a coding agent logs as it makes them, also "recorded".
+// "found-by-search". Slice 5 adds decisions a coding agent logs as it makes them, also "recorded". topic names the
+// topic the decision belongs to, as the record names it, or is null.
 export type Decision = {
 	kind: 'decision'
 	question: string
@@ -48,6 +49,7 @@ export type Decision = {
 	label: Exclude<Label, 'found-by-search'>
 	quotes: VerifiedQuote[]
 	work: EntryId | null
+	topic: string | null
 }
 
 export type Topic = { kind: 'topic'; name: string; quotes: VerifiedQuote[] }

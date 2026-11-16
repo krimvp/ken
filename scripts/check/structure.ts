@@ -25,6 +25,11 @@ export const MODULES: Record<string, Module> = {
 		imports: ['repo', 'checks', 'diagram'],
 		packages: [],
 	},
+	map: {
+		job: 'The understanding map: what this reader understands, topic by topic, kept outside the project.',
+		imports: ['record', 'repo'],
+		packages: [],
+	},
 	agent: {
 		job: 'Runs a chat with a model that explores the project with read-only tools and answers only with checked quotes.',
 		imports: ['repo', 'checks', 'diagram', 'record'],
@@ -46,8 +51,8 @@ export const MODULES: Record<string, Module> = {
 		packages: [],
 	},
 	cli: {
-		job: 'Runs ken in the terminal: a chat, one question for scripts, the project record, or the page.',
-		imports: ['agent', 'diagram', 'record', 'repo', 'server'],
+		job: 'Runs ken in the terminal: a chat, one question for scripts, the project record, the map, or the page.',
+		imports: ['agent', 'diagram', 'history', 'map', 'record', 'repo', 'server'],
 		packages: [],
 	},
 }
