@@ -40,7 +40,7 @@ export function stepsHtml(steps, live = false) {
 			if (step.kind === 'tool')
 				return `<li class="tool">${prose(i === first ? step.text.replace(RECORD, RECORD_SAID) : step.text)}</li>`
 			if (step.kind === 'rejected') {
-				return `<li class="sent-back"><strong>The quote check sent answer ${step.attempt} back:</strong><ul>${step.problems.map((p) => `<li>${prose(readerProblem(p))}</li>`).join('')}</ul></li>`
+				return `<li class="sent-back"><strong>ken rejected draft ${step.attempt}:</strong><ul>${step.problems.map((p) => `<li>${prose(readerProblem(p))}</li>`).join('')}</ul></li>`
 			}
 			const caret = live && i === steps.length - 1 ? '<span class="caret" aria-hidden="true"></span>' : ''
 			return `<li class="said">${prose(step.text.trim())}${caret}</li>`
@@ -65,7 +65,7 @@ export function workingHtml(q, ui, seconds) {
 
 const HOW_KEN_CHECKS = `<ol>
 		<li>ken looks in git for every line the answer quotes.</li>
-		<li>If a quote is not there, ken sends the answer back. ken's model gets three tries.</li>
+		<li>If a quote is not there, ken rejects the draft. ken's model gets three drafts.</li>
 		<li>The answer appears on the left. What ken checked appears here: the quotes, the changed code no quote covers, and the commits.</li>
 	</ol>`
 
@@ -125,8 +125,8 @@ export function endedHtml(q) {
 	if (q.outcome === 'rejected') {
 		const tries = q.steps.filter((step) => step.kind === 'rejected')
 		return `<div class="notice" role="status">
-			<h3>No answer. The quotes did not match the code.</h3>
-			<p>ken's model sent an answer three times. Each time a quote was not in its file at the commit it names, so ken sent the answer back. ken shows an answer only when it finds every quote.</p>
+			<h3>No answer. ken rejected every draft.</h3>
+			<p>ken's model sent three drafts. In each, a quote was not in its file at the commit it names, so ken rejected it. ken shows an answer only when it finds every quote.</p>
 			<ol class="tries">${triesHtml(tries)}</ol>
 			<p class="muted">A smaller question often works. Name one commit or one file.</p>
 			<p class="actions">${again}<button class="quiet-button" data-act="one-commit" data-key="one-commit">Ask what the last commit did</button></p>
@@ -182,12 +182,12 @@ export function noModelHtml(model, hasHistory, heading) {
 			: `<li>Set these:
 				<dl class="settings">${model.missing.map((s) => `<div><dt><code>${esc(s.name)}</code></dt><dd>${esc(s.means)}. Or give <code class="nowrap">${esc(s.flag)}</code>.</dd></div>`).join('')}</dl></li>
 				<li>Start it again. For example:
-				<pre class="command">${[...model.example.split(' ').map((part) => `${part} \\`), 'npm run ken -- open'].map((line) => `<span>${esc(line)}</span>`).join('')}</pre></li>`
+				<pre class="command">${[...model.example.split(' ').map((part) => `${part} \\`), 'npm run ken -- open'].map((line) => `<span>${esc(line).replace('=', '=<wbr>')}</span>`).join('')}</pre></li>`
 	return `<div class="notice" role="alert" id="no-model">
 		${heading ? '<h3>ken has no model to ask</h3>' : ''}
 		<p>ken sends your project's code to the model you choose, so it has no default model.</p>
 		<ol class="setup">
-			<li>Stop <code>ken open</code> with Ctrl-C in its terminal.</li>
+			<li>Stop ken with Ctrl-C in the terminal where it runs.</li>
 			${settings}
 		</ol>
 		${hasHistory ? '<p class="muted">Until then you can still read your earlier questions under Your questions.</p>' : ''}

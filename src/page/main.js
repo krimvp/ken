@@ -66,6 +66,7 @@ const state = {
 	// "follow-up" what is open.
 	view: 'question',
 	map: null,
+	mapSaid: '',
 	decisions: null,
 	decisionsKey: false,
 	ui: freshUi(),
@@ -147,7 +148,7 @@ function addEvent(q, event) {
 			q.steps.push({ kind: 'rejected', attempt: event.attempt, problems: event.problems })
 			break
 		case 'waiting':
-			q.steps.push({ kind: 'text', text: 'ken is finishing a live note. Your question starts when it ends.' })
+			q.steps.push({ kind: 'text', text: 'ken is finishing a note for Live. Your question starts when it ends.' })
 			break
 		case 'asked':
 			q.question = event.question
@@ -305,7 +306,7 @@ function schedule() {
 
 function rowMeta(row) {
 	const ended = {
-		rejected: 'No answer: the quotes did not match the code',
+		rejected: 'No answer: ken rejected every draft',
 		stopped: 'You stopped it',
 		error: 'The model did not answer',
 		'no-answer': "ken's model sent no answer",
@@ -375,8 +376,8 @@ function runLine(q, ui) {
 	const parts = []
 	if (q.live) parts.push("ken's model is writing a closing note")
 	if (q.usage && q.steps.length > 0) parts.push(duration(q.usage.seconds))
-	if (back > 0 && q.answer) parts.push(`ken rejected ${count(back, 'earlier draft', 'earlier drafts')}`)
-	else if (back > 0) parts.push(`${count(back, 'answer', 'answers')} sent back`)
+	if (back > 0) parts.push(`ken rejected ${count(back, 'draft', 'drafts')}`)
+
 	if (tools + back > 0) {
 		parts.push(
 			`<button class="link" data-act="steps" data-key="steps" aria-expanded="${ui.stepsOpen}">${ui.stepsOpen ? 'Hide the steps' : `Show the ${count(tools, 'step', 'steps')}`}</button>`,
@@ -431,7 +432,7 @@ function movedHtml(q) {
 }
 
 function threadHtml() {
-	if (state.view === 'map') return mapViewHtml(state.map)
+	if (state.view === 'map') return mapViewHtml(state.map, state.model?.kind === 'ok' && !state.running, state.mapSaid)
 	if (state.view === 'decisions') return decisionsViewHtml(state.decisions, state.decisionsKey)
 	if (state.view === 'live') {
 		const canAsk = state.model?.kind === 'ok' && !state.running
@@ -593,9 +594,23 @@ async function postMap(signal) {
 	render()
 }
 
+// A button on the map's own page: it appends a line, then the map is read again and a line says what was saved.
+async function mapTopic(signal, topic, said) {
+	try {
+		await post('/api/map', { signal, topics: [topic] })
+		state.map = await getJson('/api/map')
+		state.mapSaid = said
+	} catch (error) {
+		state.mapSaid = error.message
+	}
+	await loadFollowUp()
+	render()
+}
+
 async function showMap() {
 	state.view = 'map'
 	state.menuOpen = false
+	state.mapSaid = ''
 	state.map = null
 	render()
 	try {
@@ -778,6 +793,10 @@ const actions = {
 			`Saved. Your map says you know ${el.dataset.topic}, as the code is now.`,
 		),
 	'map-close': closeMap,
+	'map-topic-know': (el) =>
+		mapTopic('know', el.dataset.topic, `Saved. Your map says you know ${el.dataset.topic}, as the code is now.`),
+	'map-topic-forgot': (el) =>
+		mapTopic('forgot', el.dataset.topic, `Saved. Your map says you do not know ${el.dataset.topic} any more.`),
 	'map-know': () => postMap('know'),
 	'map-too-much': () => postMap('too-much'),
 	'map-deeper'() {

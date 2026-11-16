@@ -32,7 +32,7 @@ export function list(items) {
 export function duration(seconds) {
 	const whole = Math.round(seconds)
 	if (whole < 60) return `${whole} s`
-	return `${Math.floor(whole / 60)} min ${whole % 60} s`
+	return `${Math.floor(whole / 60)} min${whole % 60 === 0 ? '' : ` ${whole % 60} s`}`
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']

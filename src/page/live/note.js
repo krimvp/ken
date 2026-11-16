@@ -2,7 +2,7 @@
 // and what it cost open on request. Every older note folds to one line. The agent wrote the words; ken checked only
 // that each quote is in its file, at the commit or in its own snapshot of uncommitted work.
 import { decisionHtml } from '../views/answer.js'
-import { copiesOf, count, esc, label, prose, quoteRows, short, when, withCost } from '../views/format.js'
+import { copiesOf, count, duration, esc, label, prose, quoteRows, short, when, withCost } from '../views/format.js'
 
 // What a note explains: "Commit 7c7d8f5" with its subject, or "Uncommitted work, 06:40". A note that failed has no
 // commits to name, so it names the range.
@@ -33,10 +33,10 @@ function costHtml(entry) {
 	const parts = []
 	if (entry.usage) {
 		const tokens = entry.usage.inputTokens + entry.usage.outputTokens
-		parts.push(`This note took ${entry.usage.seconds} seconds and ${tokens.toLocaleString('en-US')} tokens.`)
+		parts.push(`This note took ${duration(entry.usage.seconds)} and ${tokens.toLocaleString('en-US')} tokens.`)
 	}
 	const sent = entry.steps.filter((step) => step.kind === 'rejected').length
-	if (sent > 0) parts.push(`ken sent ${count(sent, 'draft', 'drafts')} back first, because a quote did not match.`)
+	if (sent > 0) parts.push(`ken rejected ${count(sent, 'draft', 'drafts')} first, because a quote did not match.`)
 	return parts.length === 0 ? '' : `<p class="ln-cost">${parts.join(' ')}</p>`
 }
 

@@ -202,9 +202,9 @@ async function readJson(
 	}
 }
 
-// Two of the three buttons under an answer. "Go deeper" asks a question, so it comes as a lens, and a question marks
-// its topics itself, so the page never sends "asked".
-const BUTTONS: MapSignal[] = ['know', 'too-much']
+// Two of the three buttons under an answer, and "I do not know this any more" on the map. "Go deeper" asks a question,
+// so it comes as a lens, and a question marks its topics itself, so the page never sends "asked".
+const BUTTONS: MapSignal[] = ['know', 'too-much', 'forgot']
 
 function mapSignalOf(
 	body: unknown,

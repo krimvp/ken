@@ -86,14 +86,14 @@ export function checksHtml(q, ui) {
 	].filter(([n]) => n > 0)
 	const match =
 		places.length > 1
-			? `All ${all.length} quotes were found: ${list(places.map(([n, where]) => `${n} ${where}`))}.`
+			? `ken found all ${all.length} quotes: ${list(places.map(([n, where]) => `${n} ${where}`))}.`
 			: inGit.length === 0
-				? `${inCopy === 1 ? 'The quote is' : `All ${inCopy} quotes are`} in ken's copy of your uncommitted work.`
+				? `ken found ${inCopy === 1 ? 'the quote' : `all ${inCopy} quotes`} in its copy of your uncommitted work.`
 				: inGit.length === 1
-					? `The quote matches git, ${at}.`
+					? `ken found the quote in git, ${at}.`
 					: inGit.length === 2
-						? `Both quotes match git, ${at}.`
-						: `All ${inGit.length} quotes match git, ${at}.`
+						? `ken found both quotes in git, ${at}.`
+						: `ken found all ${inGit.length} quotes in git, ${at}.`
 	const gitLine = quotes.length === 0 ? '' : `<p>${match}</p>`
 	const fromMessages = quotes.filter((quote) => quote.path === null).length
 	const messageLine =
@@ -108,7 +108,7 @@ export function checksHtml(q, ui) {
 	const backLine =
 		back === 0
 			? ''
-			: `<p class="muted">ken rejected ${count(back, 'earlier draft', 'earlier drafts')} first, because a quote did not match.</p>`
+			: `<p class="muted">ken rejected ${count(back, 'draft', 'drafts')} first, because a quote did not match.</p>`
 	return `<div class="panel-head"><h2>What ken checked</h2></div>
 		<p class="panel-limit">${limit(q)}</p>
 		<section class="check" id="check-quotes">
@@ -294,16 +294,8 @@ function messagesLine(change, own) {
 	return `<p>${said}${merges}</p>`
 }
 
-// What a numbered part of a diagram is, as a node and as an edge.
-const PART = {
-	component: ['Box', 'Arrow'],
-	sequence: ['Participant', 'Message'],
-	'entity-relationship': ['Entity', 'Relation'],
-}
-
-function titleOf(q, { kind, item, n, diagram }) {
-	if (kind === 'element')
-		return `${PART[diagram.kind]?.[item.label === null ? 0 : 1] ?? 'Part'} ${item.number} of the diagram`
+function titleOf(q, { kind, item, n }) {
+	if (kind === 'element') return `Part ${item.number} of the diagram`
 	if (kind === 'decision') return `Decision ${n} of ${decisionsOf(q).length}`
 	if (kind === 'risk') return `Risk ${n} of ${q.answer.risks.length}`
 	return `Statement ${n} of ${q.answer.statements.length}`

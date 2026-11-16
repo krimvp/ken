@@ -67,7 +67,7 @@ export function formatAnswer(answer: Answer, entries: Entry[], paint: Paint): st
 	if (decisions.length > 0) {
 		lines.push(paint('bold', `Decisions (${decisions.length}):`))
 		for (const [index, d] of decisions.entries()) {
-			lines.push(`${index + 1}. ${d.question} Chosen: ${d.chosen} ${paint('cyan', `[${d.label}]`)}`)
+			lines.push(`${index + 1}. ${d.question} ${paint('cyan', `[${d.label}]`)}`, `   Chosen: ${d.chosen}`)
 			if (d.reason)
 				lines.push(`   Why: ${d.reason.text}`, ...d.reason.quotes.flatMap((quote) => formatQuote(quote, paint)))
 		}

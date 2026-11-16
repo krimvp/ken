@@ -6,8 +6,9 @@ export const DEPTHS = ['heard-of', 'can-follow', 'could-change'] as const
 export type Depth = (typeof DEPTHS)[number]
 
 // asked: a question named the topic. read: the reader read an answer on it and found it too much. said: the reader
-// said "I know this". wrote: the reader wrote the code by hand. Only said and wrote mean the reader understands it.
-export const EVIDENCE = ['asked', 'read', 'said', 'wrote'] as const
+// said "I know this". wrote: the reader wrote the code by hand. forgot: the reader said they do not know it any more.
+// Only said and wrote mean the reader understands it.
+export const EVIDENCE = ['asked', 'read', 'said', 'wrote', 'forgot'] as const
 export type Evidence = (typeof EVIDENCE)[number]
 
 // date is a day, such as 2026-11-16. hash is the topic's codeHash at HEAD that day: see topicCode in the record.
