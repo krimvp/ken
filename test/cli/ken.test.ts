@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict'
-import { execFile } from 'node:child_process'
+import { execFile, execFileSync } from 'node:child_process'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { test } from 'node:test'
+import { after, test } from 'node:test'
+import { openMap } from '../../src/map/index.ts'
+import { fileRecordStore } from '../../src/record/index.ts'
+import { gitRepository } from '../../src/repo/index.ts'
 import { buildRepository } from '../fixtures/build-repository.ts'
 import { scriptedModel } from '../fixtures/scripted-model.ts'
 
@@ -137,4 +142,36 @@ test('ken refuses to start without a model, and says what to set', async () => {
 		for (const name of names) assert.ok(stderr.includes(name), `the message names ${name}: ${stderr}`)
 		assert.doesNotMatch(stderr, /^\s+at /m, 'a plain message, not a stack trace')
 	}
+})
+
+test('ken catch-up lists the topics whose code changed since the reader understood them, with no model', async () => {
+	const project = buildRepository([
+		{ message: 'feat: start', files: { 'app.py': 'def total(items):\n    return 0\n' } },
+	])
+	const home = mkdtempSync(path.join(tmpdir(), 'ken-home-'))
+	after(() => rmSync(home, { recursive: true, force: true }))
+	const repo = gitRepository(project.root)
+	const record = fileRecordStore(project.root, repo)
+	const at = { path: 'app.py', commit: 'HEAD' }
+	await record.append([
+		{ kind: 'topic', name: 'totals', quotes: [{ ...at, text: '    return 0' }] },
+		{ kind: 'topic', name: 'naming', quotes: [{ ...at, text: 'def total(items):' }] },
+	])
+	const opened = await openMap(home, repo, record)
+	if (opened.kind !== 'ok') assert.fail('the repository has commits')
+	await opened.map.learn('know', ['totals', 'naming'], new Date())
+	writeFileSync(path.join(project.root, 'app.py'), 'def total(items):\n    return sum(items)\n')
+	execFileSync('git', ['-c', 'commit.gpgsign=false', 'commit', '--quiet', '--all', '--message', 'fix: add them'], {
+		cwd: project.root,
+	})
+
+	const { code, stdout, stderr } = await ken(['catch-up', '--repo', project.root], {
+		...NO_KEN_VARIABLES,
+		KEN_HOME: home,
+	})
+
+	assert.equal(code, 2, 'no model, so nothing explains the list')
+	assert.match(stdout, /^- totals: .*changed since: app\.py line 2$/m)
+	assert.doesNotMatch(stdout, /naming/, 'a topic whose code did not change is not listed')
+	assert.match(stderr, /KEN_MODEL/)
 })

@@ -2,9 +2,12 @@ import { randomUUID } from 'node:crypto'
 import type { Answer, Chat, ChatEvent } from '../agent/index.ts'
 import { withDrawings } from '../diagram/index.ts'
 import { entryFrom, type History, type HistoryEntry } from '../history/index.ts'
-import type { TopicState, UnderstandingMap } from '../map/index.ts'
+import { areaQuestion, catchUpQuestion, deeperQuestion, type TopicState, type UnderstandingMap } from '../map/index.ts'
 import { type EntryId, type RecordEntry, type RecordRead, type RecordStore, sameName } from '../record/index.ts'
-import type { Repository } from '../repo/index.ts'
+import { parsePath, type Repository } from '../repo/index.ts'
+
+const MAX_QUESTION_CHARS = 4000
+const MAX_TOPICS = 20
 
 // One row in the page's list of questions. calls counts the decisions the agent wants the reader to decide. risks is
 // null when the answer did not look for risks, and hunks when it was not about a range of commits.
@@ -121,7 +124,42 @@ export function questionDesk(history: History, record: RecordStore, repo: Reposi
 		return entry ? await viewOf(entry) : null
 	}
 
-	return { settled, busy, ask, rows, view }
+	// The page sends a question, or a lens for ken to write the question from: catch up, an area, or "Go deeper" on
+	// the topics of an answer, which also tells the map the reader needs more on them.
+	async function questionOf(
+		body: unknown,
+	): Promise<{ kind: 'ok'; text: string } | { kind: 'refused'; problem: string }> {
+		const lens = fieldOf(body, 'lens')
+		const kind = fieldOf(lens, 'kind')
+		if (lens === undefined) {
+			const text = fieldOf(body, 'question')
+			if (typeof text !== 'string' || text.trim() === '') return { kind: 'refused', problem: 'The question is empty.' }
+			if (text.length > MAX_QUESTION_CHARS) {
+				return { kind: 'refused', problem: `Keep the question under ${MAX_QUESTION_CHARS} characters.` }
+			}
+			return { kind: 'ok', text: text.trim() }
+		}
+		if (kind === 'catch-up') {
+			const [{ states }, read, asked] = await Promise.all([map.read(new Date()), record.read(), history.list()])
+			return { kind: 'ok', text: catchUpQuestion({ states, record: read, asked, head: await headNow() }) }
+		}
+		if (kind === 'area') {
+			const area = parsePath(String(fieldOf(lens, 'path') ?? ''))
+			if (area.kind !== 'ok') return { kind: 'refused', problem: `Name a folder or a file: ${area.reason}.` }
+			const [{ states }, read] = await Promise.all([map.read(new Date()), record.read()])
+			return { kind: 'ok', text: areaQuestion(area.path, states, read) }
+		}
+		const topics = fieldOf(lens, 'topics')
+		const asked = fieldOf(lens, 'question')
+		const names = Array.isArray(topics) ? topics.filter((topic) => typeof topic === 'string') : []
+		if (kind !== 'deeper' || names.length === 0 || names.length > MAX_TOPICS || typeof asked !== 'string') {
+			return { kind: 'refused', problem: 'Send a question, or a lens: catch-up, area with a path, or deeper.' }
+		}
+		await map.learn('deeper', names, new Date())
+		return { kind: 'ok', text: deeperQuestion(names, asked.slice(0, MAX_QUESTION_CHARS)) }
+	}
+
+	return { settled, busy, ask, rows, view, questionOf }
 }
 
 // The record entries an answer stands on: the ones it added, and the current decisions of its piece of work. An answer
@@ -137,4 +175,9 @@ function entriesOf(answer: Answer, added: EntryId[], record: RecordRead): Record
 	const own = record.entries.filter((stored) => added.includes(stored.id))
 	const ofWork = work ? record.current.filter((stored) => stored.kind === 'decision' && stored.work === work.id) : []
 	return [...own, ...ofWork.filter((stored) => !added.includes(stored.id))]
+}
+
+// A field of a JSON body the page sent, or undefined.
+export function fieldOf(body: unknown, name: string): unknown {
+	return typeof body === 'object' && body !== null ? Reflect.get(body, name) : undefined
 }

@@ -8,8 +8,9 @@ import { parseArgs } from 'node:util'
 import { type Answer, type Chat, type ChatEvent, type Outcome, readModelConfig, startChat } from '../agent/index.ts'
 import { withDrawings } from '../diagram/index.ts'
 import type { RecordEntry } from '../record/index.ts'
+import { lensQuestion } from './lens-question.ts'
 import { openPage } from './open-page.ts'
-import { printMap } from './print-map.ts'
+import { mapOf, printMap } from './print-map.ts'
 import { printQuestion } from './print-question.ts'
 import { printRecord } from './print-record.ts'
 
@@ -18,6 +19,8 @@ const USAGE = `Usage:
   ken ask "<question>" [--repo <path>] [--json]
   ken record [<id>] [--repo <path>] [--json]
   ken map [--repo <path>] [--json]
+  ken catch-up [--repo <path>]
+  ken area <path> [--repo <path>]
   ken open [--repo <path>] [--port <n>]
 
 Name the model with --model, --base-url and --api-key-env,
@@ -35,12 +38,22 @@ async function main(argv: string[]): Promise<number> {
 	const flags = { model: values.model, baseUrl: values['base-url'], apiKeyEnv: values['api-key-env'] }
 	if (parsed.kind === 'open')
 		return await openPage({ directory: values.repo ?? process.cwd(), port: values.port, flags })
+	const directory = values.repo ?? process.cwd()
+	const lens = parsed.kind === 'catch-up' || parsed.kind === 'area' ? await lensQuestion(parsed, directory) : null
+	if (lens?.kind === 'refused') {
+		process.stderr.write(`${lens.message}\n`)
+		return 2
+	}
+	if (lens) process.stdout.write(`${lens.text}\n\n`)
 	const config = readModelConfig(flags, process.env)
 	if (config.kind !== 'ok') {
 		process.stderr.write(`${config.message}\n`)
 		return 2
 	}
-	const started = await startChat({ directory: values.repo ?? process.cwd(), model: config.config })
+	// A script that asks for JSON is not a reader, so its questions leave the reader's map alone.
+	const reader = values.json ? null : await mapOf(directory)
+	const map = reader?.kind === 'ok' ? { map: reader.map } : {}
+	const started = await startChat({ directory, model: config.config, ...map })
 	if (started.kind !== 'ok') {
 		process.stderr.write(`${started.message}\n`)
 		return 2
@@ -48,8 +61,9 @@ async function main(argv: string[]): Promise<number> {
 	const { chat } = started
 	try {
 		if (parsed.kind === 'chat') return await talk(chat)
-		if (values.json) return await askForJson(chat, parsed.question)
-		return (await printQuestion(chat.ask(parsed.question), process.stdout)) ? 0 : 1
+		const question = parsed.kind === 'ask' ? parsed.question : (lens?.text ?? '')
+		if (values.json) return await askForJson(chat, question)
+		return (await printQuestion(chat.ask(question), process.stdout)) ? 0 : 1
 	} finally {
 		await chat.close()
 	}
@@ -77,6 +91,10 @@ function parseCommand(argv: string[]) {
 	if (command === 'ask') return { kind: 'usage', problem: 'ken ask takes one question, in quotes.' } as const
 	if (command === 'record' && rest.length <= 1) return { kind: 'record', values, id: rest[0] } as const
 	if (command === 'map' && rest.length === 0) return { kind: 'map', values } as const
+	if (command === 'catch-up' && rest.length === 0 && !values.json) return { kind: 'catch-up', values } as const
+	if (command === 'area' && rest.length === 1 && rest[0] && !values.json) {
+		return { kind: 'area', values, path: rest[0] } as const
+	}
 	if (command === 'open' && rest.length === 0 && !values.json) return { kind: 'open', values } as const
 	return {
 		kind: 'usage',

@@ -16,13 +16,12 @@ import { fileRecordStore } from '../record/index.ts'
 import { findRoot, gitRepository } from '../repo/index.ts'
 import { refusal } from './guard-request.ts'
 import { type PageFile, readPageFiles } from './page-files.ts'
-import { type QuestionLine, questionDesk } from './question-desk.ts'
+import { fieldOf, type QuestionLine, questionDesk } from './question-desk.ts'
 
 // model is the name of the model the page asks, or null when none is set and the page can only show earlier answers.
 export type KenServer = { url: string; root: string; model: string | null; close(): Promise<void> }
 
 const MAX_BODY_BYTES = 64 * 1024
-const MAX_QUESTION_CHARS = 4000
 // Mermaid puts a <style> element and style attributes in every drawing it makes, so styles may be inline. Nothing else
 // is widened: scripts, images, fonts and requests still come only from this server, so a style cannot fetch anything
 // from another host.
@@ -93,8 +92,10 @@ export async function openServer(options: {
 		}
 		if (where === 'POST /api/questions') {
 			if (model.kind !== 'ok') return sendJson(response, 503, { message: model.message })
-			const question = await readQuestion(request)
-			if (question.kind !== 'ok') return sendJson(response, 400, { message: question.problem })
+			const body = await readJson(request)
+			const asked = body.kind === 'ok' ? await desk.questionOf(body.value) : body
+			if (asked.kind !== 'ok') return sendJson(response, 400, { message: asked.problem })
+			const question = { text: asked.text }
 			await desk.settled()
 			if (desk.busy()) {
 				return sendJson(response, 409, { message: 'ken is answering another question. Stop it, or wait for it.' })
@@ -167,21 +168,9 @@ async function readJson(
 	}
 }
 
-async function readQuestion(
-	request: IncomingMessage,
-): Promise<{ kind: 'ok'; text: string } | { kind: 'refused'; problem: string }> {
-	const body = await readJson(request)
-	if (body.kind !== 'ok') return body
-	const text = fieldOf(body.value, 'question')
-	if (typeof text !== 'string' || text.trim() === '') return { kind: 'refused', problem: 'The question is empty.' }
-	if (text.length > MAX_QUESTION_CHARS) {
-		return { kind: 'refused', problem: `Keep the question under ${MAX_QUESTION_CHARS} characters.` }
-	}
-	return { kind: 'ok', text: text.trim() }
-}
-
-// The three buttons under an answer. A question marks its topics itself, so the page cannot send "asked".
-const BUTTONS: MapSignal[] = ['know', 'too-much', 'deeper']
+// Two of the three buttons under an answer. "Go deeper" asks a question, so it comes as a lens, and a question marks
+// its topics itself, so the page never sends "asked".
+const BUTTONS: MapSignal[] = ['know', 'too-much']
 
 function mapSignalOf(
 	body: unknown,
@@ -193,10 +182,6 @@ function mapSignalOf(
 		return { kind: 'refused', problem: 'Send the names of the topics as a list.' }
 	}
 	return { kind: 'ok', signal, topics }
-}
-
-function fieldOf(body: unknown, name: string): unknown {
-	return typeof body === 'object' && body !== null ? Reflect.get(body, name) : undefined
 }
 
 function sendJson(response: ServerResponse, status: number, value: unknown) {
