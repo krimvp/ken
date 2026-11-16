@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { after, test } from 'node:test'
-import { decide, openItems } from '../../src/follow-up/index.ts'
+import { decide, openItems, rangeQuestion, timeRange } from '../../src/follow-up/index.ts'
 import { openMap } from '../../src/map/index.ts'
 import { type EntryDraft, fileRecordStore, type RecordEntry } from '../../src/record/index.ts'
 import { gitRepository } from '../../src/repo/index.ts'
@@ -134,6 +134,45 @@ test('a decision that needs the owner is open until "I have decided", which adds
 	assert.equal(again.kind, 'refused', 'a decision answered once does not wait on the owner')
 	const settledAnswer = await decide(record, { id: settled?.id ?? '', note: '', now })
 	assert.equal(settledAnswer.kind, 'refused', 'a decision that never waited on the owner cannot be answered')
+})
+
+test('the time range lens turns "the last N days" into what landed on the main line since then, a merged branch included, and says when nothing did', async () => {
+	// Commit n is dated 2026-01-01 plus n days. Commit 3 is a collaborator's, on a branch from commit 1 that commit 4
+	// merges, so it is the newest commit before 4 January noon but not on the main line.
+	const { root, hashes } = buildRepository([
+		{ message: 'feat: start', files: { 'app.py': 'total = 0\n' } },
+		{ message: 'feat: count', files: { 'app.py': 'total = 1\n' } },
+		{ message: 'feat: count more', files: { 'app.py': 'total = 2\n' } },
+		{ message: 'feat: notes', author: COLLABORATOR, parent: 1, files: { 'notes.md': '# notes\n' } },
+		{ message: 'merge the notes', parent: 2, merge: 3, files: {} },
+		{ message: 'feat: count again', files: { 'app.py': 'total = 3\n' } },
+	])
+	const repo = gitRepository(root)
+	const record = await fileRecordStore(root, repo).read()
+	const lastDays = async (days: number, now: string) => {
+		const found = await timeRange(repo, { kind: 'days', days }, new Date(now))
+		if (found.kind !== 'ok') return assert.fail(found.problem)
+		return found.range
+	}
+
+	const lastTwo = await lastDays(2, '2026-01-06T12:00:00Z')
+	assert.deepEqual(
+		{ base: lastTwo.base, commits: lastTwo.commits.map((commit) => commit.hash) },
+		{ base: hashes[2], commits: [hashes[5], hashes[3]] },
+		'the range starts at the last main-line commit before 4 January noon; the merge itself is left out',
+	)
+	assert.equal(rangeQuestion(lastTwo, record, null).empty, false)
+
+	const quiet = await lastDays(2, '2026-01-20T00:00:00Z')
+	assert.deepEqual(quiet.commits, [])
+	assert.equal(rangeQuestion(quiet, record, null).empty, true, 'nothing landed, so ken does not ask the agent')
+
+	const all = await lastDays(30, '2026-01-06T12:00:00Z')
+	assert.deepEqual(
+		{ base: all.base, fromFirst: all.fromFirst, commits: all.commits.length },
+		{ base: hashes[0], fromFirst: true, commits: 4 },
+		'no commit is older than the start, so the range starts at the first commit',
+	)
 })
 
 // What a decision says, without the fields an answer changes and those every entry has.
