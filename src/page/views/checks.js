@@ -73,11 +73,13 @@ export function checksHtml(q, ui) {
 	const commits = [...new Set(quotes.map((quote) => short(quote.commit)))]
 	const at = commits.length === 1 ? `at <code>${commits[0]}</code>` : `across ${commits.length} commits`
 	const match =
-		quotes.length === 1
-			? 'The quote matches'
-			: quotes.length === 2
-				? 'Both quotes match'
-				: `All ${quotes.length} quotes match`
+		quotes.length < all.length
+			? `${quotes.length} of the ${all.length} quotes ${quotes.length === 1 ? 'matches' : 'match'}`
+			: quotes.length === 1
+				? 'The quote matches'
+				: quotes.length === 2
+					? 'Both quotes match'
+					: `All ${quotes.length} quotes match`
 	const gitLine = quotes.length === 0 ? '' : `<p>${match} git, ${at}.</p>`
 	const fromMessages = quotes.filter((quote) => quote.path === null).length
 	const messageLine =
@@ -88,7 +90,7 @@ export function checksHtml(q, ui) {
 	const sessionLine =
 		fromSessions === 0
 			? ''
-			: `<p>${count(fromSessions, 'quote is', 'quotes are')} from a saved session of the coding agent. ken found the lines in the saved session. It did not check that they give the true reason.</p>`
+			: `<p>${quotes.length === 0 ? (fromSessions === 1 ? 'The quote is' : `All ${fromSessions} quotes are`) : fromSessions === 1 ? 'The other is' : `The other ${fromSessions} are`} from a saved session of the coding agent. ken found the lines in the saved session. It did not check that they give the true reason.</p>`
 	const back = sentBack(q)
 	const backLine =
 		back === 0
@@ -99,9 +101,9 @@ export function checksHtml(q, ui) {
 		<section class="check" id="check-quotes">
 			<h3>Quotes</h3>
 			${gitLine}
-			${whereQuotes(q)}
 			${messageLine}
 			${sessionLine}
+			${whereQuotes(q)}
 			${backLine}
 			<p><button class="link small" data-act="key" data-key="key" aria-expanded="${ui.keyOpen}">${ui.keyOpen ? 'Hide what the labels mean' : 'What the labels mean'}</button></p>
 			${ui.keyOpen ? labelKey(labelsOf(q)) : ''}

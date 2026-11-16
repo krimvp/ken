@@ -709,7 +709,7 @@ span.label-from-the-session {
 
 .label-key div {
 	display: grid;
-	grid-template-columns: 9rem minmax(0, 1fr);
+	grid-template-columns: 10.5rem minmax(0, 1fr);
 	gap: var(--space-3);
 	align-items: baseline;
 	font-size: var(--text-note);
@@ -1654,6 +1654,7 @@ span.label-from-the-session {
 }
 
 .dv-list {
+	max-width: var(--measure);
 	margin-top: var(--space-5);
 	border-top: 1px solid var(--color-border);
 }
