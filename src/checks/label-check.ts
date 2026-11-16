@@ -2,6 +2,8 @@
 // does every arrow, message and relation in a diagram. ken never takes "recorded" from a writer, and takes
 // "from-the-session" only with a quote of a saved session to show for it. ken labels a decision itself, from its
 // evidence, the strongest first: logged with ken decide, then a commit message, then a saved session, then inferred.
+import type { CommitHash } from '../repo/index.ts'
+import type { ChangedHunk } from './coverage-check.ts'
 import type { Quote, VerifiedQuote } from './verify-quote.ts'
 
 export type Label = 'recorded' | 'from-the-session' | 'inferred' | 'found-by-search'
@@ -41,4 +43,19 @@ export function decisionLabel(reasonQuotes: VerifiedQuote[], logged: boolean): E
 	if (reasonQuotes.some((quote) => !('session' in quote) && quote.path === null && quote.endLine > 1)) return 'recorded'
 	if (reasonQuotes.some((quote) => 'session' in quote)) return 'from-the-session'
 	return 'inferred'
+}
+
+// A risk is checked in the code when one of its quotes holds, at the change's head, a line the change did not touch:
+// the model read past the diff for it. The reader sees "Checked in the code" or "Not checked outside the change", and
+// ken sets which from git, never the model. hunks are all the change's hunks; their new lines are the touched ones.
+export function checkedInCode(quotes: VerifiedQuote[], head: CommitHash, hunks: ChangedHunk[]): boolean {
+	const touched = (path: string, line: number) =>
+		hunks.some(
+			({ hunk, ...file }) => file.path === path && line >= hunk.newStart && line < hunk.newStart + hunk.newLength,
+		)
+	return quotes.some((quote) => {
+		if ('session' in quote || quote.path === null || quote.commit !== head) return false
+		for (let line = quote.startLine; line <= quote.endLine; line++) if (!touched(quote.path, line)) return true
+		return false
+	})
 }

@@ -24,6 +24,10 @@ export type Change = {
 // this reader already knows. A claim that belongs to no topic has none.
 export type Claim = Statement & { topic?: string }
 
+// checked is ken's own mark on a risk of an answer about a change, set from git by checkedInCode. A risk saved before
+// ken set it, or one in an answer about no change, has none.
+export type Risk = Claim & { checked?: boolean }
+
 // A risk has the shape of a statement: a claim about what could go wrong or what the owner should watch, with the
 // lines it starts from. topics names every topic the answer names: those it sends and those its claims and decisions
 // belong to. They are the topics the reader's three buttons act on. risks is null when the answer says nothing about risks, as for a question about how a part
@@ -32,7 +36,7 @@ export type Claim = Statement & { topic?: string }
 export type Answer = {
 	summary: string
 	statements: Claim[]
-	risks: Claim[] | null
+	risks: Risk[] | null
 	topics: string[]
 	diagrams: Diagram[]
 	change: Change | null

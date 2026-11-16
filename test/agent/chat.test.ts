@@ -4,13 +4,7 @@ import path from 'node:path'
 import { after, test } from 'node:test'
 import { type ChatEvent, startChat } from '../../src/agent/index.ts'
 import { buildRepository, OWNER } from '../fixtures/build-repository.ts'
-import {
-	NOTHING_TO_REVISE,
-	scriptedModel,
-	type Turn,
-	toolResults,
-	USAGE_PER_REPLY,
-} from '../fixtures/scripted-model.ts'
+import { nothingToRevise, scriptedModel, type Turn, toolResults, USAGE_PER_REPLY } from '../fixtures/scripted-model.ts'
 
 const RETRY = 'export function retry(times: number) {\n\tfor (let i = 0; i < times; i++) {\n\t\tattempt()\n'
 const { root, hashes } = buildRepository([
@@ -60,7 +54,7 @@ test('a false quote is rejected with its reasons sent to the model, and a true q
 	const { events, requests } = await ask([
 		answer(FALSE_QUOTE),
 		answer(TRUE_QUOTE),
-		...NOTHING_TO_REVISE,
+		...nothingToRevise(0),
 		{ text: 'I left out the README.' },
 	])
 

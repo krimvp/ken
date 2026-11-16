@@ -1,7 +1,8 @@
 // Where else the names a change touches are used, computed from git before the model answers. Plain patterns over the
-// changed lines find the names the change defines, alters or removes, in any language and with no parser, and a
-// whole-word search at the head commit finds the other lines that hold each name. It is a search, so it can miss a use
-// and can find a different thing with the same name: ken says so wherever it shows the list.
+// changed lines find the names the change defines, alters or removes, or sets as a key, such as a setting, in any
+// language and with no parser, and a whole-word search at the head commit finds the other lines that hold each name. It
+// is a search, so it can miss a use and can find a different thing with the same name: ken says so wherever it shows
+// the list.
 import { type CommitHash, type FileDiff, parsePath, type Range, type Repository, type TooLarge } from '../repo/index.ts'
 import type { VerifiedGitQuote } from './quote-check.ts'
 
@@ -12,12 +13,12 @@ export type Site = { path: string; line: number; text: string }
 export type UsedName = { name: string; how: 'added' | 'altered' | 'removed'; sites: Site[] }
 
 // left says what ken did not follow, so nobody takes the list for all of it: names too short to search, names on more
-// than MAX_SITES lines, names past MAX_SEARCHED, and names with places past MAX_NAMES.
+// than MAX_SITES lines, names past MAX_SEARCHED, names with places past MAX_NAMES, and the import lines it dropped.
 export type UsedElsewhere = {
 	head: CommitHash
 	names: UsedName[]
 	searched: number
-	left: { short: number; common: string[]; unsearched: number; unlisted: number }
+	left: { short: number; common: string[]; unsearched: number; unlisted: number; imports: number }
 }
 
 // A name no quote of an answer follows: how many places hold it, and the first of them, for the reader to look at.
@@ -52,6 +53,14 @@ const SETTINGS_FILE = /\.(?:json|jsonc|json5|ya?ml|toml|ini|cfg|conf|properties|
 // Prose defines nothing, so a doc gives no names. Its lines are still places that use one.
 const DOC_FILE = /\.(?:md|mdx|markdown|rst|txt|adoc)$/i
 const TEST_PATH = /(?:^|\/)(?:tests?|spec|__tests__)\/|[._-](?:test|spec)\.[^/]+$/
+// A key or a member a line sets: "timeoutMs: 500" in an object, "readonly timeout_s?: number" in a type.
+const KEY = /(?:^|[{,])\s*(?:readonly\s+)?['"]?([A-Za-z_$][\w$]*)['"]?\??\s*:(?!:)/g
+// A keyword argument in a call: "run(timeout_s=30)".
+const KEYWORD_ARGUMENT = /[(,]\s*([A-Za-z_]\w*)=(?![=>])/g
+const COMPOUND = /[a-z0-9][A-Z]|[A-Za-z0-9]_[A-Za-z0-9]/
+// An import or a re-export names a thing only to bring it into the file, so it shows no use of it.
+const IMPORT =
+	/^\s*(?:import\b|from\s+[\w.]+\s+import\b|export\s+(?:type\s+)?(?:\*|\{).*\bfrom\b|(?:const|let|var)\s.*=\s*require\()/
 
 export async function usedElsewhere(
 	repo: Repository,
@@ -61,10 +70,11 @@ export async function usedElsewhere(
 	const diff = await repo.diff(range, signal)
 	if (diff.kind !== 'ok') return diff
 	const files = diff.files.flatMap((file) => (file.kind === 'text' ? [file] : []))
-	const found = new Map<string, { added: boolean; removed: boolean; altered: boolean }>()
-	const note = (name: string, side: 'added' | 'removed' | 'altered') => {
-		const seen = found.get(name) ?? { added: false, removed: false, altered: false }
-		found.set(name, { ...seen, [side]: true })
+	// word is false for a name the change only sets as a key, such as "timeoutMs: 500" or "readonly timeout_s?: number".
+	const found = new Map<string, { added: boolean; removed: boolean; altered: boolean; word: boolean }>()
+	const note = (name: string, side: 'added' | 'removed' | 'altered', word = true) => {
+		const seen = found.get(name) ?? { added: false, removed: false, altered: false, word: false }
+		found.set(name, { ...seen, [side]: true, word: seen.word || word })
 	}
 	// Settings files come last, so the names of the code are searched first when there are many.
 	const ordered = [...files].sort((a, b) => Number(SETTINGS_FILE.test(a.path)) - Number(SETTINGS_FILE.test(b.path)))
@@ -75,6 +85,7 @@ export async function usedElsewhere(
 			for (const line of hunk.lines) {
 				const side = line.startsWith('+') ? 'added' : line.startsWith('-') ? 'removed' : null
 				if (side) for (const name of namesIn(line.slice(1), settings)) note(name, side)
+				if (side && !settings) for (const name of keysIn(line.slice(1))) note(name, side, false)
 			}
 		}
 		for (const name of await enclosingNames(repo, range.head, file, settings, signal)) note(name, 'altered')
@@ -83,17 +94,21 @@ export async function usedElsewhere(
 	const candidates = [...found].map(([name, seen]) => ({
 		name,
 		how: seen.altered || (seen.added && seen.removed) ? 'altered' : seen.added ? 'added' : 'removed',
-	})) satisfies Omit<UsedName, 'sites'>[]
+		word: seen.word,
+	})) satisfies (Omit<UsedName, 'sites'> & { word: boolean })[]
+	// A key comes after every other name, so the names round 4 searched keep their place within MAX_SEARCHED.
 	const order = { removed: 0, altered: 1, added: 2 }
-	candidates.sort((a, b) => order[a.how] - order[b.how])
+	candidates.sort((a, b) => Number(!a.word) - Number(!b.word) || order[a.how] - order[b.how])
 	const long = candidates.filter((candidate) => candidate.name.length >= MIN_LENGTH)
 	const searched = long.slice(0, MAX_SEARCHED)
 	const changed = changedLines(files)
+	const imports = new Set<string>()
 	const results = await Promise.all(
-		searched.map(async (candidate) => ({
-			...candidate,
-			sites: await sitesOf(repo, range.head, candidate.name, changed, signal),
-		})),
+		searched.map(async ({ name, how, word }) => {
+			const found = await sitesOf(repo, range.head, name, !word, changed, signal)
+			for (const site of found?.filter((each) => IMPORT.test(each.text)) ?? []) imports.add(`${site.path}:${site.line}`)
+			return { name, how, sites: found?.filter((each) => !IMPORT.test(each.text)) ?? null }
+		}),
 	)
 	const common = results.filter((result) => result.sites === null || result.sites.length > MAX_SITES)
 	const used = results.flatMap((result) =>
@@ -112,20 +127,67 @@ export async function usedElsewhere(
 				common: common.map((result) => result.name),
 				unsearched: long.length - searched.length,
 				unlisted: Math.max(0, used.length - MAX_NAMES),
+				imports: imports.size,
 			},
 		},
 	}
 }
 
-// A place counts as followed when a quote of its file holds its line, at whatever commit the quote was read: a quote
-// cites lines as text, and the same line reads the same at the base, the head or later.
-export function followedNames(used: UsedElsewhere, quotes: VerifiedGitQuote[]): Followed {
-	const quoted = quotes.map((quote) => ({
-		path: quote.path,
-		lines: new Set(quote.text.split('\n').map((l) => l.trim())),
-	}))
-	const follows = (site: Site) => quoted.some((quote) => quote.path === site.path && quote.lines.has(site.text.trim()))
-	const followed = used.names.filter((name) => name.sites.some(follows))
+// A place counts as followed when a quote of its file holds its line, or a line of the same function: the walk-up
+// below finds the function a line sits in, in the file as it was at the quote's commit or at the head. A quote cites
+// lines as text, so the same line reads the same at the base, the head or later.
+export async function followedNames(
+	repo: Repository,
+	used: UsedElsewhere,
+	quotes: VerifiedGitQuote[],
+	signal?: AbortSignal,
+): Promise<Followed> {
+	const read = new Map<string, Promise<string[] | null>>()
+	const linesAt = (commit: CommitHash, path: string) => {
+		const key = `${commit}:${path}`
+		const lines =
+			read.get(key) ??
+			(async () => {
+				const parsed = parsePath(path)
+				const file = parsed.kind === 'ok' ? await repo.readFile(commit, parsed.path, signal) : null
+				return file?.kind === 'ok' ? file.text.split('\n') : null
+			})()
+		read.set(key, lines)
+		return lines
+	}
+	const quoted = await Promise.all(
+		quotes.flatMap((quote) => {
+			const { path } = quote
+			if (path === null) return []
+			return [
+				(async () => {
+					const lines = (await linesAt(quote.commit, path)) ?? []
+					const within = new Set<string>()
+					for (let at = quote.startLine; at <= quote.endLine; at++) {
+						const name = namesIn(lines[at - 1] ?? '', false)[0] ?? functionOf(lines, at)
+						if (name !== undefined) within.add(name)
+					}
+					return { path, lines: new Set(quote.text.split('\n').map((l) => l.trim())), within }
+				})(),
+			]
+		}),
+	)
+	const follows = async (site: Site) => {
+		const same = quoted.filter((quote) => quote.path === site.path)
+		if (same.some((quote) => quote.lines.has(site.text.trim()))) return true
+		if (same.length === 0) return false
+		const within = functionOf((await linesAt(used.head, site.path)) ?? [], site.line)
+		return within !== undefined && same.some((quote) => quote.within.has(within))
+	}
+	const followed: UsedName[] = []
+	for (const name of used.names) {
+		for (const site of name.sites) {
+			if (await follows(site)) {
+				followed.push(name)
+				break
+			}
+		}
+	}
 	return {
 		followed: followed.map((name) => name.name),
 		notFollowed: used.names
@@ -142,6 +204,21 @@ function namesIn(line: string, settings: boolean): string[] {
 		settings ? SETTING.exec(line)?.[1] : undefined,
 	]
 	return matches.filter((name) => name !== undefined)
+}
+
+// Only a compound name, such as timeoutMs or max_calls, is taken: a one-word key such as kind or text is on too many
+// lines to follow, and each search costs one of the MAX_SEARCHED.
+function keysIn(line: string): string[] {
+	if (IMPORT.test(line)) return []
+	return [...line.matchAll(KEY), ...line.matchAll(KEYWORD_ARGUMENT)].flatMap(([, name]) =>
+		name !== undefined && COMPOUND.test(name) ? [name] : [],
+	)
+}
+
+// The function or type a line sits in, by the same walk-up as enclosingNames. A line at the far left sits in none.
+function functionOf(lines: string[], line: number): string | undefined {
+	const indent = indentOf(lines[line - 1] ?? '')
+	return indent === 0 ? undefined : definitionAbove(lines, line - 1, indent, false)
 }
 
 function definesName(line: string, name: string): boolean {
@@ -210,11 +287,13 @@ function changedLines(files: Extract<FileDiff, { kind: 'text' }>[]): Map<string,
 	return lines
 }
 
-// null when git grep finds more than it can return, which makes the name common too.
+// null when git grep finds more than it can return, which makes the name common too. The places of a key the change
+// sets start with the lines that read it, as .name, ['name'] or name=, since they are the ones the change can break.
 async function sitesOf(
 	repo: Repository,
 	head: CommitHash,
 	name: string,
+	key: boolean,
 	changed: Map<string, Set<number>>,
 	signal?: AbortSignal,
 ): Promise<Site[] | null> {
@@ -224,6 +303,8 @@ async function sitesOf(
 	const sites = found.matches.filter(
 		(match) => !changed.get(match.path)?.has(match.line) && !definesName(match.text, name),
 	)
-	const rank = (path: string) => (DOC_FILE.test(path) ? 2 : TEST_PATH.test(path) ? 1 : 0)
-	return sites.sort((a, b) => rank(a.path) - rank(b.path)).map(({ path, line, text }) => ({ path, line, text }))
+	const reads = new RegExp(`\\.${word}(?![\\w$])|\\[['"]${word}['"]\\]|(?<![\\w$.])${word}=(?!=)`)
+	const rank = (site: Site) =>
+		(key && !reads.test(site.text) ? 3 : 0) + (DOC_FILE.test(site.path) ? 2 : TEST_PATH.test(site.path) ? 1 : 0)
+	return sites.sort((a, b) => rank(a) - rank(b)).map(({ path, line, text }) => ({ path, line, text }))
 }

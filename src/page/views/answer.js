@@ -144,10 +144,18 @@ function claimHtml(claim, key, i, rows, marked) {
 	return `<li class="st" id="item-${key}">
 		<span class="st-n">${i + 1}</span>
 		<div>
-			<p class="st-text">${marked.has(claim.label) ? label(claim.label) : ''}${prose(claim.text)}</p>
+			<p class="st-text">${marked.has(claim.label) ? label(claim.label) : ''}${checkedHtml(claim)}${prose(claim.text)}</p>
 			${quoteRows(claim.quotes, key, rows)}
 		</div>
 	</li>`
+}
+
+// ken's own mark on a risk, from git, in the label styles: solid for checked in the code, dashed for not. A statement,
+// and a risk saved before ken set it, has none.
+function checkedHtml({ checked }) {
+	if (checked === undefined) return ''
+	const [style, name] = checked ? ['recorded', 'Checked in the code'] : ['inferred', 'Not checked outside the change']
+	return `<span class="label label-${style}">${name}</span>`
 }
 
 // The risks follow the decisions, built like the statements and set apart from them. An answer about a change always

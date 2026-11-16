@@ -10,7 +10,7 @@ const HOW = { added: 'adds', altered: 'alters', removed: 'removes' } as const
 
 // What log and diff over a change end with, so the agent reads the other users of what changed before it answers.
 export function elsewhereText(used: UsedElsewhere): string {
-	const head = `Used elsewhere, found by search: ken took from the changed lines the names the change defines, alters or removes, and searched the head commit ${short(used.head)} for each as a whole word. A search can miss a use, and a line can name a different thing with the same name, so read each place before you rely on it.`
+	const head = `Used elsewhere, found by search: ken took from the changed lines the names the change defines, alters, removes or sets as a key, and searched the head commit ${short(used.head)} for each as a whole word. A search can miss a use, and a line can name a different thing with the same name, so read each place before you rely on it.`
 	const names = used.names.map(({ name, how, sites }) => ({ name, how, places: sites.length, first: sites }))
 	const listed =
 		names.length === 0 ? ['ken found none of these names on any line outside the change.'] : namesText(names)
@@ -31,14 +31,16 @@ export function namesText(names: NotFollowed[]): string[] {
 }
 
 function leftText(used: UsedElsewhere): string[] {
-	const { short: tooShort, common, unsearched, unlisted } = used.left
+	const { short: tooShort, common, unsearched, unlisted, imports } = used.left
+	const dropped =
+		imports > 0 ? [`ken left out ${imports} import lines, which bring a name into a file and do not use it.`] : []
 	const parts = [
 		common.length > 0 ? `${common.length} on too many lines to follow (${common.join(', ')})` : '',
 		tooShort > 0 ? `${tooShort} too short to search` : '',
 		unsearched > 0 ? `${unsearched} past the first ${used.searched} ken searched` : '',
 		unlisted > 0 ? `${unlisted} past the first ${used.names.length} listed` : '',
 	].filter((part) => part !== '')
-	return parts.length === 0 ? [] : [`Names left out: ${parts.join('; ')}.`]
+	return [...(parts.length === 0 ? [] : [`Names left out: ${parts.join('; ')}.`]), ...dropped]
 }
 
 function cut(line: string): string {
