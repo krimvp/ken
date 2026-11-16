@@ -696,7 +696,7 @@ const ANSWER_SCHEMA = {
 		},
 		diagrams: {
 			type: 'array',
-			description: `Basic diagrams that lead the answer, at most ${DIAGRAM_BOUNDS.diagrams}. ken draws them.`,
+			description: `Basic diagrams that lead the answer, at most ${DIAGRAM_BOUNDS.diagrams}. ken draws them. An answer about a change that touches two or more parts sends one.`,
 			items: DIAGRAM_SCHEMA,
 		},
 		summary: {
