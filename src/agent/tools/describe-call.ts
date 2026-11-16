@@ -48,6 +48,16 @@ const SENTENCES: Record<string, (args: Said) => string> = {
 		if (risks > 0) listed.push(`${risks} ${risks === 1 ? 'risk' : 'risks'}`)
 		return `Sent an answer with ${listed.join(' and ')} for ken to check`
 	},
+	revise_answer: (args) => {
+		const changes = [
+			[args.count('risks'), 'added', 'risk', 'risks'],
+			[args.count('decisions'), 'added', 'decision', 'decisions'],
+			[args.count('withdraw'), 'withdrew', 'risk', 'risks'],
+		] as const
+		const listed = changes.flatMap(([n, verb, one, many]) => (n > 0 ? [`${verb} ${n} ${n === 1 ? one : many}`] : []))
+		if (listed.length === 0) return 'Looked again at the risks and found nothing to change'
+		return `Looked again at the risks: ${listed.join(', ')}, for ken to check`
+	},
 }
 
 export function describeCall(name: string, args: JsonObject): string {

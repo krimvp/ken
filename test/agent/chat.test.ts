@@ -4,7 +4,13 @@ import path from 'node:path'
 import { after, test } from 'node:test'
 import { type ChatEvent, startChat } from '../../src/agent/index.ts'
 import { buildRepository, OWNER } from '../fixtures/build-repository.ts'
-import { scriptedModel, type Turn, toolResults, USAGE_PER_REPLY } from '../fixtures/scripted-model.ts'
+import {
+	NOTHING_TO_REVISE,
+	scriptedModel,
+	type Turn,
+	toolResults,
+	USAGE_PER_REPLY,
+} from '../fixtures/scripted-model.ts'
 
 const RETRY = 'export function retry(times: number) {\n\tfor (let i = 0; i < times; i++) {\n\t\tattempt()\n'
 const { root, hashes } = buildRepository([
@@ -51,11 +57,16 @@ async function ask(script: Turn[], directory = path.join(root, 'src')) {
 }
 
 test('a false quote is rejected with its reasons sent to the model, and a true quote then gets a checked answer', async () => {
-	const { events, requests } = await ask([answer(FALSE_QUOTE), answer(TRUE_QUOTE), { text: 'I left out the README.' }])
+	const { events, requests } = await ask([
+		answer(FALSE_QUOTE),
+		answer(TRUE_QUOTE),
+		...NOTHING_TO_REVISE,
+		{ text: 'I left out the README.' },
+	])
 
 	assert.deepEqual(
 		events.filter((event) => event.kind !== 'text').map((event) => event.kind),
-		['tool', 'rejected', 'tool', 'accepted', 'usage', 'done'],
+		['tool', 'rejected', 'tool', 'tool', 'accepted', 'usage', 'done'],
 	)
 	assert.equal(events.map((event) => (event.kind === 'text' ? event.delta : '')).join(''), 'I left out the README.')
 	const toModel = toolResults(requests[1])[0] ?? ''
@@ -65,7 +76,7 @@ test('a false quote is rejected with its reasons sent to the model, and a true q
 	const usage = events.find((event) => event.kind === 'usage')
 	assert.deepEqual(
 		[usage?.kind === 'usage' && usage.inputTokens, usage?.kind === 'usage' && usage.outputTokens],
-		[3 * USAGE_PER_REPLY.prompt_tokens, 3 * USAGE_PER_REPLY.completion_tokens],
+		[5 * USAGE_PER_REPLY.prompt_tokens, 5 * USAGE_PER_REPLY.completion_tokens],
 	)
 
 	const accepted = events.find((event) => event.kind === 'accepted')
@@ -112,6 +123,7 @@ test('a false quote is rejected with its reasons sent to the model, and a true q
 			],
 			binary: [],
 			messages: { quoted: [], unquoted: [head] },
+			usedElsewhere: { followed: [], notFollowed: [] },
 		},
 	})
 })

@@ -13,6 +13,7 @@ import {
 	resolveRange,
 	type Unrelated,
 } from '../../repo/index.ts'
+import type { Elsewhere } from './elsewhere-text.ts'
 import { readArgs, refuse, reply, short } from './tool-edge.ts'
 
 const MAX_READ_LINES = 400
@@ -36,7 +37,7 @@ const RANGE = {
 	head: { type: 'string', description: 'The last commit of the change, such as HEAD or a branch' },
 }
 
-export function explorationTools(repo: Repository): Tool[] {
+export function explorationTools(repo: Repository, elsewhere: Elsewhere): Tool[] {
 	return [
 		{
 			name: 'resolve_ref',
@@ -185,8 +186,9 @@ export function explorationTools(repo: Repository): Tool[] {
 				const more = logged.commits.length > shown.length ? `\nShowing the newest ${shown.length}.` : ''
 				const left =
 					unread > 0 ? `\nThe messages of ${unread} commits did not fit. Call log on a shorter range to read them.` : ''
+				const used = await elsewhere(range, ctx.signal)
 				return reply(
-					`${logged.commits.length} commits in ${short(range.base)}..${short(range.head)}:\n${shown.join('\n')}${more}${left}`,
+					`${logged.commits.length} commits in ${short(range.base)}..${short(range.head)}:\n${shown.join('\n')}${more}${left}${used === null ? '' : `\n\n${used}`}`,
 				)
 			},
 		},

@@ -183,6 +183,8 @@ test('ken ask --json on a repository ends in an accepted answer when claude answ
 				},
 			],
 		}),
+		cliResult({ text: '', tool_calls: [] }),
+		cliResult({ text: '', tool_calls: [{ name: 'ken__revise_answer', arguments: {} }] }),
 		cliResult({ text: 'Nothing was left out.', tool_calls: [] }),
 	])
 	const env = {
@@ -204,5 +206,5 @@ test('ken ask --json on a repository ends in an accepted answer when claude answ
 	assert.deepEqual(result.rejected, [])
 	assert.deepEqual(result.answer.statements[0].quotes, [{ ...quote, startLine: 2, endLine: 2 }])
 	assert.equal(result.note, 'Nothing was left out.')
-	assert.deepEqual([result.usage.inputTokens, result.usage.outputTokens], [2000, 60], 'two runs of claude, summed')
+	assert.deepEqual([result.usage.inputTokens, result.usage.outputTokens], [4000, 120], 'four runs of claude, summed')
 })
