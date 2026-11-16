@@ -216,6 +216,8 @@ function costLine(cost: Cost): string {
 const SECOND_LOOK = {
 	unchanged: "ken's second look at the risks changed nothing, so this is the answer as ken first checked it.",
 	'not-run': "ken's second look at the risks did not run, so this is the answer as ken first checked it.",
+	explained:
+		"ken's second look at the risks did not run, because the project record already explains this change. This is the answer as ken first checked it.",
 } as const
 
 // The same words as the page's line, so the reader meets one name for it.

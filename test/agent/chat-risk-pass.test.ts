@@ -16,10 +16,13 @@ import {
 
 // The change lowers a limit. A caller in a file the change did not touch still waits twice the limit.
 const CALLER = 'export async function load() {\n\treturn await fetchWithin(TIMEOUT_MS * 2)\n}\n'
-const { root, hashes } = buildRepository([
+// The fixture dates every commit, so a copy has the same hashes. A test that records a piece of work uses its own copy:
+// the record would then explain the change for the tests after it.
+const COMMITS = [
 	{ message: 'feat: start', files: { 'src/limits.ts': 'export const TIMEOUT_MS = 500\n', 'src/load.ts': CALLER } },
 	{ message: 'fix: time out sooner', files: { 'src/limits.ts': 'export const TIMEOUT_MS = 100\n' } },
-])
+]
+const { root, hashes } = buildRepository(COMMITS)
 const [base = '', head = ''] = hashes
 const KEY_ENV = 'KEN_TEST_MODEL_KEY'
 process.env[KEY_ENV] = 'scripted-model-key'
@@ -194,14 +197,19 @@ test('a question not about a change, and a live note about one, get no draft ste
 test('an answer about a change is held for one risk pass: the agent gets its risks and the names no quote follows, an added risk with a false quote is refused, and the final risks come in the order the revise call gave, with the withdrawn one gone, in the answer, the record and the cost', async () => {
 	const falseRisk = { ...CALLER_RISK, quotes: [{ ...CALL, text: '    return await fetchWithin(TIMEOUT_MS * 2)' }] }
 	const withdraw = [{ risk: 1, reason: 'Only requests slower than 100 ms fail.', quotes: [LIMIT] }]
-	const { events, requests } = await ask([
-		DRAFT,
-		answer({ ...ABOUT_THE_CHANGE, risks: [FIRST_RISK, SECOND_RISK] }),
-		{ text: '' },
-		{ tool: 'ken__revise_answer', args: { risks: [falseRisk], order: [3, 1, 2] } },
-		{ tool: 'ken__revise_answer', args: { risks: [CALLER_RISK], withdraw, order: [3, 2] } },
-		{ text: 'I left out the tests.' },
-	])
+	const own = buildRepository(COMMITS).root
+	const { events, requests } = await ask(
+		[
+			DRAFT,
+			answer({ ...ABOUT_THE_CHANGE, risks: [FIRST_RISK, SECOND_RISK] }),
+			{ text: '' },
+			{ tool: 'ken__revise_answer', args: { risks: [falseRisk], order: [3, 1, 2] } },
+			{ tool: 'ken__revise_answer', args: { risks: [CALLER_RISK], withdraw, order: [3, 2] } },
+			{ text: 'I left out the tests.' },
+		],
+		'question',
+		own,
+	)
 
 	const [question, , pass, ...more] = userTexts(requests.at(-1))
 	assert.ok(question?.includes('What did the last commit do?'))
@@ -224,7 +232,7 @@ test('an answer about a change is held for one risk pass: the agent gets its ris
 		'the withdrawn risk is kept with the answer, with the line that rules it out',
 	)
 	assert.deepEqual(event.answer.change?.usedElsewhere, { followed: ['TIMEOUT_MS'], notFollowed: [] })
-	const work = (await fileRecordStore(root, gitRepository(root)).read()).current.find((entry) => entry.kind === 'work')
+	const work = (await fileRecordStore(own, gitRepository(own)).read()).current.find((entry) => entry.kind === 'work')
 	const stored = event.answer.risks?.map(({ checked: _, weight: __, ...risk }) => risk)
 	assert.deepEqual(
 		work?.kind === 'work' && work.risks,
@@ -246,6 +254,20 @@ test('an answer about a change is held for one risk pass: the agent gets its ris
 		[replies(6).input, replies(6).output, replies(3).input, replies(3).output],
 		'the risk pass took the last three replies, and the total counts them too',
 	)
+})
+
+test('an answer about a change the record already explains gets no second look, even without work, and says why', async () => {
+	const own = buildRepository(COMMITS).root
+	const scoped = { scope: { base, head }, risks: [] }
+	await ask([DRAFT, answer({ ...ABOUT_THE_CHANGE, risks: [] }), ...nothingToRevise(0), { text: '.' }], 'question', own)
+	const again = await ask(
+		[answer(scoped), { text: 'Nothing left out.' }, { text: 'A second look gets this.' }],
+		'question',
+		own,
+	)
+
+	assert.equal(again.requests.length, 2, 'the answer and the closing note, no second look')
+	assert.equal(accepted(again.events).answer.secondLook, 'explained')
 })
 
 test('a withdrawal with no quote goes back without using an attempt, and the risk stays in the answer', async () => {

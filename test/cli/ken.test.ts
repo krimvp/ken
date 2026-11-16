@@ -11,10 +11,13 @@ import { buildRepository } from '../fixtures/build-repository.ts'
 import { DRAFT, nothingToRevise, scriptedModel } from '../fixtures/scripted-model.ts'
 
 const KEN = path.join(import.meta.dirname, '../../src/cli/main.ts')
-const { root, hashes } = buildRepository([
+// The fixture dates every commit, so a copy has the same hashes. The first test records a piece of work, so a test that
+// needs the second look uses its own copy: the record would explain the change there.
+const COMMITS = [
 	{ message: 'feat: start', files: { 'app.py': 'def total(items):\n    return 0\n' } },
 	{ message: 'fix: add the items', files: { 'app.py': 'def total(items):\n    return sum(items)\n' } },
-])
+]
+const { root, hashes } = buildRepository(COMMITS)
 const [base = '', head = ''] = hashes
 const NO_KEN_VARIABLES = Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith('KEN_')))
 
@@ -267,7 +270,10 @@ test('ken ask prints the risks the second look withdrew as one count, each with 
 		KEN_API_KEY_ENV: 'KEN_TEST_KEY',
 		KEN_TEST_KEY: 'scripted-model-key',
 	}
-	const { code, stdout, stderr } = await ken(['ask', 'What did the fix do?', '--repo', root], env)
+	const { code, stdout, stderr } = await ken(
+		['ask', 'What did the fix do?', '--repo', buildRepository(COMMITS).root],
+		env,
+	)
 
 	assert.equal(code, 0, `${stderr}${stdout}`)
 	assert.match(

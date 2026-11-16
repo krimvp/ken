@@ -80,14 +80,14 @@ export function answerTool(gate: Gate, round: () => AnswerRound): Tool {
 			if (settled.kind === 'accepted') {
 				const { recorded } = settled
 				// A piece of work the record already holds keeps its risks, so a second look could change nothing it stores.
-				if (holds && !(recorded.kind === 'checked' && recorded.kept !== null)) {
+				if (holds && !(await explained(gate, args, ctx.signal))) {
 					current.held = { args: settled.args, answer: settled.answer, decisions: settled.decisions, rejections: 0 }
 					const next =
 						'The reader has not seen it yet. ken will now ask you a few questions about risks. Write nothing more in this turn.'
 					return reply(confirmation(settled.answer, settled.decisions, recorded, next))
 				}
 				if (!holds) return reply(await shown(gate, current, settled, null, ctx.signal))
-				const accepted = await accept(gate, current, settled.args, null, ctx.signal, 'not-run')
+				const accepted = await accept(gate, current, settled.args, null, ctx.signal, 'explained')
 				if (accepted.kind === 'accepted') return reply(accepted.reply)
 				return refuse(accepted.problems.join('\n'))
 			}
