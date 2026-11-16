@@ -4,7 +4,7 @@ ken explains a software project to the developer who owns it. It tells you what 
 
 ![Risk 1 of 5 in an answer: the page and the terminal show times differently, because the page shows note times in the browser's local time with no zone, while the terminal slices the ISO string and labels it UTC. Under it are two quotes at commit 53567b4: line 16 of src/page/live/note.js and line 71 of src/cli/live.ts.](site/images/ken-risk-with-quotes-wide.png)
 
-Screenshot of ken's page, on Claude Opus: the first of five risks in its answer to "What did the last three commits do, and why?" about this repository.
+Screenshot of ken's own page. The model was Claude Opus. It shows the first of five risks in its answer to "What did the last three commits do, and why?" about this repository.
 
 ## Status
 
@@ -13,17 +13,34 @@ Early work. ken is not released, it has no license yet, there is nothing to inst
 What runs today:
 
 - `ken open` starts a page on your machine, and `ken chat` and `ken ask` answer in the terminal. `ken record`, `ken map`, `ken follow-up`, `ken who`, `ken since`, `ken catch-up`, `ken area`, `ken decide`, `ken sessions` and `ken live` are described under [Run it](#run-it).
-- An answer has a short summary, one or two basic diagrams for a high-level question, then the decisions with their reasons, the risks, and statements. Each carries quotes of lines of code, of a commit message, or of a saved session of the coding agent. ken checks that every quoted line is where the quote says, and rejects an answer with a quote that is not there. It does not check that a sentence, a risk or an arrow is true, and it does not check the summary. The commits, authors and dates, and which changed blocks and commit messages the quotes cover, come from git.
+- An answer has a short summary, one or two basic diagrams for a high-level question, then the decisions with their reasons, the risks, and statements. Each carries quotes of lines of code, of a commit message, or of a saved session of the coding agent. ken checks that every quoted line is where the quote says, and rejects an answer with a quote that is not there. It does not check that a sentence, a risk or an arrow is true, and it does not check the summary. ken shows no answer that fails the check: the agent tries again, up to three times. The commits, authors and dates, and which changed blocks and commit messages the quotes cover, come from git.
+- For a question about a change, ken searches the code at the head commit for the names the change defines, alters or removes, and gives the model the places that use them, under "Used elsewhere". After the first answer passes, ken asks the model for a second look at its risks: read the code each risk points at, ask what happens when two decisions touch the same thing, and put the risks in order, heaviest first.
 - ken sets a label where it can. "Recorded" means a coding agent logged the decision with `ken decide` as it worked, or the reason is quoted from a commit message. "From the session" means the reason is quoted from a saved session. "Inferred" means the agent worked it out. "Found by search" marks a link between pieces of code that the agent found by searching and did not prove.
 - The project record lives in `.ken/record/` in your repository, as JSON Lines files that ken only adds to. You commit it, so a collaborator and their agents can read it. ken never commits, and never writes to your project besides `.ken/`. Your question history and your understanding map live in `~/.ken/projects/<first commit>/` on your machine.
-- The understanding map keeps what you said you know, topic by topic. A topic you know whose quoted code has not changed shortens to one line. When the code changed, the answer leads with the change. "Open" lists the decisions that need your call and the topics that changed since you understood them, with who changed them.
-- Live mode runs beside your coding agent and writes short notes as the work moves, on each commit and on uncommitted work that has gone quiet. For uncommitted work it keeps snapshots in its own store under `~/.ken/` and never writes to the project, so such a note is a draft on your machine. Live mode is off until you turn it on, and it shows what it spends.
+- The understanding map keeps what you said you know, topic by topic. A topic you know whose quoted code has not changed shortens to one line. When the code changed, the answer starts with what changed. "Waiting on you" lists the decisions that need your call and the topics that changed since you understood them, with who changed them. You answer a decision with "Keep what was chosen" or "I want it changed". ken saves your answer and note, and changes no code. "Decisions" lists every decision in the record, and a later decision on the same question replaces the older one.
+- Live mode runs beside your coding agent and writes short notes as the work moves, on each commit and on uncommitted work that has gone quiet. ken finds each note's quotes. It does not check the note's words. For uncommitted work it keeps snapshots in its own store under `~/.ken/` and never writes to the project, so such a note is a draft on your machine. Live mode is off until you turn it on, and it shows what it spends.
 - ken reads the sessions Claude Code saves. Before any session text reaches the model, the page, your history or the record, ken hides what looks like a credential. This is best effort: a secret written in plain words, or a short one, gets through. The record keeps only the quoted lines of a session, so commit `.ken/` only if you are happy to share them. Set `KEN_SESSIONS=off` to stop ken reading sessions.
 - ken works with any OpenAI-compatible endpoint, and the code and session text it reads go to that provider. It has been run on glm-5.3 and kimi-k3.1-pro through Ollama Cloud, and on Claude Opus through the Claude Code command with ken's local adapter, `npm run claude-endpoint`. gpt-oss:120b, as served on Ollama Cloud in November 2026, could not follow the quoting rules.
 
 Not built: readers for other coding tools' sessions, anything for teams, and a parser or index of the code.
 
-The plan says ken must beat a plain chat on at least one of three counts and lose on none: finding a decision or a risk the other missed, trusting the answer because the quotes are there, and finding the answer again the next day. The plain chat was a coding agent in the same repository, asked the same question. So far, ken has not passed. Three rounds ran ken on glm-5.3, an open-weight model, against a plain chat on Claude Opus, over merged pull requests of another project by the same owner: three in the first two rounds and five in the third. A fourth round put Claude Opus on both sides, over the same five. A second AI agent scored each round. The owner has not scored them. In all four, ken won the second and third counts and lost the first. With Claude Opus on both sides, the first count came to three ties and two wins for the plain chat. The two counts ken won are things a plain chat does not have by design. The four verdicts are in [docs/checkpoint/](docs/checkpoint/).
+### How ken did in its test
+
+ken's plan sets a rule for its test: against a plain chat, ken must win at least one of three counts and lose none. The counts are finding more, trust without the diff, and finding it again. Finding more means the answer names a decision or a risk the other answer missed. Trust without the diff means the quotes let you trust the answer without opening the diff. Finding it again means you can find the answer the next day.
+
+For real merged pull requests of another project by the same owner, ken and a plain chat with a coding agent on Claude Opus got the same question: "What did pull request #N do, and why was it done that way? Name the decisions it made and any risk I should know about." A second AI agent, fresh each time, scored each round against the code. The owner has not scored any of it.
+
+ken won trust without the diff and finding it again in every round, on both models. Finding more went like this:
+
+- Rounds 1 to 3 ran ken on glm-5.3, then on Claude Opus, against the plain chat on Claude Opus. Rounds 1 and 2 used three pull requests, and ken was tuned on these three. Round 3 added two more. ken lost finding more in every round.
+- Round 4 added the "Used elsewhere" list and the second look at risks. With Claude Opus on both sides, ken passed on the three tuned pull requests for the first time, with a tie on finding more. It failed on the two others, and lost finding more on one of them. On three pull requests it had never seen, it passed narrowly, with a tie. With ken on glm-5.3, those three failed.
+- Round 5 made the second look read the code each risk points at and ask what happens when two decisions touch the same thing. It also put the risks in order and labelled each by whether it quotes code outside the change. With Claude Opus on both sides, three more pull requests ken had never seen passed. Finding more was a tie on two and a narrow win for ken on one, and the judge said a count of finds gives a tie, or ken by one. The three tuned ones passed. The two others failed narrowly on finding more, and so did the three that had passed narrowly in round 4. With ken on glm-5.3, the three newest passed, with a tie.
+
+So ken does not find more than a plain chat. On finding more it is about level: sometimes a tie, sometimes a narrow loss, once a narrow win. The same three pull requests passed in one round and failed in the next, so one answer per pull request is a noisy measure, and a pass is not proof. ken's answers cost more. One took two to four minutes on Claude Opus and four to eight on glm-5.3, against one to three in the plain chat, and the second look takes about half of ken's input tokens. ken's answers are longer, and the plain chat reads faster. In round 5, one of ken's risks was false and carried the label now named "Quotes code outside the change". That label says where a quote is. It does not say the risk is true. Every pull request came from one repository, and one AI judge scored each round.
+
+A last check on three more pull requests ken has never seen, #107, #93 and #92, is still running. Its result will go here.
+
+The verdicts are in [docs/checkpoint/](docs/checkpoint/): `round-1.md` to `round-3-same-model.md` for rounds 1 to 3, `round-4.md`, `round-4-unseen.md` and `round-4-unseen-glm.md` for round 4, and `round-5.md`, `round-5-second-three.md`, `round-5-unseen.md` and `round-5-unseen-glm.md` for round 5.
 
 How ken works today:
 
@@ -51,9 +68,9 @@ flowchart LR
 
 The public page in `site/` draws the same parts and arrows.
 
-![A draft note in the Live view, marked Draft, on this machine only. It says a 404 now throws a NotFound error and retry rethrows it at once, and that letting the caller choose the number of attempts is not done yet. Statement 1 quotes lines 8 to 9 of src/http.ts.](site/images/ken-live-draft-note-wide.png)
+![An earlier note in the Live view, headed Uncommitted work, 07:17, and marked Committed since, in a32ffb8. It says retry's wait now doubles after each failed try. Under it are a risk labelled Inferred with a quote of lines 13 to 16 of src/retry.ts, a decision labelled From the session, and a statement labelled Inferred with a quote of line 1 of src/retry.ts.](site/images/ken-live-note-wide.png)
 
-Screenshot of the top of a draft note in ken's Live view, written by Claude Opus as a coding agent worked on a small made-up project.
+Screenshot of an earlier note in ken's Live view for a small made-up project.
 
 ## Run it
 
@@ -125,7 +142,7 @@ npm run ken -- who bo@example.com --since 14d --repo ../my-project
 npm run ken -- since 2026-11-01 --repo ../my-project
 ```
 
-`open` starts the page for the repository in the current folder, or the one you name, and opens it in your browser. It prints the address too, in case no browser opens. Press Ctrl-C to stop it. With no model set, the page still opens: it shows your earlier answers and says what to set. The page draws diagrams with Mermaid, which ken serves from its own address. Under each answer, "I know this", "Too much" and "Go deeper" update your map. The header links to "Your map", to "Decisions", and to "Open" when something waits on you. The lenses sit under the question box: catch up, an area, and what changed, by one person or by everyone, in a span you pick.
+`open` starts the page for the repository in the current folder, or the one you name, and opens it in your browser. It prints the address too, in case no browser opens. Press Ctrl-C to stop it. With no model set, the page still opens: it shows your earlier answers and says what to set. The page draws diagrams with Mermaid, which ken serves from its own address. Under each answer, "I know this", "Too much" and "Go deeper" update your map. The header links to "Decisions" and "Your map", to "Live" when a model is set, and to "Waiting on you" when something waits on you. The lenses sit under the question box: catch up, an area, and what changed, by one person or by everyone, in a span you pick.
 
 ```sh
 npm run ken -- open
