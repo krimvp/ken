@@ -6,7 +6,6 @@ import {
 	count,
 	decisionQuotes,
 	esc,
-	gitDay,
 	isSession,
 	LABELS,
 	label,
@@ -16,6 +15,7 @@ import {
 	quoteBody,
 	quoteSource,
 	short,
+	when,
 } from './format.js'
 
 const MAX_DIFF_LINES = 60
@@ -72,25 +72,25 @@ export function checksHtml(q, ui) {
 	const quotes = all.filter((quote) => !isSession(quote))
 	const commits = [...new Set(quotes.map((quote) => short(quote.commit)))]
 	const at = commits.length === 1 ? `at <code>${commits[0]}</code>` : `across ${commits.length} commits`
+	const fromSessions = all.length - quotes.length
 	const match =
-		quotes.length < all.length
-			? `${quotes.length} of the ${all.length} quotes ${quotes.length === 1 ? 'matches' : 'match'}`
+		fromSessions > 0 && quotes.length > 0
+			? `All ${all.length} quotes were found: ${quotes.length} in git, ${at}, and ${fromSessions} in a saved session of the coding agent.`
 			: quotes.length === 1
-				? 'The quote matches'
+				? `The quote matches git, ${at}.`
 				: quotes.length === 2
-					? 'Both quotes match'
-					: `All ${quotes.length} quotes match`
-	const gitLine = quotes.length === 0 ? '' : `<p>${match} git, ${at}.</p>`
+					? `Both quotes match git, ${at}.`
+					: `All ${quotes.length} quotes match git, ${at}.`
+	const gitLine = quotes.length === 0 ? '' : `<p>${match}</p>`
 	const fromMessages = quotes.filter((quote) => quote.path === null).length
 	const messageLine =
 		fromMessages === 0
 			? ''
-			: `<p class="muted small">${fromMessages === quotes.length ? 'All' : fromMessages} of them ${fromMessages === 1 ? 'is' : 'are'} from commit messages.</p>`
-	const fromSessions = all.length - quotes.length
+			: `<p class="muted small">${fromMessages === quotes.length ? 'All' : fromMessages} of the git quotes ${fromMessages === 1 ? 'is' : 'are'} from commit messages.</p>`
 	const sessionLine =
 		fromSessions === 0
 			? ''
-			: `<p>${quotes.length === 0 ? (fromSessions === 1 ? 'The quote is' : `All ${fromSessions} quotes are`) : fromSessions === 1 ? 'The other is' : `The other ${fromSessions} are`} from a saved session of the coding agent. ken found the lines in the saved session. It did not check that they give the true reason.</p>`
+			: `<p>${quotes.length === 0 ? `${fromSessions === 1 ? 'The quote is' : `All ${fromSessions} quotes are`} from a saved session of the coding agent. ` : ''}ken found the lines in the saved session. It did not check that they give the true reason.</p>`
 	const back = sentBack(q)
 	const backLine =
 		back === 0
@@ -156,7 +156,7 @@ function uncoveredFiles(change) {
 function coverageSection(q, ui) {
 	const change = q.answer.change
 	if (!change) {
-		return `<section class="check"><h3>Changed code</h3><p class="muted">None for this answer. It is about the code as it is now, not about a set of commits.</p></section>`
+		return `<section class="check"><h3>Changed code</h3><p class="muted">Not checked. The answer names no range of commits, so ken has no changed blocks to hold its quotes against.</p></section>`
 	}
 	const total = change.covered.length + change.uncovered.length
 	const uncovered = change.uncovered.length
@@ -180,7 +180,7 @@ function coverageSection(q, ui) {
 	return `<section class="check" id="check-coverage">
 		<h3>Changed code</h3>
 		<p>${change.covered.length} of ${blocks(total)} quoted.</p>
-		<p class="muted">${where}. The answer shows no code for ${uncovered === 1 ? 'it' : 'them'}.</p>
+		<p class="muted">${where}. The answer quotes nothing from ${uncovered === 1 ? 'it' : 'them'}.</p>
 		${button}
 		${binary}
 		${ui.coverageOpen ? uncoveredHtml(change, files, ui) : ''}
@@ -225,44 +225,64 @@ function hunkHtml(hunk, change, path) {
 	return `<div class="hunk"><p class="hunk-head">${what}</p><pre class="code"><code>${codeLines(shown, numbers, kinds)}${more}</code></pre></div>`
 }
 
+// ken's copy of uncommitted work is a commit only in ken's own store, written as "ken" with no message (see the live
+// module). An answer that cites one is a draft, so only a draft can hold one.
+function isSnapshot(q, commit) {
+	return q.draft !== undefined && commit.email === 'ken@localhost'
+}
+
 function commitsSection(q) {
 	const change = q.answer.change
 	if (!change) return ''
+	const commits = change.commits.filter((commit) => !isSnapshot(q, commit))
+	const copies = change.commits.filter((commit) => isSnapshot(q, commit))
+	const copy =
+		copies.length === 0
+			? ''
+			: `<p>${commits.length === 0 ? 'This answer covers uncommitted work. ' : 'It also covers uncommitted work. '}ken quoted it from its own copy, ${list(copies.map((c) => `<code>${short(c.hash)}</code>`))}, kept on this machine. That copy is not a commit in the repository.</p>`
+	if (commits.length === 0)
+		return `<section class="check" id="check-commits"><h3>Uncommitted work</h3>${copy}</section>`
 	const authors = new Map()
-	for (const commit of change.commits) authors.set(commit.author, (authors.get(commit.author) ?? 0) + 1)
+	for (const commit of commits) authors.set(commit.author, (authors.get(commit.author) ?? 0) + 1)
 	const names = [...authors].sort((a, b) => b[1] - a[1])
 	const by =
 		names.length === 1
 			? ` Author: ${esc(names[0][0])}.`
-			: names.length > 1
-				? ` Authors: ${list(names.map(([name, n]) => `${esc(name)} (${n})`))}.`
-				: ''
-	const unquoted = new Set(change.messages?.unquoted ?? [])
+			: ` Authors: ${list(names.map(([name, n]) => `${esc(name)} (${n})`))}.`
+	const own = new Set(commits.map((commit) => commit.hash))
+	const unquoted = new Set((change.messages?.unquoted ?? []).filter((hash) => own.has(hash)))
+	const marked = commits.length > 1
 	return `<section class="check" id="check-commits">
-		<h3>The ${count(change.commits.length, 'commit', 'commits')} this answer covers</h3>
+		<h3>${commits.length === 1 ? 'The commit this answer covers' : `The ${commits.length} commits this answer covers`}</h3>
 		<p class="muted small">From git, not from the model.${by}</p>
-		${messagesLine(change)}
-		<ol class="commits">${change.commits
+		${messagesLine(change, own)}
+		<ol class="commits">${commits
 			.map(
 				(commit) =>
-					`<li><code>${short(commit.hash)}</code><span>${esc(commit.subject)}<span class="who muted">${esc(commit.author)}, ${gitDay(commit.date)} UTC${unquoted.has(commit.hash) ? '. Message not quoted' : ''}</span></span></li>`,
+					`<li><code>${short(commit.hash)}</code><span><q class="subject">${esc(commit.subject)}</q><span class="who muted">${esc(commit.author)}, ${when(commit.date)}${marked && unquoted.has(commit.hash) ? '. Message not quoted' : ''}</span></span></li>`,
 			)
 			.join('')}</ol>
+		${copy}
 	</section>`
 }
 
 // A merge is not counted: the tool that merged wrote its message. An answer saved before ken counted says nothing.
-function messagesLine(change) {
+function messagesLine(change, own) {
 	const { messages } = change
 	if (!messages) return ''
-	const total = messages.quoted.length + messages.unquoted.length
+	const quoted = messages.quoted.filter((hash) => own.has(hash)).length
+	const total = quoted + messages.unquoted.filter((hash) => own.has(hash)).length
 	if (total === 0) return ''
-	const left =
-		messages.unquoted.length === 0
-			? ''
-			: ` The answer does not quote ${messages.unquoted.length === 1 ? 'the other' : `the other ${messages.unquoted.length}`}: ${list(messages.unquoted.map((hash) => `<code>${short(hash)}</code>`))}.`
-	const merges = change.commits.length > total ? ' Merges are not counted.' : ''
-	return `<p>${messages.quoted.length} of ${count(total, 'commit message', 'commit messages')} quoted.${left}${merges}</p>`
+	const merges = own.size > total ? ' Merges are not counted.' : ''
+	const said =
+		total === 1
+			? quoted === 1
+				? 'The answer quotes the commit message.'
+				: 'The answer does not quote the commit message.'
+			: quoted === total
+				? `The answer quotes all ${total} commit messages.`
+				: `The answer quotes ${quoted} of the ${total} commit messages.`
+	return `<p>${said}${merges}</p>`
 }
 
 // What a numbered part of a diagram is, as a node and as an edge.

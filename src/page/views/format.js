@@ -36,28 +36,38 @@ export function duration(seconds) {
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+const pad = (n) => String(n).padStart(2, '0')
 
-// "today at 12:31", "yesterday at 09:05", "3 Nov at 17:40", in the reader's own time zone.
+// The page's one way to write a moment, in the reader's own time zone: "06:36" today, "16 Nov 06:36" on another day,
+// "16 Nov 2025 06:36" in another year. Git dates carry their offset, so they read the same way.
 export function when(iso, now = new Date()) {
 	const at = new Date(iso)
-	const time = `${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`
-	const day = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
-	const daysAgo = Math.round((day(now) - day(at)) / 86_400_000)
-	if (daysAgo === 0) return `today at ${time}`
-	if (daysAgo === 1) return `yesterday at ${time}`
+	const time = `${pad(at.getHours())}:${pad(at.getMinutes())}`
+	if (at.toDateString() === now.toDateString()) return time
 	const year = at.getFullYear() === now.getFullYear() ? '' : ` ${at.getFullYear()}`
-	return `${at.getDate()} ${MONTHS[at.getMonth()]}${year} at ${time}`
+	return `${at.getDate()} ${MONTHS[at.getMonth()]}${year} ${time}`
 }
 
-// A git date, which is UTC, as "10 Nov 00:19".
-export function gitDay(iso) {
-	const d = new Date(iso)
-	const time = `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`
-	return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${time}`
+// The same moment in a sentence: "at 06:36", "on 16 Nov 06:36".
+export function at(iso) {
+	const said = when(iso)
+	return said.includes(' ') ? `on ${said}` : `at ${said}`
+}
+
+// A day with no time, such as a map line's 2026-11-16: "today", "16 Nov", "16 Nov 2025".
+export function day(date, now = new Date()) {
+	const [year, month, d] = date.split('-').map(Number)
+	if (year === now.getFullYear() && month === now.getMonth() + 1 && d === now.getDate()) return 'today'
+	return `${d} ${MONTHS[month - 1]}${year === now.getFullYear() ? '' : ` ${year}`}`
 }
 
 export function lineSpan(start, end) {
 	return start === end ? `line ${start}` : `lines ${start} to ${end}`
+}
+
+// A session quote counts its lines within the one message it quotes.
+function quoteLines(quote) {
+	return `${lineSpan(quote.startLine, quote.endLine)}${isSession(quote) ? ' of the message' : ''}`
 }
 
 // Code with a gutter of line numbers. kinds marks diff lines: "add", "del" or "".
@@ -75,7 +85,7 @@ export function codeLines(lines, numbers, kinds = []) {
 export function quoteSource(quote) {
 	if (isSession(quote)) {
 		const who = quote.by === 'user' ? 'what you asked' : 'what the agent said'
-		return `From the session of ${gitDay(quote.at)} UTC, ${who}`
+		return `Session ${when(quote.at)}, ${who}`
 	}
 	return quote.path === null ? `Commit message of <code>${short(quote.commit)}</code>` : esc(quote.path)
 }
@@ -108,14 +118,15 @@ export function quoteRows(quotes, key, { ui, commits }) {
 			const id = `${key}-q${j}`
 			const chosen = ui.wide && ui.panel.kind === 'quote' && ui.panel.key === key && ui.panel.quote === j
 			const open = !ui.wide && ui.openQuotes.has(id)
-			const first = quote.text.split('\n').find((line) => line.trim() !== '') ?? ''
+			// A session quote's row names the session and the line within its message, so its first line has no room.
+			const first = isSession(quote) ? '' : (quote.text.split('\n').find((line) => line.trim() !== '') ?? '')
 			const at =
 				commits && !isSession(quote) && quote.path !== null
 					? `<span class="q-commit">at <code>${short(quote.commit)}</code></span>`
 					: ''
 			return `<li class="q${chosen ? ' chosen' : ''}">
 				<button class="q-row" data-act="quote" data-item="${key}" data-quote="${j}" data-key="${id}" aria-expanded="${ui.wide ? chosen : open}"${ui.wide ? ' aria-controls="panel"' : ''}>
-					<span class="q-path">${quoteSource(quote)}</span><span class="q-lines"><span class="nowrap">${lineSpan(quote.startLine, quote.endLine)}</span>${at}</span><span class="q-first">${esc(first.trim())}</span>
+					<span class="q-path">${quoteSource(quote)}</span><span class="q-lines"><span class="nowrap">${quoteLines(quote)}</span>${at}</span>${first ? `<span class="q-first">${esc(first.trim())}</span>` : ''}
 				</button>
 				${open ? quoteBody(quote, '', commits) : ''}
 			</li>`
@@ -127,16 +138,16 @@ export const LABELS = {
 	recorded: {
 		name: 'Recorded',
 		means:
-			'Written down when the work was done: logged with ken decide as the decision was made, or quoted from a commit message.',
+			'Written down when the work was done: quoted from a commit message, or logged by your coding agent with ken decide as it worked. ken did not check the reason.',
 	},
 	'from-the-session': {
 		name: 'From the session',
 		means:
-			'Read afterwards from a saved session of the coding agent, and quoted. ken found the lines there. It did not check that they give the true reason.',
+			"The reason is quoted from your agent's saved session. ken found the lines there. It did not check that they give the true reason.",
 	},
 	inferred: {
 		name: 'Inferred',
-		means: 'The agent worked this out from the code or the diff. No commit message or note says so.',
+		means: 'Worked out by the agent from the code or the diff. No commit message or session says so.',
 	},
 	'found-by-search': {
 		name: 'Found by search',

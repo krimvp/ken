@@ -883,13 +883,8 @@ span.label-from-the-session {
 }
 
 .d-line {
-	display: -webkit-box;
 	flex: 1 1 0;
 	min-width: 0;
-	overflow: hidden;
-	-webkit-box-orient: vertical;
-	-webkit-line-clamp: 2;
-	line-clamp: 2;
 	line-height: 1.5;
 }
 
@@ -1434,27 +1429,10 @@ span.label-from-the-session {
 		grid-column: 1;
 	}
 
-	/* Two lines on a narrow screen: the question with its mark, then the option taken. */
-	.d-line {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0 var(--space-2);
-	}
-
-	.d-q,
+	/* On a narrow screen the question with its mark, then the option taken on a line of its own, each wrapped whole:
+	   this is where the page sits beside a coding agent. */
 	.d-chosen {
-		overflow: hidden;
-		white-space: nowrap;
-		text-overflow: ellipsis;
-	}
-
-	.d-q {
-		flex: 1 1 0;
-		min-width: 0;
-	}
-
-	.d-chosen {
-		flex-basis: 100%;
+		display: block;
 	}
 
 	.d-card {
@@ -1852,53 +1830,161 @@ span.label-from-the-session {
 }
 
 /* The Live view and its notes. */
-.live-dot {
+.visually-hidden {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip-path: inset(50%);
+	white-space: nowrap;
+}
+
+/* Live mode's mark, in the header and on the status line: a dot when on, two bars when paused, a pulsing dot while a
+   note is being written, a hollow ring when off. */
+.live-mark {
 	display: inline-block;
-	width: 0.5rem;
-	height: 0.5rem;
-	margin-right: var(--space-1);
+	flex: none;
+	width: 0.625rem;
+	height: 0.625rem;
+	margin-right: var(--space-2);
 	border-radius: 50%;
+	vertical-align: 0.05em;
+}
+
+.live-mark.is-on,
+.is-on > .live-mark {
+	background: var(--color-add);
+}
+
+.live-mark.is-paused,
+.is-paused > .live-mark {
+	border-radius: 0;
+	background: linear-gradient(
+		to right,
+		var(--color-warn-border) 35%,
+		transparent 35% 65%,
+		var(--color-warn-border) 65%
+	);
+}
+
+.live-mark.is-writing,
+.is-writing > .live-mark {
 	background: var(--color-accent);
-	vertical-align: 0.1em;
+	animation: pulse 1.2s ease-in-out infinite;
+}
+
+.is-off > .live-mark {
+	border: 2px solid var(--color-muted);
+}
+
+@keyframes pulse {
+	50% {
+		opacity: 0.25;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.live-mark.is-writing,
+	.is-writing > .live-mark {
+		animation: none;
+	}
+}
+
+.live-view {
+	max-width: var(--measure);
+	padding: var(--space-5) 0 var(--space-6);
+}
+
+.live-top {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-3) var(--space-5);
+}
+
+.live-status {
+	display: flex;
+	align-items: baseline;
+	flex: 1 1 18rem;
+	font-size: var(--text-md);
+	line-height: 1.5;
+}
+
+.live-status.is-paused {
+	padding: var(--space-1) var(--space-2);
+	border-left: 3px solid var(--color-warn-border);
+	background: var(--color-warn-bg);
 }
 
 .live-controls {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
-	gap: var(--space-3);
-	margin-top: var(--space-4);
+	gap: var(--space-2) var(--space-3);
 }
 
 .live-pace {
-	max-width: var(--measure);
-	margin-top: var(--space-3);
+	margin-top: var(--space-2);
+	color: var(--color-note);
+	font-size: var(--text-sm);
+	line-height: 1.5;
+}
+
+.ln-count {
+	margin-top: var(--space-5);
+	margin-bottom: var(--space-2);
+	color: var(--color-note);
+	font-size: var(--text-note);
+	font-weight: 650;
 }
 
 .now {
-	max-width: var(--measure);
-	margin-top: var(--space-5);
-	padding: var(--space-4);
+	margin-top: var(--space-4);
+	padding: var(--space-3) var(--space-4);
 	border: 1px solid var(--color-border);
 	border-radius: var(--radius-md);
-	background: var(--color-card);
+	font-size: var(--text-note);
+	line-height: 1.5;
 	overflow-wrap: anywhere;
 }
 
 .now h2 {
-	font-size: 1.125rem;
+	display: inline;
+	font-size: var(--text-note);
 	font-weight: 650;
+}
+
+.now-from {
+	display: inline;
+	margin-left: var(--space-2);
+	color: var(--color-note);
+	font-size: var(--text-sm);
 }
 
 .now > * + * {
 	margin-top: var(--space-2);
 }
 
+.now > .now-from {
+	margin-top: 0;
+}
+
+.now-sub,
+.now-when,
+.now-commits {
+	color: var(--color-note);
+}
+
 .now-files,
 .now-commits {
 	display: grid;
 	gap: var(--space-1);
-	font-size: var(--text-note);
+}
+
+.now-sub + .now-commits,
+.now-sub + .now-files {
+	margin-top: var(--space-1);
 }
 
 .now-count .add {
@@ -1921,20 +2007,12 @@ span.label-from-the-session {
 	white-space: pre-line;
 }
 
-.live-notes {
-	display: grid;
-	gap: var(--space-4);
-	max-width: var(--measure);
-	margin-top: var(--space-3);
-}
-
 /* A grid item is as wide as its widest line by default, and a quote's first line can be long. */
 .live-item {
 	min-width: 0;
 }
 
 .live-notes.folded {
-	gap: 0;
 	border-top: 1px solid var(--color-border);
 }
 
@@ -1946,6 +2024,10 @@ span.label-from-the-session {
 	overflow-wrap: anywhere;
 }
 
+.live-notes .live-note {
+	margin: var(--space-3) 0 var(--space-2);
+}
+
 .live-note > * + * {
 	margin-top: var(--space-3);
 }
@@ -1955,23 +2037,38 @@ span.label-from-the-session {
 }
 
 .ln-head {
-	display: flex;
-	flex-wrap: wrap;
-	gap: var(--space-1) var(--space-3);
-	color: var(--color-muted);
+	color: var(--color-note);
 	font-size: var(--text-note);
 }
 
-.ln-time {
-	font-weight: 650;
+.ln-about {
 	color: var(--color-text);
+	font-weight: 650;
 }
 
-.ln-draft {
+.ln-time {
+	white-space: nowrap;
+}
+
+q.subject {
+	font-weight: 400;
+	quotes: '"' '"';
+}
+
+.ln-new,
+.ln-tag {
+	display: inline-block;
 	padding: 0 var(--space-2);
 	border-radius: var(--radius-sm);
 	background: var(--color-label-bg);
 	color: var(--color-label-text);
+	font-size: var(--text-sm);
+	font-weight: 600;
+}
+
+.ln-tag {
+	margin-left: var(--space-2);
+	font-weight: 400;
 }
 
 .ln-sub {
@@ -1984,31 +2081,34 @@ span.label-from-the-session {
 	gap: var(--space-3);
 }
 
+.st.alone {
+	grid-template-columns: minmax(0, 1fr);
+}
+
 .ln-foot {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
 	justify-content: space-between;
-	gap: var(--space-2);
+	gap: var(--space-2) var(--space-4);
+}
+
+.ln-ask {
+	display: inline-flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-1) var(--space-3);
 }
 
 .ln-cost {
-	color: var(--color-muted);
+	color: var(--color-note);
 	font-size: var(--text-note);
 }
 
-.ln-gist {
-	text-decoration: underline;
-}
-
-.live-older {
-	margin-top: var(--space-4);
-}
-
 .ln-folded {
-	display: grid;
-	gap: var(--space-1);
+	display: block;
 	width: 100%;
+	min-height: 2.75rem;
 	padding: var(--space-3) 0;
 	border: 0;
 	border-bottom: 1px solid var(--color-border);
@@ -2019,11 +2119,142 @@ span.label-from-the-session {
 	cursor: pointer;
 }
 
-.ln-folded:hover .ln-gist {
-	display: -webkit-box;
+.ln-line {
+	display: block;
 	overflow: hidden;
-	-webkit-box-orient: vertical;
-	-webkit-line-clamp: 1;
-	color: var(--color-text);
+	color: var(--color-note);
 	font-size: var(--text-note);
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.ln-folded:hover .ln-about,
+.ln-folded:focus-visible .ln-about {
+	text-decoration: underline;
+}
+
+.ln-gist {
+	margin-left: var(--space-2);
+}
+
+.ln-fold {
+	margin-bottom: var(--space-3);
+}
+
+.live-foot {
+	margin-top: var(--space-5);
+	color: var(--color-note);
+	font-size: var(--text-note);
+	line-height: 1.5;
+}
+
+/* The header on a phone: the views go into the menu, and the project's name keeps its room. */
+.top-narrow,
+.menu-views {
+	display: none;
+}
+
+.top-views {
+	display: contents;
+}
+
+@media (max-width: 720px) {
+	.top-wide {
+		display: none;
+	}
+
+	.top-narrow {
+		display: inline;
+	}
+
+	.menu-views.top-narrow {
+		display: grid;
+		gap: var(--space-1);
+		justify-items: start;
+		padding-bottom: var(--space-3);
+		margin-bottom: var(--space-2);
+		border-bottom: 1px solid var(--color-border);
+	}
+
+	.menu-views .link {
+		min-height: 2.75rem;
+	}
+
+	.top {
+		gap: var(--space-3);
+	}
+
+	.top-menu {
+		flex-wrap: nowrap;
+		gap: var(--space-4);
+	}
+
+	.project .reads {
+		display: none;
+	}
+
+	.project {
+		flex: 1 1 auto;
+		min-width: 4.5rem;
+	}
+
+	.top-menu {
+		flex: none;
+	}
+}
+
+/* The buttons under an answer, each with what it does, and the lenses folded behind one line. */
+.map-bar .map-buttons li {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-1) var(--space-3);
+	color: var(--color-note);
+	font-size: var(--text-note);
+}
+
+.map-bar .map-buttons {
+	display: grid;
+	gap: var(--space-2);
+}
+
+.map-bar .map-buttons .quiet-button {
+	min-width: 8.5rem;
+}
+
+.lens-fold {
+	padding: var(--space-3) 0 var(--space-6);
+}
+
+.lens-fold .lenses {
+	margin-top: var(--space-3);
+}
+
+.lens-note {
+	flex-basis: 100%;
+}
+
+.moved.stale {
+	color: var(--color-text);
+}
+
+.o-decided {
+	padding: var(--space-3) var(--space-3);
+	margin: var(--space-3) 0;
+	border-left: 3px solid var(--color-add);
+	background: var(--color-card);
+}
+
+.o-decided > * + * {
+	margin-top: var(--space-1);
+}
+
+.dv-answer {
+	padding-left: var(--space-3);
+	border-left: 3px solid var(--color-add);
+}
+
+.dv-row:focus {
+	outline: 2px solid var(--color-focus);
+	outline-offset: 4px;
 }
