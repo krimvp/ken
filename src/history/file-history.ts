@@ -72,9 +72,13 @@ function parseLine(line: string): HistoryEntry | null {
 		Array.isArray(steps)
 	if (!fine) return null
 	// An answer saved before answers carried diagrams has none, and an entry saved before ken kept the HEAD has none. One
-	// saved before answers carried risks never looked for them, so its risks are null, not an empty list.
+	// saved before answers carried risks never looked for them, so its risks are null, not an empty list. A change saved
+	// before ken counted the quoted commit messages has no count.
 	if (isObject(value.answer) && !Array.isArray(value.answer.diagrams)) value.answer.diagrams = []
 	if (isObject(value.answer) && value.answer.risks === undefined) value.answer.risks = null
+	if (isObject(value.answer) && isObject(value.answer.change) && value.answer.change.messages === undefined) {
+		value.answer.change.messages = null
+	}
 	if (typeof value.head !== 'string') value.head = null
 	return value as HistoryEntry
 }

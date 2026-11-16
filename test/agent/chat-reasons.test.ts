@@ -22,7 +22,7 @@ const { root, hashes } = buildRepository([
 	},
 	{ message: "Merge branch 'wait'", parent: 0, merge: 2, files: {} },
 ])
-const [base = '', waits = '', , merge = ''] = hashes
+const [base = '', waits = '', docs = '', merge = ''] = hashes
 const KEY_ENV = 'KEN_TEST_MODEL_KEY'
 process.env[KEY_ENV] = 'scripted-model-key'
 
@@ -93,4 +93,14 @@ test('a reason quoted from a commit message is checked like a file quote: half a
 		'recorded',
 		{ text: DECISION.reason, quotes: [{ path: null, commit: waits, startLine: 3, endLine: 3, text: REASON }] },
 	])
+})
+
+test('an accepted answer tells the model which commit messages no quote cites, leaving out the merge, and carries the same count', async () => {
+	const { events, requests } = await ask([answer([DECISION]), { text: 'I left out the README commit.' }])
+
+	assert.deepEqual(accepted(events).answer.change?.messages, { quoted: [waits], unquoted: [docs] })
+	const told = toolResults(requests[1])[0] ?? ''
+	assert.match(told, /cite 1 of 2 commit messages/)
+	assert.ok(told.includes(`- ${docs.slice(0, 7)} docs: say how long`), `the model is told which one: ${told}`)
+	assert.ok(!told.includes(merge.slice(0, 7)), `the merge is not listed: ${told}`)
 })

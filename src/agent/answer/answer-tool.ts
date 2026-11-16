@@ -17,6 +17,7 @@ import { type RecordArgs, type Recorded, recordAnswer } from './record-answer.ts
 
 export const MAX_REJECTIONS = 3
 const MAX_LISTED_HUNKS = 40
+const MAX_LISTED_MESSAGES = 40
 // Two short sentences. A longer summary pushes the checked part of the answer off the reader's first screen.
 export const MAX_SUMMARY_CHARS = 280
 
@@ -121,6 +122,16 @@ function confirmation(
 			lines.push('Not covered:', ...listed, ...more)
 		}
 		if (binary.length > 0) lines.push(`Binary files, which no quote can cover: ${binary.join(', ')}.`)
+		const { messages, commits } = answer.change
+		if (messages) {
+			const total = messages.quoted.length + messages.unquoted.length
+			lines.push(`Your quotes cite ${messages.quoted.length} of ${total} commit messages.`)
+			const subjects = new Map(commits.map((commit) => [commit.hash, commit.subject]))
+			const listed = messages.unquoted
+				.slice(0, MAX_LISTED_MESSAGES)
+				.map((hash) => `- ${hash.slice(0, 7)} ${subjects.get(hash) ?? ''}`)
+			if (listed.length > 0) lines.push('Commit messages no quote cites:', ...listed)
+		}
 	}
 	lines.push(
 		'Now write one or two sentences to the reader that say what the answer left out. Say nothing else, and do not repeat the answer.',

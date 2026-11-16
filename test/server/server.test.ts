@@ -193,7 +193,7 @@ test('a question streams its steps and a checked answer with its diagram drawn, 
 	)
 })
 
-test('a question saved before ken kept the HEAD still opens with no HEAD of its own, and an answer saved before risks and before the diagram rules opens as it was', async () => {
+test('a question saved before ken kept the HEAD still opens with no HEAD of its own, and answers saved before risks, before the diagram rules and before the commit message count open as they were', async () => {
 	const home = tempFolder('ken-home-')
 	const old = { id: 'old-1', question: 'What changed?', askedAt: '2026-11-01T10:00:00.000Z', steps: [], usage: null }
 	// An answered question as ken wrote it at f3e1e61, before answers carried risks. Its diagram has one arrow and a box
@@ -205,10 +205,13 @@ test('a question saved before ken kept the HEAD still opens with no HEAD of its 
 	const diagram = { kind: 'component', title: 'Retry', label: 'inferred', boxes, arrows: [arrow] }
 	const answer = { summary: 'Retries wait.', statements: [statement], diagrams: [diagram], change: null }
 	const answered = { ...old, id: 'old-2', head, outcome: 'answered', answer, recorded: [], note: '' }
+	// An answer about a change as ken wrote it at 0d81f71, before it counted the quoted commit messages.
+	const change = { base, head, commits: [], covered: [], uncovered: [], binary: [] }
+	const counted = { ...answered, id: 'old-3', answer: { ...answer, diagrams: [], risks: [], change } }
 	mkdirSync(path.join(home, 'projects', base), { recursive: true })
 	writeFileSync(
 		path.join(home, 'projects', base, 'history.jsonl'),
-		`${JSON.stringify({ ...old, outcome: 'stopped' })}\n${JSON.stringify(answered)}\n`,
+		[{ ...old, outcome: 'stopped' }, answered, counted].map((entry) => `${JSON.stringify(entry)}\n`).join(''),
 	)
 	const server = await open(home, null)
 
@@ -221,6 +224,8 @@ test('a question saved before ken kept the HEAD still opens with no HEAD of its 
 	const [drawn] = reopened.entry.answer.diagrams
 	assert.match(drawn.mermaid, /^flowchart LR\n.*n3\["3\. clock"\].*"4\. calls"/s, 'the old diagram still draws')
 	assert.equal(drawn.elements.length, 4)
+	const before = await json(server, '/api/questions/old-3')
+	assert.deepEqual(before.entry.answer.change, { ...change, messages: null }, 'no count, rather than a count of none')
 })
 
 test('a second question about the same commits shows the decision the first one recorded', async () => {
