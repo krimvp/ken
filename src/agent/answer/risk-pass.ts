@@ -4,11 +4,10 @@
 // the final order of the risks, heaviest first. ken merges what passes into one answer. When nothing passes, the first
 // answer stands.
 import type { JsonObject, Tool } from 'aigent/plugin'
-import type { Commit, Repository } from '../../repo/index.ts'
+import type { Commit, Range, Repository } from '../../repo/index.ts'
 import type { Revision } from '../chat-event.ts'
 import { namesText } from '../tools/elsewhere-text.ts'
 import { readArgs, refuse, reply, short } from '../tools/tool-edge.ts'
-import type { Change } from './answer.ts'
 import {
 	type AnswerRound,
 	accept,
@@ -27,43 +26,89 @@ import { allowJsonText, readJsonText } from './json-text.ts'
 export const MAX_PASS_REJECTIONS = 2
 const MAX_LATER = 8
 const MAX_LATER_PATHS = 4
+const MAX_OPENING_CHARS = 300
 
-// A later commit that changed a file the change changed, with the files they share.
-export type Later = { commit: Commit; shared: string[] }
+// A later commit that changed a file the change changed, with the files they share and the first lines of its message
+// body, each with its line number in the message.
+export type Later = { commit: Commit; shared: string[]; opening: { line: number; text: string }[] }
+export type LaterCommits = { shown: Later[]; total: number }
 
-// The commits after the change, up to HEAD, that changed its files, oldest first: a fix that came after shows what the
-// change left undone. A change that ends at HEAD has none.
-export async function laterCommits(repo: Repository, change: Change, signal?: AbortSignal): Promise<Later[]> {
+// The commits after the change, up to HEAD, that changed its files. A fix that came after shows what the change left
+// open, so the fixes come first; then those that share the most files, since a design doc that nearly every commit
+// touches would fill the list with fixes of other things; then the oldest. A change that ends at HEAD has none.
+export async function laterCommits(repo: Repository, range: Range, signal?: AbortSignal): Promise<LaterCommits> {
+	const none = { shown: [], total: 0 }
 	const now = await repo.resolve('HEAD', signal)
-	if (now.kind !== 'ok' || now.commit === change.head) return []
-	const logged = await repo.log({ base: change.head, head: now.commit }, signal)
-	if (logged.kind !== 'ok') return []
-	const touched = new Set([...change.covered, ...change.uncovered].map(({ path }) => path))
-	return logged.commits
+	if (now.kind !== 'ok' || now.commit === range.head) return none
+	const [logged, diff] = await Promise.all([
+		repo.log({ base: range.head, head: now.commit }, signal),
+		repo.diff(range, signal),
+	])
+	if (logged.kind !== 'ok' || diff.kind !== 'ok') return none
+	const touched = new Set(diff.files.flatMap((file) => [file.path, file.oldPath]))
+	const fix = (commit: Commit) => (/^fix\b/i.test(commit.subject) ? 0 : 1)
+	const later = logged.commits
 		.map((commit) => ({ commit, shared: commit.paths.filter((path) => touched.has(path)) }))
 		.filter(({ shared }) => shared.length > 0)
 		.reverse()
+		.sort((a, b) => fix(a.commit) - fix(b.commit) || b.shared.length - a.shared.length)
+	const shown = await Promise.all(
+		later.slice(0, MAX_LATER).map(async (each) => {
+			const message = await repo.message(each.commit.hash, signal)
+			return { ...each, opening: message.kind === 'ok' ? openingOf(message.text) : [] }
+		}),
+	)
+	return { shown, total: later.length }
+}
+
+// Whole lines of the body, up to MAX_OPENING_CHARS in all, so each can be quoted as it is. One line longer than that is
+// cut, and says so.
+function openingOf(message: string): Later['opening'] {
+	const opening: Later['opening'] = []
+	let used = 0
+	for (const [at, text] of message.split('\n').entries()) {
+		if (at === 0 || text.trim() === '') continue
+		if (opening.length > 0 && used + text.length > MAX_OPENING_CHARS) break
+		const cut = text.length > MAX_OPENING_CHARS ? `${text.slice(0, MAX_OPENING_CHARS)} [line cut]` : text
+		opening.push({ line: at + 1, text: cut })
+		used += text.length
+	}
+	return opening
+}
+
+// The listing the draft's log and the second look both get, numbered by line the way log numbers a message.
+export function laterText({ shown, total }: LaterCommits, head: string): string[] {
+	if (shown.length === 0) return []
+	const of = total > shown.length ? `; here are ${shown.length} of ${total}` : ''
+	return [
+		`Later commits that changed the same files, after ${short(head)}, the fixes first, then those that share the most files${of}. Each gives its subject and the start of its message by line, as log does; log with base <commit>^1 and head <commit> shows the whole message.`,
+		...shown.flatMap(({ commit, shared, opening }) => [
+			`- ${short(commit.hash)} ${commit.date.slice(0, 10)} ${commit.subject} (${shared.slice(0, MAX_LATER_PATHS).join(', ')}${shared.length > MAX_LATER_PATHS ? ', ...' : ''})`,
+			...opening.map(({ line, text }) => `${String(line).padStart(6)}\t${text}`),
+		]),
+	]
 }
 
 // The steps follow the checkpoint's verdicts: the plain chat found the risks that need the code outside the change, two
 // parts of the change read together, a behaviour no test covers or a thing outside the repository, and it ordered its
 // risks by who hits them and when. The first step tries to prove each risk false, because a judge found a false risk
 // and an unsettled one that one line of code settled, and the pass had never withdrawn a risk.
-export function riskPassQuestion(held: Held, later: Later[]): string {
+export function riskPassQuestion(held: Held, later: LaterCommits): string {
 	const { answer, decisions } = held
 	const risks = answer.risks ?? []
 	const notFollowed = answer.change?.usedElsewhere?.notFollowed ?? []
 	const head = answer.change ? short(answer.change.head) : 'HEAD'
 	const mark = (checked: boolean | undefined) =>
 		checked ? 'quotes code outside the change' : 'quotes only the changed lines'
-	const shown = later.slice(0, MAX_LATER)
+	const listed = laterText(later, head)
 	return [
 		`ken checked your answer, and the reader has not seen it yet. Now check it against the code at the head commit ${head}, with the same tools. Take these steps in order:`,
-		'1. Each risk below: find the code that would make it false, and read it: a check that stops the case, a caller that never passes the value, a later commit below that fixed it. Withdraw the risk when that code shows it does not happen; that is a normal result. A risk that begins with "if" ends settled: rewrite it without the "if" and quote the line that settles it, or withdraw it. It may stay unsettled only when the code that decides it is not in git, such as a dependency\'s, and then it says so. Otherwise rewrite the risk with a quote of the place it rests on, or keep it as it is. ken marks a risk "Quotes code outside the change" only when one of its quotes, at the head commit, holds no line the change touched, and "Quotes only the changed lines" otherwise. A dependency\'s code is not in git, so ken cannot read it.',
+		'1. Each risk below: find the code that would make it false, and read it: a check that stops the case, a caller that never passes the value. Withdraw the risk when that code shows it does not happen; that is a normal result. A later commit below that fixed the risk shows it was real: keep it, and say it was fixed since, in which commit. A risk that begins with "if" ends settled: rewrite it without the "if" and quote the line that settles it, or withdraw it. It may stay unsettled only when the code that decides it is not in git, such as a dependency\'s, and then it says so. Otherwise rewrite the risk with a quote of the place it rests on, or keep it as it is. ken marks a risk "Quotes code outside the change" only when one of its quotes, at the head commit, holds no line the change touched, and "Quotes only the changed lines" otherwise. A dependency\'s code is not in git, so ken cannot read it.',
 		'2. Each pair of decisions that touch the same file, function, record, id or signal, such as one that writes or keeps a thing and one that deletes or skips it: what happens when both apply?',
 		'3. Each early return, refusal, delete or catch in the changed lines: what no longer happens after it, and who relied on it?',
 		'4. Which new behaviour has no test? And what does the change lean on outside the repository, such as a setting, a service or the way a dependency behaves?',
-		'5. Each name below that no quote follows: read where it is used. Does the change still fit there? And each fix: what does it leave undone?',
+		'5. Each name below that no quote follows: read where it is used. Does the change still fit there?',
+		"6. Each later fix below: what did this change leave open that the fix closed? Send it as a risk as of this change: quote the line of the fixing commit's message that says what was wrong, and say it has been fixed since, in which commit.",
 		'',
 		decisions.length === 0 ? 'Your answer names no decisions.' : 'The decisions in your answer:',
 		...decisions.map((d, at) => `${at + 1}. ${d.question} Chosen: ${d.chosen} Why: ${d.reason.text}`),
@@ -76,18 +121,9 @@ export function riskPassQuestion(held: Held, later: Later[]): string {
 		...(notFollowed.length === 0
 			? ['Every name ken found used elsewhere has a quote of your answer at one of its places.']
 			: [`Names used elsewhere, at ${head}, that no quote of your answer follows:`, ...namesText(notFollowed)]),
-		...(shown.length === 0
-			? []
-			: [
-					'',
-					`Later commits that changed the same files, after ${head}, oldest first${later.length > shown.length ? `, the first ${shown.length} of ${later.length}` : ''}. log with base <commit>^1 and head <commit> shows one's message:`,
-					...shown.map(
-						({ commit, shared }) =>
-							`- ${short(commit.hash)} ${commit.date.slice(0, 10)} ${commit.subject} (${shared.slice(0, MAX_LATER_PATHS).join(', ')}${shared.length > MAX_LATER_PATHS ? ', ...' : ''})`,
-					),
-				]),
+		...(listed.length === 0 ? [] : ['', ...listed]),
 		'',
-		'Before you call revise_answer, write what you found in steps 2, 3 and 4, one short line each: the two decisions, the line or the behaviour, and what happens. These lines are not part of the answer.',
+		'Before you call revise_answer, write what you found in steps 2, 3, 4 and 6, one short line each: the two decisions, the line or the behaviour, and what happens. These lines are not part of the answer.',
 		'Then call revise_answer once:',
 		`- risks: each new risk, and each risk above that you rewrite, with replaces set to its number. A risk is one or two sentences: what can happen, who hits it (a host, an operator, a reader of results, a later developer) and when (always, on resume, only for runs made before this change, only under load). Quote the place it rests on, and give it its weight: ${WEIGHT_RULE}.`,
 		'- withdraw: each risk above that the code shows does not happen, with what the code shows instead.',

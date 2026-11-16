@@ -49,10 +49,10 @@ function answer(args: Record<string, unknown>): Turn {
 }
 const ABOUT_THE_CHANGE = { scope: { base, head }, work: { title: 'Time out sooner' } }
 
-async function ask(script: Turn[], as: 'question' | 'note' = 'question') {
+async function ask(script: Turn[], as: 'question' | 'note' = 'question', directory = root) {
 	const model = await scriptedModel(script)
 	const started = await startChat({
-		directory: root,
+		directory,
 		model: { model: 'scripted', baseUrl: model.baseUrl, apiKeyEnv: KEY_ENV },
 		env: {},
 	})
@@ -100,6 +100,53 @@ test('log and diff over a change end with the names used elsewhere, once per que
 			{ name: 'TIMEOUT_MS', how: 'altered', places: 1, first: [{ path: 'src/load.ts', line: 2, text: CALL.text }] },
 		],
 	})
+})
+
+test('log over a change and the second look list the later commits on its files: a later fix comes first, with the first lines of its message', async () => {
+	const later = buildRepository([
+		{ message: 'feat: start', files: { 'src/limits.ts': 'export const TIMEOUT_MS = 500\n', 'README.md': 'Limits.\n' } },
+		{ message: 'fix: time out sooner', files: { 'src/limits.ts': 'export const TIMEOUT_MS = 100\n' } },
+		{ message: 'feat: name the limit', files: { 'src/limits.ts': '// The limit.\nexport const TIMEOUT_MS = 100\n' } },
+		{
+			message: 'fix: wait longer on a slow network',
+			body: 'A limit of 100 ms timed out every request on a slow network.\nThe limit is 300 ms now.',
+			files: { 'src/limits.ts': '// The limit.\nexport const TIMEOUT_MS = 300\n' },
+		},
+		{ message: 'fix: a typo in the README', files: { 'README.md': 'The limits.\n' } },
+	])
+	const [start = '', change = ''] = later.hashes
+	const quote = { path: 'src/limits.ts', commit: change, text: 'export const TIMEOUT_MS = 100' }
+	const { requests } = await ask(
+		[
+			{ tool: 'ken__log', args: { base: start, head: change } },
+			DRAFT,
+			{
+				tool: 'ken__answer',
+				args: {
+					scope: { base: start, head: change },
+					summary: 'The timeout is shorter.',
+					statements: [{ text: 'The timeout drops to 100 ms.', label: 'inferred', quotes: [quote] }],
+					risks: [],
+				},
+			},
+			...nothingToRevise(0),
+			{ text: 'I left out the tests.' },
+		],
+		'question',
+		later.root,
+	)
+
+	const pass = userTexts(requests.at(-1))[2] ?? ''
+	const seen: [string, string][] = [
+		['the log of the change', toolResults(requests[1])[0] ?? ''],
+		['the second look', pass],
+	]
+	for (const [what, text] of seen) {
+		const fix = text.indexOf('fix: wait longer on a slow network')
+		assert.ok(fix > 0 && fix < text.indexOf('feat: name the limit'), `${what} lists the later fix first: ${text}`)
+		assert.ok(text.includes('A limit of 100 ms timed out every request on a slow network.'), `${what}: ${text}`)
+		assert.ok(!text.includes('a typo in the README'), `${what} leaves out a later commit on other files`)
+	}
 })
 
 test('a question about a change gets its draft first: an answer sent before the draft goes back without using an attempt, ken asks for the answer once the draft ends the turn, and the answer counts the points of the draft it left out', async () => {

@@ -7,7 +7,7 @@ import { findRoot, gitRepository } from '../repo/index.ts'
 import { projectSessions } from '../transcripts/index.ts'
 import { type AnswerRound, accept, answerTool, MAX_REJECTIONS, type Step } from './answer/answer-tool.ts'
 import { FROM_DRAFT } from './answer/from-draft.ts'
-import { laterCommits, MAX_PASS_REJECTIONS, reviseTool, riskPassQuestion } from './answer/risk-pass.ts'
+import { laterCommits, laterText, MAX_PASS_REJECTIONS, reviseTool, riskPassQuestion } from './answer/risk-pass.ts'
 import type { ChatEvent, Cost } from './chat-event.ts'
 import type { ModelConfig } from './model-config.ts'
 import { readerIndex } from './reader-index.ts'
@@ -89,15 +89,17 @@ export async function startChat(options: {
 			return { ...result, content: [...result.content, { type: 'text', text: notice }] }
 		},
 	})
-	// A question reads the names used elsewhere once per range, at the first log or diff of it. A note does without, and
-	// so does the risk pass, which reads the later commits and has the names in its question.
+	// A question reads the names used elsewhere and the later commits on the same files once per range, at the first log
+	// or diff of it. A note does without, and so does the risk pass, which has both in its question.
 	const shown = new Set<string>()
 	const elsewhere: Elsewhere = async (range, signal) => {
 		const key = `${range.base}..${range.head}`
 		if (!round.asked || round.step === 'risks' || shown.has(key)) return null
 		shown.add(key)
-		const found = await usedElsewhere(repo, range, signal)
-		return found.kind === 'ok' ? elsewhereText(found.used) : null
+		const [found, later] = await Promise.all([usedElsewhere(repo, range, signal), laterCommits(repo, range, signal)])
+		const parts = [found.kind === 'ok' ? elsewhereText(found.used) : '', laterText(later, range.head).join('\n')]
+		const text = parts.filter((part) => part !== '').join('\n\n')
+		return text === '' ? null : text
 	}
 	const gate = { sources: { repo, sessions }, store, project, map: options.map ?? null }
 	const { model, baseUrl, apiKeyEnv } = options.model
@@ -198,7 +200,9 @@ export async function startChat(options: {
 				// A model that failed after the answer was held would fail the pass too, so the held answer stands.
 				if (result.stop !== 'error') {
 					const before = { ...tokens, at: performance.now() }
-					const later = held.answer.change ? await laterCommits(repo, held.answer.change, signal) : []
+					const later = held.answer.change
+						? await laterCommits(repo, held.answer.change, signal)
+						: { shown: [], total: 0 }
 					result = await step('risks', riskPassQuestion(held, later))
 					riskPass = costSince(before, tokens)
 				}

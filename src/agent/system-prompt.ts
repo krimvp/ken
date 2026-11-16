@@ -25,6 +25,7 @@ A question about a change:
 - Then the decisions in it: each choice the change made, what it chose against, and why.
 - Then every risk you see. Think about the people who use the thing: a host, an operator, a reader of results, a later developer. Who relied on the old behaviour, and what do they get now? What worked before and is refused now, and who passes it? What does the change leave undone? What does it lean on outside the repository, such as a setting, a service or the way a dependency behaves? Which new behaviour has no test?
 - Settle each doubt by reading the code that decides it. Say what you did not get to read.
+- When git has later commits that changed the same files, log and diff over the change's range end with them, the fixes first, with the start of each message. They often tell what a change left open.
 - End the draft with one sentence on how risky the change is overall.
 
 How to send the answer:

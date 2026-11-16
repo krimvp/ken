@@ -2,7 +2,8 @@ import type { NotFollowed, UsedElsewhere } from '../../checks/index.ts'
 import type { Range } from '../../repo/index.ts'
 import { short } from './tool-edge.ts'
 
-// The end log and diff give a change's range: the text below, or null where the question needs none or already has it.
+// The end log and diff give a change's range: the names used elsewhere below and the later commits on the same files,
+// or null where the question needs none or already has them.
 export type Elsewhere = (range: Range, signal: AbortSignal) => Promise<string | null>
 
 const MAX_LINE_CHARS = 160
