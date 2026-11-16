@@ -73,7 +73,7 @@ test('a diagram arrow with a false quote rejects the answer and names the arrow;
 		['rejected', 'accepted'],
 	)
 	const toModel = toolResults(first.requests[1])[0] ?? ''
-	assert.match(toModel, /Diagram 1, arrow 1 \("calls" from app to store\), quote 1 \(src\/app\.ts/)
+	assert.match(toModel, /Diagram 1, arrow 1 \("calls" from app to store\), quote 1: .*src\/app\.ts/)
 	const accepted = first.events.find((event) => event.kind === 'accepted')
 	assert.ok(accepted?.kind === 'accepted')
 	const [diagram] = accepted.answer.diagrams

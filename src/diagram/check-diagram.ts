@@ -114,9 +114,7 @@ async function checkOne(
 		return checks.flatMap((check, index): VerifiedQuote[] => {
 			if (check.kind === 'verified') return [check.quote]
 			const quote = raw[index]
-			problems.push(
-				`${field}, quote ${index + 1} (${quote?.path} at ${quote?.commit}): ${explainQuote(check, quote?.text ?? '')}`,
-			)
+			problems.push(`${field}, quote ${index + 1}: ${explainQuote(check, quote)}`)
 			return []
 		})
 	}

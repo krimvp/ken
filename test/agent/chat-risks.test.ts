@@ -59,7 +59,7 @@ test('a risk with a false quote rejects the answer and names the risk; with a tr
 	const first = await ask([answer({ ...work, risks: [falseRisk] }), answer({ ...work, risks: [RISK] }), { text: '.' }])
 
 	assert.deepEqual(outcomes(first.events), ['rejected', 'accepted'])
-	assert.match(toolResults(first.requests[1])[0] ?? '', /Risk 1, quote 1 \(src\/load\.ts/)
+	assert.match(toolResults(first.requests[1])[0] ?? '', /Risk 1, quote 1: .*src\/load\.ts/)
 	const { answer: checked, recorded } = accepted(first.events)
 	assert.deepEqual(checked.risks, [{ ...RISK, quotes: [{ ...CALL, startLine: 2, endLine: 2 }] }])
 	const stored = recorded.find((entry) => entry.kind === 'work')

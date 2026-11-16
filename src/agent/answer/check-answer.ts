@@ -59,9 +59,7 @@ async function checkClaims(
 		const quotes = checks.flatMap((check, at) => {
 			if (check.kind === 'verified') return [check.quote]
 			const quote = claim.quotes[at]
-			problems.push(
-				`${where}, quote ${at + 1} (${quote?.path} at ${quote?.commit}): ${explainQuote(check, quote?.text ?? '')}`,
-			)
+			problems.push(`${where}, quote ${at + 1}: ${explainQuote(check, quote)}`)
 			return []
 		})
 		if (label.kind === 'ok') claims.push({ text: claim.text, label: label.label, quotes })
