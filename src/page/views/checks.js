@@ -34,7 +34,7 @@ function quotesOf(q) {
 function limit(q) {
 	const what =
 		q.answer.diagrams.length > 0 ? 'the sentences, the summary or the arrows' : 'the sentences or the summary'
-	return `ken checks that each quote is in its file at its commit. It does not check ${what}.`
+	return `ken checks that each quote is in its file, or in its commit's message, at its commit. It does not check ${what}.`
 }
 
 function decisionsOf(q) {
