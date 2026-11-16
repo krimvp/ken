@@ -325,12 +325,6 @@ code {
 	margin: var(--space-3) 0 0;
 }
 
-.pending {
-	padding-left: var(--space-4);
-	border-left: 3px solid var(--color-border);
-	color: var(--color-muted);
-}
-
 footer {
 	max-width: calc(var(--measure) + 2 * var(--gutter));
 	margin: 0 auto;
