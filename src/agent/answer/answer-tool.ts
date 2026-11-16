@@ -7,6 +7,7 @@ import { decisionLabel, type Label, type Quote, type QuoteSources } from '../../
 import { CARDINALITIES, DIAGRAM_BOUNDS, DIAGRAM_KINDS, type DiagramDraft } from '../../diagram/index.ts'
 import type { UnderstandingMap } from '../../map/index.ts'
 import { type RecordEntry, type RecordStore, sameName, UNDO } from '../../record/index.ts'
+import type { Repository } from '../../repo/index.ts'
 import type { ChatEvent } from '../chat-event.ts'
 import { hunkHeader } from '../tools/diff-tool.ts'
 import { readArgs, refuse, reply } from '../tools/tool-edge.ts'
@@ -21,13 +22,21 @@ const MAX_LISTED_MESSAGES = 40
 // Two short sentences. A longer summary pushes the checked part of the answer off the reader's first screen.
 export const MAX_SUMMARY_CHARS = 280
 
-// What one question has seen of the answer tool. The session makes a new one for each question.
-export type AnswerRound = { rejections: number; answer: Answer | null; emit: (event: ChatEvent) => void }
+// What one question has seen of the answer tool. The session makes a new one for each question. learns is false for a
+// note ken wrote by itself in live mode: the reader did not ask it, so it tells their map nothing.
+export type AnswerRound = {
+	rejections: number
+	answer: Answer | null
+	learns: boolean
+	emit: (event: ChatEvent) => void
+}
 
-// map is the reader's understanding map. An accepted answer marks the topics it names as met there.
+// map is the reader's understanding map. An accepted answer marks the topics it names as met there. project reads the
+// project's own git, without ken's snapshots, for the draft rule in recordAnswer.
 export function answerTool(
 	sources: QuoteSources,
 	store: RecordStore,
+	project: Repository,
 	map: UnderstandingMap | null,
 	round: () => AnswerRound,
 ): Tool {
@@ -44,13 +53,16 @@ export function answerTool(
 			if (current.rejections >= MAX_REJECTIONS) return refuse('No attempts are left for this question. Stop now.')
 			const form = formProblems(args)
 			if (form.length > 0) return sentBack(form)
-			const settled = await settle(sources, store, args, ctx.signal)
+			const settled = await settle(sources, store, project, args, ctx.signal)
 			if (settled.kind === 'form') return sentBack(settled.problems)
 			if (settled.kind === 'accepted') {
-				await map?.learn('asked', settled.answer.topics, new Date(), ctx.signal)
+				if (current.learns) await map?.learn('asked', settled.answer.topics, new Date(), ctx.signal)
 				current.answer = settled.answer
-				current.emit({ kind: 'accepted', answer: settled.answer, recorded: settled.recorded.entries })
-				return reply(confirmation(settled.answer, settled.decisions, settled.recorded))
+				const { recorded } = settled
+				const draft = recorded.kind === 'draft' ? recorded.decisions : null
+				const entries = recorded.kind === 'recorded' ? recorded.entries : []
+				current.emit({ kind: 'accepted', answer: settled.answer, recorded: entries, draft })
+				return reply(confirmation(settled.answer, settled.decisions, recorded))
 			}
 			current.rejections += 1
 			current.emit({ kind: 'rejected', attempt: current.rejections, problems: settled.problems })
@@ -85,6 +97,7 @@ function formProblems(args: JsonObject): string[] {
 async function settle(
 	sources: QuoteSources,
 	store: RecordStore,
+	project: Repository,
 	raw: JsonObject,
 	signal: AbortSignal,
 ): Promise<
@@ -92,7 +105,7 @@ async function settle(
 			kind: 'accepted'
 			answer: Answer
 			decisions: CheckedDecision[]
-			recorded: Extract<Recorded, { kind: 'recorded' }>
+			recorded: Exclude<Recorded, { kind: 'refused' }>
 	  }
 	| { kind: 'rejected' | 'form'; problems: string[] }
 > {
@@ -115,7 +128,7 @@ async function settle(
 	}
 	const check = await checkAnswer(sources, draft, signal)
 	if (check.kind === 'rejected') return check
-	const recorded = await recordAnswer(store, check.answer, check.decisions, args, signal)
+	const recorded = await recordAnswer(store, project, check.answer, check.decisions, args, signal)
 	if (recorded.kind === 'refused') return { kind: 'rejected', problems: recorded.problems }
 	// Every topic is in the record now, so each name becomes the record's own spelling of it.
 	const names = await topicNames(store)
@@ -139,7 +152,7 @@ async function topicNames(store: RecordStore): Promise<string[]> {
 function confirmation(
 	answer: Answer,
 	decisions: CheckedDecision[],
-	recorded: Extract<Recorded, { kind: 'recorded' }>,
+	recorded: Exclude<Recorded, { kind: 'refused' }>,
 ): string {
 	const claims = [...answer.statements, ...(answer.risks ?? [])]
 	const quotes = claims.reduce((sum, claim) => sum + claim.quotes.length, 0)
@@ -150,10 +163,15 @@ function confirmation(
 	const lines = [
 		`Answer accepted: ${answer.statements.length} statements, ${risks}${decisions.length} decisions (${counts}), ${answer.diagrams.length} diagrams, ${quotes} quotes in the statements and risks. ken shows it to the reader.`,
 	]
-	if (recorded.kept) {
+	if (recorded.kind === 'draft') {
+		lines.push(
+			"The answer cites ken's snapshot of uncommitted work, which the project's history does not have, so ken keeps it for this reader only and added nothing to the project record.",
+		)
+	}
+	if (recorded.kind === 'recorded' && recorded.kept) {
 		lines.push(`Piece of work ${recorded.kept} already explains this range, so ken kept it and wrote no new one.`)
 	}
-	if (recorded.entries.length > 0) {
+	if (recorded.kind === 'recorded' && recorded.entries.length > 0) {
 		lines.push(`Added to the project record: ${recorded.entries.map(named).join(', ')}.`)
 	}
 	if (answer.change) {

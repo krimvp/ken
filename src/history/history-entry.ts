@@ -2,7 +2,8 @@
 // when there was one. The page reopens an answer from this without a model call, and the understanding map (slice 4)
 // will be built from these entries, so an entry is plain data with no behaviour.
 import type { Answer, ChatEvent, Outcome } from '../agent/index.ts'
-import type { EntryId } from '../record/index.ts'
+import type { About } from '../live/index.ts'
+import type { Decision, EntryId } from '../record/index.ts'
 
 // What happened while the question ran, in order. "tool" is one call as a sentence, "text" is what the agent wrote
 // between calls, and "rejected" is an answer ken's checks sent back.
@@ -14,26 +15,29 @@ export type Step =
 export type Usage = { inputTokens: number; outputTokens: number; seconds: number }
 
 // note is what the agent wrote after ken accepted its answer. recorded names the project record entries the answer
-// added; the record holds them, the reader's history only points at them.
+// added; the record holds them, the reader's history only points at them. draft is there when the answer cites ken's
+// snapshot of uncommitted work: the record has nothing of it, so the history keeps its decisions whole.
 export type Ending =
-	| { outcome: 'answered'; answer: Answer; recorded: EntryId[]; note: string }
+	| { outcome: 'answered'; answer: Answer; recorded: EntryId[]; note: string; draft?: Decision[] }
 	| { outcome: Exclude<Outcome, 'answered'> | 'stopped' }
 	| { outcome: 'error'; error: string }
 
 // head is the project's HEAD when the question was asked, so a reopened answer can say the project has moved on. It is
-// null in entries saved before ken kept it.
+// null in entries saved before ken kept it. about is there for a note ken wrote by itself in live mode: what the note
+// explains. The question is then the one ken wrote for the agent.
 export type HistoryEntry = {
 	id: string
 	question: string
 	askedAt: string
 	head: string | null
+	about?: About
 	steps: Step[]
 	usage: Usage | null
 } & Ending
 
 // Folds the events of one question into its entry. stopped says the reader stopped it before it ended.
 export function entryFrom(
-	asked: { id: string; question: string; askedAt: string; head: string | null },
+	asked: { id: string; question: string; askedAt: string; head: string | null; about?: About },
 	events: ChatEvent[],
 	stopped: boolean,
 ): HistoryEntry {
@@ -78,7 +82,8 @@ export function entryFrom(
 	}
 	if (accepted) {
 		const recorded = accepted.recorded.map((entry) => entry.id)
-		ending = { outcome: 'answered', answer: accepted.answer, recorded, note: note.trim() }
+		const draft = accepted.draft ? { draft: accepted.draft } : {}
+		ending = { outcome: 'answered', answer: accepted.answer, recorded, note: note.trim(), ...draft }
 	}
 	return { ...asked, steps, usage, ...ending }
 }

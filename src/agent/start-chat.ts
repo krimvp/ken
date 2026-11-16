@@ -17,8 +17,9 @@ import { sessionTools } from './tools/session-tools.ts'
 
 export type Chat = {
 	root: string
-	// One question at a time. Breaking out of the loop early stops the question.
-	ask(question: string, signal?: AbortSignal): AsyncGenerator<ChatEvent>
+	// One question at a time. Breaking out of the loop early stops the question. as 'note' is a note ken writes by
+	// itself in live mode, which tells the reader's map nothing.
+	ask(question: string, signal?: AbortSignal, as?: 'question' | 'note'): AsyncGenerator<ChatEvent>
 	close(): Promise<void>
 }
 
@@ -34,20 +35,25 @@ const MAX_TOOL_RESULT_CHARS = 64_000
 
 // map is the reader's understanding map. A chat run by a script, such as "ken ask --json", has no reader and no map.
 // env decides which saved sessions the agent may read (see projectSessions) and which values secretHider hides.
+// snapshots is ken's store of snapshots of uncommitted work (see the live module), which the agent's tools and the
+// quote check read as well as the project's own git.
 export async function startChat(options: {
 	directory: string
 	model: ModelConfig
 	env: Record<string, string | undefined>
 	map?: UnderstandingMap
+	snapshots?: string
 }): Promise<{ kind: 'ok'; chat: Chat } | { kind: 'no-repository'; message: string }> {
 	const found = await findRoot(options.directory)
 	if (found.kind !== 'ok') {
 		return { kind: 'no-repository', message: `${options.directory} is not inside a git repository.` }
 	}
-	const repo = gitRepository(found.root)
+	const project = gitRepository(found.root)
+	const repo = options.snapshots ? gitRepository(found.root, { alternate: options.snapshots }) : project
 	const sessions = projectSessions(found.root, options.env)
-	const store = fileRecordStore(found.root, repo, sessions)
-	let round: AnswerRound = { rejections: 0, answer: null, emit: () => {} }
+	// The record reads the project alone, so its gate refuses a quote of a snapshot whatever reaches it.
+	const store = fileRecordStore(found.root, project, sessions)
+	let round: AnswerRound = { rejections: 0, answer: null, learns: false, emit: () => {} }
 	let turnsEnded = 0
 	const withTurnsLeft = (tool: Tool): Tool => ({
 		...tool,
@@ -72,7 +78,7 @@ export async function startChat(options: {
 					diffTool(repo),
 					recordTool(store, repo),
 					...sessionTools(sessions),
-					answerTool({ repo, sessions }, store, options.map ?? null, () => round),
+					answerTool({ repo, sessions }, store, project, options.map ?? null, () => round),
 				].map(withTurnsLeft),
 			},
 		],
@@ -83,9 +89,9 @@ export async function startChat(options: {
 		systemPrompt: SYSTEM_PROMPT,
 	})
 
-	async function* ask(question: string, signal?: AbortSignal): AsyncGenerator<ChatEvent> {
+	async function* ask(question: string, signal?: AbortSignal, as = 'question'): AsyncGenerator<ChatEvent> {
 		const events = eventQueue()
-		const current: AnswerRound = { rejections: 0, answer: null, emit: events.push }
+		const current: AnswerRound = { rejections: 0, answer: null, learns: as === 'question', emit: events.push }
 		round = current
 		turnsEnded = 0
 		const stop = new AbortController()

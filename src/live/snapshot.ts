@@ -19,12 +19,12 @@ export type Snapshot =
 	| { kind: 'taken'; commit: CommitHash; head: CommitHash; files: number; leftOut: number }
 	| { kind: 'clean'; head: CommitHash; leftOut: number }
 
-// What one snapshot takes in, and how large the store may grow before ken empties it when live mode starts.
+// What one snapshot takes in, and how large the store may grow before ken empties it at its next start.
 const BOUNDS = { fileBytes: 1024 * 1024, snapshotBytes: 8 * 1024 * 1024, storeBytes: 200 * 1024 * 1024 }
 
 const execFileAsync = promisify(execFile)
 
-// The store keeps the snapshots of the live runs since it was last emptied. Live mode empties it when it starts and
+// The store keeps every snapshot since it was last emptied. ken empties it when it starts ("ken open" or "ken live") and
 // finds it over BOUNDS.storeBytes. A note keeps its quotes as text in the reader's history, so an emptied store loses
 // nothing a note shows.
 export async function openSnapshots(home: string, repo: Repository, root: string): Promise<SnapshotStore> {

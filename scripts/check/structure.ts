@@ -47,12 +47,12 @@ export const MODULES: Record<string, Module> = {
 	},
 	agent: {
 		job: 'Runs a chat with a model that explores the project and its saved sessions with read-only tools, and answers only with checked quotes.',
-		imports: ['repo', 'checks', 'diagram', 'map', 'record', 'transcripts'],
+		imports: ['repo', 'checks', 'diagram', 'live', 'map', 'record', 'transcripts'],
 		packages: ['aigent'],
 	},
 	history: {
-		job: "The reader's own log of questions asked and the answers shown, kept outside the project.",
-		imports: ['agent', 'record', 'repo'],
+		job: "The reader's own log of questions asked, notes written in live mode, and the answers shown, kept outside the project.",
+		imports: ['agent', 'live', 'record', 'repo'],
 		packages: [],
 	},
 	page: {
@@ -61,8 +61,8 @@ export const MODULES: Record<string, Module> = {
 		packages: ['mermaid'],
 	},
 	server: {
-		job: 'Serves the page on 127.0.0.1 and runs the questions it sends, one at a time.',
-		imports: ['agent', 'diagram', 'follow-up', 'history', 'map', 'page', 'record', 'repo', 'transcripts'],
+		job: 'Serves the page on 127.0.0.1, runs the questions it sends and the notes of live mode one model call at a time.',
+		imports: ['agent', 'diagram', 'follow-up', 'history', 'live', 'map', 'page', 'record', 'repo', 'transcripts'],
 		packages: [],
 	},
 	cli: {

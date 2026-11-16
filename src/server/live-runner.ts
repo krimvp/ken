@@ -1,0 +1,211 @@
+import { type Chat, noteQuestion } from '../agent/index.ts'
+import {
+	type About,
+	type LastAsk,
+	lastAsk,
+	type NowBlock,
+	nowBlock,
+	observe,
+	PACE,
+	type SnapshotStore,
+	startWatch,
+	takeSnapshot,
+	type WatchAction,
+	type WatchEvent,
+	type WatchState,
+	watchStep,
+} from '../live/index.ts'
+import type { Repository } from '../repo/index.ts'
+import type { Transcripts } from '../transcripts/index.ts'
+import type { QuestionView, questionDesk } from './question-desk.ts'
+
+// What the Live view and "ken live" show. status says what ken does now; about is what the note it writes explains.
+// said is ken's last word to the owner, such as "Nothing new since the last note", or null. spent counts the notes of
+// this run and what they cost.
+export type LiveView = {
+	status: 'off' | 'watching' | 'paused' | 'snapshot' | 'writing'
+	about: About | null
+	said: string | null
+	now: NowBlock
+	pace: typeof PACE
+	spent: { notes: number; inputTokens: number; outputTokens: number; seconds: number }
+	notes: QuestionView[]
+}
+
+export type LiveRunner = ReturnType<typeof liveRunner>
+
+const EARLIER_NOTES = 5
+const SHOWN_NOTES = 30
+
+// Live mode for one project: every PACE.pollMs it reads the project, feeds watchStep, and does what it says. project
+// reads the project's own git; withSnapshots also reads ken's store, to count the lines a snapshot changed. A note goes
+// through the desk, so it takes turns with the owner's questions.
+export function liveRunner(deps: {
+	root: string
+	project: Repository
+	withSnapshots: Repository
+	store: SnapshotStore
+	sessions: Transcripts | null
+	desk: ReturnType<typeof questionDesk>
+	chat: Chat
+}) {
+	const { root, project, withSnapshots, store, sessions, desk, chat } = deps
+	let state: WatchState | null = null
+	let timer: ReturnType<typeof setInterval> | null = null
+	let polling: Promise<void> | null = null
+	let stop = new AbortController()
+	let said: string | null = null
+	let leftOut = 0
+	let spent = { notes: 0, inputTokens: 0, outputTokens: 0, seconds: 0 }
+	let asked: { stamp: string; ask: LastAsk } | null = null
+	const working = new Set<Promise<void>>()
+	const listeners = new Set<(event: { kind: 'writing'; about: About } | { kind: 'note'; view: QuestionView }) => void>()
+
+	function apply(event: WatchEvent) {
+		if (state === null) return
+		const step = watchStep(state, event, Date.now())
+		state = step.state
+		const work = act(step.action, stop.signal).catch((error: unknown) => {
+			said = `ken stopped watching for a moment: ${error instanceof Error ? error.message : String(error)}`
+		})
+		working.add(work)
+		void work.finally(() => working.delete(work))
+	}
+
+	async function act(action: WatchAction, signal: AbortSignal) {
+		switch (action.kind) {
+			case 'none':
+				return
+			case 'nothing-new':
+				said = 'Nothing new since the last note.'
+				return
+			case 'snapshot': {
+				const taken = await takeSnapshot(store, project, root, signal).catch(() => null)
+				if (signal.aborted) return
+				if (taken?.kind !== 'taken') return apply({ kind: 'snapshot', taken: null })
+				leftOut = taken.leftOut
+				const since = state?.noted.snapshot ?? state?.noted.head ?? taken.head
+				const changed = await changedLines(withSnapshots, since, taken.commit, signal)
+				return apply({ kind: 'snapshot', taken: { snapshot: taken.commit, head: taken.head, changed } })
+			}
+			case 'note': {
+				said = null
+				for (const listener of listeners) listener({ kind: 'writing', about: action.about })
+				const earlier = (await desk.notes(EARLIER_NOTES)).flatMap(({ entry }) =>
+					entry.outcome === 'answered' ? [{ at: entry.askedAt.slice(11, 16), summary: entry.answer.summary }] : [],
+				)
+				const session = sessions && (await sessions.latest())
+				const facts = {
+					earlier,
+					session: session?.id ?? null,
+					leftOut: action.about.kind === 'uncommitted' ? leftOut : 0,
+				}
+				const view = await desk.note(chat, action.about, noteQuestion(action.about, facts), signal)
+				const usage = view.entry.usage
+				spent = {
+					notes: spent.notes + 1,
+					inputTokens: spent.inputTokens + (usage?.inputTokens ?? 0),
+					outputTokens: spent.outputTokens + (usage?.outputTokens ?? 0),
+					seconds: spent.seconds + (usage?.seconds ?? 0),
+				}
+				if (view.entry.outcome !== 'answered') said = 'ken could not write a checked note on the last change.'
+				for (const listener of listeners) listener({ kind: 'note', view })
+				return apply({ kind: 'noted' })
+			}
+			default:
+				return action satisfies never
+		}
+	}
+
+	async function poll() {
+		const seen = await observe(project, state?.noted.head ?? null, stop.signal)
+		if (state === null) state = startWatch(seen, Date.now())
+		apply({ kind: 'observed', ...seen })
+	}
+
+	function tick() {
+		polling ??= poll()
+			.catch((error: unknown) => {
+				said = `ken could not read the project: ${error instanceof Error ? error.message : String(error)}`
+			})
+			.finally(() => {
+				polling = null
+			})
+		return polling
+	}
+
+	async function start() {
+		if (timer !== null) return
+		stop = new AbortController()
+		state = null
+		said = null
+		spent = { notes: 0, inputTokens: 0, outputTokens: 0, seconds: 0 }
+		timer = setInterval(tick, PACE.pollMs)
+		await tick()
+	}
+
+	// Turning live mode off stops a note being written, so it spends nothing more.
+	async function off() {
+		if (timer !== null) clearInterval(timer)
+		timer = null
+		stop.abort()
+		await polling
+		await Promise.all([...working])
+		state = null
+	}
+
+	async function view(): Promise<LiveView> {
+		const newest = sessions && (await sessions.latest())
+		const stamp = newest ? `${newest.id} ${newest.bytes} ${newest.changedAt}` : ''
+		if (asked?.stamp !== stamp) asked = { stamp, ask: await lastAsk(sessions) }
+		const busy = state?.busy
+		const status =
+			timer === null
+				? 'off'
+				: busy?.kind === 'note' || desk.writing()
+					? 'writing'
+					: busy?.kind === 'snapshot'
+						? 'snapshot'
+						: state?.paused
+							? 'paused'
+							: 'watching'
+		return {
+			status,
+			about: busy?.kind === 'note' ? busy.about : null,
+			said,
+			now: await nowBlock(project, asked.ask),
+			pace: PACE,
+			spent,
+			notes: await desk.notes(SHOWN_NOTES),
+		}
+	}
+
+	return {
+		start,
+		off,
+		view,
+		on: () => timer !== null,
+		pause: () => apply({ kind: 'pause' }),
+		resume: () => apply({ kind: 'resume' }),
+		noteNow: () => apply({ kind: 'note-now' }),
+		subscribe(listener: Parameters<typeof listeners.add>[0]) {
+			listeners.add(listener)
+			return () => listeners.delete(listener)
+		},
+	}
+}
+
+// Lines added and removed between two commits, ken's snapshots among them.
+async function changedLines(repo: Repository, base: string, head: string, signal: AbortSignal): Promise<number> {
+	const [from, to] = await Promise.all([repo.resolve(base, signal), repo.resolve(head, signal)])
+	if (from.kind !== 'ok' || to.kind !== 'ok') return 0
+	const diff = await repo.diff({ base: from.commit, head: to.commit }, signal)
+	if (diff.kind !== 'ok') return Number.POSITIVE_INFINITY
+	return diff.files.reduce(
+		(sum, file) =>
+			file.kind === 'binary'
+				? sum + 1
+				: sum + file.hunks.reduce((n, hunk) => n + hunk.lines.filter((line) => /^[+-]/.test(line)).length, 0),
+		0,
+	)
+}

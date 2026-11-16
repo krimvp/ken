@@ -1,28 +1,16 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
-import { homedir } from 'node:os'
-import path from 'node:path'
-import {
-	type Chat,
-	MODEL_EXAMPLE,
-	type ModelFlags,
-	type ModelUnset,
-	readModelConfig,
-	startChat,
-} from '../agent/index.ts'
+import { MODEL_EXAMPLE, type ModelFlags } from '../agent/index.ts'
 import { authorsOf, decide, openItems, timeRange } from '../follow-up/index.ts'
-import { kenHome, openHistory } from '../history/index.ts'
-import { type MapSignal, openMap } from '../map/index.ts'
+import type { MapSignal } from '../map/index.ts'
 import { MERMAID_FILE, PAGE_FOLDER } from '../page/index.ts'
-import { fileRecordStore } from '../record/index.ts'
-import { findRoot, gitRepository } from '../repo/index.ts'
-import { projectSessions } from '../transcripts/index.ts'
 import { decisionRows } from './decision-list.ts'
 import { refusal } from './guard-request.ts'
+import { openProject } from './ken-project.ts'
 import { type PageFile, readPageFiles } from './page-files.ts'
-import { fieldOf, type QuestionLine, questionDesk } from './question-desk.ts'
+import { fieldOf, type QuestionLine } from './question-desk.ts'
 
 // model is the name of the model the page asks, or null when none is set and the page can only show earlier answers.
-export type KenServer = { url: string; root: string; model: string | null; close(): Promise<void> }
+export type KenServer = { url: string; root: string; model: string | null; live: boolean; close(): Promise<void> }
 
 const MAX_BODY_BYTES = 64 * 1024
 // The person lens offers the authors of this many days.
@@ -37,38 +25,29 @@ const HEADERS = {
 		"default-src 'self'; style-src 'self' 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
 }
 
+// What the page may ask live mode to do.
+const LIVE_ACTIONS = ['on', 'off', 'pause', 'resume', 'note-now'] as const
+
+// live starts live mode with the server, as "ken open --live" does.
 export async function openServer(options: {
 	directory: string
 	flags: ModelFlags
 	env: Record<string, string | undefined>
 	port: number
+	live?: boolean
 }): Promise<{ kind: 'ok'; server: KenServer } | { kind: 'refused'; message: string }> {
-	const found = await findRoot(options.directory)
-	if (found.kind !== 'ok') return { kind: 'refused', message: `${options.directory} is not inside a git repository.` }
-	const { root } = found
-	const repo = gitRepository(root)
-	const opened = await openHistory(kenHome(options.env), repo)
-	if (opened.kind !== 'ok') {
-		return { kind: 'refused', message: `${root} has no commits yet, so ken has nothing to read.` }
+	const opened = await openProject(options)
+	if (opened.kind !== 'ok') return opened
+	const { project } = opened
+	const { root, shown, repo, record, map, model, desk, live } = project
+	if (options.live && !live) {
+		await project.close()
+		return {
+			kind: 'refused',
+			message: `Live mode writes notes with a model, and none is set. ${model.kind === 'ok' ? '' : model.message}`,
+		}
 	}
-	const { history } = opened
-	// With the saved sessions, so the answer to a decision whose reason quotes one passes the gate again.
-	const record = fileRecordStore(root, repo, projectSessions(root, options.env))
-	const mapped = await openMap(kenHome(options.env), repo, record)
-	if (mapped.kind !== 'ok') throw new Error(`${root} has a history but no first commit`)
-	const { map } = mapped
-	const config = readModelConfig(options.flags, options.env)
-	let model: { kind: 'ok'; chat: Chat; name: string } | ModelUnset
-	if (config.kind === 'ok') {
-		const started = await startChat({ directory: root, model: config.config, env: options.env, map })
-		if (started.kind !== 'ok') return { kind: 'refused', message: started.message }
-		model = { kind: 'ok', chat: started.chat, name: config.config.model }
-	} else {
-		model = config
-	}
-	const desk = questionDesk(history, record, repo, map)
 	const openNow = async () => openItems(repo, await record.read(), (await map.read(new Date())).states)
-	const shown = root.startsWith(`${homedir()}${path.sep}`) ? `~${root.slice(homedir().length)}` : root
 	const files = await readPageFiles(PAGE_FOLDER, { '/mermaid.min.js': MERMAID_FILE })
 	let port = 0
 
@@ -82,9 +61,25 @@ export async function openServer(options: {
 				model.kind === 'ok'
 					? { kind: 'ok', name: model.name }
 					: { kind: 'unset', message: model.message, missing: model.missing, example: MODEL_EXAMPLE }
-			return sendJson(response, 200, { project: shown, model: state })
+			return sendJson(response, 200, { project: shown, model: state, live: live?.on() ?? false })
 		}
 		if (where === 'GET /api/questions') return sendJson(response, 200, { questions: await desk.rows() })
+		if (where === 'GET /api/live') {
+			if (!live) return sendJson(response, 503, { message: model.kind === 'ok' ? '' : model.message })
+			return sendJson(response, 200, await live.view())
+		}
+		if (where === 'POST /api/live') {
+			if (!live) return sendJson(response, 503, { message: model.kind === 'ok' ? '' : model.message })
+			const body = await readJson(request)
+			const action = LIVE_ACTIONS.find((each) => body.kind === 'ok' && each === fieldOf(body.value, 'action'))
+			if (!action) return sendJson(response, 400, { message: `Send an action: ${LIVE_ACTIONS.join(', ')}.` })
+			if (action === 'on') await live.start()
+			if (action === 'off') await live.off()
+			if (action === 'pause') live.pause()
+			if (action === 'resume') live.resume()
+			if (action === 'note-now') live.noteNow()
+			return sendJson(response, 200, await live.view())
+		}
 		if (where === 'GET /api/decisions') return sendJson(response, 200, { decisions: decisionRows(await record.read()) })
 		if (where === 'GET /api/map') return sendJson(response, 200, { file: map.file, ...(await map.read(new Date())) })
 		if (where === 'POST /api/map') {
@@ -164,7 +159,7 @@ export async function openServer(options: {
 			server.listen(options.port, '127.0.0.1', resolve)
 		})
 	} catch (error) {
-		if (model.kind === 'ok') await model.chat.close()
+		await project.close()
 		const busy = error instanceof Error && 'code' in error && error.code === 'EADDRINUSE'
 		if (busy) return { kind: 'refused', message: `Port ${options.port} is in use. Give another with --port.` }
 		throw error
@@ -173,15 +168,17 @@ export async function openServer(options: {
 	if (address === null || typeof address === 'string') throw new Error('the server is not listening on a TCP port')
 	port = address.port
 
+	if (options.live) await live?.start()
+
 	async function close() {
 		server.closeAllConnections()
-		await desk.settled()
 		await new Promise((resolve) => server.close(resolve))
-		if (model.kind === 'ok') await model.chat.close()
+		await project.close()
 	}
 
 	const name = model.kind === 'ok' ? model.name : null
-	return { kind: 'ok', server: { url: `http://127.0.0.1:${port}/`, root, model: name, close } }
+	const url = `http://127.0.0.1:${port}/`
+	return { kind: 'ok', server: { url, root, model: name, live: live?.on() ?? false, close } }
 }
 
 async function readJson(

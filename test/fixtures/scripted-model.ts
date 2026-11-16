@@ -2,10 +2,10 @@ import { createServer } from 'node:http'
 import { after } from 'node:test'
 
 // One scripted reply per chat request: text, one tool call with the text the model writes before it, or no reply at
-// all. hang is called when that request arrives, and the request then stays open until the caller gives up on it.
+// all. hang is called when that request arrives, and the request then stays open until the caller gives up on it. A
+// reply with held waits for that promise before it is sent, so a test can keep a model call running.
 export type Turn =
-	| { text: string }
-	| { tool: string; args: Record<string, unknown>; text?: string }
+	| (({ text: string } | { tool: string; args: Record<string, unknown>; text?: string }) & { held?: Promise<unknown> })
 	| { hang: () => void }
 
 export type ChatRequest = { messages: { role: string; content: unknown }[] }
@@ -25,6 +25,7 @@ export async function scriptedModel(script: Turn[]): Promise<{ baseUrl: string; 
 		if (!turn) return void res.writeHead(500).end('the script has no turn for this request')
 		requests.push(JSON.parse(raw))
 		if ('hang' in turn) return turn.hang()
+		await turn.held
 		const delta = !('tool' in turn)
 			? { role: 'assistant', content: turn.text }
 			: {

@@ -2,9 +2,14 @@
 // the decisions it names, and its topics with a note each. Every entry goes through the record's own check first, and a
 // refused entry rejects the whole answer, the same way a bad quote does. The record labels each decision from its
 // reason's quotes, and checks each quote of a session again in the session itself.
-import type { Quote, VerifiedQuote } from '../../checks/index.ts'
-import { diagramDraft } from '../../diagram/index.ts'
-import type { EntryDraft, EntryId, RecordEntry, RecordStore, Statement } from '../../record/index.ts'
+//
+// The draft rule lives here too. ken keeps snapshots of uncommitted work in its own store, which no collaborator has, so
+// an answer that cites a commit the project's own git cannot find is a draft: it adds nothing to the project record,
+// and the reader's history keeps it, decisions and all.
+import { decisionLabel, gitQuotes, type Quote, type VerifiedQuote } from '../../checks/index.ts'
+import { diagramDraft, diagramElements } from '../../diagram/index.ts'
+import type { Decision, EntryDraft, EntryId, RecordEntry, RecordStore, Statement } from '../../record/index.ts'
+import type { Repository } from '../../repo/index.ts'
 import type { Answer } from './answer.ts'
 import type { CheckedDecision } from './check-answer.ts'
 
@@ -13,17 +18,25 @@ export type RecordArgs = {
 	topics: { name: string; quotes: Quote[]; note: string; replaces: string | undefined }[]
 }
 
+// draft: the answer cites a commit only ken's store holds, so nothing was recorded and decisions are its decisions as
+// ken checked and labelled them.
 export type Recorded =
 	| { kind: 'recorded'; entries: RecordEntry[]; kept: EntryId | null }
+	| { kind: 'draft'; decisions: Decision[] }
 	| { kind: 'refused'; problems: string[] }
 
+// project reads the project's own git, never ken's snapshot store.
 export async function recordAnswer(
 	store: RecordStore,
+	project: Repository,
 	answer: Omit<Answer, 'topics'>,
 	decisions: CheckedDecision[],
 	args: RecordArgs,
 	signal: AbortSignal,
 ): Promise<Recorded> {
+	if (await citesUnshared(project, answer, decisions, signal)) {
+		return { kind: 'draft', decisions: decisions.map(asDraft) }
+	}
 	const problems: string[] = []
 	const pending: RecordEntry[] = []
 	const drafts: EntryDraft[] = []
@@ -86,6 +99,40 @@ export async function recordAnswer(
 	if (appended.kind === 'refused') return appended
 	const entries = appended.entries.filter((each) => each.written).map((each) => each.entry)
 	return { kind: 'recorded', entries, kept: args.work ? kept : null }
+}
+
+async function citesUnshared(
+	project: Repository,
+	answer: Omit<Answer, 'topics'>,
+	decisions: CheckedDecision[],
+	signal: AbortSignal,
+): Promise<boolean> {
+	const claims = [...answer.statements, ...(answer.risks ?? [])]
+	const quotes = [
+		...claims.flatMap((claim) => claim.quotes),
+		...decisions.flatMap((decision) => [...decision.reason.quotes, ...decision.quotes]),
+		...answer.diagrams.flatMap((diagram) => diagramElements(diagram).flatMap((element) => element.quotes)),
+	]
+	const commits = new Set([
+		...gitQuotes(quotes).map((quote) => quote.commit),
+		...(answer.change ? [answer.change.base, answer.change.head] : []),
+	])
+	for (const commit of commits) {
+		if ((await project.resolve(commit, signal)).kind !== 'ok') return true
+	}
+	return false
+}
+
+function asDraft(decision: CheckedDecision): Decision {
+	const { topic, ...rest } = decision
+	return {
+		kind: 'decision',
+		...rest,
+		label: decisionLabel(decision.reason.quotes, false),
+		work: null,
+		topic: topic ?? null,
+		answer: null,
+	}
 }
 
 function raw(quote: VerifiedQuote): Quote {

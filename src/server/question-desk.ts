@@ -3,6 +3,7 @@ import type { Answer, Chat, ChatEvent } from '../agent/index.ts'
 import { withDrawings } from '../diagram/index.ts'
 import { type LensFacts, openItems, personLens, rangeLens, topicQuestion } from '../follow-up/index.ts'
 import { entryFrom, type History, type HistoryEntry } from '../history/index.ts'
+import type { About } from '../live/index.ts'
 import { areaQuestion, catchUpQuestion, deeperQuestion, type TopicState, type UnderstandingMap } from '../map/index.ts'
 import { type EntryId, type RecordEntry, type RecordRead, type RecordStore, sameName } from '../record/index.ts'
 import { parsePath, type Repository } from '../repo/index.ts'
@@ -32,19 +33,40 @@ export type QuestionView = { entry: HistoryEntry; recorded: RecordEntry[]; head:
 
 type Accepted = Extract<ChatEvent, { kind: 'accepted' }>
 
-// What the page receives while a question runs: the question as ken asks it, which for a lens ken wrote itself, each
-// chat event, then the saved entry as the last line. An accepted
+// What the page receives while a question runs: "waiting" first when ken is writing a live note, then the question as
+// ken asks it, which for a lens ken wrote itself, each chat event, then the saved entry as the last line. An accepted
 // answer's diagrams carry their drawings, its recorded entries are the ones it stands on, and it carries its topics'
 // states as a view does.
 export type QuestionLine =
+	| { kind: 'waiting' }
 	| { kind: 'asked'; question: string }
 	| Exclude<ChatEvent, Accepted>
 	| (Accepted & { topics: TopicState[] })
 	| { kind: 'saved'; view: QuestionView }
 
-// Runs the page's questions one at a time and keeps each in the reader's history, together with what it ended in.
+// Runs the page's questions and live mode's notes one model run at a time, and keeps each in the reader's history,
+// together with what it ended in. A question asked while a note runs waits for it; a second question is refused.
 export function questionDesk(history: History, record: RecordStore, repo: Repository, map: UnderstandingMap) {
 	let running: { stop: AbortSignal; done: Promise<void> } | null = null
+	let questions = 0
+	let holder: 'question' | 'note' | null = null
+	let last: Promise<void> = Promise.resolve()
+
+	// One run at a time, in the order they came. waiting is told when the run must wait for another.
+	async function inTurn<T>(who: 'question' | 'note', work: () => Promise<T>, waiting = () => {}): Promise<T> {
+		const before = last
+		let release = () => {}
+		last = new Promise((resolve) => (release = resolve))
+		if (holder !== null) waiting()
+		await before
+		holder = who
+		try {
+			return await work()
+		} finally {
+			holder = null
+			release()
+		}
+	}
 
 	// A question the reader stopped can still be winding down. Wait for it, so the next request finds it in the history.
 	async function settled() {
@@ -53,34 +75,66 @@ export function questionDesk(history: History, record: RecordStore, repo: Reposi
 
 	// Call busy right before ask, with no await between them, so two requests cannot both start a question.
 	function busy() {
-		return running !== null
+		return questions > 0
 	}
 
 	async function ask(chat: Chat, question: string, stop: AbortSignal, send: (line: QuestionLine) => void) {
 		let finish = () => {}
+		questions += 1
 		running = { stop, done: new Promise((resolve) => (finish = resolve)) }
 		try {
-			const asked = { id: randomUUID(), question, askedAt: new Date().toISOString(), head: await headNow() }
-			send({ kind: 'asked', question })
-			const events: ChatEvent[] = []
-			for await (const event of chat.ask(question, stop)) {
-				events.push(event)
-				if (event.kind !== 'accepted') {
-					send(event)
-					continue
-				}
-				const added = event.recorded.map((stored) => stored.id)
-				const recorded = entriesOf(event.answer, added, await record.read())
-				const topics = await topicsOf(event.answer.topics)
-				send({ ...event, answer: withDrawings(event.answer), recorded, topics })
-			}
-			const entry = entryFrom(asked, events, stop.aborted)
-			await history.add(entry)
-			send({ kind: 'saved', view: await viewOf(entry) })
+			await inTurn(
+				'question',
+				() => run(chat, question, stop, send),
+				() => send({ kind: 'waiting' }),
+			)
 		} finally {
+			questions -= 1
 			running = null
 			finish()
 		}
+	}
+
+	async function run(chat: Chat, question: string, stop: AbortSignal, send: (line: QuestionLine) => void) {
+		const asked = { id: randomUUID(), question, askedAt: new Date().toISOString(), head: await headNow() }
+		send({ kind: 'asked', question })
+		const events: ChatEvent[] = []
+		for await (const event of chat.ask(question, stop)) {
+			events.push(event)
+			if (event.kind !== 'accepted') {
+				send(event)
+				continue
+			}
+			const added = event.recorded.map((stored) => stored.id)
+			const recorded = entriesOf(event.answer, added, await record.read())
+			const topics = await topicsOf(event.answer.topics)
+			send({ ...event, answer: withDrawings(event.answer), recorded, topics })
+		}
+		const entry = entryFrom(asked, events, stop.aborted)
+		await history.add(entry)
+		send({ kind: 'saved', view: await viewOf(entry) })
+	}
+
+	// A note ken writes by itself in live mode, saved in the history with what it is about.
+	async function note(chat: Chat, about: About, question: string, stop: AbortSignal): Promise<QuestionView> {
+		return await inTurn('note', async () => {
+			const asked = { id: randomUUID(), question, askedAt: new Date().toISOString(), head: await headNow(), about }
+			const events: ChatEvent[] = []
+			for await (const event of chat.ask(question, stop, 'note')) events.push(event)
+			const entry = entryFrom(asked, events, stop.aborted)
+			await history.add(entry)
+			return await viewOf(entry)
+		})
+	}
+
+	// The notes of live mode, newest first.
+	async function notes(limit: number): Promise<QuestionView[]> {
+		const written = (await history.list()).filter((entry) => entry.about !== undefined)
+		return await Promise.all(written.slice(-limit).reverse().map(viewOf))
+	}
+
+	function writing() {
+		return holder === 'note'
 	}
 
 	async function headNow(): Promise<string | null> {
@@ -105,22 +159,24 @@ export function questionDesk(history: History, record: RecordStore, repo: Reposi
 	async function rows(): Promise<QuestionRow[]> {
 		await settled()
 		const [entries, read] = await Promise.all([history.list(), record.read()])
-		return entries.map((entry) => {
-			const row = { id: entry.id, question: entry.question, askedAt: entry.askedAt, outcome: entry.outcome }
-			if (entry.outcome !== 'answered')
-				return { ...row, statements: 0, decisions: 0, calls: 0, risks: null, hunks: null }
-			const { statements, risks, change } = entry.answer
-			const total = change ? change.covered.length + change.uncovered.length : 0
-			const decisions = entriesOf(entry.answer, entry.recorded, read).filter((stored) => stored.kind === 'decision')
-			return {
-				...row,
-				statements: statements.length,
-				decisions: decisions.length,
-				calls: decisions.filter((decision) => decision.needsOwner).length,
-				risks: risks === null ? null : risks.length,
-				hunks: change && { uncovered: change.uncovered.length, total },
-			}
-		})
+		return entries
+			.filter((entry) => entry.about === undefined)
+			.map((entry) => {
+				const row = { id: entry.id, question: entry.question, askedAt: entry.askedAt, outcome: entry.outcome }
+				if (entry.outcome !== 'answered')
+					return { ...row, statements: 0, decisions: 0, calls: 0, risks: null, hunks: null }
+				const { statements, risks, change } = entry.answer
+				const total = change ? change.covered.length + change.uncovered.length : 0
+				const decisions = entriesOf(entry.answer, entry.recorded, read).filter((stored) => stored.kind === 'decision')
+				return {
+					...row,
+					statements: statements.length,
+					decisions: decisions.length,
+					calls: decisions.filter((decision) => decision.needsOwner).length,
+					risks: risks === null ? null : risks.length,
+					hunks: change && { uncovered: change.uncovered.length, total },
+				}
+			})
 	}
 
 	async function view(id: string): Promise<QuestionView | null> {
@@ -173,6 +229,14 @@ export function questionDesk(history: History, record: RecordStore, repo: Reposi
 			if (written.kind !== 'ok') return written
 			return { kind: written.question.empty ? 'empty' : 'ok', text: written.question.text }
 		}
+		if (kind === 'note') {
+			const id = String(fieldOf(lens, 'id') ?? '')
+			const note = (await history.list()).find((entry) => entry.id === id && entry.about !== undefined)
+			if (note?.about === undefined || note.outcome !== 'answered') {
+				return { kind: 'refused', problem: 'There is no such note.' }
+			}
+			return { kind: 'ok', text: deeperOnNote(note.about, note.askedAt, note.answer.summary) }
+		}
 		if (kind === 'topic') {
 			const { record: read, states } = await lensFacts()
 			const open = (await openItems(repo, read, states)).topics.find(({ state }) =>
@@ -187,14 +251,24 @@ export function questionDesk(history: History, record: RecordStore, repo: Reposi
 		if (kind !== 'deeper' || names.length === 0 || names.length > MAX_TOPICS || typeof asked !== 'string') {
 			return {
 				kind: 'refused',
-				problem: 'Send a question, or a lens: catch-up, area with a path, deeper, person, range or topic.',
+				problem: 'Send a question, or a lens: catch-up, area with a path, deeper, person, range, topic or note.',
 			}
 		}
 		await map.learn('deeper', names, new Date())
 		return { kind: 'ok', text: deeperQuestion(names, asked.slice(0, MAX_QUESTION_CHARS)) }
 	}
 
-	return { settled, busy, ask, rows, view, questionOf }
+	return { settled, busy, ask, note, notes, writing, rows, view, questionOf }
+}
+
+// "Open as a question" on a live note: the full answer on the change the note was about.
+function deeperOnNote(about: About, at: string, summary: string): string {
+	const short = (hash: string) => hash.slice(0, 7)
+	const what =
+		about.kind === 'commits'
+			? `the commits from ${short(about.base)} to ${short(about.head)}`
+			: `uncommitted work at ${at.slice(11, 16)} UTC. ken copied that work into commit ${short(about.snapshot)} in its own store, on top of HEAD ${short(about.head)}: read it with diff from ${short(about.base)} to ${short(about.snapshot)} and with read_file at ${short(about.snapshot)}, as you would a commit`
+	return `Go deeper on ken's live note about ${what}. The note said: ${summary}\nExplain that change in full: what it does, why it was done this way, and what to watch now.`
 }
 
 // The record entries an answer stands on: the ones it added, and the current decisions of its piece of work. An answer

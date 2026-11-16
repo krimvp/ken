@@ -10,4 +10,5 @@ export {
 	type ModelUnset,
 	readModelConfig,
 } from './model-config.ts'
+export { MAX_NOTE_ENTRIES, type NoteFacts, noteQuestion } from './note-question.ts'
 export { type Chat, startChat } from './start-chat.ts'

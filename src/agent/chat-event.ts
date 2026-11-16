@@ -1,7 +1,7 @@
 // What one question produces, in this order: text and tool calls while the model works, one "rejected" for each
 // answer that failed a check, at most one "accepted", then "usage", then "done" or "error" as the last event.
 // Plain data, so the terminal and a server can pass it on as it is.
-import type { RecordEntry } from '../record/index.ts'
+import type { Decision, RecordEntry } from '../record/index.ts'
 import type { Answer } from './answer/answer.ts'
 
 export type ChatEvent =
@@ -9,8 +9,10 @@ export type ChatEvent =
 	// step is the call as one plain sentence for the reader, such as "Read `src/cli.ts`, lines 100 to 180".
 	| { kind: 'tool'; name: string; step: string }
 	| { kind: 'rejected'; attempt: number; problems: string[] }
-	// recorded holds the entries this answer added to the project record; an entry already there is not repeated.
-	| { kind: 'accepted'; answer: Answer; recorded: RecordEntry[] }
+	// recorded holds the entries this answer added to the project record; an entry already there is not repeated. draft
+	// is set when the answer cites ken's snapshot of uncommitted work: nothing was recorded, and it holds the answer's
+	// decisions as ken checked and labelled them, for the reader's history alone.
+	| { kind: 'accepted'; answer: Answer; recorded: RecordEntry[]; draft: Decision[] | null }
 	| { kind: 'usage'; inputTokens: number; outputTokens: number; seconds: number }
 	| { kind: 'done'; outcome: Outcome }
 	| { kind: 'error'; message: string }
