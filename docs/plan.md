@@ -120,6 +120,12 @@ The agent explores freely, but three things are never left to the model. None of
 2. **Change facts come from git.** What changed, who changed it and when are read from git, never recalled by the model. The tool also computes whether every changed hunk in scope is covered by the explanation, and lists the ones that are not.
 3. **The stores are append-only and written through tools.** The model adds a decision, a topic or an understanding entry by calling a tool that validates it. It never rewrites a store as free text. A correction is a new entry that replaces an old one, and the old one stays readable.
 
+### An answer about a change, as built
+
+ken asks the model in three steps, in one session. First the model explores and writes a free draft. A model that sends its answer at once skips this step. Then it turns the draft into the answer: each decision and risk carries the lines it rests on, and each point with no line to quote is left out and named for the reader. Last, a second look checks each risk against the code and the later commits on the same files. It may withdraw a risk only with a quote of the line that rules it out, and the reader still sees the withdrawn risk with that line.
+
+Besides the quote check, ken runs these checks. An entry that says something is missing or untested names the text that would be there, and ken searches the head commit for it and refuses the entry if it finds the text. A risk that quotes the message of a commit made after the change is marked "Fixed since", and open risks come first.
+
 ### Labels on every statement
 
 A reader must be able to tell a recorded fact from a guess. Each statement carries one of these labels.
