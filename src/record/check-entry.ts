@@ -14,7 +14,7 @@ import {
 	type Note,
 	type RecordEntry,
 	type Topic,
-	type Undo,
+	UNDO,
 	type Work,
 } from './entry.ts'
 import { codeHash } from './note-freshness.ts'
@@ -38,7 +38,8 @@ export type EntryDraft =
 			chosen: string
 			reason: { text: string; quotes: Quote[] }
 			rejected: { option: string; reason: string }[]
-			undo: Undo
+			// One of UNDO. ken decide passes what its caller typed, so the gate checks it.
+			undo: string
 			needsOwner: boolean
 			quotes: Quote[]
 			work: string | null
@@ -141,6 +142,9 @@ export async function checkEntry(
 				by: draft.logged.by === null ? null : text('by', draft.logged.by, MAX.name),
 				head: await headNow(repo, signal),
 			}
+			const undo = UNDO.find((known) => known === draft.undo)
+			const given = draft.undo.trim() === '' ? '' : `, not "${draft.undo}"`
+			if (undo === undefined) problems.push(`say how easy it is to undo: easy, some-work or hard${given}.`)
 			entry = {
 				kind: 'decision',
 				question: text('question', draft.question, MAX.option),
@@ -150,7 +154,8 @@ export async function checkEntry(
 					option: text(`rejected option ${index + 1}`, rejected.option, MAX.option),
 					reason: text(`the reason for rejected option ${index + 1}`, rejected.reason, MAX.text),
 				})),
-				undo: draft.undo,
+				// An unknown undo is refused above, so this entry is never written.
+				undo: undo ?? 'hard',
 				needsOwner: draft.needsOwner,
 				label: logged ? 'recorded' : decisionLabel(reasonQuotes),
 				...(logged && { logged }),

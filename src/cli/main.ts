@@ -2,11 +2,13 @@
 // The ken command. "ken chat" talks about a repository in the terminal. "ken ask" answers one question and exits, as
 // text or as JSON for scripts. Exit code 0 means a checked answer, 1 means none, 2 means ken could not start.
 // "ken record" shows the project record and needs no model. "ken open" serves the page on 127.0.0.1.
+// "ken decide" logs a decision a coding agent makes as it works, and needs no model either.
 import { createInterface } from 'node:readline/promises'
 import { parseArgs } from 'node:util'
 import { type Answer, type Chat, type ChatEvent, type Outcome, readModelConfig, startChat } from '../agent/index.ts'
 import { withDrawings } from '../diagram/index.ts'
 import type { RecordEntry } from '../record/index.ts'
+import { decide } from './decide.ts'
 import { openPage } from './open-page.ts'
 import { printQuestion } from './print-question.ts'
 import { printRecord } from './print-record.ts'
@@ -16,11 +18,15 @@ const USAGE = `Usage:
   ken ask "<question>" [--repo <path>] [--json]
   ken record [<id>] [--repo <path>] [--json]
   ken open [--repo <path>] [--port <n>]
+  ken decide --question <text> --chosen <text> --reason <text> --undo <how easy> [...]
+  ken decide --json < decision.json
 
 Name the model with --model, --base-url and --api-key-env,
-or with KEN_MODEL, KEN_BASE_URL and KEN_API_KEY_ENV.`
+or with KEN_MODEL, KEN_BASE_URL and KEN_API_KEY_ENV.
+Run "ken decide --help" to see how a coding agent logs a decision.`
 
 async function main(argv: string[]): Promise<number> {
+	if (argv[0] === 'decide') return await decide(argv.slice(1))
 	const parsed = parseCommand(argv)
 	if (parsed.kind === 'usage') {
 		process.stderr.write(`${parsed.problem}\n\n${USAGE}\n`)
