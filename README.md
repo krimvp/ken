@@ -61,6 +61,10 @@ Slice 4 adds the understanding map: what you understand of the project, topic by
 
 Slice 6 adds following up: ken brings back what waits on you, worked out by plain code from the record, the map and git, with no model. Open means two things. One is a decision the agent marked as needing your call, which you have not answered. The other is a topic you said you know whose quoted code changed since. For each such topic, ken lists the commits that touched its files since you understood it, and who made each by the record's rule: your agent, a collaborator, or unknown. A topic you never met is never listed. "Open (3)" in the page's header leads to the list. "I have decided", with a note if you like, adds to the record a copy of the decision that no longer needs you and keeps your answer; the old entry stays readable. A topic leaves the list when you press "I know this" on it again. Asking about it does not take it off, since a question is interest, not understanding. Two more lenses sit under the question box: what one person or agent changed, and what happened in a span of time, such as the last 14 days or since your last question. The person lens lists their commits and the topics you know that those commits touched, then asks the agent to explain them. The time lens lists the commits and the pieces of work the record has in that span, then asks the agent.
 
+Live mode, which the plan did not have, lets ken explain the work while a coding agent does it. Run it beside your agent, on the page's "Live" view or with `ken live` in a terminal pane. Without a model, ken shows what it sees now: the branch, the files with uncommitted changes and how many lines changed, the last commits, and the last thing you asked your agent, read from its saved session with secrets hidden and no tool output. Then it writes a short note each time a commit lands, and each time uncommitted work has been quiet for 20 seconds and changed by 3 lines or more: what changed since the last note and why, with each claim quoting its lines, a risk when there is a real one, and the reason quoted from the session when the session gives one. A note goes through the same checks as an answer, and a note whose quotes fail is shown as failed. Notes come one at a time, at most one a minute and 12 an hour, and take turns with your questions. Every note is a model call, so live mode is off until you turn it on, and the page shows the pace and what this run spent.
+
+ken never writes to your project, and that holds in live mode. To quote lines nobody has committed, ken copies the uncommitted work into a commit in its own git object folder, `~/.ken/projects/<first commit>/snapshots/`, with HEAD as parent. The project's `.git` and working tree do not change: no object, ref, index or lock. A snapshot takes in what `.gitignore` allows, leaves out `.ken/`, binary files and files over 1 MB, takes at most 8 MB, and says how many files it left out. ken empties the folder when it starts and finds it over 200 MB. A note on uncommitted work cites a commit only your machine has, so it is a draft: it stays in your history, shown as uncommitted work at that time, and adds nothing to `.ken/record/`. A note on commits that landed records what any answer records.
+
 These parts of the plan are not built yet:
 
 - A reader for the saved sessions of a coding tool other than Claude Code.
@@ -144,7 +148,14 @@ npm run ken -- open
 npm run ken -- open --repo ../my-project --port 4242
 ```
 
-The server listens only on 127.0.0.1 and answers only its own page. It runs one question at a time. Set `KEN_HOME` to keep ken's own files somewhere other than `~/.ken`.
+`open --live` starts the page with live mode on; the "Live" view's switch turns it on and off too. `live` runs it in the terminal instead: it prints what it sees now, then each note as ken writes it, until Ctrl-C. Both need a model, and each note is one question to it. "Pause" holds the notes, "Write a note now" asks for one at once, and "Open as a question" on a note asks for the full answer on that change.
+
+```sh
+npm run ken -- open --live --repo ../my-project
+npm run ken -- live --repo ../my-project
+```
+
+The server listens only on 127.0.0.1 and answers only its own page. It runs one question or live note at a time. Set `KEN_HOME` to keep ken's own files somewhere other than `~/.ken`.
 
 After a session, commit the record in the project: `git add .ken && git commit -m "chore: update the ken record"`.
 
