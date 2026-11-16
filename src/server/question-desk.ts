@@ -31,6 +31,9 @@ export type QuestionRow = {
 // topic whose state is "unchanged" into one line.
 export type QuestionView = { entry: HistoryEntry; recorded: RecordEntry[]; head: string | null; topics: TopicState[] }
 
+// What live mode's notes cost: how many there are and the tokens they took.
+export type Spent = { notes: number; inputTokens: number; outputTokens: number }
+
 type Accepted = Extract<ChatEvent, { kind: 'accepted' }>
 
 // What the page receives while a question runs: "waiting" first when ken is writing a live note, then the question as
@@ -131,6 +134,18 @@ export function questionDesk(history: History, record: RecordStore, repo: Reposi
 	async function notes(limit: number): Promise<QuestionView[]> {
 		const written = (await history.list()).filter((entry) => entry.about !== undefined)
 		return await Promise.all(written.slice(-limit).reverse().map(viewOf))
+	}
+
+	// The notes written from the moment since on, all of them, not only the ones the page lists.
+	async function spentSince(since: string | null): Promise<Spent> {
+		const written = (await history.list()).filter(
+			(entry) => entry.about !== undefined && since !== null && entry.askedAt >= since,
+		)
+		return {
+			notes: written.length,
+			inputTokens: written.reduce((n, entry) => n + (entry.usage?.inputTokens ?? 0), 0),
+			outputTokens: written.reduce((n, entry) => n + (entry.usage?.outputTokens ?? 0), 0),
+		}
 	}
 
 	function writing() {
@@ -235,7 +250,8 @@ export function questionDesk(history: History, record: RecordStore, repo: Reposi
 			if (note?.about === undefined || note.outcome !== 'answered') {
 				return { kind: 'refused', problem: 'There is no such note.' }
 			}
-			return { kind: 'ok', text: deeperOnNote(note.about, note.askedAt, note.answer.summary) }
+			const commits = note.answer.change?.commits.length ?? 0
+			return { kind: 'ok', text: deeperOnNote(note.about, note.askedAt, note.answer.summary, commits) }
 		}
 		if (kind === 'topic') {
 			const { record: read, states } = await lensFacts()
@@ -258,18 +274,26 @@ export function questionDesk(history: History, record: RecordStore, repo: Reposi
 		return { kind: 'ok', text: deeperQuestion(names, asked.slice(0, MAX_QUESTION_CHARS)) }
 	}
 
-	return { settled, busy, ask, note, notes, writing, rows, view, questionOf }
+	return { settled, busy, ask, note, notes, spentSince, writing, rows, view, questionOf }
 }
 
-// "Open as a question" on a live note: the full answer on the change the note was about. The first line is what the
-// page shows as the question; the lines under it are for the agent.
-function deeperOnNote(about: About, at: string, summary: string): string {
+// "Open as a question" on a live note: the full answer on the change the note was about. The first line is the title the
+// page shows as the question. The page shows a line under it only when it starts with "- ", as a lens's list does, so
+// the lines here are for the agent alone. The server runs on the reader's machine, so its clock is the reader's.
+function deeperOnNote(about: About, at: string, summary: string, commits: number): string {
 	const short = (hash: string) => hash.slice(0, 7)
-	const when = at.slice(11, 16)
+	const time = new Date(at).toTimeString().slice(0, 5)
+	const explain = `The note said: ${summary}\nExplain that change in full: what it does, why it was done this way, and what to watch now.`
 	if (about.kind === 'commits') {
-		return `Go deeper on the live note of ${when} UTC about the commits from ${short(about.base)} to ${short(about.head)}.\nThe note said: ${summary}\nExplain that change in full: what it does, why it was done this way, and what to watch now.`
+		const what =
+			commits === 1
+				? `commit ${short(about.head)}`
+				: commits > 1
+					? `${commits} commits, up to ${short(about.head)}`
+					: `the commits up to ${short(about.head)}`
+		return `Go deeper on the ${time} note about ${what}\nThe note was about the commits from ${short(about.base)} to ${short(about.head)}. Read them with log and diff over that range.\n${explain}`
 	}
-	return `Go deeper on the live note of ${when} UTC about uncommitted work.\nken copied that work into commit ${short(about.snapshot)} in its own store, on top of HEAD ${short(about.head)}. Read it with diff from ${short(about.base)} to ${short(about.snapshot)} and with read_file at ${short(about.snapshot)}, as you would a commit.\nThe note said: ${summary}\nExplain that change in full: what it does, why it was done this way, and what to watch now.`
+	return `Go deeper on the ${time} note about uncommitted work\nken copied that work into commit ${short(about.snapshot)} in its own store, on top of HEAD ${short(about.head)}. Read it with diff from ${short(about.base)} to ${short(about.snapshot)} and with read_file at ${short(about.snapshot)}, as you would a commit.\n${explain}`
 }
 
 // The record entries an answer stands on: the ones it added, and the current decisions of its piece of work. An answer

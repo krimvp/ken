@@ -241,3 +241,69 @@ test('a question asked while a note is being written waits for it, then runs', a
 	const view = await live(server)
 	assert.equal(view.notes[0].entry.outcome, 'answered')
 })
+
+test('turning live mode off and on again does not explain the same uncommitted work twice, and the spend counts only the notes since it was turned on', async () => {
+	const { root, hashes } = buildRepository([{ message: 'feat: retry', files: { 'src/retry.ts': RETRY } }])
+	const [first = ''] = hashes
+	const home = tempFolder('ken-home-')
+	writeFileSync(path.join(root, 'src/retry.ts'), WAITING)
+	const snapshot = await takeSnapshot(await openSnapshots(home, gitRepository(root), root), gitRepository(root), root)
+	if (snapshot.kind !== 'taken') return assert.fail('there is uncommitted work to take')
+	const model = await scriptedModel([noteAbout(first, snapshot.commit, 'Retries now wait.'), { text: 'Done.' }])
+	const server = await open(home, model.baseUrl, root)
+
+	await live(server, 'on')
+	await live(server, 'note-now')
+	const noted = await until(
+		() => live(server),
+		(each) => each.notes.length > 0 && each.status === 'watching',
+	)
+	const usage = noted.notes[0].entry.usage
+	assert.deepEqual(noted.spent, { notes: 1, inputTokens: usage.inputTokens, outputTokens: usage.outputTokens })
+
+	await live(server, 'off')
+	const again = await live(server, 'on')
+	assert.deepEqual(again.spent, { notes: 0, inputTokens: 0, outputTokens: 0 }, 'the note came before live was on again')
+	assert.ok(again.since > noted.notes[0].entry.askedAt)
+	await live(server, 'note-now')
+	const after = await until(
+		() => live(server),
+		(each) => each.said !== null || each.notes.length > 1,
+	)
+	assert.equal(after.said, 'Nothing new since the last note.')
+	assert.equal(after.notes.length, 1)
+	assert.equal(model.requests.length, 2, 'no model call for work a note already explained')
+})
+
+test('a note opened as a question shows a short title, and the lines that tell the agent where the snapshot is stay out of what the page lists', async () => {
+	const { root, hashes } = buildRepository([{ message: 'feat: retry', files: { 'src/retry.ts': RETRY } }])
+	const [first = ''] = hashes
+	const home = tempFolder('ken-home-')
+	writeFileSync(path.join(root, 'src/retry.ts'), WAITING)
+	const snapshot = await takeSnapshot(await openSnapshots(home, gitRepository(root), root), gitRepository(root), root)
+	if (snapshot.kind !== 'taken') return assert.fail('there is uncommitted work to take')
+	const model = await scriptedModel([
+		noteAbout(first, snapshot.commit, 'Retries now wait.'),
+		{ text: 'Done.' },
+		{ text: 'Done.' },
+	])
+	const server = await open(home, model.baseUrl, root)
+	await live(server, 'on')
+	await live(server, 'note-now')
+	const view = await until(
+		() => live(server),
+		(each) => each.notes.length > 0 && each.status === 'watching',
+	)
+	const note = view.notes[0].entry
+
+	const asking = send(server, '/api/questions', { lens: { kind: 'note', id: note.id } })
+	const [title, ...rest] = JSON.parse(await asking.firstLine).question.split('\n')
+	const time = new Date(note.askedAt).toTimeString().slice(0, 5)
+	assert.equal(title, `Go deeper on the ${time} note about uncommitted work`)
+	assert.ok(
+		rest.every((line: string) => !line.startsWith('- ')),
+		'the page lists only the lines that start with "- "',
+	)
+	assert.ok(rest.join('\n').includes(snapshot.commit.slice(0, 7)), 'the agent learns where the snapshot is')
+	await asking.all
+})

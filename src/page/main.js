@@ -359,9 +359,14 @@ function turnHtml(q, ui) {
 	</article>`
 }
 
+// A lens's question is its first line and the list ken wrote under it, each item a line that starts with "- ". Any
+// other line is for the agent alone, such as where ken keeps a snapshot.
 function questionHtml(question) {
 	const [first, ...listed] = question.split('\n')
-	const items = listed.map((line) => `<li>${prose(line.replace(/^- /, ''))}</li>`).join('')
+	const items = listed
+		.filter((line) => line.startsWith('- '))
+		.map((line) => `<li>${prose(line.slice(2))}</li>`)
+		.join('')
 	return `<h2 class="question">${prose(first)}</h2>${items ? `<ul class="asked-list">${items}</ul>` : ''}`
 }
 

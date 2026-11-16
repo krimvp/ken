@@ -63,11 +63,14 @@ export type WatchState = {
 
 type Step = { state: WatchState; action: WatchAction }
 
-export function startWatch(first: Observation, now: number): WatchState {
+// last is what the newest note in the history explained. While HEAD has not moved since, live mode picks up from it, so
+// turning live mode off and on again does not explain the same uncommitted work twice.
+export function startWatch(first: Observation, now: number, last: About | null = null): WatchState {
+	const snapshot = last?.kind === 'uncommitted' && last.head === first.head ? last.snapshot : null
 	return {
 		paused: false,
 		busy: { kind: 'idle' },
-		noted: { head: first.head, snapshot: null },
+		noted: { head: first.head, snapshot },
 		seen: { ...first, changedAt: now },
 		snapshotted: null,
 		notes: [],

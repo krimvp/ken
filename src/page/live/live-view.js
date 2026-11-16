@@ -33,14 +33,13 @@ function controlsHtml(live) {
 	return `${toggle}<button class="quiet-button" data-act="live-note-now" data-key="live-note-now"${busy || paused ? ' disabled' : ''}>Write a note now</button><button class="link small" data-act="live-off" data-key="live-off">Turn off</button>`
 }
 
-function paceHtml({ pace, spent }) {
+function paceHtml({ pace, spent, since }) {
 	const tokens = (spent.inputTokens + spent.outputTokens).toLocaleString('en-US')
-	const rule = `A note for each commit, or after ${pace.quietMs / 1000} s without edits once ${pace.minLines} lines changed; at most one a minute and ${pace.perHour} an hour.`
-	const cost =
-		spent.notes === 0
-			? 'No notes yet this run.'
-			: `This run: ${spent.notes} ${spent.notes === 1 ? 'note' : 'notes'}, ${tokens} tokens, ${Math.round(spent.seconds)} s.`
-	return `<p class="live-pace small muted">${rule} ${cost}</p>`
+	const rule = `ken writes a note after each commit, and when you stop editing for ${pace.quietMs / 1000} seconds with at least ${pace.minLines} lines changed. At most 1 a minute and ${pace.perHour} an hour. Each note is a model call.`
+	const cost = since
+		? ` Since ${clock(since)}: ${spent.notes} ${spent.notes === 1 ? 'note' : 'notes'}, ${tokens} tokens.`
+		: ''
+	return `<p class="live-pace small muted">${rule}${cost}</p>`
 }
 
 function fileHtml(file) {

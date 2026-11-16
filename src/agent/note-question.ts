@@ -50,6 +50,7 @@ export function noteQuestion(about: About, facts: NoteFacts): string {
 		`- Say what changed since the last note and why, in at most ${MAX_NOTE_ENTRIES} entries: statements, decisions and risks together.`,
 		'- Lead with what matters to someone watching: what the change does and what it means for the code, not which lines moved.',
 		'- Quote the changed lines.',
+		'- Speak to the reader as "you": write "you asked for", never "the owner asked for".',
 		'- Name a risk only if it is real. If there is none, send risks as an empty list. Read only the code the change touches and the lines next to it; do not search the rest of the project.',
 		"- Use the reader's map: skip what they know, and lead with what changed in what they knew.",
 		earlier,
