@@ -26,6 +26,8 @@ A high-level question, such as how the parts fit together or what happens when a
 
 ken's answer to a question about how its own page works, on glm-5.3. It opens with a sequence diagram.
 
+Slice 5 has started. A coding agent logs a decision as it makes it with `ken decide`, and ken labels it "recorded". `ken sessions` reads the sessions Claude Code saved for the project. The chat does not quote those sessions yet, and the page does not show logged decisions yet.
+
 How ken works today:
 
 ```mermaid
@@ -103,6 +105,15 @@ To let the agents in your other projects call it, run `npm link` once in this ch
 ```
 
 A decision logged before its code is committed has no piece of work yet. Later, the piece of work whose commits start at, or pass through, the commit that was checked out when the decision was logged takes it in. `ken record <id>` shows which.
+
+`sessions` reads the sessions Claude Code saved while it worked on the project, and needs no model. With no id it lists them, newest first: when each started and ended, and how many messages it holds. With an id it prints one session in order: what you asked, what the agent said, and each tool the agent ran on which file or with which command, with the first lines of its output. ken only reads these files. It reads only sessions that started in the project's folder or one inside it, at most the newest 100, and at most 32 MB of each.
+
+```sh
+npm run ken -- sessions --repo ../my-project
+npm run ken -- sessions 0b7e4c2a-5f1d-4c3e-9a8b-2d6f1e0c9b7a --repo ../my-project --json
+```
+
+Claude Code keeps sessions in `~/.claude/projects/`. Set `KEN_CLAUDE_PROJECTS` to read them from another folder.
 
 `open` starts the page for the repository in the current folder, or the one you name, and opens it in your browser. It prints the address too, in case no browser opens. Press Ctrl-C to stop it. With no model set, the page still opens: it shows your earlier answers and says what to set. Ask how the parts of a project fit together and the answer leads with a diagram; choose a numbered row, or a box or an arrow in the drawing, to read the code it rests on. The page draws with Mermaid, which ken serves from its own address.
 
