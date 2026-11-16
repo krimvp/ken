@@ -1,7 +1,7 @@
 // When ken writes a note while it watches. A note is a model call, so the pace is calm and bounded: a commit always
 // earns a note; uncommitted work earns one once it has been quiet for PACE.quietMs and changed by PACE.minLines lines
 // since the last note; one note at a time, PACE.gapMs apart at least, and PACE.perHour at most. The owner's "Write a
-// note now" skips the wait, the gap and the cap. watchStep is pure: the state, what happened and the time go in, and
+// note now" skips the wait, the gap and the cap, and works while paused too. watchStep is pure: the state, what happened and the time go in, and
 // the new state and what to do come out, so tests drive it with made-up observations and times.
 import type { CommitHash } from '../repo/index.ts'
 
@@ -105,7 +105,7 @@ export function watchStep(state: WatchState, event: WatchEvent, now: number): St
 // nothing yet.
 function next(state: WatchState, now: number): Step {
 	const wait: Step = { state, action: { kind: 'none' } }
-	if (state.paused || state.busy.kind !== 'idle') return wait
+	if ((state.paused && !state.asked) || state.busy.kind !== 'idle') return wait
 	const free =
 		state.asked || (state.notes.length < PACE.perHour && now - (state.notes.at(-1) ?? -HOUR_MS) >= PACE.gapMs)
 	const { head, landed, tree, changedAt } = state.seen
@@ -125,7 +125,8 @@ function snapshotTaken(state: WatchState, taken: Extract<WatchEvent, { kind: 'sn
 	if (state.busy.kind !== 'snapshot') return { state, action: { kind: 'none' } } satisfies Step
 	const settled: WatchState = { ...state, busy: { kind: 'idle' }, snapshotted: state.busy.tree, asked: false }
 	// Paused while the snapshot ran: take it again once the owner resumes.
-	if (state.paused) return { state: { ...settled, snapshotted: null }, action: { kind: 'none' } } satisfies Step
+	if (state.paused && !state.asked)
+		return { state: { ...settled, snapshotted: null }, action: { kind: 'none' } } satisfies Step
 	const enough = taken !== null && taken.changed >= (state.asked ? 1 : PACE.minLines)
 	if (taken === null || !enough || taken.snapshot === state.noted.snapshot) {
 		return { state: settled, action: { kind: state.asked ? 'nothing-new' : 'none' } } satisfies Step
