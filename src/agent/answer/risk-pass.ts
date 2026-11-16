@@ -52,11 +52,12 @@ export function riskPassQuestion(held: Held, later: Later[]): string {
 	const risks = answer.risks ?? []
 	const notFollowed = answer.change?.usedElsewhere?.notFollowed ?? []
 	const head = answer.change ? short(answer.change.head) : 'HEAD'
-	const mark = (checked: boolean | undefined) => (checked ? 'checked in the code' : 'not checked outside the change')
+	const mark = (checked: boolean | undefined) =>
+		checked ? 'quotes code outside the change' : 'quotes only the changed lines'
 	const shown = later.slice(0, MAX_LATER)
 	return [
 		`ken checked your answer, and the reader has not seen it yet. Now check it against the code at the head commit ${head}, with the same tools. Take these steps in order:`,
-		'1. Each risk below: read the place it points at. That is the code outside the change that uses what changed, or, for what the change left undone, the later commits below. Then rewrite the risk with a quote of that place, withdraw it because the code shows it does not happen, or keep it as it is. ken marks a risk "Checked in the code" only when it quotes, at the head commit, a line the change did not touch. A dependency\'s code is not in git, so ken cannot read it.',
+		'1. Each risk below: read the place it points at. That is the code outside the change that uses what changed, or, for what the change left undone, the later commits below. Then rewrite the risk with a quote of that place, withdraw it because the code shows it does not happen, or keep it as it is. ken marks a risk "Quotes code outside the change" only when one of its quotes, at the head commit, holds no line the change touched, and "Quotes only the changed lines" otherwise. A dependency\'s code is not in git, so ken cannot read it.',
 		'2. Each pair of decisions that touch the same file, function, record, id or signal, such as one that writes or keeps a thing and one that deletes or skips it: what happens when both apply?',
 		'3. Each early return, refusal, delete or catch in the changed lines: what no longer happens after it, and who relied on it?',
 		'4. Each reason your answer quotes from a commit message or a comment: does the code do what it says? Where it does not, that is a risk.',

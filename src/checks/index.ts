@@ -4,7 +4,7 @@
 // else the names a change touches are used, and which of them the answer follows. No model takes part, so the same
 // answer always gets the same result.
 export { type ChangedHunk, type Coverage, checkCoverage } from './coverage-check.ts'
-export { checkedInCode, checkLabel, decisionLabel, type Label, type LabelCheck } from './label-check.ts'
+export { checkLabel, decisionLabel, type Label, type LabelCheck, quotesOutsideChange } from './label-check.ts'
 export { countMessages, type MessageCount } from './message-count.ts'
 export { checkQuote, type GitQuote, type QuoteCheck, type VerifiedGitQuote } from './quote-check.ts'
 export {

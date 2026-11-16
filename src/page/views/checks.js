@@ -16,6 +16,7 @@ import {
 	quoteBody,
 	quoteSource,
 	quoteTags,
+	RISK_MARKS,
 	short,
 	tagHtml,
 	when,
@@ -119,7 +120,7 @@ export function checksHtml(q, ui) {
 			${whereQuotes(q)}
 			${backLine}
 			<p><button class="link small" data-act="key" data-key="key" aria-expanded="${ui.keyOpen}">${ui.keyOpen ? 'Hide what the labels mean' : 'What the labels mean'}</button></p>
-			${ui.keyOpen ? labelKey(labelsOf(q)) : ''}
+			${ui.keyOpen ? labelKey(labelsOf(q)) + marksKey(q) : ''}
 		</section>
 		${coverageSection(q, ui)}
 		${elsewhereSection(q)}
@@ -174,6 +175,15 @@ export function labelKey(names) {
 	return `<dl class="label-key">${names
 		.map((name) => `<div><dt>${label(name)}</dt><dd>${prose(LABELS[name].means)}</dd></div>`)
 		.join('')}</dl>`
+}
+
+// The two marks ken sets on a risk, when this answer's risks carry them.
+function marksKey(q) {
+	if (!(q.answer.risks ?? []).some((risk) => risk.checked !== undefined)) return ''
+	return `<dl class="label-key">
+		<div><dt><span class="label label-recorded">${RISK_MARKS.outside}</span></dt><dd>A quote of the risk lies wholly outside the lines the change touched, at its last commit. ${RISK_MARKS.means}</dd></div>
+		<div><dt><span class="label label-inferred">${RISK_MARKS.inside}</span></dt><dd>No quote of the risk lies wholly outside the lines the change touched.</dd></div>
+	</dl>`
 }
 
 // The changed blocks no quote covers, by file, the files with the most uncovered lines first.

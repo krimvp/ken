@@ -3,13 +3,13 @@
 // Only then does ken read the change facts from git.
 import {
 	checkCoverage,
-	checkedInCode,
 	checkLabel,
 	countMessages,
 	followedNames,
 	gitQuotes,
 	type Quote,
 	type QuoteSources,
+	quotesOutsideChange,
 	usedElsewhere,
 	type VerifiedGitQuote,
 	type VerifiedQuote,
@@ -90,7 +90,7 @@ export async function checkAnswer(
 	const { head, covered, uncovered } = change.change
 	const marked = risks?.map((risk) => ({
 		...risk,
-		checked: checkedInCode(risk.quotes, head, [...covered, ...uncovered]),
+		checked: quotesOutsideChange(risk.quotes, head, [...covered, ...uncovered]),
 	}))
 	return { kind: 'accepted', answer: { ...answer, risks: marked ?? null, change: change.change }, decisions }
 }

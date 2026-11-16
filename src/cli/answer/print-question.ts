@@ -80,8 +80,12 @@ export function formatAnswer(answer: Answer, entries: Entry[], paint: Paint): st
 		lines.push('')
 	}
 	if (answer.risks?.length === 0) lines.push(paint('bold', "Risks: ken's model looked and found none."), '')
-	if (answer.risks?.length)
-		lines.push(paint('bold', `Risks (${answer.risks.length}):`), ...claims(answer.risks, paint), '')
+	if (answer.risks?.length) {
+		lines.push(paint('bold', `Risks (${answer.risks.length}):`), ...claims(answer.risks, paint))
+		if (answer.risks.some((risk) => risk.checked !== undefined))
+			lines.push(paint('dim', 'ken checks where the quote is, not whether the risk is true.'))
+		lines.push('')
+	}
 	const said = answer.change ? 'What the change did' : 'Statements'
 	lines.push(paint('bold', `${said} (${answer.statements.length}):`), ...claims(answer.statements, paint))
 	const fromSessions = [
@@ -154,8 +158,8 @@ function revisionLine({ risks, decisions, withdrawn }: Revision): string {
 	return `A second look at risks ${changes.length === 0 ? 'changed nothing in them' : changes.join(', ')}.${order}`
 }
 
-// A risk carries ken's own mark of whether it was checked past the diff; a statement, and an older risk, has none.
-const CHECKED = { true: 'Checked in the code', false: 'Not checked outside the change' } as const
+// A risk carries ken's own mark of whether a quote lies outside the change; a statement, and an older risk, has none.
+const CHECKED = { true: 'Quotes code outside the change', false: 'Quotes only the changed lines' } as const
 
 function claims(list: Risk[], paint: Paint): string[] {
 	return list.flatMap((claim, index) => [
