@@ -167,7 +167,7 @@ function decisionsHtml(shown, rows) {
 	</section>`
 }
 
-function decisionHtml(d, key, { ui, commits }, marked) {
+export function decisionHtml(d, key, { ui, commits }, marked) {
 	const open = ui.openDecisions.has(key)
 	const call = d.needsOwner ? '<span class="your-call">Your call</span> ' : ''
 	const mark = marked.has(d.label) ? `${label(d.label)} ` : ''

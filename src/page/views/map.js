@@ -1,7 +1,7 @@
 // The reader's understanding map on the page: the line under an answer that says which topics its buttons update, the
 // one line a topic the reader knows folds to, and the "Your map" view. ken works out each topic's state from the map
 // file and the code at HEAD; the page only shows it.
-import { esc, list } from './format.js'
+import { esc, list, WHO } from './format.js'
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
@@ -134,13 +134,31 @@ export function mapViewHtml(map) {
 	</section>`
 }
 
-// The two lenses, each a button or a small form that asks a question ken writes from the map.
-export function lensHtml(where) {
+// The lenses, each a button or a small form that asks a question ken writes without a model. The last one looks at
+// what changed by one person, or by everyone, in a span of time. pick holds the authors of recent commits, the person
+// and the span the reader chose, and whether they have asked a question yet.
+export function lensHtml(where, pick) {
+	const spans = [
+		...(pick.asked ? [['question', 'since your last question']] : []),
+		['7d', 'in the last 7 days'],
+		['14d', 'in the last 14 days'],
+		['30d', 'in the last 30 days'],
+	]
+	const since = spans.some(([value]) => value === pick.since) ? pick.since : spans[0][0]
+	const option = (value, text, chosen) =>
+		`<option value="${esc(value)}"${value === chosen ? ' selected' : ''}>${esc(text)}</option>`
+	const people = pick.authors.map((a) =>
+		option(a.email, `${a.name}, ${a.by.map((by) => WHO[by] ?? by).join(' or ')}`, pick.author),
+	)
 	return `<div class="lenses lenses-${where}">
 		<button class="quiet-button" data-act="catch-up" data-key="catch-up-${where}">Catch up on what changed since you understood it</button>
 		<form class="area-form" data-area="${where}" autocomplete="off">
 			<label for="area-${where}">Work in an area today</label>
 			<span class="area-row"><input id="area-${where}" name="path" placeholder="src/server" spellcheck="false" /><button class="quiet-button" type="submit">What do I need to know?</button></span>
+		</form>
+		<form class="change-form" autocomplete="off">
+			<label for="who-${where}">What changed</label>
+			<span class="area-row"><select id="who-${where}" name="author">${option('', 'by everyone', pick.author)}${people.join('')}</select><select name="since" aria-label="When">${spans.map(([value, text]) => option(value, text, since)).join('')}</select><button class="quiet-button" type="submit">Explain</button></span>
 		</form>
 	</div>`
 }

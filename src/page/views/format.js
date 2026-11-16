@@ -131,3 +131,11 @@ export const LABELS = {
 export function label(name) {
 	return `<span class="label label-${esc(name)}">${esc(LABELS[name]?.name ?? name)}</span>`
 }
+
+// The record's "who did it" for a commit, said to the reader.
+export const WHO = {
+	owner: 'you',
+	'owner-agent': 'your agent',
+	collaborator: 'a collaborator',
+	unknown: 'git cannot tell who',
+}
