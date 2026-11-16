@@ -22,9 +22,6 @@ const MAX_LISTED_HUNKS = 40
 const MAX_LISTED_MESSAGES = 40
 // Two short sentences. A longer summary pushes the checked part of the answer off the reader's first screen.
 export const MAX_SUMMARY_CHARS = 280
-// The plain chat the checkpoint compares ken with names about five risks, heaviest first. More than this and the
-// heavy ones drown among the minor ones.
-export const MAX_RISKS = 7
 
 // What one question has seen of the answer tool. The session makes a new one for each question. asked is false for a
 // note ken wrote by itself in live mode: the reader did not ask it, so it tells their map nothing, and it gets neither
@@ -167,11 +164,6 @@ async function settle(
 	const { sources, store, project } = gate
 	const read = readJsonText(ANSWER_SCHEMA, raw)
 	if (read.kind === 'refused') return { kind: 'rejected', problems: read.problems }
-	const risks = optionalList(read.args.risks).length
-	if (risks > MAX_RISKS) {
-		const problem = `The answer has ${risks} risks, and ken shows at most ${MAX_RISKS}, so the owner reads every one. Keep the heaviest, and leave out the minor or speculative ones.`
-		return { kind: 'form', problems: [problem] }
-	}
 	const sourceProblems: string[] = []
 	const quote = (each: JsonObject) => quoteOf(each, sourceProblems)
 	const draft = draftOf(read.args, quote)

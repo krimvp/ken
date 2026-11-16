@@ -17,7 +17,6 @@ import {
 	DECISION_SCHEMA,
 	type Gate,
 	type Held,
-	MAX_RISKS,
 	optionalList,
 	sentBack,
 	withoutDescriptions,
@@ -87,7 +86,7 @@ export function riskPassQuestion(held: Held, later: Later[]): string {
 		'Then call revise_answer once:',
 		'- risks: each new risk, and each risk above that you rewrite, with replaces set to its number. A risk is one or two sentences: what can happen, to whom, and when. Quote the place it rests on.',
 		'- withdraw: each risk above that the code shows does not happen, with what the code shows instead.',
-		`- order: the numbers of all the risks the answer keeps, the heaviest first: what can hurt the owner most, soonest. A risk above keeps its number; the risks you send are ${risks.length + 1}, ${risks.length + 2} and on, in the order you send them. A minor or speculative risk goes last, or withdraw it. At most ${MAX_RISKS} risks.`,
+		`- order: the numbers of all the risks the answer keeps, the heaviest first: what can hurt the owner most, soonest. A risk above keeps its number; the risks you send are ${risks.length + 1}, ${risks.length + 2} and on, in the order you send them. A minor or speculative risk goes last, or withdraw it.`,
 		'- decisions: a decision your answer missed, with its quotes.',
 	].join('\n')
 }
@@ -164,7 +163,7 @@ export function reviseTool(gate: Gate, round: () => AnswerRound): Tool {
 }
 
 // A revision's form, which the model fixes without reading code again: each risk of the first answer is kept in order,
-// rewritten or withdrawn, once, and each risk it sends is in order. The answer's own check refuses more than MAX_RISKS.
+// rewritten or withdrawn, once, and each risk it sends is in order.
 function orderProblems(n: number, replaced: (number | undefined)[], withdrawn: number[], order: number[]): string[] {
 	const problems: string[] = []
 	const last = n + replaced.length
@@ -237,7 +236,7 @@ const REVISE_SCHEMA = {
 		},
 		order: {
 			type: 'array',
-			description: `The numbers of every risk the answer keeps, the heaviest first, at most ${MAX_RISKS}`,
+			description: 'The numbers of every risk the answer keeps, the heaviest first',
 			items: { type: 'integer', minimum: 1 },
 		},
 		decisions: { type: 'array', description: 'Decisions to add', items: withoutDescriptions(DECISION_SCHEMA) },
