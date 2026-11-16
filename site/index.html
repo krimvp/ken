@@ -35,21 +35,21 @@
 			<figure class="shot">
 				<a href="images/ken-risk-with-quotes-wide.png">
 					<picture>
-						<source media="(max-width: 34rem) and (prefers-color-scheme: dark)" srcset="images/ken-risk-with-quotes-narrow-dark.png 2x" width="382" height="623" />
-						<source media="(max-width: 34rem)" srcset="images/ken-risk-with-quotes-narrow.png 2x" width="382" height="623" />
-						<source media="(prefers-color-scheme: dark)" srcset="images/ken-risk-with-quotes-wide-dark.png 2x" width="794" height="405" />
-						<img src="images/ken-risk-with-quotes-wide.png" srcset="images/ken-risk-with-quotes-wide.png 2x" width="794" height="405" alt="The heading 5 risks to watch, then risk 1: The page and the terminal show times differently. The page shows note times and &quot;you last asked&quot; in the browser's local time with no zone. The terminal slices the ISO string and labels it UTC. The two can disagree by hours. Under it are two quotes at commit 53567b4. The first is open and shows line 16 of src/page/live/note.js, which builds the time from getHours and getMinutes. The second is line 71 of src/cli/live.ts, which prints the time with the word UTC." />
+						<source media="(max-width: 34rem) and (prefers-color-scheme: dark)" srcset="images/ken-risk-with-quotes-narrow-dark.png 2x" width="366" height="525" />
+						<source media="(max-width: 34rem)" srcset="images/ken-risk-with-quotes-narrow.png 2x" width="366" height="525" />
+						<source media="(prefers-color-scheme: dark)" srcset="images/ken-risk-with-quotes-wide-dark.png 2x" width="794" height="321" />
+						<img src="images/ken-risk-with-quotes-wide.png" srcset="images/ken-risk-with-quotes-wide.png 2x" width="794" height="321" alt="The heading 3 risks to watch, and the line: A risk is something ken's model thinks could go wrong. ken checks where the quote is, not whether the risk is true. Then risk 1, marked Quotes code outside the change: Readers of every answer about a change can now get a long risk list, with the heavy risks buried among minor ones. The terminal prints every risk it gets and cuts none, so only the prompt's wording keeps the list short. Under it are two folded quotes: line 84 of src/cli/answer/print-question.ts at commit 5d4efe5, and lines 25 to 26 of src/agent/answer/answer-tool.ts at af5ce77." />
 					</picture>
 				</a>
-				<figcaption>Screenshot of ken's own page. The model was Claude Opus. It shows the first of five risks in its answer to "What did the last three commits do, and why?" about ken's own repository, with the first quote open.</figcaption>
+				<figcaption>Screenshot of ken's own page. The model was Claude Opus, through ken's local endpoint. It shows the first of three risks in ken's answer to "What did the last commit do, and why?" about ken's own repository at commit 5d4efe5, the commit that removed the cap on risks.</figcaption>
 			</figure>
 
 			<section aria-labelledby="check">
 				<h2 id="check">What is in an answer, and what ken checks</h2>
 				<p>
 					An answer has a short summary, then the decisions with their reasons, the risks, and plain statements. Ask
-					how the parts fit together and it opens with one or two basic diagrams, where each box and arrow quotes its
-					lines too.
+					how the parts fit together, or about a change that touches two or more parts, and it opens with a basic
+					diagram, where each box and arrow quotes its lines too.
 				</p>
 				<figure class="shot">
 					<a href="images/ken-answer-with-diagram-wide.png">
@@ -68,8 +68,7 @@
 				</p>
 				<p>
 					The check covers only the quotes. It does not check that a sentence, a risk or an arrow is true, and it
-					does not check the summary. ken never shows an answer that fails the check. The agent tries again, up to three
-					times. The commits, their authors and dates, and the changed lines no quote covers come from git.
+					does not check the summary. If the check rejects an answer, the agent tries again, up to three times. The commits, their authors and dates, and the changed lines no quote covers come from git.
 				</p>
 				<p>A label says how the agent knows each claim:</p>
 				<ul class="labels">
@@ -92,7 +91,7 @@
 				</ul>
 				<p>
 					ken, not the model, also marks each risk "Quotes code outside the change" or "Quotes only the changed
-					lines". That label says where a quote is. It does not say the risk is true.
+					lines". ken checks where the quote is, not whether the risk is true.
 				</p>
 			</section>
 
@@ -189,7 +188,7 @@
 				<p>
 					Outside <code>.ken/</code> in the project and <code>~/.ken/</code> on your machine, ken writes nothing. It
 					never edits your code, commits or pushes. The project record holds what passed the check: decisions, topics, and which commits belong together as one
-					task, with a short summary. You commit it for collaborators and their agents. ken only adds to it.
+					task, with a short summary. You commit it for collaborators and their agents.
 				</p>
 				<p>
 					ken uses any OpenAI-compatible endpoint, or the <code>claude</code> command through a small local endpoint
@@ -212,7 +211,7 @@
 					"Decisions" lists every decision saved for the project, with its label and where its reason comes from. A
 					later decision on the same question replaces the older one.
 				</p>
-				<figure class="shot">
+				<figure class="shot shot-wide-only">
 					<a href="images/ken-decisions-wide.png">
 						<picture>
 							<source media="(max-width: 34rem) and (prefers-color-scheme: dark)" srcset="images/ken-decisions-narrow-dark.png 2x" width="390" height="270" />
@@ -269,10 +268,10 @@
 					per pull request is a noisy measure, and a pass is not proof.
 				</p>
 				<p>
-					ken is also slower. An answer took two to four minutes on Claude Opus and four to eight on glm-5.3, against
-					one to three in the plain chat. The second look took about half of ken's input tokens. ken's answers are
-					longer, and the plain chat reads faster. In round 5 one of ken's risks was false, and still carried the label
-					for quoting code outside the change.
+					ken's answers are longer and slower to read than the plain chat's, and slower to make, at two to four minutes on
+					Claude Opus and four to eight on glm-5.3 against one to three, with the second look taking about half of
+					ken's input tokens. In round 5 one of ken's risks was false, and still carried the mark "Quotes code outside
+					the change".
 				</p>
 				<details class="rounds">
 					<summary>The five rounds, one by one</summary>
@@ -292,7 +291,7 @@
 						</li>
 						<li>
 							<strong>Round 5</strong> made the second look read the code each risk points at, and ask what happens
-							when two decisions touch the same thing. It also put the risks in order and added the risk labels. With
+							when two decisions touch the same thing. It also put the risks in order and added ken's two marks on risks. With
 							Claude Opus on both sides, three more pull requests ken had never seen passed. Finding more was a tie on
 							two and a narrow win for ken on one, and the judge said a count of finds gives a tie, or ken by one. The
 							three tuned ones passed. The two others failed narrowly on finding more, and so did the three that had
