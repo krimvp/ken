@@ -246,10 +246,12 @@ function weighedHtml(risks, ui, rows, marked, labels) {
 	const note = `A risk is something ken's model thinks could go wrong. ken's model weighs each one. Serious: someone who uses the code in the normal way loses work, gets a wrong result or a failure, or finds refused what worked before. Minor: it needs a rare case or costs little.${fixed > 0 ? ` ${RISK_MARKS.fixedMeans}` : ''} ${RISK_MARKS.means}${labels ? ` ${labels}` : ''}`
 	const list = (each) => each.map(({ item, key, n }) => claimHtml(item, key, n - 1, rows, marked)).join('')
 	const rest = risks.slice(FIRST_RISKS)
+	const fixedLater = rest.filter(({ item }) => item.fixedIn !== undefined).length
+	const restFixed = fixedLater === 0 ? '' : fixedLater === rest.length ? ', fixed since' : `, ${fixedLater} fixed since`
 	const more =
 		rest.length === 0
 			? ''
-			: foldHtml('risks', count(rest.length, 'more risk', 'more risks'), ui, `<ol>${list(rest)}</ol>`)
+			: foldHtml('risks', `${count(rest.length, 'more risk', 'more risks')}${restFixed}`, ui, `<ol>${list(rest)}</ol>`)
 	return `<section class="risks" aria-labelledby="risks-head">
 		<div class="list-head">
 			<h3 id="risks-head">${fixed > 0 ? `${count(risks.length, 'risk', 'risks')}, ${fixed} fixed since` : `Risks, heaviest first (${risks.length})`}</h3>
@@ -314,7 +316,8 @@ function folded(text, open, ui, act, more) {
 function needsHtml(q) {
 	const calls = decisionsOf(q).filter((d) => d.needsOwner).length
 	const { weighed, risks, fixed } = risksOf(q)
-	const serious = risks.filter(({ item }) => item.weight === 'serious').length
+	// Once some are fixed, the serious count is of the open risks, which still need the reader.
+	const serious = risks.filter(({ item }) => item.weight === 'serious' && item.fixedIn === undefined).length
 	const since = fixed === 0 ? '' : `, ${fixed} fixed since`
 	const parts = []
 	if (calls > 0) {
@@ -325,8 +328,9 @@ function needsHtml(q) {
 	if (!weighed && risks.length > 0)
 		parts.push(`<a href="#risks-head">${count(risks.length, 'risk', 'risks')} to watch${since}</a>`)
 	if (weighed && risks.length > 0) {
-		const of = serious === 0 ? '' : `, ${serious} of them serious`
-		parts.push(`<a href="#risks-head">${count(risks.length, 'risk', 'risks')}${of}${since}</a>`)
+		const of =
+			serious === 0 ? '' : fixed === 0 ? `, ${serious} of them serious` : `, ${serious} of the open ones serious`
+		parts.push(`<a href="#risks-head">${count(risks.length, 'risk', 'risks')}${since}${of}</a>`)
 	}
 	// Fewer than half the changed blocks quoted means most of the change is not explained here, so it is said up front.
 	const change = q.answer.change
