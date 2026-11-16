@@ -16,14 +16,14 @@ What runs today:
 - An answer has a short summary, one or two basic diagrams for a high-level question, then the decisions with their reasons, the risks, and statements. Each carries quotes of lines of code, of a commit message, or of a saved session of the coding agent. ken checks that every quoted line is where the quote says, and rejects an answer with a quote that is not there. It does not check that a sentence, a risk or an arrow is true, and it does not check the summary. The commits, authors and dates, and which changed blocks and commit messages the quotes cover, come from git.
 - ken sets a label where it can. "Recorded" means a coding agent logged the decision with `ken decide` as it worked, or the reason is quoted from a commit message. "From the session" means the reason is quoted from a saved session. "Inferred" means the agent worked it out. "Found by search" marks a link between pieces of code that the agent found by searching and did not prove.
 - The project record lives in `.ken/record/` in your repository, as JSON Lines files that ken only adds to. You commit it, so a collaborator and their agents can read it. ken never commits, and never writes to your project besides `.ken/`. Your question history and your understanding map live in `~/.ken/projects/<first commit>/` on your machine.
-- The understanding map keeps what you said you know, topic by topic. A topic you know whose quoted code has not changed folds to one line. When the code changed, the answer leads with the change. "Open" lists the decisions that need your call and the topics that changed since you understood them, with who changed them.
+- The understanding map keeps what you said you know, topic by topic. A topic you know whose quoted code has not changed shortens to one line. When the code changed, the answer leads with the change. "Open" lists the decisions that need your call and the topics that changed since you understood them, with who changed them.
 - Live mode runs beside your coding agent and writes short notes as the work moves, on each commit and on uncommitted work that has gone quiet. For uncommitted work it keeps snapshots in its own store under `~/.ken/` and never writes to the project, so such a note is a draft on your machine. Live mode is off until you turn it on, and it shows what it spends.
 - ken reads the sessions Claude Code saves. Before any session text reaches the model, the page, your history or the record, ken hides what looks like a credential. This is best effort: a secret written in plain words, or a short one, gets through. The record keeps only the quoted lines of a session, so commit `.ken/` only if you are happy to share them. Set `KEN_SESSIONS=off` to stop ken reading sessions.
 - ken works with any OpenAI-compatible endpoint, and the code and session text it reads go to that provider. It has been run on glm-5.3 and kimi-k3.1-pro through Ollama Cloud, and on Claude Opus through the Claude Code command with ken's local adapter, `npm run claude-endpoint`. gpt-oss:120b, as served on Ollama Cloud in November 2026, could not follow the quoting rules.
 
 Not built: readers for other coding tools' sessions, anything for teams, and a parser or index of the code.
 
-The plan says ken must beat a plain chat with a coding agent on at least one of three counts and lose on none: finding a decision or a risk the other missed, trusting the answer because the quotes are there, and finding the answer again the next day. In three rounds on merged pull requests of another project by the same owner, scored by a second AI agent and not yet by the owner, ken did not pass. Each time it won the second and third counts and lost the first, so today ken is not better than a plain chat at finding risks. The four verdicts are in [docs/checkpoint/](docs/checkpoint/).
+The plan says ken must beat a plain chat on at least one of three counts and lose on none: finding a decision or a risk the other missed, trusting the answer because the quotes are there, and finding the answer again the next day. The plain chat was a coding agent in the same repository, asked the same question. So far, ken has not passed. Three rounds ran ken on glm-5.3, an open-weight model, against a plain chat on Claude Opus, over merged pull requests of another project by the same owner: three in the first two rounds and five in the third. A fourth round put Claude Opus on both sides, over the same five. A second AI agent scored each round. The owner has not scored them. In all four, ken won the second and third counts and lost the first. With Claude Opus on both sides, the first count came to three ties and two wins for the plain chat. The two counts ken won are things a plain chat does not have by design. The four verdicts are in [docs/checkpoint/](docs/checkpoint/).
 
 How ken works today:
 
@@ -31,15 +31,17 @@ How ken works today:
 flowchart LR
   reader(["You"])
   page["The page<br/>ken open, on your machine"]
-  history["History and map<br/>~/.ken/, yours only"]
-  agent["The agent<br/>a model you choose, read-only tools"]
+  history["Your history<br/>and topics you know, ~/.ken/"]
+  agent["The agent<br/>read-only tools, a model you choose"]
+  provider["Model provider<br/>off your machine"]
   repo["Your repository<br/>files and git history"]
-  sessions["Saved sessions<br/>of Claude Code, ~/.claude/"]
-  checks["Three checks<br/>every quote is found<br/>commits come from git<br/>entries never change"]
+  sessions["Saved sessions<br/>of Claude Code, this project only, ~/.claude/"]
+  checks["Code, not a model<br/>checks every quote<br/>takes commits from git<br/>only adds to the record"]
   record["Project record<br/>.ken/record/, committed"]
   reader -->|asks and reads| page
   page -->|saves| history
   page -->|runs the question| agent
+  agent -->|sends the code and session text it reads to| provider
   agent -->|reads| repo
   agent -->|reads| sessions
   agent -->|sends the answer to| checks
