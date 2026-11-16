@@ -16,10 +16,12 @@ export function emptyHtml(project, canAsk) {
 	</section>`
 }
 
-export function emptyAfterHtml() {
+export function emptyAfterHtml(lenses) {
 	return `<section class="welcome-after">
 		<h2>You could start with</h2>
 		<ul class="starts">${EXAMPLES.map((q) => `<li><button data-act="example" data-key="ex-${esc(q)}">${esc(q)}</button></li>`).join('')}</ul>
+		<h2>Or let ken write the question</h2>
+		${lenses}
 		<div class="limit">
 			<p>ken checks that every quoted line is in git, at the commit the answer names.</p>
 			<p class="muted">It cannot check that a sentence about the code is true. The quote is there so you can judge.</p>

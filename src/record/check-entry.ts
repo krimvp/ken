@@ -45,6 +45,7 @@ export type EntryDraft =
 			work: string | null
 			// Only ken decide sends this. by is the name its caller gave, or null.
 			logged?: { by: string | null }
+			topic?: string | undefined
 	  } & Replaces)
 	| ({ kind: 'topic'; name: string; quotes: Quote[] } & Replaces)
 	| ({ kind: 'note'; topic: string; text: string } & Replaces)
@@ -99,6 +100,12 @@ export async function checkEntry(
 		return found?.id ?? null
 	}
 	const replaces = draft.replaces === undefined ? null : named('replaces', draft.replaces, draft.kind)
+	// A name, not an id, so it keeps naming the topic after a newer entry replaces it.
+	const topicNamed = (name: string): string | null => {
+		const found = record.current.find((other) => other.kind === 'topic' && sameName(other.name, name))
+		if (found?.kind !== 'topic') problems.push(`topic names "${name}", which is not a topic in the record.`)
+		return found?.kind === 'topic' ? found.name : null
+	}
 
 	let entry: Entry
 	switch (draft.kind) {
@@ -162,6 +169,7 @@ export async function checkEntry(
 				// A decision logged as it is made often comes before the code it is about, so it may quote nothing.
 				quotes: await quotes('the decision', draft.quotes, !logged),
 				work: draft.work === null ? null : named('work', draft.work, 'work'),
+				topic: draft.topic === undefined ? null : topicNamed(draft.topic),
 			} satisfies Decision
 			break
 		}
@@ -210,7 +218,7 @@ async function headNow(repo: Repository, signal?: AbortSignal): Promise<CommitHa
 	return head.kind === 'ok' ? head.commit : null
 }
 
-function sameName(a: string, b: string): boolean {
+export function sameName(a: string, b: string): boolean {
 	const normal = (name: string) =>
 		name
 			.toLowerCase()

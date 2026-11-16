@@ -11,12 +11,12 @@ import {
 	type VerifiedQuote,
 } from '../../checks/index.ts'
 import { checkDiagrams, type DiagramDraft, diagramElements } from '../../diagram/index.ts'
-import type { Statement, Undo } from '../../record/index.ts'
+import type { Undo } from '../../record/index.ts'
 import { type Repository, resolveRange } from '../../repo/index.ts'
 import { scopeProblem } from '../tools/exploration-tools.ts'
-import type { Answer, Change } from './answer.ts'
+import type { Answer, Change, Claim } from './answer.ts'
 
-type ClaimDraft = { text: string; label: string; quotes: Quote[] }
+type ClaimDraft = { text: string; label: string; quotes: Quote[]; topic?: string }
 
 type DecisionFields = { question: string; chosen: string; rejected: { option: string; reason: string }[] }
 export type DecisionDraft = DecisionFields & {
@@ -24,6 +24,7 @@ export type DecisionDraft = DecisionFields & {
 	undo: Undo
 	needsOwner: boolean
 	quotes: Quote[]
+	topic?: string
 }
 // A decision whose quotes passed. The project record checks its words and sets its label when it stores it.
 export type CheckedDecision = Omit<DecisionDraft, 'reason' | 'quotes'> & {
@@ -40,8 +41,9 @@ export type AnswerDraft = {
 	diagrams: DiagramDraft[]
 }
 
+// The answer's topics are known only once the record holds them, so the answer tool adds them.
 export type AnswerCheck =
-	| { kind: 'accepted'; answer: Answer; decisions: CheckedDecision[] }
+	| { kind: 'accepted'; answer: Omit<Answer, 'topics'>; decisions: CheckedDecision[] }
 	| { kind: 'rejected'; problems: string[] }
 
 export async function checkAnswer(repo: Repository, draft: AnswerDraft, signal: AbortSignal): Promise<AnswerCheck> {
@@ -83,14 +85,15 @@ async function checkClaims(
 	drafts: ClaimDraft[],
 	problems: string[],
 	signal: AbortSignal,
-): Promise<Statement[]> {
-	const claims: Statement[] = []
+): Promise<Claim[]> {
+	const claims: Claim[] = []
 	for (const [index, claim] of drafts.entries()) {
 		const where = `${what} ${index + 1}`
 		const label = checkLabel(claim.label)
 		if (label.kind === 'refused') problems.push(`${where}: ${label.problem}`)
 		const quotes = await verifyQuotes(repo, where, claim.quotes, problems, signal)
-		if (label.kind === 'ok') claims.push({ text: claim.text, label: label.label, quotes })
+		const topic = claim.topic === undefined ? {} : { topic: claim.topic }
+		if (label.kind === 'ok') claims.push({ text: claim.text, label: label.label, quotes, ...topic })
 	}
 	return claims
 }

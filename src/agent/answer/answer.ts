@@ -17,14 +17,20 @@ export type Change = {
 	messages: MessageCount | null
 }
 
+// A statement or a risk. topic names the topic it belongs to, as the project record names it, so the page can fold what
+// this reader already knows. A claim that belongs to no topic has none.
+export type Claim = Statement & { topic?: string }
+
 // A risk has the shape of a statement: a claim about what could go wrong or what the owner should watch, with the
-// lines it starts from. risks is null when the answer says nothing about risks, as for a question about how a part
+// lines it starts from. topics names every topic the answer names: those it sends and those its claims and decisions
+// belong to. They are the topics the reader's three buttons act on. risks is null when the answer says nothing about risks, as for a question about how a part
 // works or an answer saved before ken asked for them; an empty list means the agent looked and found none. change is
 // null when the question was not about a range of commits.
 export type Answer = {
 	summary: string
-	statements: Statement[]
-	risks: Statement[] | null
+	statements: Claim[]
+	risks: Claim[] | null
+	topics: string[]
 	diagrams: Diagram[]
 	change: Change | null
 }

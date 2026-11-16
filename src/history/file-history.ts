@@ -76,6 +76,8 @@ function parseLine(line: string): HistoryEntry | null {
 	// before ken counted the quoted commit messages has no count.
 	if (isObject(value.answer) && !Array.isArray(value.answer.diagrams)) value.answer.diagrams = []
 	if (isObject(value.answer) && value.answer.risks === undefined) value.answer.risks = null
+	// One saved before answers named their topics names none.
+	if (isObject(value.answer) && !Array.isArray(value.answer.topics)) value.answer.topics = []
 	if (isObject(value.answer) && isObject(value.answer.change) && value.answer.change.messages === undefined) {
 		value.answer.change.messages = null
 	}

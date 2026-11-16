@@ -55,9 +55,10 @@ The public page in `site/` draws the same parts and arrows.
 
 ken runs on a model you choose. It has been run on glm-5.3 through Ollama Cloud. One open-weight model that was tried could not follow the quoting rules.
 
+Slice 4 adds the understanding map: what you understand of the project, topic by topic. It is personal, so it lives beside your history in `~/.ken/projects/<first commit>/map.jsonl` and never in the project. Each line is a small JSON object you can read and type: the topic, a depth (`heard-of`, `can-follow` or `could-change`), the evidence (`asked`, `read`, `said` or `wrote`), the day, and the hash of the topic's quoted code that day. ken only adds lines, and the newest line for a topic wins. A line you add or change by hand counts as long as it parses; a line that does not parse is skipped and named. A question marks the topics it names as met, which is interest, not understanding. Under each answer, "I know this" marks its topics as understood at the code as it is now, "Too much" makes the next answer on them shorter, and "Go deeper" asks for more and tells the map you need it. The next answer folds each topic you know whose code is unchanged into one line, "You know quote check. Unchanged since 16 Nov. Show it anyway." When a commit changes a line the topic quotes, ken marks it as changed since you understood it and names the lines, whoever made the change. Two lenses use the map: catch up, and what you need to know to work in one part today. A reformat or a rename of a quoted file also marks a topic as changed.
+
 These parts of the plan are not built yet:
 
-- The understanding map, so that answers about what you already know can be shorter.
 - A command coding agents call to log a decision while they work, and a reader for their saved transcripts.
 - The list of open items.
 
@@ -115,7 +116,15 @@ npm run ken -- sessions 0b7e4c2a-5f1d-4c3e-9a8b-2d6f1e0c9b7a --repo ../my-projec
 
 Claude Code keeps sessions in `~/.claude/projects/`. Set `KEN_CLAUDE_PROJECTS` to read them from another folder.
 
-`open` starts the page for the repository in the current folder, or the one you name, and opens it in your browser. It prints the address too, in case no browser opens. Press Ctrl-C to stop it. With no model set, the page still opens: it shows your earlier answers and says what to set. Ask how the parts of a project fit together and the answer leads with a diagram; choose a numbered row, or a box or an arrow in the drawing, to read the code it rests on. The page draws with Mermaid, which ken serves from its own address.
+`map` prints your understanding map and the path of its file. It needs no model. To correct the map, add a line to that file; `map` shows the hash each topic has now, and an example line to copy. `catch-up` lists, without a model, the topics whose code changed since you understood them and the work recorded since your last question, then asks the agent to explain them. `area` does the same for one part of the project. With no model set, both still print their list.
+
+```sh
+npm run ken -- map --repo ../my-project
+npm run ken -- catch-up --repo ../my-project
+npm run ken -- area src/server --repo ../my-project
+```
+
+`open` starts the page for the repository in the current folder, or the one you name, and opens it in your browser. It prints the address too, in case no browser opens. Press Ctrl-C to stop it. With no model set, the page still opens: it shows your earlier answers and says what to set. Ask how the parts of a project fit together and the answer leads with a diagram; choose a numbered row, or a box or an arrow in the drawing, to read the code it rests on. The page draws with Mermaid, which ken serves from its own address. Under each answer, three buttons update your map; "Your map" in the header shows it, and catch up and an area sit under the question box.
 
 ```sh
 npm run ken -- open

@@ -68,13 +68,15 @@ test('an accepted answer stores its work, decision and topic, and the next quest
 	const { recorded } = accepted(first.events)
 	assert.deepEqual(
 		recorded.map((entry) => entry.kind),
-		['work', 'decision', 'topic', 'note'],
+		['work', 'topic', 'note', 'decision'],
+		'the topics go first, so a decision can name one',
 	)
-	const [work, decision] = recorded
+	const [work, , , decision] = recorded
 	assert.ok(decision?.kind === 'decision')
 	assert.deepEqual([decision.label, decision.work], ['inferred', work?.id])
 	const onDisk = await fileRecordStore(root, gitRepository(root)).read()
-	assert.deepEqual(onDisk.current, recorded)
+	const byId = (entries: { id: string }[]) => [...entries].sort((a, b) => a.id.localeCompare(b.id))
+	assert.deepEqual(byId(onDisk.current), byId(recorded))
 
 	const second = await ask([
 		{ tool: 'ken__read_record', args: { id: work?.id } },

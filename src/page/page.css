@@ -1497,3 +1497,212 @@ span.label-recorded {
 		font-weight: 650;
 	}
 }
+
+/* The understanding map: the lines a known topic folds to, the buttons under an answer, the lenses and the map view */
+.top-menu {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-2) var(--space-5);
+	justify-content: flex-end;
+}
+
+.top-menu .link[aria-current="page"] {
+	color: var(--color-text);
+	text-decoration: none;
+	font-weight: 600;
+}
+
+.asked-list {
+	margin-top: var(--space-3);
+	padding-left: var(--space-4);
+	border-left: 3px solid var(--color-border);
+	color: var(--color-note);
+	font-size: var(--text-note);
+	line-height: 1.5;
+	overflow-wrap: anywhere;
+}
+
+.asked-list li + li {
+	margin-top: var(--space-1);
+}
+
+.knowns {
+	margin-top: var(--space-4);
+}
+
+.known {
+	padding: var(--space-2) var(--space-3);
+	border-radius: var(--radius-sm);
+	background: var(--color-label-bg);
+	color: var(--color-label-text);
+	font-size: var(--text-note);
+	line-height: 1.5;
+	overflow-wrap: anywhere;
+}
+
+.known + .known {
+	margin-top: var(--space-2);
+}
+
+.known .link {
+	color: inherit;
+}
+
+.known.changed {
+	border-left: 3px solid var(--color-warn-border);
+	background: var(--color-warn-bg);
+	color: var(--color-text);
+}
+
+.map-bar {
+	margin-top: var(--space-6);
+	padding-top: var(--space-4);
+	border-top: 1px solid var(--color-border);
+}
+
+.map-buttons {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-2);
+	margin-top: var(--space-2);
+}
+
+.map-buttons .quiet-button,
+.lenses .quiet-button {
+	min-height: 2.75rem;
+}
+
+.quiet-button[disabled] {
+	opacity: 0.55;
+	cursor: default;
+}
+
+.map-said {
+	margin-top: var(--space-2);
+	color: var(--color-note);
+	font-size: var(--text-note);
+}
+
+.lenses {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-3) var(--space-5);
+	align-items: flex-end;
+}
+
+.lenses-start {
+	margin-top: var(--space-3);
+}
+
+.lenses-ask {
+	padding: var(--space-2) 0 var(--space-6);
+}
+
+.area-form label {
+	display: block;
+	margin-bottom: var(--space-1);
+	font-size: var(--text-note);
+	font-weight: 600;
+}
+
+.area-row {
+	display: flex;
+	gap: var(--space-2);
+}
+
+.area-form input {
+	width: 11rem;
+	min-width: 0;
+	min-height: 2.75rem;
+	padding: var(--space-2) var(--space-3);
+	border: 1px solid var(--color-muted);
+	border-radius: var(--radius-sm);
+	background: var(--color-card);
+	color: var(--color-text);
+	font-family: var(--font-code);
+	font-size: var(--text-note);
+}
+
+.area-form input::placeholder {
+	color: var(--color-note);
+	opacity: 1;
+}
+
+.map-view {
+	padding: var(--space-7) 0 var(--space-6);
+}
+
+.map-view h1 {
+	font-size: 2rem;
+	font-weight: 650;
+	line-height: var(--leading-tight);
+}
+
+.map-view .lead {
+	margin-top: var(--space-3);
+	max-width: var(--measure);
+}
+
+.t-list {
+	margin-top: var(--space-5);
+	border-top: 1px solid var(--color-border);
+}
+
+.t-row {
+	padding: var(--space-3) 0;
+	border-bottom: 1px solid var(--color-border);
+}
+
+.t-name {
+	font-weight: 650;
+	overflow-wrap: anywhere;
+}
+
+.t-state {
+	color: var(--color-note);
+	font-size: var(--text-note);
+	white-space: nowrap;
+}
+
+.t-changed .t-state,
+.t-long-ago .t-state {
+	color: var(--color-text);
+	font-weight: 600;
+}
+
+.t-how,
+.t-lines {
+	color: var(--color-note);
+	overflow-wrap: anywhere;
+}
+
+.t-lines {
+	font-size: var(--text-note);
+}
+
+.t-unmet,
+.t-empty {
+	margin-top: var(--space-5);
+}
+
+.map-view .notice {
+	margin-top: var(--space-5);
+}
+
+@media (max-width: 1099px) {
+	.map-view {
+		padding-top: var(--space-5);
+	}
+
+	.map-view h1 {
+		font-size: 1.625rem;
+	}
+
+	.area-row {
+		flex-wrap: wrap;
+	}
+
+	.area-form input {
+		flex: 1 1 9rem;
+	}
+}

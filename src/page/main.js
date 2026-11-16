@@ -6,6 +6,7 @@ import { answerHtml, itemsOf } from './views/answer.js'
 import { allQuotesHtml, checksHtml, quoteCardHtml } from './views/checks.js'
 import { elementKey } from './views/diagram.js'
 import { count, duration, esc, folderHtml, prose, short, when } from './views/format.js'
+import { lensHtml, mapViewHtml } from './views/map.js'
 import {
 	emptyAfterHtml,
 	emptyHtml,
@@ -37,6 +38,9 @@ const freshUi = () => ({
 	noteOpen: false,
 	// The diagrams whose numbered list the page opened by itself, once, because the drawing did not fit.
 	partsShown: new Set(),
+	// The topics the reader knows whose entries they asked to see anyway, and the last map button they pressed.
+	unfolded: new Set(),
+	mapSaid: null,
 	wide: wideQuery.matches,
 })
 
@@ -49,14 +53,24 @@ const state = {
 	running: null,
 	menuOpen: false,
 	problem: null,
+	// "map" shows the reader's understanding map in place of the question.
+	view: 'question',
+	map: null,
 	ui: freshUi(),
+}
+
+// What the page shows as the question until ken sends the one it wrote for a lens.
+const LENS_TITLES = {
+	'catch-up': 'Catch me up: what differs from what I understood?',
+	area: 'What do I need to know to work here today?',
+	deeper: 'Go one level deeper',
 }
 
 // A saved question as the page shows it: the history entry with its project record entries in place of their ids, and
 // the project's HEAD now, to compare with the HEAD it was asked at.
 function fromView(view) {
-	const { entry, recorded, head } = view
-	return { answer: null, note: '', error: null, ...entry, recorded, headNow: head, live: false }
+	const { entry, recorded, head, topics } = view
+	return { answer: null, note: '', error: null, ...entry, recorded, topics, headNow: head, live: false }
 }
 
 // The same fold as the server's entryFrom, for the question while it runs. The saved entry replaces it at the end.
@@ -78,9 +92,13 @@ function addEvent(q, event) {
 		case 'rejected':
 			q.steps.push({ kind: 'rejected', attempt: event.attempt, problems: event.problems })
 			break
+		case 'asked':
+			q.question = event.question
+			break
 		case 'accepted':
 			q.answer = event.answer
 			q.recorded = event.recorded
+			q.topics = event.topics
 			break
 		case 'usage':
 			q.usage = event
@@ -116,8 +134,9 @@ async function* linesOf(body) {
 	if (buffer.trim() !== '') yield buffer
 }
 
-async function send(text) {
-	const question = text.trim()
+// body is a question, {question}, or a lens for ken to write the question from, {lens}.
+async function send(body) {
+	const question = body.lens ? LENS_TITLES[body.lens.kind] : body.question.trim()
 	if (question === '' || state.running || state.model?.kind !== 'ok') return
 	const q = {
 		id: null,
@@ -130,6 +149,7 @@ async function send(text) {
 		usage: null,
 		answer: null,
 		recorded: [],
+		topics: [],
 		note: '',
 		error: null,
 		live: true,
@@ -139,7 +159,8 @@ async function send(text) {
 	state.open = q
 	state.ui = freshUi()
 	state.menuOpen = false
-	$('#question').value = ''
+	state.view = 'question'
+	if (!body.lens) $('#question').value = ''
 	resizeBox()
 	// On a phone the keyboard would cover the answer as it arrives.
 	if (!state.ui.wide) $('#question').blur()
@@ -149,7 +170,7 @@ async function send(text) {
 		const response = await fetch('/api/questions', {
 			method: 'POST',
 			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ question }),
+			body: JSON.stringify(body),
 			signal: controller.signal,
 		})
 		if (!response.ok) {
@@ -160,7 +181,9 @@ async function send(text) {
 		for await (const line of linesOf(response.body)) {
 			const event = JSON.parse(line)
 			if (event.kind === 'saved') {
-				if (state.open === q) state.open = fromView(event.view)
+				// The topics keep the states they had when the answer came, so a button pressed while the note was still
+				// coming does not fold the answer the reader is reading.
+				if (state.open === q) state.open = { ...fromView(event.view), topics: q.topics }
 			} else {
 				addEvent(q, event)
 			}
@@ -179,7 +202,7 @@ async function send(text) {
 		await loadRows()
 		const saved = state.rows.at(-1)
 		// A stopped question has no saved line, so it is read back from the history.
-		if (state.open === q && controller.signal.aborted && saved?.question === question) await openQuestion(saved.id)
+		if (state.open === q && controller.signal.aborted && saved?.question === q.question) await openQuestion(saved.id)
 		render()
 	}
 }
@@ -230,16 +253,22 @@ function rowMeta(row) {
 function rowHtml(row) {
 	const current = state.open?.id === row.id
 	return `<button class="row" data-act="open" data-id="${esc(row.id)}" data-key="menu-${esc(row.id)}"${current ? ' aria-current="true"' : ''}>
-		<span class="row-q">${esc(row.question)}</span><span class="row-meta">${current ? 'Open now · ' : ''}${rowMeta(row)}</span></button>`
+		<span class="row-q">${esc(firstLine(row.question))}</span><span class="row-meta">${current ? 'Open now · ' : ''}${rowMeta(row)}</span></button>`
+}
+
+// A lens's question is a line the reader asked and the list ken wrote under it.
+function firstLine(question) {
+	return question.split('\n')[0]
 }
 
 function menuHtml() {
 	const n = state.rows.length
-	if (n === 0) return ''
-	const button = `<button class="link" data-act="menu" data-key="menu" aria-expanded="${state.menuOpen}">Your questions (${n})</button>`
+	const map = `<button class="link" data-act="map" data-key="map"${state.view === 'map' ? ' aria-current="page"' : ''}>Your map</button>`
+	if (n === 0) return map
+	const button = `${map}<button class="link" data-act="menu" data-key="menu" aria-expanded="${state.menuOpen}">Your questions (${n})</button>`
 	if (!state.menuOpen) return button
 	const running = state.running
-		? `<button class="row" data-act="open-running" data-key="menu-running"><span class="row-q">${esc(state.running.q.question)}</span><span class="row-meta">Running now</span></button>`
+		? `<button class="row" data-act="open-running" data-key="menu-running"><span class="row-q">${esc(firstLine(state.running.q.question))}</span><span class="row-meta">Running now</span></button>`
 		: ''
 	const rows = [...state.rows].reverse().map((row) => rowHtml(row))
 	return `${button}<div class="menu"><p class="menu-head">Your questions about this project, newest first. ken keeps them on this computer, outside the project.</p>${running}${rows.join('')}</div>`
@@ -268,15 +297,21 @@ function runLine(q, ui) {
 
 function turnHtml(q, ui) {
 	let body
-	if (q.answer) body = runLine(q, ui) + answerHtml(q, ui)
+	if (q.answer) body = runLine(q, ui) + answerHtml(q, ui, state.running !== null)
 	else if (q.live) body = workingHtml(q, ui, (Date.now() - state.running.started) / 1000)
 	else body = runLine(q, ui) + endedHtml(q)
 	return `<article class="turn" id="turn">
 		<p class="asked">You asked ${when(q.askedAt)}</p>
-		<h2 class="question">${prose(q.question)}</h2>
+		${questionHtml(q.question)}
 		${movedHtml(q)}
 		${body}
 	</article>`
+}
+
+function questionHtml(question) {
+	const [first, ...listed] = question.split('\n')
+	const items = listed.map((line) => `<li>${prose(line.replace(/^- /, ''))}</li>`).join('')
+	return `<h2 class="question">${prose(first)}</h2>${items ? `<ul class="asked-list">${items}</ul>` : ''}`
 }
 
 function movedHtml(q) {
@@ -289,6 +324,7 @@ function movedHtml(q) {
 }
 
 function threadHtml() {
+	if (state.view === 'map') return mapViewHtml(state.map)
 	const q = state.open
 	if (state.problem && !q)
 		return `<div class="notice" role="alert"><h3>ken did not answer</h3><p>${esc(state.problem)}</p></div>`
@@ -299,7 +335,7 @@ function threadHtml() {
 function panelHtml() {
 	const q = state.open
 	const ui = state.ui
-	if (!q || !ui.wide) return ''
+	if (!q || !ui.wide || state.view === 'map') return ''
 	if (!q.answer) return q.live ? workingPanelHtml() : endedPanelHtml()
 	if (ui.panel.kind === 'quote') return quoteCardHtml(q, ui, itemsOf(q))
 	if (ui.panel.kind === 'all') return allQuotesHtml(q, itemsOf(q))
@@ -314,8 +350,8 @@ function render() {
 	const page = $('#page')
 	const panel = $('#panel')
 	const scroll = panel.scrollTop
-	page.classList.toggle('first-visit', !q)
-	page.classList.toggle('single', !q)
+	page.classList.toggle('first-visit', !q && state.view !== 'map')
+	page.classList.toggle('single', !q || state.view === 'map')
 	$('#project').innerHTML = state.project ? `reads ${folderHtml(state.project)}` : ''
 	$('#menu').innerHTML = menuHtml()
 	const across = [...document.querySelectorAll('.drawing')].map((box) => box.scrollLeft)
@@ -330,14 +366,19 @@ function render() {
 	if (unseen.length > 0) schedule()
 	for (const [i, box] of document.querySelectorAll('.drawing').entries()) box.scrollLeft = across[i] ?? 0
 	const canAsk = state.model?.kind === 'ok'
-	$('#ask').hidden = !canAsk
+	$('#ask').hidden = !canAsk || state.view === 'map'
 	$('#send').disabled = state.running !== null
+	// The area box is drawn again with the rest, so what the reader typed in it is carried over.
+	const typed = [...document.querySelectorAll('.area-form input')].find((input) => input.value !== '')?.value ?? ''
 	$('#after').innerHTML =
 		state.model?.kind === 'unset'
 			? noModelHtml(state.model, state.rows.length > 0, q !== null)
-			: q
+			: state.view === 'map'
 				? ''
-				: emptyAfterHtml()
+				: q
+					? lensHtml('ask')
+					: emptyAfterHtml(lensHtml('start'))
+	for (const input of document.querySelectorAll('.area-form input')) input.value = typed
 	$('#question').placeholder = ui.wide ? 'Ask what changed, why, or how a part works.' : 'Ask what changed, and why.'
 	panel.innerHTML = panelHtml()
 	panel.scrollTop = scroll
@@ -405,7 +446,51 @@ function ask(text) {
 	box.focus()
 }
 
+async function postMap(signal) {
+	const response = await fetch('/api/map', {
+		method: 'POST',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify({ signal, topics: state.open.answer.topics }),
+	})
+	if (!response.ok) throw new Error((await response.json()).message)
+	state.ui.mapSaid = signal
+	render()
+}
+
+async function showMap() {
+	state.view = 'map'
+	state.menuOpen = false
+	state.map = null
+	render()
+	try {
+		state.map = await getJson('/api/map')
+	} catch (error) {
+		state.map = { file: '', states: [], problems: [error.message] }
+	}
+	render()
+	window.scrollTo({ top: 0 })
+}
+
+function closeMap() {
+	state.view = 'question'
+	render()
+	$('[data-key="map"]')?.focus({ preventScroll: true })
+}
+
 const actions = {
+	map: () => (state.view === 'map' ? closeMap() : showMap()),
+	'map-close': closeMap,
+	'map-know': () => postMap('know'),
+	'map-too-much': () => postMap('too-much'),
+	'map-deeper'() {
+		const q = state.open
+		void send({ lens: { kind: 'deeper', topics: q.answer.topics, question: firstLine(q.question) } })
+	},
+	unfold(el) {
+		toggle(state.ui.unfolded, el.dataset.topic)
+		render()
+	},
+	'catch-up': () => send({ lens: { kind: 'catch-up' } }),
 	menu() {
 		state.menuOpen = !state.menuOpen
 		render()
@@ -481,7 +566,7 @@ const actions = {
 	},
 	example: (el) => ask(el.textContent),
 	'one-commit': () => ask('What did the last commit do?'),
-	again: () => send(state.open.question),
+	again: () => send({ question: state.open.question }),
 	stop() {
 		state.running?.controller.abort()
 	},
@@ -520,6 +605,7 @@ document.addEventListener('keydown', (event) => {
 		$('[data-key="menu"]')?.focus()
 		return
 	}
+	if (state.view === 'map') return closeMap()
 	if (closePanel()) return
 	if (ui.coverageOpen || ui.stepsOpen || ui.keyOpen || ui.openQuotes.size > 0 || ui.openDecisions.size > 0) {
 		ui.coverageOpen = ui.stepsOpen = ui.keyOpen = false
@@ -537,13 +623,21 @@ function resizeBox() {
 
 $('#ask').addEventListener('submit', (event) => {
 	event.preventDefault()
-	void send($('#question').value)
+	void send({ question: $('#question').value })
+})
+
+document.addEventListener('submit', (event) => {
+	const form = event.target.closest('.area-form')
+	if (!form) return
+	event.preventDefault()
+	const path = form.elements.path.value.trim()
+	if (path !== '') void send({ lens: { kind: 'area', path } })
 })
 
 $('#question').addEventListener('keydown', (event) => {
 	if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
 		event.preventDefault()
-		void send($('#question').value)
+		void send({ question: $('#question').value })
 	}
 })
 

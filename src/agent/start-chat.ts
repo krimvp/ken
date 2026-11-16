@@ -1,10 +1,12 @@
 import { createSession, type RunResult } from 'aigent'
 import type { Tool } from 'aigent/plugin'
+import type { UnderstandingMap } from '../map/index.ts'
 import { fileRecordStore } from '../record/index.ts'
 import { findRoot, gitRepository } from '../repo/index.ts'
 import { type AnswerRound, answerTool, MAX_REJECTIONS } from './answer/answer-tool.ts'
 import type { ChatEvent } from './chat-event.ts'
 import type { ModelConfig } from './model-config.ts'
+import { readerIndex } from './reader-index.ts'
 import { SYSTEM_PROMPT } from './system-prompt.ts'
 import { describeCall } from './tools/describe-call.ts'
 import { diffTool } from './tools/diff-tool.ts'
@@ -28,9 +30,11 @@ const TURNS_LEFT_NOTICE = 6
 // Above the diff tool's own limit, so a whole diff reaches the model uncut.
 const MAX_TOOL_RESULT_CHARS = 64_000
 
+// map is the reader's understanding map. A chat run by a script, such as "ken ask --json", has no reader and no map.
 export async function startChat(options: {
 	directory: string
 	model: ModelConfig
+	map?: UnderstandingMap
 }): Promise<{ kind: 'ok'; chat: Chat } | { kind: 'no-repository'; message: string }> {
 	const found = await findRoot(options.directory)
 	if (found.kind !== 'ok') {
@@ -62,7 +66,7 @@ export async function startChat(options: {
 					...explorationTools(repo),
 					diffTool(repo),
 					recordTool(store, repo),
-					answerTool(repo, store, () => round),
+					answerTool(repo, store, options.map ?? null, () => round),
 				].map(withTurnsLeft),
 			},
 		],
@@ -97,8 +101,9 @@ export async function startChat(options: {
 		})
 		const started = performance.now()
 		const index = recordIndex(await store.read())
+		const reader = options.map ? `\n\n${readerIndex(await options.map.read(new Date(), signal))}` : ''
 		const run = session
-			.prompt(`${index}\n\nThe question: ${question}`, {
+			.prompt(`${index}${reader}\n\nThe question: ${question}`, {
 				signal: signal ? AbortSignal.any([signal, stop.signal]) : stop.signal,
 			})
 			.catch((error: unknown): RunResult => ({ stop: 'error', message: String(error), turns: 0 }))

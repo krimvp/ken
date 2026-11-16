@@ -119,7 +119,7 @@ test('a question streams its steps and a checked answer with its diagram drawn, 
 
 	assert.deepEqual(
 		lines.map((line) => line.kind).filter((kind) => kind !== 'text'),
-		['tool', 'tool', 'accepted', 'usage', 'done', 'saved'],
+		['asked', 'tool', 'tool', 'accepted', 'usage', 'done', 'saved'],
 	)
 	assert.match(lines.find((line) => line.kind === 'tool').step, /^Read `src\/retry\.ts`, lines 1 to 3$/)
 	const accepted = lines.find((line) => line.kind === 'accepted')
@@ -311,3 +311,63 @@ test('with no model set the server still starts, and its state names each settin
 	assert.equal(asked.status, 503)
 	assert.equal((await send(server, '/').response).status, 200, 'the page is served all the same')
 })
+
+test('"I know this" folds a topic in the next answer, a commit to its quoted line unfolds it as changed, and each question starts with the topic states', async () => {
+	const repo = tempFolder('ken-clone-')
+	execFileSync('git', ['clone', '--quiet', root, repo])
+	const home = tempFolder('ken-home-')
+	const retryLine = { ...RETRY_LINE, commit: 'HEAD' }
+	const explain = (topics: object[] = []): Turn => ({
+		tool: 'ken__answer',
+		args: {
+			summary: 'retry calls attempt in a loop and sleeps after each one.',
+			statements: [
+				{ text: 'retry loops over attempts.', label: 'inferred', quotes: [retryLine], topic: 'Retry logic' },
+			],
+			topics,
+		},
+	})
+	const topic = { name: 'retry logic', quotes: [{ ...SLEEP, commit: 'HEAD' }], note: 'retry sleeps 100 ms.' }
+	const model = await scriptedModel([
+		explain([topic]),
+		{ text: 'Done.' },
+		explain(),
+		{ text: 'Done.' },
+		explain(),
+		{ text: 'Done.' },
+	])
+	const server = await open(home, model.baseUrl, repo)
+	const states = (list: { topic: string; kind: string }[]) => list.map((state) => [state.topic, state.kind])
+
+	const first = (await ask(server, 'How does retry work?')).find((line) => line.kind === 'accepted')
+	assert.deepEqual(first.answer.statements[0].topic, 'retry logic', 'the entry names the topic as the record does')
+	assert.deepEqual(states(first.topics), [['retry logic', 'met']], 'a question is interest, not understanding')
+
+	const know = await send(server, '/api/map', { body: { signal: 'know', topics: first.answer.topics } }).response
+	assert.equal(know.status, 200, know.text)
+	const map = await json(server, '/api/map')
+	assert.ok(map.file.startsWith(home), `the map lives in the reader's home: ${map.file}`)
+	assert.deepEqual(states(map.states), [['retry logic', 'unchanged']])
+
+	const second = (await ask(server, 'How does retry work, again?')).find((line) => line.kind === 'accepted')
+	assert.deepEqual(states(second.topics), [['retry logic', 'unchanged']], 'the page folds the statement of this topic')
+	const toModel = questionPrompt(model.requests[2])
+	assert.match(
+		toModel,
+		/retry logic: can follow it, said "I know this" on [\d-]+; understood, and the code is unchanged/,
+	)
+
+	writeFileSync(path.join(repo, 'src/retry.ts'), `${RETRY}\t\tsleep(250)\n\t}\n}\n`)
+	execFileSync('git', ['-c', 'commit.gpgsign=false', 'commit', '--quiet', '--all', '--message', 'wait longer'], {
+		cwd: repo,
+	})
+	const third = (await ask(server, 'How does retry work now?')).find((line) => line.kind === 'accepted')
+	assert.deepEqual(states(third.topics), [['retry logic', 'changed']], 'nothing folds')
+	assert.deepEqual(third.topics[0].changed, [{ path: 'src/retry.ts', startLine: 4, endLine: 4 }])
+	assert.match(questionPrompt(model.requests[4]), /retry logic: .*the code changed since: src\/retry\.ts line 4/)
+})
+
+function questionPrompt(request: { messages: { role: string; content: unknown }[] } | undefined): string {
+	const message = request?.messages.findLast((each) => each.role === 'user')
+	return typeof message?.content === 'string' ? message.content : JSON.stringify(message?.content)
+}

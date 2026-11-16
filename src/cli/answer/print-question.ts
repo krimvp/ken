@@ -1,6 +1,6 @@
 import { styleText } from 'node:util'
-import type { Answer, ChatEvent } from '../agent/index.ts'
-import { entryLine, type RecordEntry } from '../record/index.ts'
+import type { Answer, ChatEvent } from '../../agent/index.ts'
+import { entryLine, type RecordEntry } from '../../record/index.ts'
 import { formatDiagram, formatQuote } from './print-diagram.ts'
 
 export type Paint = (format: Parameters<typeof styleText>[0], text: string) => string

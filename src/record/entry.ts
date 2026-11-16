@@ -43,6 +43,7 @@ export type Logged = { by: string | null; head: CommitHash | null }
 // "recorded" when it was written down as it was made: it carries logged, or its reason quotes a commit message (see
 // decisionLabel). Otherwise it is "inferred". A decision says why, which is never a relation found by searching, so it
 // is never "found-by-search". Only a logged decision has logged, so a decision written before ken decide reads as before.
+// topic names the topic the decision belongs to, as the record names it, or is null.
 export type Decision = {
 	kind: 'decision'
 	question: string
@@ -55,6 +56,7 @@ export type Decision = {
 	logged?: Logged
 	quotes: VerifiedQuote[]
 	work: EntryId | null
+	topic: string | null
 }
 
 export type Topic = { kind: 'topic'; name: string; quotes: VerifiedQuote[] }

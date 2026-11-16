@@ -78,6 +78,7 @@ test('a false quote is rejected with its reasons sent to the model, and a true q
 			},
 		],
 		risks: [],
+		topics: [],
 		diagrams: [],
 		change: {
 			base,

@@ -1,5 +1,5 @@
-import type { Answer } from '../agent/index.ts'
-import { type Diagram, diagramElements } from '../diagram/index.ts'
+import type { Answer } from '../../agent/index.ts'
+import { type Diagram, diagramElements } from '../../diagram/index.ts'
 import type { Paint } from './print-question.ts'
 
 type Quote = Answer['statements'][number]['quotes'][number]

@@ -5,12 +5,13 @@
 import type { JsonObject, JsonValue, Tool } from 'aigent/plugin'
 import { decisionLabel, type Quote } from '../../checks/index.ts'
 import { CARDINALITIES, DIAGRAM_BOUNDS, DIAGRAM_KINDS, type DiagramDraft } from '../../diagram/index.ts'
-import { type RecordEntry, type RecordStore, UNDO } from '../../record/index.ts'
+import type { UnderstandingMap } from '../../map/index.ts'
+import { type RecordEntry, type RecordStore, sameName, UNDO } from '../../record/index.ts'
 import type { Repository } from '../../repo/index.ts'
 import type { ChatEvent } from '../chat-event.ts'
 import { hunkHeader } from '../tools/diff-tool.ts'
 import { readArgs, refuse, reply } from '../tools/tool-edge.ts'
-import type { Answer } from './answer.ts'
+import type { Answer, Claim } from './answer.ts'
 import { type AnswerDraft, type CheckedDecision, checkAnswer } from './check-answer.ts'
 import { allowJsonText, readJsonText } from './json-text.ts'
 import { type RecordArgs, type Recorded, recordAnswer } from './record-answer.ts'
@@ -24,7 +25,13 @@ export const MAX_SUMMARY_CHARS = 280
 // What one question has seen of the answer tool. The session makes a new one for each question.
 export type AnswerRound = { rejections: number; answer: Answer | null; emit: (event: ChatEvent) => void }
 
-export function answerTool(repo: Repository, store: RecordStore, round: () => AnswerRound): Tool {
+// map is the reader's understanding map. An accepted answer marks the topics it names as met there.
+export function answerTool(
+	repo: Repository,
+	store: RecordStore,
+	map: UnderstandingMap | null,
+	round: () => AnswerRound,
+): Tool {
 	return {
 		name: 'answer',
 		description:
@@ -37,14 +44,11 @@ export function answerTool(repo: Repository, store: RecordStore, round: () => An
 			}
 			if (current.rejections >= MAX_REJECTIONS) return refuse('No attempts are left for this question. Stop now.')
 			const form = formProblems(args)
-			if (form.length > 0) {
-				const head = 'Answer sent back. This did not use one of your attempts. The reader saw nothing.'
-				return refuse(
-					[head, ...form.map((problem) => `- ${problem}`), 'Fix this and send the whole answer again.'].join('\n'),
-				)
-			}
+			if (form.length > 0) return sentBack(form)
 			const settled = await settle(repo, store, args, ctx.signal)
+			if (settled.kind === 'form') return sentBack(settled.problems)
 			if (settled.kind === 'accepted') {
+				await map?.learn('asked', settled.answer.topics, new Date(), ctx.signal)
 				current.answer = settled.answer
 				current.emit({ kind: 'accepted', answer: settled.answer, recorded: settled.recorded.entries })
 				return reply(confirmation(settled.answer, settled.decisions, settled.recorded))
@@ -54,6 +58,13 @@ export function answerTool(repo: Repository, store: RecordStore, round: () => An
 			return refuse(rejection(settled.problems, current.rejections))
 		},
 	}
+}
+
+function sentBack(problems: string[]) {
+	const head = 'Answer sent back. This did not use one of your attempts. The reader saw nothing.'
+	return refuse(
+		[head, ...problems.map((problem) => `- ${problem}`), 'Fix this and send the whole answer again.'].join('\n'),
+	)
 }
 
 function formProblems(args: JsonObject): string[] {
@@ -84,15 +95,43 @@ async function settle(
 			decisions: CheckedDecision[]
 			recorded: Extract<Recorded, { kind: 'recorded' }>
 	  }
-	| { kind: 'rejected'; problems: string[] }
+	| { kind: 'rejected' | 'form'; problems: string[] }
 > {
 	const read = readJsonText(ANSWER_SCHEMA, raw)
 	if (read.kind === 'refused') return { kind: 'rejected', problems: read.problems }
-	const check = await checkAnswer(repo, draftOf(read.args), signal)
+	const draft = draftOf(read.args)
+	const args = recordArgsOf(read.args)
+	const named = [...draft.statements, ...(draft.risks ?? []), ...draft.decisions].flatMap((each) => each.topic ?? [])
+	const known = [...(await topicNames(store)), ...args.topics.map((topic) => topic.name)]
+	const unknown = [...new Set(named.filter((name) => !known.some((other) => sameName(other, name))))]
+	if (unknown.length > 0) {
+		const problems = unknown.map(
+			(name) =>
+				`An entry names the topic "${name}", which is neither in the record nor in this answer's topics. Add it to topics with its quotes and note, use the name the index gives, or leave topic out.`,
+		)
+		return { kind: 'form', problems }
+	}
+	const check = await checkAnswer(repo, draft, signal)
 	if (check.kind === 'rejected') return check
-	const recorded = await recordAnswer(store, check.answer, check.decisions, recordArgsOf(read.args), signal)
+	const recorded = await recordAnswer(store, check.answer, check.decisions, args, signal)
 	if (recorded.kind === 'refused') return { kind: 'rejected', problems: recorded.problems }
-	return { kind: 'accepted', answer: check.answer, decisions: check.decisions, recorded }
+	// Every topic is in the record now, so each name becomes the record's own spelling of it.
+	const names = await topicNames(store)
+	const canonical = (name: string) => names.find((other) => sameName(other, name)) ?? name
+	const claims = (list: Claim[]) =>
+		list.map((claim) => (claim.topic === undefined ? claim : { ...claim, topic: canonical(claim.topic) }))
+	const topics = [...new Set([...args.topics.map((topic) => topic.name), ...named].map(canonical))]
+	const answer: Answer = {
+		...check.answer,
+		statements: claims(check.answer.statements),
+		risks: check.answer.risks && claims(check.answer.risks),
+		topics,
+	}
+	return { kind: 'accepted', answer, decisions: check.decisions, recorded }
+}
+
+async function topicNames(store: RecordStore): Promise<string[]> {
+	return (await store.read()).current.flatMap((entry) => (entry.kind === 'topic' ? [entry.name] : []))
 }
 
 function confirmation(
@@ -180,12 +219,22 @@ function decisionOf(raw: JsonObject) {
 		undo,
 		needsOwner: decision.flag('needs_owner'),
 		quotes: listOf(raw.quotes).map(quoteOf),
+		...topicOf(decision.optionalText('topic')),
 	}
+}
+
+function topicOf(topic: string | undefined): { topic?: string } {
+	return topic === undefined ? {} : { topic }
 }
 
 function claimOf(raw: JsonObject, what: string) {
 	const claim = readArgs(raw, what)
-	return { text: claim.text('text'), label: claim.text('label'), quotes: listOf(raw.quotes).map(quoteOf) }
+	return {
+		text: claim.text('text'),
+		label: claim.text('label'),
+		quotes: listOf(raw.quotes).map(quoteOf),
+		...topicOf(claim.optionalText('topic')),
+	}
 }
 
 function diagramDraftOf(raw: JsonObject): DiagramDraft {
@@ -307,6 +356,12 @@ const QUOTE_SCHEMA = {
 } as const
 const QUOTE = withoutDescriptions(QUOTE_SCHEMA)
 
+const TOPIC_NAME = {
+	type: 'string',
+	description:
+		"The topic it belongs to, if any: a topic name from the record's index, or one this answer sends in topics",
+} as const
+
 const CLAIM_SCHEMA = {
 	type: 'object',
 	properties: {
@@ -317,6 +372,7 @@ const CLAIM_SCHEMA = {
 				'"inferred" for what you worked out from the code or the diff, every reason why included. "found-by-search" for a relation between pieces of code, such as "this calls that", that you found by searching and did not prove.',
 		},
 		quotes: { type: 'array', minItems: 1, items: QUOTE_SCHEMA },
+		topic: TOPIC_NAME,
 	},
 	required: ['text', 'label', 'quotes'],
 	additionalProperties: false,

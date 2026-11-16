@@ -30,9 +30,14 @@ export const MODULES: Record<string, Module> = {
 		imports: ['repo', 'checks', 'diagram'],
 		packages: [],
 	},
+	map: {
+		job: 'The understanding map: what this reader understands, topic by topic, kept outside the project.',
+		imports: ['record', 'repo'],
+		packages: [],
+	},
 	agent: {
 		job: 'Runs a chat with a model that explores the project with read-only tools and answers only with checked quotes.',
-		imports: ['repo', 'checks', 'diagram', 'record'],
+		imports: ['repo', 'checks', 'diagram', 'map', 'record'],
 		packages: ['aigent'],
 	},
 	history: {
@@ -47,12 +52,12 @@ export const MODULES: Record<string, Module> = {
 	},
 	server: {
 		job: 'Serves the page on 127.0.0.1 and runs the questions it sends, one at a time.',
-		imports: ['agent', 'diagram', 'history', 'page', 'record', 'repo'],
+		imports: ['agent', 'diagram', 'history', 'map', 'page', 'record', 'repo'],
 		packages: [],
 	},
 	cli: {
-		job: 'Runs ken in the terminal: a chat, one question for scripts, the project record, the page, a logged decision, or saved sessions.',
-		imports: ['agent', 'diagram', 'record', 'repo', 'server', 'transcripts'],
+		job: 'Runs ken in the terminal: a chat, one question for scripts, the project record, the map, the page, a logged decision, or saved sessions.',
+		imports: ['agent', 'diagram', 'history', 'map', 'record', 'repo', 'server', 'transcripts'],
 		packages: [],
 	},
 }

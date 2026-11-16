@@ -68,6 +68,7 @@ test('ken decide logs a decision with a true quote, labelled recorded by the com
 		logged: { by: 'claude-code', head },
 		quotes: [{ path: 'app.py', commit: head, startLine: 2, endLine: 2, text: '    return sum(items)' }],
 		work: null,
+		topic: null,
 		replaces: null,
 	})
 	const text = await ken(['record'])
