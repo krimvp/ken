@@ -334,7 +334,7 @@ const DECISION_SCHEMA = {
 		reason_quotes: {
 			type: 'array',
 			description:
-				'The lines that give the reason: the lines of a commit message that state it, or a comment or doc that does. An empty list when nothing states it and you worked it out. ken labels a decision whose reason quotes the body of a commit message "recorded", and any other "inferred".',
+				'Only lines that say why the option was chosen: lines of a commit message, a comment or a doc that state the reason, not lines that say what was done. An empty list when nothing you read says why. ken labels a decision whose reason quotes the body of a commit message "recorded", and any other "inferred".',
 			items: QUOTE,
 		},
 		rejected: {
