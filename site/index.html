@@ -7,7 +7,7 @@
 		<title>ken</title>
 		<meta
 			name="description"
-			content="ken explains your own software project to you, and each statement in its answer quotes the code it rests on. Early work, not released."
+			content="ken explains your own software project to you, and each claim in its answer quotes lines you can check. Early work, not released."
 		/>
 		<link rel="stylesheet" href="style.css" />
 	</head>
@@ -19,73 +19,68 @@
 					ken explains your own software project to you. Ask what changed, why it was done that way, or how a part
 					works now, and each statement in the answer quotes the code it rests on.
 				</p>
+				<p>
+					Why not ask your coding agent? In <a href="#test">ken's own test</a>, ken found no more risks than a plain
+					chat did. It adds two things. ken rejects any answer containing a quote it cannot find in git, so each claim
+					comes with lines you can read. And it keeps the answers, the decisions and what you said you understood, so
+					you can find them the next day.
+				</p>
 				<p class="status">
 					<strong>Early work, not released.</strong> There is nothing to install and no license yet, and the
-					repository is private. Today ken runs from a checkout. <code>ken open</code> starts a page on your machine
-					where you ask about your project, and the code ken reads goes to the model provider you choose.
-				</p>
-				<p>
-					Why not ask your coding agent? ken reads every quoted line back from git at the commit the quote names, and
-					rejects an answer with a quote that is not there. It also saves each answer, to open again without the model.
+					repository is private.
 				</p>
 			</header>
 
 			<figure class="shot">
-				<a href="images/ken-statement-with-quotes.png">
+				<a href="images/ken-risk-with-quotes-wide.png">
 					<picture>
-						<source srcset="images/ken-statement-with-quotes-dark.png" media="(prefers-color-scheme: dark)" />
-						<img src="images/ken-statement-with-quotes.png" width="558" height="690" alt="ken's side panel, headed Statement 1 of 3. The statement says that the answer tool is the model's only way out of a question: checkAnswer checks every quote against git, one bad quote rejects the whole answer, and after three rejected answers the question ends with no answer. Under it is the label Inferred, then two quotes at commit b5a9226: lines 1 to 3 of src/agent/answer/check-answer.ts, a comment that states the rule, and line 17 of src/agent/answer/answer-tool.ts, export const MAX_REJECTIONS = 3." />
+						<source media="(max-width: 34rem) and (prefers-color-scheme: dark)" srcset="images/ken-risk-with-quotes-narrow-dark.png 2x" width="382" height="623" />
+						<source media="(max-width: 34rem)" srcset="images/ken-risk-with-quotes-narrow.png 2x" width="382" height="623" />
+						<source media="(prefers-color-scheme: dark)" srcset="images/ken-risk-with-quotes-wide-dark.png 2x" width="794" height="321" />
+						<img src="images/ken-risk-with-quotes-wide.png" srcset="images/ken-risk-with-quotes-wide.png 2x" width="794" height="321" alt="The heading 5 risks to watch, then risk 1: The page and the terminal show times differently. The page shows note times and &quot;you last asked&quot; in the browser's local time with no zone. The terminal slices the ISO string and labels it UTC. The two can disagree by hours. Under it are two quotes at commit 53567b4: line 16 of src/page/live/note.js, which builds the time from getHours and getMinutes, and line 71 of src/cli/live.ts, which prints the time with the word UTC." />
 					</picture>
 				</a>
-				<figcaption>
-					ken answering a question about its own code, "What happens, step by step, when the reader asks a question on
-					the page?", on glm-5.3. The panel shows the answer's first statement, its label, and two of its four quotes,
-					read from git at commit <code>b5a9226</code>.
-				</figcaption>
+				<figcaption>Screenshot of ken's page, on Claude Opus: the first of five risks in its answer to "What did the last three commits do, and why?" about ken's own repository. Each quote opens to show its lines.</figcaption>
 			</figure>
 
-			<section aria-labelledby="who">
-				<h2 id="who">Who it is for</h2>
-				<p>
-					ken is for the developer who owns a project that coding agents mostly write, and who comes back to it after
-					hours or weeks away. In <a href="https://www.anthropic.com/research/AI-assistance-coding-skills">a trial by
-					Anthropic</a>, developers who used AI help scored about 50% on a comprehension quiz, against 67% for those
-					who coded by hand.
-				</p>
-			</section>
-
 			<section aria-labelledby="check">
-				<h2 id="check">How to check an answer</h2>
+				<h2 id="check">What an answer holds, and how to check it</h2>
 				<p>
-					An answer has statements, the decisions in a change, and its risks. A question about how the parts fit
-					together also gets one or two basic diagrams. Each statement, decision, risk and diagram arrow quotes the
-					lines of code it rests on, with their file and commit.
+					An answer has a short summary, then the decisions with their reasons, the risks, and plain statements. Ask
+					how the parts fit together and it opens with one or two basic diagrams. Each claim and each arrow quotes the
+					lines it is based on: code, a commit message, or a session your coding agent saved.
 				</p>
-				<p>
-					ken reads each quoted line from git at that commit, and sends back an answer whose quote is not there. After
-					three rejected answers, the question ends with no answer. The check proves that the quoted code is there,
-					not that a sentence or an arrow about it is true, and it does not check the summary.
-				</p>
-				<figure class="shot">
-					<a href="images/ken-what-it-checked.png">
+				<figure class="shot shot-wide-only">
+					<a href="images/ken-answer-with-diagram-wide.png">
 						<picture>
-							<source srcset="images/ken-what-it-checked-dark.png" media="(prefers-color-scheme: dark)" />
-							<img
-								src="images/ken-what-it-checked.png"
-								width="558"
-								height="746"
-								loading="lazy"
-								alt="The panel headed What ken checked. It says ken checks that each quote is in its file at its commit, and does not check the sentences, the summary or the arrows. Quotes: all 12 quotes are in git, at b5a9226, 7 in the diagram and 5 in the statements. Changed code: 7 of 175 changed blocks quoted. 168 are not, in src/page/page.css and 8 more files, and the panel says to read them yourself before you trust what the answer says about them. A button reads Show the 168 unquoted blocks. Last, 1 commit after 8bcc747, from git and not from the model: b5a9226, by Claude, on 15 November at 22:50 UTC."
-							/>
+							<source media="(prefers-color-scheme: dark)" srcset="images/ken-answer-with-diagram-wide-dark.png 2x" width="772" height="381" />
+							<img src="images/ken-answer-with-diagram-wide.png" srcset="images/ken-answer-with-diagram-wide.png 2x" width="772" height="381" loading="lazy" alt="A drawing of five numbered boxes and the arrows between them. 1, Page and 2, CLI sit at the top. Arrow 6: the page fetches /api/ from 3, Server. Arrow 7: the CLI starts the server, for ken open and ken live. Arrow 8: the CLI starts a chat with 4, Agent, for ken ask. Arrow 9: the server starts a chat with the agent. Arrow 10: the server runs watchStep and snapshots in 5, Live." />
 						</picture>
 					</a>
-					<figcaption>
-						The panel beside ken's answer to "What did the last commit do?", also about its own repository. The commit,
-						its author and the changed blocks that no quote covers come from git, not from the model.
-					</figcaption>
+					<figcaption>Screenshot of the first diagram in ken's answer to "What are the main parts of ken, and how do they connect?", on Claude Opus. Each number opens the quote for that box or arrow. A phone shows this drawing in a frame that scrolls sideways, so this page shows it only on a wide screen.</figcaption>
 				</figure>
-				<p>Each statement carries a label that says how the agent knows it.</p>
+				<p>
+					ken rejects any answer containing a quote it cannot find in that file at that commit, in that commit
+					message, or in that saved session. It does not check that a sentence, a risk or an arrow is true, and it
+					does not check the summary.
+				</p>
+				<p>
+					The commits, their authors and dates, and the changed lines that no quote covers come from git, not from the
+					model. ken only adds to the project record, so an entry never changes. A label says how the agent knows each
+					claim.
+				</p>
 				<dl class="labels">
+					<div>
+						<dt><span class="label label-recorded">Recorded</span></dt>
+						<dd>
+							Written down at the time, in a commit message or by a coding agent that ran <code>ken decide</code> as it
+							worked.
+						</dd>
+					</div>
+					<div>
+						<dt><span class="label label-session">From the session</span></dt>
+						<dd>Quoted from a session Claude Code saved, read afterwards, with what looks like a key hidden.</dd>
+					</div>
 					<div>
 						<dt><span class="label">Inferred</span></dt>
 						<dd>The agent worked it out from the code or the diff. Nobody wrote the reason down at the time.</dd>
@@ -95,29 +90,19 @@
 						<dd>The agent found a link between two pieces of code, such as "this calls that", and did not prove it.</dd>
 					</div>
 				</dl>
-				<p>
-					Two more are planned: "recorded" for a decision logged when it was made, and "from the session" for a
-					reason quoted from a coding agent's saved transcript.
-				</p>
 			</section>
 
 			<section aria-labelledby="how">
 				<h2 id="how">How ken works</h2>
 				<figure class="flow">
-					<svg
-						viewBox="0 0 420 480"
-						width="420"
-						height="480"
-						role="img"
-						aria-labelledby="flow-title flow-desc"
-					>
+					<svg viewBox="0 0 420 516" width="420" height="516" role="img" aria-labelledby="flow-title flow-desc">
 						<title id="flow-title">How ken answers a question</title>
 						<desc id="flow-desc">
-							You ask and read on the page, which ken open starts on your machine. The page runs each question in the
-							agent, a model you choose with read-only tools, and saves each answer in your history in ~/.ken/. The
-							agent reads your repository and sends every answer to three checks: each quote is in git, change facts
-							come from git, and the record only grows. The checks read the quoted lines from the repository and add
-							what passed to the project record in .ken/record/. The agent reads the record before each question.
+							You ask and read on the page, which ken open starts on your machine. The page saves each answer in your
+							history and map in ~/.ken/, and runs each question in the agent: a model you choose, with read-only tools.
+							The agent reads your repository and the sessions Claude Code saved in ~/.claude/, and sends its answer to
+							three checks: every quote is found, commits come from git, and entries never change. What passes goes into
+							the project record in .ken/record/, which the agent reads before each question.
 						</desc>
 						<defs>
 							<marker id="flow-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
@@ -129,16 +114,18 @@
 							<rect x="44" y="76" width="172" height="60" />
 							<rect x="264" y="76" width="152" height="60" />
 							<rect x="44" y="176" width="172" height="72" />
-							<rect x="264" y="176" width="152" height="200" />
+							<rect x="264" y="176" width="152" height="72" />
+							<rect x="264" y="288" width="152" height="88" />
 							<rect class="flow-checks" x="44" y="288" width="172" height="88" />
-							<rect x="44" y="416" width="172" height="60" />
+							<rect x="44" y="416" width="172" height="96" />
 						</g>
 						<g class="flow-titles" text-anchor="middle">
 							<text x="130" y="23">You</text>
 							<text x="130" y="100">The page</text>
-							<text x="340" y="100">Your history</text>
+							<text x="340" y="100">History and map</text>
 							<text x="130" y="200">The agent</text>
-							<text x="340" y="256">Your repository</text>
+							<text x="340" y="200">Your repository</text>
+							<text x="340" y="312">Saved sessions</text>
 							<text x="130" y="312">Three checks</text>
 							<text x="130" y="440">Project record</text>
 						</g>
@@ -147,62 +134,108 @@
 							<text x="340" y="120" class="flow-code">~/.ken/</text>
 							<text x="130" y="220">a model you choose,</text>
 							<text x="130" y="238">read-only tools</text>
-							<text x="340" y="276">files and</text>
-							<text x="340" y="294">git history</text>
-							<text x="130" y="332">each quote is in git</text>
-							<text x="130" y="350">change facts from git</text>
-							<text x="130" y="368">the record only grows</text>
+							<text x="340" y="220">files and</text>
+							<text x="340" y="238">git history</text>
+							<text x="340" y="334">of Claude Code</text>
+							<text x="340" y="356" class="flow-code">~/.claude/</text>
+							<text x="130" y="332">every quote is found</text>
+							<text x="130" y="350">commits come from git</text>
+							<text x="130" y="368">entries never change</text>
 							<text x="130" y="460" class="flow-code">.ken/record/</text>
+							<text x="130" y="482">the agent reads it</text>
+							<text x="130" y="500">before each question</text>
 						</g>
 						<g class="flow-lines" marker-end="url(#flow-arrow)">
 							<path d="M130 36 V74" />
 							<path d="M216 106 H262" />
 							<path d="M130 136 V174" />
 							<path d="M216 212 H262" />
+							<path d="M240 212 V332 H262" />
 							<path d="M130 248 V286" />
-							<path d="M216 332 H262" />
 							<path d="M130 376 V414" />
-							<path d="M44 446 H30 V212 H42" />
+							<path d="M44 464 H30 V212 H42" />
 						</g>
 						<g class="flow-edges">
 							<text x="140" y="60">asks and reads</text>
 							<text x="240" y="99" text-anchor="middle">saves</text>
 							<text x="140" y="161">runs the question</text>
 							<text x="240" y="205" text-anchor="middle">reads</text>
-							<text x="140" y="273">sends the answer</text>
-							<text x="240" y="325" text-anchor="middle">reads</text>
+							<text x="140" y="273">the answer</text>
 							<text x="140" y="401">adds what passed</text>
-							<text x="22" y="329" class="flow-loop" text-anchor="middle" transform="rotate(-90 22 329)">read before each question</text>
 						</g>
 					</svg>
 				</figure>
 				<p>
-					The project record lives in <code>.ken/record/</code> in your repository, and you commit it yourself. Your
-					question history lives in <code>~/.ken/</code>. The agent runs on a model you choose, through an
-					OpenAI-compatible endpoint. It has run on glm-5.3 through Ollama Cloud. One open-weight model that was tried
-					could not follow the quoting rules.
+					<code>ken open</code> starts the page on your machine. The code and session text ken reads go to the model
+					provider you choose, through any OpenAI-compatible endpoint. ken has run on glm-5.3 and kimi-k3.1-pro through
+					Ollama Cloud, and on Claude Opus through Claude Code. gpt-oss:120b, as served on Ollama Cloud in November
+					2026, could not follow the quoting rules.
+				</p>
+				<p>
+					The project record, in <code>.ken/record/</code>, holds what checked answers found, and you commit it for
+					collaborators and their agents. Your history and understanding map stay in <code>~/.ken/</code> on your
+					machine. ken writes nothing in your project besides <code>.ken/</code>.
 				</p>
 			</section>
 
-			<section aria-labelledby="status">
-				<h2 id="status">Where it stands</h2>
+			<section aria-labelledby="known">
+				<h2 id="known">What you already know</h2>
 				<p>
-					<strong>Runs now.</strong> The page, <code>ken chat</code> and <code>ken ask</code> in the terminal, and
-					<code>ken record</code>, which lists the project record.
+					Under each answer, "I know this" adds its topics to your understanding map. A later answer folds a topic you
+					know to one line, such as "You know live mode. Unchanged since 16 Nov." If the code it quotes has changed,
+					the answer leads with the change instead. "Open", in the page's header, lists the decisions an agent left for
+					you and the topics you knew that changed since, with who changed them.
+				</p>
+			</section>
+
+			<section aria-labelledby="live">
+				<h2 id="live">Live mode</h2>
+				<p>
+					Live mode runs beside your coding agent and writes a short, checked note each time a commit lands or
+					uncommitted work goes quiet. For uncommitted work, ken keeps a snapshot in its own store under
+					<code>~/.ken/</code>, so that note is a draft on your machine. Each note is a model call, so live mode is off
+					until you turn it on, and the page shows what it spends.
+				</p>
+				<figure class="shot">
+					<a href="images/ken-live-draft-note-wide.png">
+						<picture>
+							<source media="(max-width: 34rem) and (prefers-color-scheme: dark)" srcset="images/ken-live-draft-note-narrow-dark.png 2x" width="360" height="555" />
+							<source media="(max-width: 34rem)" srcset="images/ken-live-draft-note-narrow.png 2x" width="360" height="555" />
+							<source media="(prefers-color-scheme: dark)" srcset="images/ken-live-draft-note-wide-dark.png 2x" width="578" height="374" />
+							<img src="images/ken-live-draft-note-wide.png" srcset="images/ken-live-draft-note-wide.png 2x" width="578" height="374" loading="lazy" alt="A note in the Live view, headed 06:40, Uncommitted work as it stood at 06:40, and marked Draft, on this machine only. It says a 404 now throws a NotFound error and retry rethrows it at once with no wait, so missing users are no longer retried, and that letting the caller choose the number of attempts, which the owner also asked for, is not done yet. Statement 1 says request now throws its own NotFound error for a 404, and quotes lines 8 to 9 of src/http.ts." />
+						</picture>
+					</a>
+					<figcaption>Screenshot of the top of a draft note in ken's Live view, written by Claude Opus as a coding agent worked on a small made-up project.</figcaption>
+				</figure>
+			</section>
+
+			<section aria-labelledby="test">
+				<h2 id="test">The test ken has to pass</h2>
+				<p>
+					The plan says ken must beat a plain chat with a coding agent on at least one of three counts and lose on
+					none: finding a decision or a risk the other missed, trusting the answer because of its quotes, and finding
+					it again the next day.
 				</p>
 				<p>
-					<strong>Next.</strong> A map of what you already understand, so that answers about it can be shorter. A
-					command coding agents call to log a decision while they work, and a reader for their saved transcripts. A
-					list of what is still open.
+					Three rounds compared the two on merged pull requests of another project by the same owner. A second AI
+					agent scored each round with both answers and the diff. The owner has not scored them. ken did not pass any
+					round. Each time it won the second and third counts and lost the first. The first verdict opens with "No.
+					ken does not meet its plan's rule." With Claude Opus on both sides, over five pull requests, the first count
+					was close: three ties and two for the plain chat, in about the same time.
 				</p>
 				<p>
-					<strong>The test that decides the rest.</strong> On real agent work, ken has to beat a plain chat with a
-					coding agent on at least one of three counts and lose on none. In round 1, on three pull requests, ken won on
-					trusting an answer because of its quotes and on finding it again the next day. It lost on finding a decision
-					or a risk the other missed. Since then, risks are their own part of an answer, and the agent reads past the
-					diff. Round 2 has not been scored. The verdict is in <code>docs/checkpoint/round-1.md</code>.
+					So today ken is not better than a plain chat at finding risks. What it adds is a quote you can check under
+					each claim, and answers, decisions and what you understood that stay saved. The verdicts are in the
+					repository, under <code>docs/checkpoint/</code>.
 				</p>
 			</section>
 		</main>
+		<footer>
+			<p>
+				Not built yet: a reader for other coding tools' sessions, anything for teams, and a parser or index of the
+				code.
+			</p>
+			<p>Built by <a href="https://github.com/krimvp">krimvp</a>. Page updated on 16 November 2026.</p>
+		</footer>
 	</body>
 </html>
