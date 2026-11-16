@@ -64,7 +64,11 @@ export function formatAnswer(answer: Answer, recorded: RecordEntry[], paint: Pai
 	const decisions = recorded.flatMap((entry) => (entry.kind === 'decision' ? [entry] : []))
 	if (decisions.length > 0) {
 		lines.push(paint('bold', `Decisions (${decisions.length}):`))
-		for (const [index, d] of decisions.entries()) lines.push(`${index + 1}. ${d.question} Chosen: ${d.chosen}`)
+		for (const [index, d] of decisions.entries()) {
+			lines.push(`${index + 1}. ${d.question} Chosen: ${d.chosen} ${paint('cyan', `[${d.label}]`)}`)
+			if (d.reason)
+				lines.push(`   Why: ${d.reason.text}`, ...d.reason.quotes.flatMap((quote) => formatQuote(quote, paint)))
+		}
 		lines.push('')
 	}
 	if (answer.risks?.length === 0) lines.push(paint('bold', 'Risks: the agent looked and found none.'), '')
@@ -89,6 +93,14 @@ export function formatAnswer(answer: Answer, recorded: RecordEntry[], paint: Pai
 		}
 		if (uncovered.length === 0) lines.push('  none')
 		for (const path of binary) lines.push(`  - ${path}, a binary file`)
+		const { messages } = answer.change
+		if (messages) {
+			const total = messages.quoted.length + messages.unquoted.length
+			const left = messages.unquoted.length === 0 ? '' : ' Not quoted:'
+			lines.push('', paint('bold', `Commit messages quoted: ${messages.quoted.length} of ${total}.${left}`))
+			const subjects = new Map(commits.map((commit) => [commit.hash, commit.subject]))
+			for (const hash of messages.unquoted) lines.push(`  - ${hash.slice(0, 7)} ${subjects.get(hash) ?? ''}`)
+		}
 	}
 	return lines.join('\n')
 }

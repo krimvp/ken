@@ -23,8 +23,12 @@ export function formatDiagram(diagram: Diagram, paint: Paint): string[] {
 export function formatQuote(quote: Quote, paint: Paint): string[] {
 	const span =
 		quote.startLine === quote.endLine ? `line ${quote.startLine}` : `lines ${quote.startLine}-${quote.endLine}`
+	const source =
+		quote.path === null
+			? `commit message of ${quote.commit.slice(0, 7)}`
+			: `${quote.path} @ ${quote.commit.slice(0, 7)}`
 	return [
-		paint('dim', `   ${quote.path} @ ${quote.commit.slice(0, 7)}, ${span}`),
+		paint('dim', `   ${source}, ${span}`),
 		...quote.text
 			.split('\n')
 			.map((text, offset) => `   ${paint('dim', String(quote.startLine + offset).padStart(5))}  ${text}`),

@@ -3,7 +3,7 @@
 // words; ken checked only that each quote is in its file.
 import { checkStrip, checksHtml } from './checks.js'
 import { diagramHtml, elementKey } from './diagram.js'
-import { count, esc, LABELS, label, prose, quoteRows } from './format.js'
+import { count, decisionQuotes, esc, LABELS, label, list, prose, quoteRows, short } from './format.js'
 
 const UNDO = { easy: 'Easy to undo.', 'some-work': 'Some work to undo.', hard: 'Hard to undo.' }
 
@@ -24,7 +24,12 @@ export function itemsOf(q) {
 				.filter((element) => element.quotes.length > 0)
 				.map((element) => ({ key: elementKey(i, element.number), kind: 'element', item: element, diagram })),
 		),
-		...decisionsOf(q).map((d, i) => ({ key: `d${i}`, kind: 'decision', item: d, n: i + 1 })),
+		...decisionsOf(q).map((d, i) => ({
+			key: `d${i}`,
+			kind: 'decision',
+			item: { ...d, quotes: decisionQuotes(d) },
+			n: i + 1,
+		})),
 		...(q.answer.risks ?? []).map((r, i) => ({ key: `r${i}`, kind: 'risk', item: r, n: i + 1 })),
 		...q.answer.statements.map((s, i) => ({ key: `s${i}`, kind: 'statement', item: s, n: i + 1 })),
 	]
@@ -128,23 +133,26 @@ function decisionsHtml(decisions, rows) {
 			: decisions.length === 1
 				? ', and it needs your call'
 				: `, ${calls} ${calls === 1 ? 'needs' : 'need'} your call`
-	// One label for all of them goes on the head, as on a diagram's title. Mixed labels are counted under it.
+	// One label for all of them goes on the head, as on a diagram's title. Mixed labels are counted under it, and each
+	// decision that does not carry the most common one is marked.
 	const labels = labelCounts(decisions)
 	const one = labels.length === 1 ? label(labels[0][0]) : ''
+	const marked = markedLabels(decisions)
 	return `<section class="decisions" aria-labelledby="decisions-head">
 		<div class="list-head">
 			<h3 id="decisions-head">${one}${head}${needs}</h3>
 			${one ? '' : `<p class="list-note">${labelLine(decisions)}</p>`}
 		</div>
-		<ul>${decisions.map((d, i) => decisionHtml(d, `d${i}`, rows)).join('')}</ul>
+		<ul>${decisions.map((d, i) => decisionHtml(d, `d${i}`, rows, marked)).join('')}</ul>
 	</section>`
 }
 
-function decisionHtml(d, key, { ui, commits }) {
+function decisionHtml(d, key, { ui, commits }, marked) {
 	const open = ui.openDecisions.has(key)
 	const call = d.needsOwner ? '<span class="your-call">Your call</span> ' : ''
+	const mark = marked.has(d.label) ? `${label(d.label)} ` : ''
 	const row = `<button class="d-row" data-act="decision" data-item="${key}" data-key="${key}-row" aria-expanded="${open}">
-		<span class="d-line">${call}<span class="d-q">${prose(d.question)}</span> <span class="d-chosen">Chosen: ${prose(d.chosen)}</span></span></button>`
+		<span class="d-line">${call}${mark}<span class="d-q">${prose(d.question)}</span> <span class="d-chosen">Chosen: ${prose(d.chosen)}</span></span></button>`
 	if (!open) return `<li class="decision" id="item-${key}">${row}</li>`
 	const others =
 		d.rejected.length === 0
@@ -157,16 +165,29 @@ function decisionHtml(d, key, { ui, commits }) {
 			${d.needsOwner ? `<p class="d-call">You decide: ${prose(d.question)}</p>` : ''}
 			<dl class="facts">
 				<div><dt>Chosen</dt><dd>${prose(d.chosen)}</dd></div>
+				${d.reason ? `<div><dt>Why</dt><dd>${prose(d.reason.text)}${fromHtml(d)}</dd></div>` : ''}
 				<div><dt>Other options</dt>${others}</div>
 			</dl>
 			<p class="d-undo">${UNDO[d.undo] ?? esc(d.undo)}</p>
-			${quoteRows(d.quotes, key, { ui, commits })}
+			${quoteRows(decisionQuotes(d), key, { ui, commits })}
 		</div>
 	</li>`
 }
 
+// Where a recorded decision's reason is quoted from: the commit messages its reason quotes.
+function fromHtml(d) {
+	if (d.label !== 'recorded') return ''
+	const messages = [...new Set(d.reason.quotes.filter((q) => q.path === null).map((q) => short(q.commit)))]
+	const named = list(messages.map((hash) => `<code>${hash}</code>`))
+	return `<span class="why">Quoted from the commit message of ${named}.</span>`
+}
+
 // What each label means, said of one statement and of several.
 const MEANS = {
+	recorded: [
+		'its reason is quoted from a commit message written when the work was done',
+		'their reasons are quoted from commit messages written when the work was done',
+	],
 	inferred: [
 		'the agent worked it out from the code and the diff',
 		'the agent worked them out from the code and the diff',

@@ -70,11 +70,23 @@ export function codeLines(lines, numbers, kinds = []) {
 		.join('')
 }
 
+// A quote with no path is from the message of its commit, so it names the commit and no file.
+export function quoteSource(quote) {
+	return quote.path === null ? `Commit message of <code>${short(quote.commit)}</code>` : esc(quote.path)
+}
+
+// A decision's quotes in the order the page shows them: those of its reason, then those that show what was chosen. A
+// decision written before ken asked for a reason has none.
+export function decisionQuotes(decision) {
+	return [...(decision.reason?.quotes ?? []), ...decision.quotes]
+}
+
 // The lines of a quote, under a line that names the commit ken found them at, unless its row names it already.
 export function quoteBody(quote, where = '', named = false) {
 	const lines = quote.text.split('\n')
 	const numbers = lines.map((_, k) => quote.startLine + k)
-	const source = named ? '' : `<p class="q-source">${where}At commit <code>${short(quote.commit)}</code></p>`
+	const at = quote.path === null ? '' : `At commit <code>${short(quote.commit)}</code>`
+	const source = named || where + at === '' ? '' : `<p class="q-source">${where}${at}</p>`
 	return `${source}<pre class="code"><code>${codeLines(lines, numbers)}</code></pre>`
 }
 
@@ -88,10 +100,11 @@ export function quoteRows(quotes, key, { ui, commits }) {
 			const chosen = ui.wide && ui.panel.kind === 'quote' && ui.panel.key === key && ui.panel.quote === j
 			const open = !ui.wide && ui.openQuotes.has(id)
 			const first = quote.text.split('\n').find((line) => line.trim() !== '') ?? ''
-			const at = commits ? `<span class="q-commit">at <code>${short(quote.commit)}</code></span>` : ''
+			const at =
+				commits && quote.path !== null ? `<span class="q-commit">at <code>${short(quote.commit)}</code></span>` : ''
 			return `<li class="q${chosen ? ' chosen' : ''}">
 				<button class="q-row" data-act="quote" data-item="${key}" data-quote="${j}" data-key="${id}" aria-expanded="${ui.wide ? chosen : open}"${ui.wide ? ' aria-controls="panel"' : ''}>
-					<span class="q-path">${esc(quote.path)}</span><span class="q-lines"><span class="nowrap">${lineSpan(quote.startLine, quote.endLine)}</span>${at}</span><span class="q-first">${esc(first.trim())}</span>
+					<span class="q-path">${quoteSource(quote)}</span><span class="q-lines"><span class="nowrap">${lineSpan(quote.startLine, quote.endLine)}</span>${at}</span><span class="q-first">${esc(first.trim())}</span>
 				</button>
 				${open ? quoteBody(quote, '', commits) : ''}
 			</li>`
@@ -100,6 +113,10 @@ export function quoteRows(quotes, key, { ui, commits }) {
 }
 
 export const LABELS = {
+	recorded: {
+		name: 'Recorded',
+		means: 'The reason is quoted from a commit message written when the work was done.',
+	},
 	inferred: {
 		name: 'Inferred',
 		means: 'The agent worked this out from the code or the diff. No commit message or note says so.',

@@ -1,7 +1,21 @@
 // What ken checked for one answer, all of it read from git and none of it from the model: the quotes, the changed
 // blocks no quote covers, and the commits. On a wide screen it fills the panel; on a narrow one it follows the answer.
 // The panel also shows the quotes the reader opened, one item at a time or all of them.
-import { codeLines, count, esc, gitDay, LABELS, label, lineSpan, list, prose, quoteBody, short } from './format.js'
+import {
+	codeLines,
+	count,
+	decisionQuotes,
+	esc,
+	gitDay,
+	LABELS,
+	label,
+	lineSpan,
+	list,
+	prose,
+	quoteBody,
+	quoteSource,
+	short,
+} from './format.js'
 
 const MAX_DIFF_LINES = 60
 const FILES_NAMED = 3
@@ -11,9 +25,10 @@ function elementsOf(q) {
 }
 
 function quotesOf(q) {
-	return [...elementsOf(q), ...q.answer.statements, ...(q.answer.risks ?? []), ...decisionsOf(q)].flatMap(
-		(item) => item.quotes,
-	)
+	return [
+		...[...elementsOf(q), ...q.answer.statements, ...(q.answer.risks ?? [])].flatMap((item) => item.quotes),
+		...decisionsOf(q).flatMap(decisionQuotes),
+	]
 }
 
 function limit(q) {
@@ -60,6 +75,11 @@ export function checksHtml(q, ui) {
 			: quotes.length === 2
 				? 'Both quotes match'
 				: `All ${quotes.length} quotes match`
+	const fromMessages = quotes.filter((quote) => quote.path === null).length
+	const messageLine =
+		fromMessages === 0
+			? ''
+			: `<p class="muted small">${fromMessages === quotes.length ? 'All' : fromMessages} of them ${fromMessages === 1 ? 'is' : 'are'} from commit messages.</p>`
 	const back = sentBack(q)
 	const backLine =
 		back === 0
@@ -71,6 +91,7 @@ export function checksHtml(q, ui) {
 			<h3>Quotes</h3>
 			<p>${all} git, ${at}.</p>
 			${whereQuotes(q)}
+			${messageLine}
 			${backLine}
 			<p><button class="link small" data-act="key" data-key="key" aria-expanded="${ui.keyOpen}">${ui.keyOpen ? 'Hide what the labels mean' : 'What the labels mean'}</button></p>
 			${ui.keyOpen ? labelKey() : ''}
@@ -87,7 +108,7 @@ function whereQuotes(q) {
 		[sum(elementsOf(q)), q.answer.diagrams.length === 1 ? 'the diagram' : 'the diagrams'],
 		[sum(q.answer.risks ?? []), q.answer.risks?.length === 1 ? 'the risk' : 'the risks'],
 		[sum(q.answer.statements), 'the statements'],
-		[sum(decisions), decisions.length === 1 ? 'the decision' : 'the decisions'],
+		[decisions.flatMap(decisionQuotes).length, decisions.length === 1 ? 'the decision' : 'the decisions'],
 	].filter(([n]) => n > 0)
 	if (places.length < 2) return ''
 	return `<p class="muted small">${list(places.map(([n, where]) => `${n} in ${where}`))}.</p>`
@@ -196,16 +217,32 @@ function commitsSection(q) {
 			: names.length > 1
 				? ` Authors: ${list(names.map(([name, n]) => `${esc(name)} (${n})`))}.`
 				: ''
+	const unquoted = new Set(change.messages?.unquoted ?? [])
 	return `<section class="check" id="check-commits">
 		<h3>The ${count(change.commits.length, 'commit', 'commits')} this answer covers</h3>
 		<p class="muted small">From git, not from the model.${by}</p>
+		${messagesLine(change)}
 		<ol class="commits">${change.commits
 			.map(
 				(commit) =>
-					`<li><code>${short(commit.hash)}</code><span>${esc(commit.subject)}<span class="who muted">${esc(commit.author)}, ${gitDay(commit.date)} UTC</span></span></li>`,
+					`<li><code>${short(commit.hash)}</code><span>${esc(commit.subject)}<span class="who muted">${esc(commit.author)}, ${gitDay(commit.date)} UTC${unquoted.has(commit.hash) ? '. Message not quoted' : ''}</span></span></li>`,
 			)
 			.join('')}</ol>
 	</section>`
+}
+
+// A merge is not counted: the tool that merged wrote its message. An answer saved before ken counted says nothing.
+function messagesLine(change) {
+	const { messages } = change
+	if (!messages) return ''
+	const total = messages.quoted.length + messages.unquoted.length
+	if (total === 0) return ''
+	const left =
+		messages.unquoted.length === 0
+			? ''
+			: ` The answer does not quote ${messages.unquoted.length === 1 ? 'the other' : `the other ${messages.unquoted.length}`}: ${list(messages.unquoted.map((hash) => `<code>${short(hash)}</code>`))}.`
+	const merges = change.commits.length > total ? ' Merges are not counted.' : ''
+	return `<p>${messages.quoted.length} of ${count(total, 'commit message', 'commit messages')} quoted.${left}${merges}</p>`
 }
 
 // What a numbered part of a diagram is, as a node and as an edge.
@@ -229,7 +266,8 @@ function textOf({ kind, item }) {
 }
 
 function quoteHtml(quote, j, chosen) {
-	const where = `<code>${esc(quote.path)}</code>, ${lineSpan(quote.startLine, quote.endLine)}. `
+	const source = quote.path === null ? quoteSource(quote) : `<code>${esc(quote.path)}</code>`
+	const where = `${source}, ${lineSpan(quote.startLine, quote.endLine)}. `
 	return `<div class="q${chosen ? ' chosen' : ''}" id="panel-q${j}">${quoteBody(quote, where)}</div>`
 }
 

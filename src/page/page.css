@@ -649,8 +649,9 @@ a.strip {
 	overflow-wrap: anywhere;
 }
 
-/* Labels. A dashed outline and a hollow dot: the agent's own reading, not something written down at the time. A span,
-   because Mermaid names its own label groups "label" inside every drawing. */
+/* Labels. A dashed outline and a hollow dot: the agent's own reading, not something written down at the time. Recorded
+   is solid and filled: written down when the work was done. A span, because Mermaid names its own label groups "label"
+   inside every drawing. */
 span.label {
 	display: inline-flex;
 	align-items: center;
@@ -674,6 +675,14 @@ span.label::before {
 	border-radius: 50%;
 }
 
+span.label-recorded {
+	border-style: solid;
+}
+
+.label-recorded::before {
+	background: currentColor;
+}
+
 .label-found-by-search {
 	border-style: dotted;
 	background: var(--color-label-bg);
@@ -685,6 +694,7 @@ span.label::before {
 }
 
 .st-text .label,
+.d-line .label,
 .diagram-title .label,
 .list-head h3 .label {
 	margin-right: var(--space-2);
