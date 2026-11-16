@@ -77,7 +77,7 @@ export function answerHtml(q, ui, running) {
 	const allOpen = ui.wide
 		? ui.panel.kind === 'all'
 		: itemsOf(q).every(({ key, item }) => item.quotes.every((_, j) => ui.openQuotes.has(`${key}-q${j}`)))
-	const rows = { ui, commits: manyCommits(q), head: q.head, copies: copiesOf(q) }
+	const rows = { ui, commits: manyCommits(q), head: q.head, copies: copiesOf(q), change: a.change }
 	const risks = a.risks ? shownOf(a.risks, 'r', hidden) : []
 	const claims = [...statements, ...risks].map(({ item }) => item)
 	const marked = markedLabels(claims)
@@ -185,8 +185,8 @@ function decisionsHtml(shown, rows) {
 	</section>`
 }
 
-export function decisionHtml(d, key, { ui, commits, copies }, marked) {
-	const open = ui.openDecisions.has(key)
+export function decisionHtml(d, key, rows, marked) {
+	const open = rows.ui.openDecisions.has(key)
 	const call = d.needsOwner ? '<span class="your-call">Your call</span> ' : ''
 	const mark = marked.has(d.label) ? `${label(d.label)} ` : ''
 	const row = `<button class="d-row" data-act="decision" data-item="${key}" data-key="${key}-row" aria-expanded="${open}">
@@ -202,7 +202,7 @@ export function decisionHtml(d, key, { ui, commits, copies }, marked) {
 				${others ? `<div><dt>Other options</dt>${others}</div>` : ''}
 				<div><dt>Reversing it later</dt><dd>${UNDO[d.undo] ?? esc(d.undo)}</dd></div>
 			</dl>
-			${quoteRows(decisionQuotes(d), key, { ui, commits, copies })}
+			${quoteRows(decisionQuotes(d), key, rows)}
 		</div>
 	</li>`
 }

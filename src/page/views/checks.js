@@ -15,7 +15,9 @@ import {
 	prose,
 	quoteBody,
 	quoteSource,
+	quoteTags,
 	short,
+	tagHtml,
 	when,
 } from './format.js'
 
@@ -312,10 +314,17 @@ function textOf({ kind, item }) {
 	return prose(item.text)
 }
 
-function quoteHtml(quote, j, chosen, copies) {
+function quoteHtml(quote, j, chosen, copies, tag) {
 	const source = isSession(quote) || quote.path === null ? quoteSource(quote) : `<code>${esc(quote.path)}</code>`
-	const where = `${source}, ${lineSpan(quote.startLine, quote.endLine)}. `
+	const where = `${tagHtml(tag)}${source}, ${lineSpan(quote.startLine, quote.endLine)}. `
 	return `<div class="q${chosen ? ' chosen' : ''}" id="panel-q${j}">${quoteBody(quote, where, false, copies)}</div>`
+}
+
+// An item's quotes in full, each with the tag its row carries. opened is the one the reader opened, or -1.
+function quotesHtml(q, quotes, prefix, opened) {
+	const copies = copiesOf(q)
+	const tags = quoteTags(quotes, { head: q.head, copies, change: q.answer.change })
+	return quotes.map((quote, j) => quoteHtml(quote, `${prefix}${j}`, j === opened, copies, tags[j])).join('')
 }
 
 // The panel when the reader opened a quote: its quotes in full come first, then what the label means. The item's own
@@ -332,7 +341,7 @@ export function quoteCardHtml(q, ui, items) {
 				<button class="quiet-button" data-act="step" data-by="1" data-key="next"${at === items.length - 1 ? ' disabled' : ''}>Next</button>
 				<button class="quiet-button" data-act="close" data-key="close">Close</button>
 			</div></div>
-		${item.quotes.map((quote, j) => quoteHtml(quote, j, j === ui.panel.quote, copiesOf(q))).join('')}
+		${quotesHtml(q, item.quotes, '', ui.panel.quote)}
 		${means === null ? '' : `<p class="label-means">${label(means)}<span>${prose(LABELS[means]?.means ?? '')}</span></p>`}`
 }
 
@@ -345,7 +354,7 @@ export function allQuotesHtml(q, items) {
 				(shown) => `<section class="all-item">
 					<h3>${titleOf(q, shown)}</h3>
 					<p class="card-text">${textOf(shown)}</p>
-					${shown.item.quotes.map((quote, j) => quoteHtml(quote, `${shown.key}-${j}`, false, copiesOf(q))).join('')}
+					${quotesHtml(q, shown.item.quotes, `${shown.key}-`, -1)}
 				</section>`,
 			)
 			.join('')}`

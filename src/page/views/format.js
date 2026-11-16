@@ -126,25 +126,39 @@ export function quoteBody(quote, where = '', named = false, copies = NONE) {
 	return `${source}<pre class="code"><code>${codeLines(lines, numbers)}</code></pre>`
 }
 
+// When an item quotes one file at more than one commit, each quote of it gets a tag, so the rows of a changed line tell
+// apart. ken's copy of uncommitted work sits on top of HEAD, so a quote of it is "now"; failing that, a quote at the HEAD
+// the question was asked at is "now". Every other quote of that file is older: "before". With neither, the commits of
+// the change the answer explains give the order, newest first and then the commit it starts from: the newest is
+// "after", since later commits may have changed it again. A file whose commits ken cannot place gets no tag.
+export function quoteTags(quotes, { head = null, copies = NONE, change = null }) {
+	const order = change ? [...change.commits.map((commit) => commit.hash), change.base] : []
+	return quotes.map((quote) => {
+		if (isSession(quote) || quote.path === null) return null
+		const commits = new Set(
+			quotes.filter((other) => !isSession(other) && other.path === quote.path).map((other) => other.commit),
+		)
+		if (commits.size < 2) return null
+		const newest = [...commits].some((commit) => copies.has(commit)) ? copies : new Set([head])
+		if ([...commits].some((commit) => newest.has(commit))) return newest.has(quote.commit) ? 'now' : 'before'
+		if (![...commits].every((commit) => order.includes(commit))) return null
+		const first = Math.min(...[...commits].map((commit) => order.indexOf(commit)))
+		return order.indexOf(quote.commit) === first ? 'after' : 'before'
+	})
+}
+
+export function tagHtml(tag) {
+	return tag ? `<span class="q-then">${tag}</span>` : ''
+}
+
 // At rest a quote is one row: the file, the lines, and the first quoted line, with the commit when the answer quotes
 // more than one. Opened, it shows all its lines: in place, or in the panel on a wide screen, where only the row whose
-// quote the panel shows reads as open. When an item quotes one file at two commits, the row at the HEAD the question
-// was asked at reads "now" and the other "before", so the two rows of a changed line tell apart. When the answer quotes
-// ken's copy of uncommitted work, that copy is "now": the work sits on top of HEAD.
-export function quoteRows(quotes, key, { ui, commits, head = null, copies = NONE }) {
-	const newest = copies.size > 0 ? copies : new Set([head])
-	const paths = quotes.filter((quote) => !isSession(quote) && quote.path !== null)
-	const twice = new Set(
-		paths
-			.filter((quote) => paths.some((other) => other.path === quote.path && other.commit !== quote.commit))
-			.map((quote) => quote.path),
-	)
+// quote the panel shows reads as open.
+export function quoteRows(quotes, key, { ui, commits, head = null, copies = NONE, change = null }) {
+	const tags = quoteTags(quotes, { head, copies, change })
 	return `<ul class="quotes">${quotes
 		.map((quote, j) => {
-			const then =
-				twice.has(quote.path) && head
-					? `<span class="q-then">${newest.has(quote.commit) ? 'now' : 'before'}</span>`
-					: ''
+			const then = tagHtml(tags[j])
 			const id = `${key}-q${j}`
 			const chosen = ui.wide && ui.panel.kind === 'quote' && ui.panel.key === key && ui.panel.quote === j
 			const open = !ui.wide && ui.openQuotes.has(id)
