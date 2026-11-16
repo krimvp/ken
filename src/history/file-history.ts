@@ -85,6 +85,16 @@ function parseLine(line: string): HistoryEntry | null {
 	if (isObject(value.answer) && isObject(value.answer.change) && value.answer.change.usedElsewhere === undefined) {
 		value.answer.change.usedElsewhere = null
 	}
+	// A risk saved before ken left the mark off a risk that quotes no file carries "Quotes only the changed lines", which
+	// says nothing true of it, so it reads with no mark.
+	if (isObject(value.answer) && Array.isArray(value.answer.risks)) {
+		for (const risk of value.answer.risks) {
+			const quotes = isObject(risk) && Array.isArray(risk.quotes) ? risk.quotes : []
+			if (isObject(risk) && !quotes.some((quote) => isObject(quote) && typeof quote.path === 'string')) {
+				delete risk.checked
+			}
+		}
+	}
 	if (typeof value.head !== 'string') value.head = null
 	return value as HistoryEntry
 }

@@ -102,7 +102,7 @@ export function riskPassQuestion(held: Held, later: LaterCommits): string {
 	const notFollowed = answer.change?.usedElsewhere?.notFollowed ?? []
 	const head = answer.change ? short(answer.change.head) : 'HEAD'
 	const mark = (checked: boolean | undefined) =>
-		checked ? 'quotes code outside the change' : 'quotes only the changed lines'
+		checked === undefined ? '' : checked ? 'quotes code outside the change' : 'quotes only the changed lines'
 	const listed = laterText(later, head)
 	return [
 		`ken checked your answer, and the reader has not seen it yet. Now check it against the code at the head commit ${head}, with the same tools. Take these steps in order:`,
@@ -117,9 +117,10 @@ export function riskPassQuestion(held: Held, later: LaterCommits): string {
 		...decisions.map((d, at) => `${at + 1}. ${d.question} Chosen: ${d.chosen} Why: ${d.reason.text}`),
 		'',
 		risks.length === 0 ? 'Your answer names no risks.' : 'The risks in your answer:',
-		...risks.map(
-			(risk, at) => `${at + 1}. (${risk.weight ? `${risk.weight}, ` : ''}${mark(risk.checked)}) ${risk.text}`,
-		),
+		...risks.map((risk, at) => {
+			const marks = [risk.weight, mark(risk.checked)].filter(Boolean)
+			return `${at + 1}. ${marks.length > 0 ? `(${marks.join(', ')}) ` : ''}${risk.text}`
+		}),
 		'',
 		...(notFollowed.length === 0
 			? ['Every name ken found used elsewhere has a quote of your answer at one of its places.']

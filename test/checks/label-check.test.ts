@@ -20,9 +20,9 @@ const { root, hashes } = buildRepository([
 ])
 const [base = '', head = ''] = hashes
 
-test('a risk quotes code outside the change only when one quote at the head holds no changed line: a quote of a changed line, alone or with the untouched line beside it, quotes only the changed lines', async () => {
+test('a risk quotes code outside the change only when one quote at the head holds no changed line: a quote of a changed line, alone or with the untouched line beside it, quotes only the changed lines, and a risk that quotes no file gets neither mark', async () => {
 	const repo = gitRepository(root)
-	const quote = async (path: string, text: string) => {
+	const quote = async (path: string | null, text: string) => {
 		const checked = await checkQuote(repo, { path, commit: head, text })
 		return checked.kind === 'verified'
 			? checked.quote
@@ -42,4 +42,6 @@ test('a risk quotes code outside the change only when one quote at the head hold
 	)
 	assert.equal(quotesOutsideChange([limit], limit.commit, hunks), false, 'the limit is a changed line')
 	assert.equal(quotesOutsideChange([mixed], limit.commit, hunks), false, 'one untouched line beside a changed one')
+	const message = await quote(null, 'fix: time out sooner')
+	assert.equal(quotesOutsideChange([message], limit.commit, hunks), undefined, 'a commit message is no file')
 })

@@ -47,15 +47,24 @@ export function decisionLabel(reasonQuotes: VerifiedQuote[], logged: boolean): E
 
 // A risk quotes code outside the change when one of its quotes holds, at the change's head, only lines the change did
 // not touch. The reader sees "Quotes code outside the change" or "Quotes only the changed lines", and ken sets which
-// from git, never the model. It says where the quote is, not whether the risk is true. hunks are all the change's
-// hunks; their new lines are the touched ones.
-export function quotesOutsideChange(quotes: VerifiedQuote[], head: CommitHash, hunks: ChangedHunk[]): boolean {
+// from git, never the model. It says where the quote is, not whether the risk is true. A risk that quotes no file, only
+// commit messages or a session, gets neither: undefined. hunks are all the change's hunks; their new lines are the
+// touched ones.
+export function quotesOutsideChange(
+	quotes: VerifiedQuote[],
+	head: CommitHash,
+	hunks: ChangedHunk[],
+): boolean | undefined {
+	const files = quotes.flatMap((quote) =>
+		'session' in quote || quote.path === null ? [] : [{ ...quote, path: quote.path }],
+	)
+	if (files.length === 0) return undefined
 	const touched = (path: string, line: number) =>
 		hunks.some(
 			({ hunk, ...file }) => file.path === path && line >= hunk.newStart && line < hunk.newStart + hunk.newLength,
 		)
-	return quotes.some((quote) => {
-		if ('session' in quote || quote.path === null || quote.commit !== head) return false
+	return files.some((quote) => {
+		if (quote.commit !== head) return false
 		for (let line = quote.startLine; line <= quote.endLine; line++) if (touched(quote.path, line)) return false
 		return true
 	})

@@ -110,10 +110,10 @@ export async function checkAnswer(
 	const change = await changeOf(repo, scope, quotes, signal)
 	if (change.kind === 'refused') return { kind: 'rejected', problems: [`Scope: ${change.problem}`] }
 	const { head, covered, uncovered } = change.change
-	const marked = risks?.map((risk) => ({
-		...risk,
-		checked: quotesOutsideChange(risk.quotes, head, [...covered, ...uncovered]),
-	}))
+	const marked = risks?.map((risk) => {
+		const checked = quotesOutsideChange(risk.quotes, head, [...covered, ...uncovered])
+		return checked === undefined ? risk : { ...risk, checked }
+	})
 	return { kind: 'accepted', answer: { ...answer, risks: marked ?? null, change: change.change }, decisions }
 }
 

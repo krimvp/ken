@@ -26,7 +26,8 @@ export type Change = {
 export type Claim = Statement & { topic?: string; absent?: Absence }
 
 // checked is ken's own mark on a risk of an answer about a change, set from git by quotesOutsideChange: true when a
-// quote lies wholly outside the change. A risk saved before ken set it, or one in an answer about no change, has none.
+// quote lies wholly outside the change. A risk saved before ken set it, one that quotes no file, or one in an answer
+// about no change, has none.
 // weight is the model's own (see WEIGHT_RULE): "serious" when someone is hurt in normal use, "minor" otherwise. ken does
 // not judge it, and a risk saved before ken asked for it has none.
 export const WEIGHTS = ['serious', 'minor'] as const

@@ -177,13 +177,18 @@ export function labelKey(names) {
 		.join('')}</dl>`
 }
 
-// The two marks ken sets on a risk, when this answer's risks carry them.
+// The marks ken sets on a risk, those this answer's risks carry.
 function marksKey(q) {
-	if (!(q.answer.risks ?? []).some((risk) => risk.checked !== undefined)) return ''
-	return `<dl class="label-key marks">
-		<div><dt><span class="label label-recorded">${RISK_MARKS.outside}</span></dt><dd>A quote of the risk lies wholly outside the lines the change touched, at its last commit. ${RISK_MARKS.means}</dd></div>
-		<div><dt><span class="label label-inferred">${RISK_MARKS.inside}</span></dt><dd>No quote of the risk lies wholly outside the lines the change touched.</dd></div>
-	</dl>`
+	const risks = q.answer.risks ?? []
+	const rows = [
+		risks.some((risk) => risk.checked === true)
+			? `<div><dt><span class="label label-recorded">${RISK_MARKS.outside}</span></dt><dd>A quote of the risk lies wholly outside the lines the change touched, at its last commit. ${RISK_MARKS.means}</dd></div>`
+			: '',
+		risks.some((risk) => risk.checked === false)
+			? `<div><dt><span class="label label-inferred">${RISK_MARKS.inside}</span></dt><dd>Every file the risk quotes, it quotes at lines the change touched. A risk that quotes no file, only commit messages, has neither mark.</dd></div>`
+			: '',
+	].join('')
+	return rows === '' ? '' : `<dl class="label-key marks">${rows}</dl>`
 }
 
 // The changed blocks no quote covers, by file, the files with the most uncovered lines first.
