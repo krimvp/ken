@@ -27,12 +27,13 @@ export type Claim = Statement & { topic?: string; absent?: Absence }
 
 // checked is ken's own mark on a risk of an answer about a change, set from git by quotesOutsideChange: true when a
 // quote lies wholly outside the change. A risk saved before ken set it, one that quotes no file, or one in an answer
-// about no change, has none.
+// about no change, has none. fixedIn is the later commit, after the change's head, whose message the risk quotes: the
+// project fixed it since. ken sets it from git, and the reader sees open risks first.
 // weight is the model's own (see WEIGHT_RULE): "serious" when someone is hurt in normal use, "minor" otherwise. ken does
 // not judge it, and a risk saved before ken asked for it has none.
 export const WEIGHTS = ['serious', 'minor'] as const
 export type Weight = (typeof WEIGHTS)[number]
-export type Risk = Claim & { checked?: boolean; weight?: Weight }
+export type Risk = Claim & { checked?: boolean; weight?: Weight; fixedIn?: CommitHash }
 
 // A risk the second look took out, with its reason and the lines that make it false: code at the change's head commit
 // or a line of a later commit's message. ken checked those lines as it checks every quote. A judge found that two

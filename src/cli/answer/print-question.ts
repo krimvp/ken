@@ -93,10 +93,24 @@ export function formatAnswer(answer: Answer, entries: Entry[], paint: Paint): st
 	}
 	for (const diagram of answer.diagrams) lines.push(...formatDiagram(diagram, paint), '')
 	const decisions = entries.flatMap((entry) => (entry.kind === 'decision' ? [entry] : []))
-	const risks = answer.risks ?? []
-	const marks = risks.some((risk) => risk.checked !== undefined)
-		? [paint('dim', 'ken checks where the quote is, not whether the risk is true.')]
-		: []
+	// Open risks first, then those a later commit fixed, each in the answer's order.
+	const all = answer.risks ?? []
+	const open = all.filter((risk) => risk.fixedIn === undefined)
+	const risks = [...open, ...all.filter((risk) => risk.fixedIn !== undefined)]
+	const fixed = risks.length - open.length
+	const marks = [
+		...(fixed > 0
+			? [
+					paint(
+						'dim',
+						'Open risks come first. A risk marked Fixed since quotes the message of a later commit that fixed it, and comes last.',
+					),
+				]
+			: []),
+		...(risks.some((risk) => risk.checked !== undefined)
+			? [paint('dim', 'ken checks where the quote is, not whether the risk is true.')]
+			: []),
+	]
 	const weighed = answer.change !== null && risks.some((risk) => risk.weight !== undefined)
 	if (weighed) {
 		const calls = decisions.filter((d) => d.needsOwner)
@@ -108,7 +122,10 @@ export function formatAnswer(answer: Answer, entries: Entry[], paint: Paint): st
 		if (risks.length === 0) lines.push(paint('bold', "Risks: ken's model looked and found none."), '')
 		else
 			lines.push(
-				paint('bold', `Risks, heaviest first (${risks.length}):`),
+				paint(
+					'bold',
+					fixed > 0 ? `${risks.length} risks, ${fixed} fixed since:` : `Risks, heaviest first (${risks.length}):`,
+				),
 				weight,
 				...claims(risks, paint),
 				...marks,
@@ -124,7 +141,10 @@ export function formatAnswer(answer: Answer, entries: Entry[], paint: Paint): st
 		if (decisions.length > 0)
 			lines.push(paint('bold', `Decisions (${decisions.length}):`), ...decisionLines(decisions, paint), '')
 		if (answer.risks?.length === 0) lines.push(paint('bold', "Risks: ken's model looked and found none."), '')
-		if (risks.length > 0) lines.push(paint('bold', `Risks (${risks.length}):`), ...claims(risks, paint), ...marks, '')
+		if (risks.length > 0) {
+			const head = fixed > 0 ? `${risks.length} risks, ${fixed} fixed since:` : `Risks (${risks.length}):`
+			lines.push(paint('bold', head), ...claims(risks, paint), ...marks, '')
+		}
 	}
 	const said = answer.change ? 'What the change did' : 'Statements'
 	lines.push(paint('bold', `${said} (${answer.statements.length}):`), ...claims(answer.statements, paint))
@@ -235,7 +255,7 @@ function searchedLine(absent: Absence | undefined, paint: Paint): string[] {
 // A risk shows ken's mark and, beside it, the model's weight, when it has them.
 function claims(list: Risk[], paint: Paint): string[] {
 	return list.flatMap((claim, index) => [
-		`${index + 1}. ${claim.text} ${paint('cyan', `[${claim.label}]`)}${claim.checked === undefined ? '' : ` ${paint('cyan', `[${CHECKED[`${claim.checked}`]}]`)}`}${claim.weight === undefined ? '' : ` ${paint('cyan', `[${claim.weight}, by ken's model]`)}`}`,
+		`${index + 1}. ${claim.text} ${paint('cyan', `[${claim.label}]`)}${claim.fixedIn === undefined ? '' : ` ${paint('cyan', `[Fixed since, in ${claim.fixedIn.slice(0, 7)}]`)}`}${claim.checked === undefined ? '' : ` ${paint('cyan', `[${CHECKED[`${claim.checked}`]}]`)}`}${claim.weight === undefined ? '' : ` ${paint('cyan', `[${claim.weight}, by ken's model]`)}`}`,
 		...searchedLine(claim.absent, paint),
 		...claim.quotes.flatMap((quote) => formatQuote(quote, paint)),
 	])

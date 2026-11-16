@@ -176,6 +176,56 @@ test('ken ask prints the risks in the order the answer gives them, whatever thei
 	assert.match(stdout, /1 point of the draft had no line to quote/)
 })
 
+test('ken ask prints a risk that quotes a later commit after the open one, marked fixed since in that commit', async () => {
+	const later = buildRepository([
+		{ message: 'feat: start', files: { 'app.py': 'def total(items):\n    return 0\n' } },
+		{ message: 'fix: add the items', files: { 'app.py': 'def total(items):\n    return sum(items)\n' } },
+		{
+			message: 'fix: skip text in total',
+			body: 'A caller that passed text got a TypeError.',
+			files: { 'app.py': 'def total(items):\n    return sum(i for i in items if not isinstance(i, str))\n' },
+		},
+	])
+	const [from = '', to = '', fix = ''] = later.hashes
+	const sum = { path: 'app.py', commit: to, text: '    return sum(items)' }
+	const fixed = {
+		text: 'A caller that passes text gets a TypeError.',
+		label: 'inferred',
+		quotes: [{ path: null, commit: fix, text: 'A caller that passed text got a TypeError.' }],
+		weight: 'serious',
+	}
+	const open = { text: 'A list of floats gets a rounding error.', label: 'inferred', quotes: [sum], weight: 'minor' }
+	const model = await scriptedModel([
+		DRAFT,
+		{
+			tool: 'ken__answer',
+			args: {
+				scope: { base: from, head: to },
+				summary: 'total returned 0 for every list. It now adds the items.',
+				statements: [{ text: 'total returns the sum of the items.', label: 'inferred', quotes: [sum] }],
+				risks: [fixed, open],
+			},
+		},
+		...nothingToRevise(2),
+		{ text: 'Nothing else.' },
+	])
+	const env = {
+		...NO_KEN_VARIABLES,
+		KEN_MODEL: 'scripted',
+		KEN_BASE_URL: model.baseUrl,
+		KEN_API_KEY_ENV: 'KEN_TEST_KEY',
+		KEN_TEST_KEY: 'scripted-model-key',
+	}
+	const { code, stdout, stderr } = await ken(['ask', 'What did the fix do?', '--repo', later.root], env)
+
+	assert.equal(code, 0, `${stderr}${stdout}`)
+	assert.match(stdout, /2 risks, 1 fixed since:/)
+	const [first, second] = [open.text, fixed.text].map((text) => stdout.split('\n').find((line) => line.includes(text)))
+	assert.match(first ?? '', /^1\. A list of floats/, `the open risk comes first: ${stdout}`)
+	assert.match(second ?? '', new RegExp(`^2\\. A caller that passes text.*\\[Fixed since, in ${fix.slice(0, 7)}\\]`))
+	assert.doesNotMatch(first ?? '', /Fixed since/)
+})
+
 test('ken ask prints the risks the second look withdrew as one count, each with the line that rules it out, and the search ken made for what an entry says is missing', async () => {
 	const risk = (text: string) => ({ text, label: 'inferred', quotes: [SUM], weight: 'minor' })
 	const model = await scriptedModel([

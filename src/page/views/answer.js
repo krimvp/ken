@@ -38,11 +38,17 @@ export function decisionsOf(q) {
 	return [...q.recorded.filter((entry) => entry.kind === 'decision'), ...(q.draft ?? [])]
 }
 
-// The risks with the keys the page knows them by, in the answer's order, which the second look sets heaviest first, each
-// numbered as the page shows it. The weight on a risk is the model's. An answer saved before ken asked for it has none.
+// The risks with the keys the page knows them by, open ones first, then those a later commit fixed, each group in the
+// answer's order, which the second look sets heaviest first, and each numbered as the page shows it. The weight on a
+// risk is the model's. An answer saved before ken asked for it has none.
 export function risksOf(q) {
-	const risks = (q.answer.risks ?? []).map((item, i) => ({ item, key: `r${i}`, n: i + 1 }))
-	return { weighed: risks.some(({ item }) => item.weight !== undefined), risks }
+	const all = (q.answer.risks ?? []).map((item, i) => ({ item, key: `r${i}` }))
+	const fixed = all.filter(({ item }) => item.fixedIn !== undefined)
+	const risks = [...all.filter(({ item }) => item.fixedIn === undefined), ...fixed].map((each, i) => ({
+		...each,
+		n: i + 1,
+	}))
+	return { weighed: risks.some(({ item }) => item.weight !== undefined), risks, fixed: fixed.length }
 }
 
 // How many risks an answer about a change shows open. The rest wait in one fold, so the first view never depends on
@@ -236,7 +242,8 @@ function weighedHtml(risks, ui, rows, marked, labels) {
 	if (risks.length === 0) {
 		return `<div class="list-head"><h3>ken's model found no risks</h3><p class="list-note">ken's model says it looked for what could go wrong and found nothing to watch.</p></div>`
 	}
-	const note = `A risk is something ken's model thinks could go wrong. ken's model weighs each one. Serious: someone who uses the code in the normal way loses work, gets a wrong result or a failure, or finds refused what worked before. Minor: it needs a rare case or costs little. ${RISK_MARKS.means}${labels ? ` ${labels}` : ''}`
+	const fixed = risks.filter(({ item }) => item.fixedIn !== undefined).length
+	const note = `A risk is something ken's model thinks could go wrong. ken's model weighs each one. Serious: someone who uses the code in the normal way loses work, gets a wrong result or a failure, or finds refused what worked before. Minor: it needs a rare case or costs little.${fixed > 0 ? ` ${RISK_MARKS.fixedMeans}` : ''} ${RISK_MARKS.means}${labels ? ` ${labels}` : ''}`
 	const list = (each) => each.map(({ item, key, n }) => claimHtml(item, key, n - 1, rows, marked)).join('')
 	const rest = risks.slice(FIRST_RISKS)
 	const more =
@@ -245,7 +252,7 @@ function weighedHtml(risks, ui, rows, marked, labels) {
 			: foldHtml('risks', count(rest.length, 'more risk', 'more risks'), ui, `<ol>${list(rest)}</ol>`)
 	return `<section class="risks" aria-labelledby="risks-head">
 		<div class="list-head">
-			<h3 id="risks-head">Risks, heaviest first (${risks.length})</h3>
+			<h3 id="risks-head">${fixed > 0 ? `${count(risks.length, 'risk', 'risks')}, ${fixed} fixed since` : `Risks, heaviest first (${risks.length})`}</h3>
 			<p class="list-note">${note}</p>
 		</div>
 		<ol>${list(risks.slice(0, FIRST_RISKS))}</ol>
@@ -303,8 +310,9 @@ function folded(text, open, ui, act, more) {
 // means no line.
 function needsHtml(q) {
 	const calls = decisionsOf(q).filter((d) => d.needsOwner).length
-	const { weighed, risks } = risksOf(q)
+	const { weighed, risks, fixed } = risksOf(q)
 	const serious = risks.filter(({ item }) => item.weight === 'serious').length
+	const since = fixed === 0 ? '' : `, ${fixed} fixed since`
 	const parts = []
 	if (calls > 0) {
 		parts.push(
@@ -312,10 +320,10 @@ function needsHtml(q) {
 		)
 	}
 	if (!weighed && risks.length > 0)
-		parts.push(`<a href="#risks-head">${count(risks.length, 'risk', 'risks')} to watch</a>`)
+		parts.push(`<a href="#risks-head">${count(risks.length, 'risk', 'risks')} to watch${since}</a>`)
 	if (weighed && risks.length > 0) {
 		const of = serious === 0 ? '' : `, ${serious} of them serious`
-		parts.push(`<a href="#risks-head">${count(risks.length, 'risk', 'risks')}${of}</a>`)
+		parts.push(`<a href="#risks-head">${count(risks.length, 'risk', 'risks')}${of}${since}</a>`)
 	}
 	// Fewer than half the changed blocks quoted means most of the change is not explained here, so it is said up front.
 	const change = q.answer.change
@@ -333,7 +341,7 @@ function claimHtml(claim, key, i, rows, marked) {
 	return `<li class="st" id="item-${key}">
 		<span class="st-n">${i + 1}</span>
 		<div>
-			<p class="st-text">${marked.has(claim.label) ? label(claim.label) : ''}${checkedHtml(claim)}${weightHtml(claim)}${prose(claim.text)}</p>
+			<p class="st-text">${marked.has(claim.label) ? label(claim.label) : ''}${fixedHtml(claim)}${checkedHtml(claim)}${weightHtml(claim)}${prose(claim.text)}</p>
 			${searchedHtml(claim.absent)}
 			${quoteRows(claim.quotes, key, rows)}
 		</div>
@@ -356,6 +364,12 @@ function checkedHtml({ checked }) {
 	return `<span class="label label-${style}">${name}</span>`
 }
 
+// ken's mark on a risk that quotes the message of a commit made after the change: the project fixed it since.
+function fixedHtml({ fixedIn }) {
+	if (fixedIn === undefined) return ''
+	return `<span class="label label-recorded">${RISK_MARKS.fixed} <code>${short(fixedIn)}</code></span>`
+}
+
 // The model's weight on a risk, in the style of the label for what the model worked out itself. A statement, and a risk
 // saved before ken asked for the weight, has none.
 function weightHtml({ weight }) {
@@ -376,10 +390,17 @@ function risksHtml(all, shown, aboutChange, rows, marked, labels) {
 		return `<div class="list-head"><h3>ken's model found no risks</h3><p class="list-note">ken's model says it looked for what could go wrong and found nothing to watch.</p></div>`
 	}
 	if (shown.length === 0) return ''
+	const fixed = shown.filter(({ item }) => item.fixedIn !== undefined).length
+	const head =
+		fixed > 0
+			? `${count(shown.length, 'risk', 'risks')}, ${fixed} fixed since`
+			: shown.length === 1
+				? 'A risk to watch'
+				: `${shown.length} risks to watch`
 	return `<section class="risks" aria-labelledby="risks-head">
 		<div class="list-head">
-			<h3 id="risks-head">${shown.length === 1 ? 'A risk to watch' : `${shown.length} risks to watch`}</h3>
-			<p class="list-note">A risk is something ken's model thinks could go wrong.${shown.some(({ item }) => item.checked !== undefined) ? ` ${RISK_MARKS.means}` : ''}${labels ? ` ${labels}` : ''}</p>
+			<h3 id="risks-head">${head}</h3>
+			<p class="list-note">A risk is something ken's model thinks could go wrong.${fixed > 0 ? ` ${RISK_MARKS.fixedMeans}` : ''}${shown.some(({ item }) => item.checked !== undefined) ? ` ${RISK_MARKS.means}` : ''}${labels ? ` ${labels}` : ''}</p>
 		</div>
 		<ol>${shown.map(({ item, key }, i) => claimHtml(item, key, i, rows, marked)).join('')}</ol>
 	</section>`

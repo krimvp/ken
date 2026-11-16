@@ -24,6 +24,7 @@ import {
 	WEIGHT_RULE,
 	withoutDescriptions,
 } from './answer-tool.ts'
+import { isLater } from './check-answer.ts'
 import { allowJsonText, readJsonText } from './json-text.ts'
 
 export const MAX_PASS_REJECTIONS = 2
@@ -131,7 +132,7 @@ export function riskPassQuestion(held: Held, later: LaterCommits): string {
 		'Then call revise_answer once:',
 		`- risks: each new risk, and each risk above that you rewrite, with replaces set to its number. A risk is one or two sentences: what can happen, who hits it (a host, an operator, a reader of results, a later developer) and when (always, on resume, only for runs made before this change, only under load). Quote the place it rests on, and give it its weight: ${WEIGHT_RULE}. A new risk that needs a rare case and costs little is left out, not sent as minor; ten risks is a sign of padding.`,
 		`- withdraw: each risk above that the code shows does not happen, with what the code shows instead and, in quotes, the lines that show it: code at ${head}, or a line of a later commit's message.`,
-		`- order: the numbers of all the risks the answer keeps, the heaviest first, by who hits each and when. A risk above keeps its number; the risks you send are ${risks.length + 1}, ${risks.length + 2} and on, in the order you send them. A minor or speculative risk goes last.`,
+		`- order: the numbers of all the risks the answer keeps, the heaviest first, by who hits each and when. A risk above keeps its number; the risks you send are ${risks.length + 1}, ${risks.length + 2} and on, in the order you send them. A minor or speculative risk goes last. ken shows the reader each risk that quotes a later commit's message, one fixed since, after the open ones.`,
 		'- decisions: a decision your answer missed, with its quotes.',
 	].join('\n')
 }
@@ -253,12 +254,6 @@ async function proofProblems(
 		}
 	}
 	return problems
-}
-
-async function isLater(repo: Repository, head: CommitHash, commit: CommitHash, signal: AbortSignal) {
-	if (commit === head) return false
-	const base = await repo.mergeBase(head, commit, signal)
-	return base.kind === 'ok' && base.commit === head
 }
 
 // Each withdrawal's quotes are checked as every quote is: a line that is not there rejects the revision.

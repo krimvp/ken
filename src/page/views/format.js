@@ -215,6 +215,9 @@ export const RISK_MARKS = {
 	outside: 'Quotes code outside the change',
 	inside: 'Quotes only the changed lines',
 	means: 'ken checks where the quote is, not whether the risk is true.',
+	fixed: 'Fixed since, in',
+	fixedMeans:
+		'Open risks come first. A risk marked Fixed since quotes the message of a later commit that fixed it, and comes last.',
 }
 
 export function label(name) {

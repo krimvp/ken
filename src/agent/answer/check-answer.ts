@@ -110,11 +110,38 @@ export async function checkAnswer(
 	const change = await changeOf(repo, scope, quotes, signal)
 	if (change.kind === 'refused') return { kind: 'rejected', problems: [`Scope: ${change.problem}`] }
 	const { head, covered, uncovered } = change.change
-	const marked = risks?.map((risk) => {
-		const checked = quotesOutsideChange(risk.quotes, head, [...covered, ...uncovered])
-		return checked === undefined ? risk : { ...risk, checked }
-	})
+	const marked =
+		risks &&
+		(await Promise.all(
+			risks.map(async (risk) => {
+				const checked = quotesOutsideChange(risk.quotes, head, [...covered, ...uncovered])
+				const fixedIn = await fixedSince(repo, head, risk.quotes, signal)
+				return { ...risk, ...(checked === undefined ? {} : { checked }), ...(fixedIn ? { fixedIn } : {}) }
+			}),
+		))
 	return { kind: 'accepted', answer: { ...answer, risks: marked ?? null, change: change.change }, decisions }
+}
+
+// The first commit made after the change's head whose message a quote of the risk cites: a later commit that says what
+// the change left open. git decides, not the model.
+async function fixedSince(
+	repo: Repository,
+	head: CommitHash,
+	quotes: VerifiedQuote[],
+	signal: AbortSignal,
+): Promise<CommitHash | null> {
+	for (const quote of quotes) {
+		if (!('session' in quote) && quote.path === null && (await isLater(repo, head, quote.commit, signal))) {
+			return quote.commit
+		}
+	}
+	return null
+}
+
+export async function isLater(repo: Repository, head: CommitHash, commit: CommitHash, signal: AbortSignal) {
+	if (commit === head) return false
+	const base = await repo.mergeBase(head, commit, signal)
+	return base.kind === 'ok' && base.commit === head
 }
 
 type Search = (where: string, sought: Sought | undefined) => Promise<{ absent?: Absence }>

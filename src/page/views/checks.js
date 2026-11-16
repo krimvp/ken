@@ -187,6 +187,9 @@ function marksKey(q) {
 		risks.some((risk) => risk.checked === false)
 			? `<div><dt><span class="label label-inferred">${RISK_MARKS.inside}</span></dt><dd>Every file the risk quotes, it quotes at lines the change touched. A risk that quotes no file, only commit messages, has neither mark.</dd></div>`
 			: '',
+		risks.some((risk) => risk.fixedIn !== undefined)
+			? `<div><dt><span class="label label-recorded">Fixed since</span></dt><dd>The risk quotes the message of a commit made after the change, the one named, which says what was wrong. ken shows these risks after the open ones.</dd></div>`
+			: '',
 	].join('')
 	return rows === '' ? '' : `<dl class="label-key marks">${rows}</dl>`
 }
