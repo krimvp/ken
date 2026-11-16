@@ -1025,6 +1025,24 @@ span.label-from-the-session {
 	padding: 0 0 var(--space-4) 1.25rem;
 }
 
+/* A decision shown on the first view with its reason: the row of quotes under it opens the rest in place. */
+.decision.reasoned {
+	padding: var(--space-2) 0 var(--space-3);
+}
+
+.d-why {
+	margin: var(--space-1) 0 0;
+	line-height: 1.5;
+}
+
+.d-more {
+	margin-top: var(--space-1);
+}
+
+.decision.reasoned .d-card {
+	padding: var(--space-2) 0 0;
+}
+
 .d-card .quotes {
 	margin-top: var(--space-3);
 }

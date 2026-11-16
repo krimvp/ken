@@ -1,8 +1,8 @@
 // The answered question in the thread: the agent's summary, one line that counts what needs the reader, the diagrams,
 // the decisions, the risks and the statements with their quote rows, and the agent's closing note. The agent wrote the
 // words; ken checked only that each quote is in its file. An answer about a change opens on what a tired owner needs
-// first, as a chat would: the story, the first risks, heaviest first, and the decisions that need their call. The rest
-// folds behind one line each, with its count, and opens in place.
+// first, as a chat would: the story, the first risks, heaviest first, and the first decisions with their reasons. The
+// rest folds behind one line each, with its count, and opens in place.
 import { checkStrip, checksHtml } from './checks.js'
 import { diagramHtml, elementKey } from './diagram.js'
 import {
@@ -151,21 +151,31 @@ export function answerHtml(q, ui, running) {
 		<section class="checks-inline narrow-only" id="checks-inline" aria-label="What ken checked">${ui.wide ? '' : checksHtml(q, ui)}</section>`
 }
 
-// An answer about a change: the first risks and the decisions that need the reader's call are open. The other
-// decisions and what the change did each fold behind one line with its count.
+// How many decisions an answer about a change shows with their reason, under the risks: a judge found that a first
+// view with one decision or none did not answer "why was it done that way".
+const FIRST_DECISIONS = 3
+
+// An answer about a change: the first risks, then the first decisions with their reasons, those that need the reader's
+// call first. The other decisions and what the change did each fold behind one line with its count.
 function changeBody({ ui, rows, marked, decisions, risks, weighed, statements, statementsList, claims, all }) {
-	const calls = decisions.filter(({ item }) => item.needsOwner)
-	const others = decisions.filter(({ item }) => !item.needsOwner)
+	const ordered = [
+		...decisions.filter(({ item }) => item.needsOwner),
+		...decisions.filter(({ item }) => !item.needsOwner),
+	]
+	const others = ordered.slice(FIRST_DECISIONS)
 	const labels = labelLine(claims)
 	const risksPart = weighed
 		? weighedHtml(risks, ui, rows, marked, labels)
 		: risksHtml(all, risks, true, rows, marked, labels)
-	const otherHead =
-		calls.length === 0
-			? count(others.length, 'decision in this change', 'decisions in this change')
-			: count(others.length, 'other decision', 'other decisions')
 	const folds = [
-		others.length === 0 ? '' : foldHtml('decisions', otherHead, ui, decisionsHtml(others, rows, false)),
+		others.length === 0
+			? ''
+			: foldHtml(
+					'decisions',
+					count(others.length, 'other decision', 'other decisions'),
+					ui,
+					decisionsHtml(others, rows, true),
+				),
 		statements.length === 0
 			? ''
 			: foldHtml(
@@ -175,7 +185,39 @@ function changeBody({ ui, rows, marked, decisions, risks, weighed, statements, s
 					statementsList,
 				),
 	].join('')
-	return `${risksPart}${decisionsHtml(calls, rows, true)}${folds ? `<div class="folds">${folds}</div>` : ''}`
+	return `${risksPart}${firstDecisionsHtml(ordered, rows)}${folds ? `<div class="folds">${folds}</div>` : ''}`
+}
+
+// The head counts every decision and those that need the reader's call. Each shown decision gives its label, its
+// question, the option taken and why, and folds its quotes and its other facts into one row.
+function firstDecisionsHtml(ordered, rows) {
+	if (ordered.length === 0) return ''
+	const calls = ordered.filter(({ item }) => item.needsOwner).length
+	const asks = calls === 0 ? '' : `, ${calls} ${calls === 1 ? 'needs' : 'need'} your call`
+	const shown = ordered.slice(0, FIRST_DECISIONS)
+	return `<section class="decisions" aria-labelledby="decisions-head">
+		<div class="list-head"><h3 id="decisions-head">Decisions (${ordered.length})${asks}</h3></div>
+		<ul>${shown.map(({ item, key }) => reasonedHtml(item, key, rows)).join('')}</ul>
+	</section>`
+}
+
+function reasonedHtml(d, key, rows) {
+	const open = rows.ui.openDecisions.has(key)
+	const quotes = decisionQuotes(d)
+	const call = d.needsOwner ? '<span class="your-call">Your call</span> ' : ''
+	const why = d.reason ? `<p class="d-why"><span class="d-field">Why</span> ${prose(d.reason.text)}</p>` : ''
+	const what = open ? 'Hide' : `Show ${count(quotes.length, 'quote', 'quotes')} and how hard it is to reverse`
+	const answerIt = d.needsOwner && !d.answer && !rows.waiting ? `<p class="small">${answerItLink(key)}</p>` : ''
+	const card = open
+		? `<div class="d-card">${fromHtml(d)}${factsHtml(d, false)}${answerIt}${quoteRows(quotes, key, rows)}</div>`
+		: ''
+	return `<li class="decision reasoned" id="item-${key}">
+		<p class="d-line">${call}${label(d.label)} <span class="d-q">${prose(d.question)}</span> <span class="d-chosen"><span class="d-field">Chosen</span> ${prose(d.chosen)}</span></p>
+		${why}
+		${searchedHtml(d.absent)}
+		<button class="link small d-more" data-act="decision" data-item="${key}" data-key="${key}-row" aria-expanded="${open}">${what}</button>
+		${card}
+	</li>`
 }
 
 // One folded group: a line with its count that opens the group in place.
@@ -343,28 +385,23 @@ function risksHtml(all, shown, aboutChange, rows, marked, labels) {
 }
 
 // Each decision folds to its question and the option the code took. The row opens the decision in place. An answer
-// about a change shows the decisions that need the reader's call under their own head (calls true), and the others in a
-// fold that has its own head (calls false).
-function decisionsHtml(shown, rows, calls = null) {
+// about a change folds its other decisions this way with no head of their own (folded true); any other answer lists
+// them all under a head.
+function decisionsHtml(shown, rows, folded = false) {
 	if (shown.length === 0) return ''
 	const decisions = shown.map(({ item }) => item)
 	// Every decision carries its own label, so no missing mark has to mean one of them.
 	const all = new Set(decisions.map((d) => d.label))
 	const list = `<ul>${shown.map(({ item, key }) => decisionHtml(item, key, rows, all)).join('')}</ul>`
-	if (calls === false) return `<section class="decisions">${list}</section>`
+	if (folded) return `<section class="decisions">${list}</section>`
 	const asks = decisions.filter((d) => d.needsOwner).length
-	const head =
-		calls === true
-			? decisions.length === 1
-				? 'A decision needs your call'
-				: `${decisions.length} decisions need your call`
-			: `${decisions.length === 1 ? 'A decision in this change' : `${decisions.length} decisions in this change`}${
-					asks === 0
-						? ''
-						: decisions.length === 1
-							? ', and it needs your call'
-							: `, ${asks} ${asks === 1 ? 'needs' : 'need'} your call`
-				}`
+	const head = `${decisions.length === 1 ? 'A decision in this change' : `${decisions.length} decisions in this change`}${
+		asks === 0
+			? ''
+			: decisions.length === 1
+				? ', and it needs your call'
+				: `, ${asks} ${asks === 1 ? 'needs' : 'need'} your call`
+	}`
 	return `<section class="decisions" aria-labelledby="decisions-head">
 		<div class="list-head"><h3 id="decisions-head">${head}</h3></div>
 		${list}
@@ -395,12 +432,12 @@ export function answerItLink(key) {
 
 // A decision's facts under what was chosen, the same in an answer, in "Waiting on you" and in Decisions: why, the
 // other options when there are any, and how hard it is to reverse.
-export function factsHtml(d) {
+export function factsHtml(d, why = true) {
 	const others = d.rejected
 		.map((r) => `<dd>${prose(r.option)}<span class="why">Why not: ${prose(r.reason)}</span></dd>`)
 		.join('')
 	return `<dl class="facts">
-		${d.reason ? `<div><dt>Why</dt><dd>${prose(d.reason.text)}${fromHtml(d)}${searchedHtml(d.absent)}</dd></div>` : ''}
+		${why && d.reason ? `<div><dt>Why</dt><dd>${prose(d.reason.text)}${fromHtml(d)}${searchedHtml(d.absent)}</dd></div>` : ''}
 		${others ? `<div><dt>Other options</dt>${others}</div>` : ''}
 		<div><dt>Reversing it later</dt><dd>${UNDO[d.undo] ?? esc(d.undo)}</dd></div>
 	</dl>`
