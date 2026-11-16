@@ -38,12 +38,25 @@ function replyOf(output: unknown, tools: Tool[]): Parsed<Reply> {
 		if (!isObject(call) || typeof call.name !== 'string' || !isObject(call.arguments)) {
 			return { ok: false, problem: `tool_calls[${index}] needs a name and an arguments object` }
 		}
-		if (!names.has(call.name)) {
-			return { ok: false, problem: `tool_calls[${index}] calls ${call.name}, which is not one of the tools` }
+		const name = toolName(call.name, [...names])
+		if (name === null) {
+			return {
+				ok: false,
+				problem: `tool_calls[${index}] calls ${call.name}, which is not one of the tools: ${[...names].join(', ')}`,
+			}
 		}
-		toolCalls.push({ name: call.name, arguments: call.arguments })
+		toolCalls.push({ name, arguments: call.arguments })
 	}
 	return { ok: true, value: { text: output.text, toolCalls } }
+}
+
+// ken's prompts name a tool without its plugin's prefix ("call revise_answer"), and a model reading tools from a
+// prompt may call it that way. Such a call goes to the one tool of that name, so the model is not told the tool is
+// missing.
+function toolName(called: string, names: string[]): string | null {
+	if (names.includes(called)) return called
+	const matches = names.filter((name) => name.endsWith(`__${called}`))
+	return matches.length === 1 ? (matches[0] ?? null) : null
 }
 
 // modelUsage holds one entry per model the run used, so the sum is what the run cost.

@@ -131,6 +131,18 @@ test('a turn with two tool calls comes back as two streamed tool calls, with the
 	})
 })
 
+// ken's prompts say "call revise_answer", and a model once called it so: the endpoint refused the call, and the model
+// told the reader the tool was not available.
+test('a call by the bare name the prompts use, without the plugin prefix, reaches ken as that tool', async () => {
+	fakeClaude([cliResult({ text: '', tool_calls: [{ name: 'read_file', arguments: { path: 'app.py' } }] })])
+	const chunks = await chunksOf(await ask(QUESTION))
+
+	assert.deepEqual(chunks[0].choices[0].delta.tool_calls[0].function, {
+		name: 'ken__read_file',
+		arguments: '{"path":"app.py"}',
+	})
+})
+
 test('a turn with only text comes back as text that ends the turn', async () => {
 	fakeClaude([cliResult({ text: 'total adds the items.', tool_calls: [] })])
 	const chunks = await chunksOf(await ask(QUESTION))
