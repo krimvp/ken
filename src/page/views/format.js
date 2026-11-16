@@ -79,20 +79,21 @@ export function quoteBody(quote, where = '', named = false) {
 }
 
 // At rest a quote is one row: the file, the lines, and the first quoted line, with the commit when the answer quotes
-// more than one. Opened, it shows all its lines: in place, or in the panel on a wide screen.
+// more than one. Opened, it shows all its lines: in place, or in the panel on a wide screen, where only the row whose
+// quote the panel shows reads as open.
 export function quoteRows(quotes, key, { ui, commits }) {
 	return `<ul class="quotes">${quotes
 		.map((quote, j) => {
 			const id = `${key}-q${j}`
 			const chosen = ui.wide && ui.panel.kind === 'quote' && ui.panel.key === key && ui.panel.quote === j
-			const open = ui.wide ? ui.panel.kind === 'all' : ui.openQuotes.has(id)
+			const open = !ui.wide && ui.openQuotes.has(id)
 			const first = quote.text.split('\n').find((line) => line.trim() !== '') ?? ''
 			const at = commits ? `<span class="q-commit">at <code>${short(quote.commit)}</code></span>` : ''
 			return `<li class="q${chosen ? ' chosen' : ''}">
-				<button class="q-row" data-act="quote" data-item="${key}" data-quote="${j}" data-key="${id}" aria-expanded="${open || chosen}"${ui.wide ? ' aria-controls="panel"' : ''}>
+				<button class="q-row" data-act="quote" data-item="${key}" data-quote="${j}" data-key="${id}" aria-expanded="${ui.wide ? chosen : open}"${ui.wide ? ' aria-controls="panel"' : ''}>
 					<span class="q-path">${esc(quote.path)}</span><span class="q-lines"><span class="nowrap">${lineSpan(quote.startLine, quote.endLine)}</span>${at}</span><span class="q-first">${esc(first.trim())}</span>
 				</button>
-				${open && !ui.wide ? quoteBody(quote, '', commits) : ''}
+				${open ? quoteBody(quote, '', commits) : ''}
 			</li>`
 		})
 		.join('')}</ul>`
@@ -101,7 +102,7 @@ export function quoteRows(quotes, key, { ui, commits }) {
 export const LABELS = {
 	inferred: {
 		name: 'Inferred',
-		means: 'The agent worked this out from the code or the diff. Nobody wrote it down when the work was done.',
+		means: 'The agent worked this out from the code or the diff. No commit message or note says so.',
 	},
 	'found-by-search': {
 		name: 'Found by search',

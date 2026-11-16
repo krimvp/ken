@@ -53,19 +53,23 @@ export function checkStrip(q) {
 export function checksHtml(q, ui) {
 	const quotes = quotesOf(q)
 	const commits = [...new Set(quotes.map((quote) => short(quote.commit)))]
-	const at = commits.length === 1 ? `at <code>${commits[0]}</code>` : `at ${commits.length} commits`
+	const at = commits.length === 1 ? `at <code>${commits[0]}</code>` : `across ${commits.length} commits`
 	const all =
-		quotes.length === 1 ? 'The quote is' : quotes.length === 2 ? 'Both quotes are' : `All ${quotes.length} quotes are`
+		quotes.length === 1
+			? 'The quote matches'
+			: quotes.length === 2
+				? 'Both quotes match'
+				: `All ${quotes.length} quotes match`
 	const back = sentBack(q)
 	const backLine =
 		back === 0
 			? ''
-			: `<p class="muted">The quote check sent back ${count(back, 'earlier answer', 'earlier answers')} first.</p>`
+			: `<p class="muted">ken rejected ${count(back, 'earlier draft', 'earlier drafts')} first, because a quote did not match.</p>`
 	return `<div class="panel-head"><h2>What ken checked</h2></div>
 		<p class="panel-limit">${limit(q)}</p>
 		<section class="check" id="check-quotes">
 			<h3>Quotes</h3>
-			<p>${all} in git, ${at}.</p>
+			<p>${all} git, ${at}.</p>
 			${whereQuotes(q)}
 			${backLine}
 			<p><button class="link small" data-act="key" data-key="key" aria-expanded="${ui.keyOpen}">${ui.keyOpen ? 'Hide what the labels mean' : 'What the labels mean'}</button></p>
@@ -127,16 +131,15 @@ function coverageSection(q, ui) {
 	const more = files.length > FILES_NAMED ? [count(files.length - FILES_NAMED, 'more file', 'more files')] : []
 	const where =
 		uncovered === 1
-			? `1 changed block is not quoted: ${named[0]}`
-			: `${blocks(uncovered)} are not quoted, in ${list([...named, ...more])}`
-	const them = uncovered === 1 ? 'it' : 'them'
+			? `1 changed block has no quote: ${named[0]}`
+			: `${blocks(uncovered)} have no quote, in ${list([...named, ...more])}`
 	const button = ui.coverageOpen
 		? ''
 		: `<p><button class="quiet-button" data-act="coverage" data-key="coverage" aria-expanded="false">Show the ${uncovered === 1 ? 'unquoted block' : `${uncovered} unquoted blocks`}</button></p>`
 	return `<section class="check" id="check-coverage">
 		<h3>Changed code</h3>
 		<p>${change.covered.length} of ${blocks(total)} quoted.</p>
-		<p class="muted">${where}. Read ${them} yourself before you trust what the answer says about ${them}.</p>
+		<p class="muted">${where}. The answer shows no code for ${uncovered === 1 ? 'it' : 'them'}.</p>
 		${button}
 		${binary}
 		${ui.coverageOpen ? uncoveredHtml(change, files, ui) : ''}
@@ -194,7 +197,7 @@ function commitsSection(q) {
 				? ` Authors: ${list(names.map(([name, n]) => `${esc(name)} (${n})`))}.`
 				: ''
 	return `<section class="check" id="check-commits">
-		<h3>${count(change.commits.length, 'commit', 'commits')} after <code>${short(change.base)}</code></h3>
+		<h3>The ${count(change.commits.length, 'commit', 'commits')} this answer covers</h3>
 		<p class="muted small">From git, not from the model.${by}</p>
 		<ol class="commits">${change.commits
 			.map(
@@ -205,9 +208,17 @@ function commitsSection(q) {
 	</section>`
 }
 
-function titleOf(q, { kind, item, n }) {
-	if (kind === 'element') return `Number ${item.number} in the diagram`
-	if (kind === 'decision') return 'Decision'
+// What a numbered part of a diagram is, as a node and as an edge.
+const PART = {
+	component: ['Box', 'Arrow'],
+	sequence: ['Participant', 'Message'],
+	'entity-relationship': ['Entity', 'Relation'],
+}
+
+function titleOf(q, { kind, item, n, diagram }) {
+	if (kind === 'element')
+		return `${PART[diagram.kind]?.[item.label === null ? 0 : 1] ?? 'Part'} ${item.number} of the diagram`
+	if (kind === 'decision') return `Decision ${n} of ${decisionsOf(q).length}`
 	if (kind === 'risk') return `Risk ${n} of ${q.answer.risks.length}`
 	return `Statement ${n} of ${q.answer.statements.length}`
 }
@@ -222,8 +233,8 @@ function quoteHtml(quote, j, chosen) {
 	return `<div class="q${chosen ? ' chosen' : ''}" id="panel-q${j}">${quoteBody(quote, where)}</div>`
 }
 
-// The panel when the reader opened a quote: the item it belongs to in one small line, its quotes in full as the main
-// thing, and one line that keeps the rest of the check in view.
+// The panel when the reader opened a quote: its quotes in full come first, then what the label means. The item's own
+// text is beside it in the thread, marked as chosen.
 export function quoteCardHtml(q, ui, items) {
 	const at = items.findIndex(({ key }) => key === ui.panel.key)
 	const shown = items[at]
@@ -236,17 +247,14 @@ export function quoteCardHtml(q, ui, items) {
 				<button class="quiet-button" data-act="step" data-by="1" data-key="next"${at === items.length - 1 ? ' disabled' : ''}>Next</button>
 				<button class="quiet-button" data-act="close" data-key="close">Close</button>
 			</div></div>
-		<p class="strip">${checkStrip(q)}</p>
-		<p class="card-text">${textOf(shown)}</p>
-		${means === null ? '' : `<p class="label-means">${label(means)}<span>${esc(LABELS[means]?.means ?? '')}</span></p>`}
-		${item.quotes.map((quote, j) => quoteHtml(quote, j, j === ui.panel.quote)).join('')}`
+		${item.quotes.map((quote, j) => quoteHtml(quote, j, j === ui.panel.quote)).join('')}
+		${means === null ? '' : `<p class="label-means">${label(means)}<span>${esc(LABELS[means]?.means ?? '')}</span></p>`}`
 }
 
 // The panel when the reader opened all quotes: every item that carries quotes, in the order of the answer.
 export function allQuotesHtml(q, items) {
 	return `<div class="panel-head"><h2>All quotes</h2>
 			<div class="panel-nav"><button class="quiet-button" data-act="close" data-key="close">Close</button></div></div>
-		<p class="strip">${checkStrip(q)}</p>
 		${items
 			.map(
 				(shown) => `<section class="all-item">

@@ -27,7 +27,9 @@ function dark() {
 }
 
 // Mermaid's base theme takes plain colours, so each token is read as the browser resolved it for the current theme.
-function config() {
+// actor is the size of a sequence diagram's participant boxes: wider when the column has room, taller when a name takes
+// more than one line.
+function config(actor) {
 	const css = getComputedStyle(document.documentElement)
 	const token = (name) => css.getPropertyValue(name).trim()
 	const text = token('--color-text')
@@ -79,20 +81,28 @@ function config() {
 		sequence: {
 			useMaxWidth: false,
 			mirrorActors: false,
-			width: 120,
-			actorMargin: 8,
+			width: actor.width,
+			actorMargin: ACTOR_MARGIN,
 			wrapPadding: 4,
 			boxMargin: 4,
-			height: 50,
+			height: actor.height,
 			diagramMarginX: 4,
 			diagramMarginY: 4,
 		},
-		er: { useMaxWidth: false, nodeSpacing: 24, rankSpacing: 30, entityPadding: 8, minEntityWidth: 60 },
+		er: { useMaxWidth: false, nodeSpacing: 24, rankSpacing: 36, entityPadding: 3, minEntityWidth: 60 },
 	}
 }
 
 // A drawing wider than its box shrinks until its smallest text is this many pixels, and scrolls sideways from there.
 const SMALLEST_TEXT = 14
+
+// A drawing is at most this much shorter than the window, so the caption above it and the head of the next part of the
+// answer fit on one screen with it.
+const ROOM_AROUND = 280
+
+function tallest() {
+	return innerHeight - ROOM_AROUND
+}
 
 function smallestText(svg) {
 	const sizes = [...svg.querySelectorAll('text, tspan, span, div, p')]
@@ -108,43 +118,61 @@ function fit(box, drawing) {
 	const svg = box.querySelector('svg')
 	if (!svg) {
 		frame.classList.remove('wide')
-		return
+		return false
 	}
 	drawing.smallest ??= smallestText(svg)
 	const natural = svg.viewBox.baseVal.width
 	const style = getComputedStyle(box)
 	const room = box.clientWidth - Number.parseFloat(style.paddingLeft) - Number.parseFloat(style.paddingRight)
-	// A drawing taller than the screen less the top bar and some room shrinks too, as far as the same floor allows.
-	const tall = (innerHeight - 160) / svg.viewBox.baseVal.height
+	// A drawing taller than tallest() shrinks too, as far as the same floor allows.
+	const tall = tallest() / svg.viewBox.baseVal.height
 	const scale = Math.min(1, Math.max(SMALLEST_TEXT / drawing.smallest, Math.min(room / natural, tall)))
 	svg.style.width = `${natural * scale}px`
-	frame.classList.toggle('wide', natural * scale > room + 1)
+	const wide = natural * scale > room + 1
+	frame.classList.toggle('wide', wide)
 	const atEnd = () => frame.classList.toggle('at-end', box.scrollLeft + box.clientWidth >= box.scrollWidth - 1)
 	box.addEventListener('scroll', atEnd)
 	atEnd()
+	return wide
 }
 
 // Mermaid wraps a sequence label by cutting long words, and it cuts through the entity codes ken writes for characters
 // such as "{" or ",", which then show as garbage. So the page breaks each label itself, only between words, into lines
-// of about as many characters as fit between the participants a message joins. It adds nothing but <br> between words
-// that ken's server already made safe.
-const CHARS_PER_GAP = 14
+// of about as many characters as fit between the participants a message joins. The participants spread across the
+// column, so a label uses the room there is. It adds nothing but <br> between words that ken's server already made safe.
+const CHAR_PX = 8.5
+const LINE_PX = 20
+const ACTOR_MARGIN = 8
+const ACTOR_WIDTH = { least: 120, most: 180 }
 
-function breakSequence(text) {
-	const lines = text.split('\n')
+function participantsOf(text) {
 	const order = new Map()
-	for (const line of lines) {
+	for (const line of text.split('\n')) {
 		const id = line.match(/^ {2}participant (n\d+) as /)?.[1]
 		if (id) order.set(id, order.size)
 	}
-	return lines
+	return order
+}
+
+// Six participants at 1440 pixels keep the narrowest boxes; two get wide boxes and long label lines.
+function actorWidth(text, room) {
+	const n = participantsOf(text).size
+	return Math.round(Math.min(ACTOR_WIDTH.most, Math.max(ACTOR_WIDTH.least, room / n - ACTOR_MARGIN)))
+}
+
+function breakSequence(text, room, width) {
+	const order = participantsOf(text)
+	// The room between the middles of two participants next to each other, when they spread across the column.
+	const gap = Math.max(width + ACTOR_MARGIN, (room - width) / Math.max(1, order.size - 1))
+	return text
+		.split('\n')
 		.map((line) => {
 			const actor = line.match(/^( {2}participant n\d+ as )(.*)$/)
-			if (actor) return actor[1] + inLines(actor[2], CHARS_PER_GAP)
+			if (actor) return actor[1] + inLines(actor[2], Math.floor((width - 16) / CHAR_PX))
 			const message = line.match(/^( {2}(n\d+)->>(n\d+): )(.*)$/)
 			if (!message) return line
 			const gaps = Math.max(1, Math.abs(order.get(message[2]) - order.get(message[3])))
-			return message[1] + inLines(message[4], gaps * CHARS_PER_GAP)
+			return message[1] + inLines(message[4], Math.floor((gaps * gap) / CHAR_PX))
 		})
 		.join('\n')
 }
@@ -177,33 +205,73 @@ async function draw(mermaid, text) {
 	}
 }
 
-function widthOf(svg) {
-	return Number(svg.match(/viewBox="[-\d.]+ [-\d.]+ ([\d.]+)/)?.[1] ?? 0)
+function sizeOf(svg) {
+	const [, width = 0, height = 0] = svg.match(/viewBox="[-\d.]+ [-\d.]+ ([\d.]+) ([\d.]+)/) ?? []
+	return { width: Number(width), height: Number(height) }
 }
 
-// ken writes every flowchart left to right. When that is wider than the box, top to bottom often fits; the narrower
-// of the two is kept, and the box scrolls sideways if it is still too wide.
-async function drawToFit(text, width) {
+// How far a drawing must shrink to fit the column and the height limit: 1 is not at all. Of two layouts the one that
+// shrinks less wins, and the shorter one when neither shrinks.
+function better(a, b, room) {
+	const shrink = (svg) => {
+		const { width, height } = sizeOf(svg)
+		return Math.min(1, room / width, tallest() / height)
+	}
+	const [sa, sb] = [shrink(a), shrink(b)]
+	if (Math.abs(sa - sb) > 0.01) return sa > sb ? a : b
+	return sizeOf(a).height <= sizeOf(b).height ? a : b
+}
+
+// ken writes a flowchart left to right and an entity diagram top to bottom. The page also draws the other way and
+// keeps the layout that fits the column and the screen better.
+async function drawToFit(text, room) {
 	const mermaid = await loadMermaid()
-	mermaid.initialize(config())
-	if (text.startsWith('sequenceDiagram')) return await draw(mermaid, breakSequence(text))
-	const across = await draw(mermaid, text)
-	if (!text.startsWith('flowchart LR') || widthOf(across) <= width) return across
-	const down = await draw(mermaid, text.replace('flowchart LR', 'flowchart TB'))
-	return widthOf(down) < widthOf(across) ? down : across
+	if (text.startsWith('sequenceDiagram')) {
+		const width = actorWidth(text, room)
+		const broken = breakSequence(text, room, width)
+		const lines = Math.max(
+			...broken.split('\n').map((line) => (line.startsWith('  participant') ? line.split('<br>').length : 1)),
+		)
+		mermaid.initialize(config({ width, height: 30 + lines * LINE_PX }))
+		return await draw(mermaid, broken)
+	}
+	mermaid.initialize(config({ width: ACTOR_WIDTH.least, height: 50 }))
+	const other = text.startsWith('flowchart LR')
+		? text.replace('flowchart LR', 'flowchart TB')
+		: text.replace('erDiagram', 'erDiagram\n  direction LR')
+	const first = await draw(mermaid, text)
+	return better(first, await draw(mermaid, other), room)
 }
 
 // Fills each drawing box on the page from the drawings made so far, and starts the ones that are missing; redraw runs
 // once one is ready. A drawing is { kind: 'drawing' }, { kind: 'drawn', svg } or { kind: 'failed' }, kept by theme, box
 // width and Mermaid text, which the server wrote into data-mermaid. A drawn one also keeps the size of its smallest text.
+// A message label in a sequence diagram sits where lifelines run, and Mermaid draws it with no background. Each line of
+// it gets a box in the colour of the card behind it, so no line runs through the text. The size of the text is known
+// only once it is on the page.
+function backLabels(svg) {
+	for (const text of svg?.querySelectorAll('text.messageText') ?? []) {
+		const { x, y, width, height } = text.getBBox()
+		const back = document.createElementNS('http://www.w3.org/2000/svg', 'rect')
+		for (const [name, value] of Object.entries({ x: x - 3, y, width: width + 6, height, class: 'label-back' })) {
+			back.setAttribute(name, String(value))
+		}
+		text.before(back)
+	}
+}
+
+// Returns the numbers of the diagrams whose drawing is too wide for its box.
 export function fillDrawings(root, redraw) {
+	const tooWide = []
 	for (const box of root.querySelectorAll('[data-mermaid]')) {
 		const text = box.dataset.mermaid
-		const width = Math.round(box.clientWidth / 10) * 10
-		const key = `${dark() ? 'dark' : 'light'} ${width} ${text}`
+		const style = getComputedStyle(box)
+		const padding = Number.parseFloat(style.paddingLeft) + Number.parseFloat(style.paddingRight)
+		const room = Math.round((box.clientWidth - padding) / 10) * 10
+		const key = `${dark() ? 'dark' : 'light'} ${room} ${innerHeight} ${text}`
 		if (!drawings.has(key)) {
 			drawings.set(key, { kind: 'drawing' })
-			void drawToFit(text, width)
+			void drawToFit(text, room)
 				.then(
 					(svg) => drawings.set(key, { kind: 'drawn', svg }),
 					() => drawings.set(key, { kind: 'failed' }),
@@ -215,6 +283,12 @@ export function fillDrawings(root, redraw) {
 			drawing.kind === 'drawn'
 				? drawing.svg
 				: `<p class="drawing-note">${drawing.kind === 'failed' ? NOT_DRAWN : DRAWING}</p>`
-		fit(box, drawing)
+		if (drawing.kind === 'drawn' && !drawing.backed) {
+			backLabels(box.querySelector('svg'))
+			drawing.svg = box.innerHTML
+			drawing.backed = true
+		}
+		if (fit(box, drawing)) tooWide.push(Number(box.dataset.diagram))
 	}
+	return tooWide
 }

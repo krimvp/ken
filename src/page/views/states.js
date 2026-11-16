@@ -27,10 +27,16 @@ export function emptyAfterHtml() {
 	</section>`
 }
 
+// The project record is ken's own word, so the first step that names it says what it is.
+const RECORD = 'the project record'
+const RECORD_SAID = 'the project record, where ken keeps what earlier answers found'
+
 export function stepsHtml(steps, live = false) {
+	const first = steps.findIndex((step) => step.kind === 'tool' && step.text.includes(RECORD))
 	return `<ol class="steps">${steps
 		.map((step, i) => {
-			if (step.kind === 'tool') return `<li class="tool">${prose(step.text)}</li>`
+			if (step.kind === 'tool')
+				return `<li class="tool">${prose(i === first ? step.text.replace(RECORD, RECORD_SAID) : step.text)}</li>`
 			if (step.kind === 'rejected') {
 				return `<li class="sent-back"><strong>The quote check sent answer ${step.attempt} back:</strong><ul>${step.problems.map((p) => `<li>${prose(readerProblem(p))}</li>`).join('')}</ul></li>`
 			}
@@ -66,7 +72,7 @@ export function workingPanelHtml() {
 }
 
 export function endedPanelHtml() {
-	return `<div class="panel-empty"><h2>Nothing to check</h2><p>This question has no answer, so there are no quotes to show. When an answer comes:</p>${HOW_KEN_CHECKS}</div>`
+	return `<div class="panel-empty"><h2>Nothing to check</h2><p>This question has no answer, so there are no quotes to show. When a question gets an answer:</p>${HOW_KEN_CHECKS}</div>`
 }
 
 const ORDINAL = ['first', 'second', 'third']
@@ -112,7 +118,7 @@ export function endedHtml(q) {
 			<p>The agent sent an answer three times. Each time a quote was not in its file at the commit it names, so ken sent the answer back. ken shows an answer only when it finds every quote.</p>
 			<ol class="tries">${triesHtml(tries)}</ol>
 			<p class="muted">A smaller question often works. Name one commit or one file.</p>
-			<p class="actions">${again}<button class="quiet-button" data-act="one-commit" data-key="one-commit">Ask about one commit</button></p>
+			<p class="actions">${again}<button class="quiet-button" data-act="one-commit" data-key="one-commit">Ask what the last commit did</button></p>
 		</div>`
 	}
 	if (q.outcome === 'error') {

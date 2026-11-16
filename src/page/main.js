@@ -34,6 +34,9 @@ const freshUi = () => ({
 	keyOpen: false,
 	coverageOpen: false,
 	summaryOpen: false,
+	noteOpen: false,
+	// The diagrams whose numbered list the page opened by itself, once, because the drawing did not fit.
+	partsShown: new Set(),
 	wide: wideQuery.matches,
 })
 
@@ -138,6 +141,8 @@ async function send(text) {
 	state.menuOpen = false
 	$('#question').value = ''
 	resizeBox()
+	// On a phone the keyboard would cover the answer as it arrives.
+	if (!state.ui.wide) $('#question').blur()
 	render()
 	$('#turn')?.scrollIntoView({ block: 'start' })
 	try {
@@ -216,6 +221,8 @@ function rowMeta(row) {
 	if (ended) return `${when(row.askedAt)} · ${ended}`
 	const parts = [count(row.statements, 'statement', 'statements')]
 	if (row.decisions > 0) parts.push(count(row.decisions, 'decision', 'decisions'))
+	if (row.calls > 0) parts.push(`${row.calls} ${row.calls === 1 ? 'needs' : 'need'} your call`)
+	if (row.risks > 0) parts.push(count(row.risks, 'risk', 'risks'))
 	if (row.hunks) parts.push(`${row.hunks.total - row.hunks.uncovered} of ${row.hunks.total} changed blocks quoted`)
 	return `${when(row.askedAt)} · ${parts.join(', ')}`
 }
@@ -244,15 +251,19 @@ function runLine(q, ui) {
 	const parts = []
 	if (q.live) parts.push('The agent is writing a closing note')
 	if (q.usage && q.steps.length > 0) parts.push(duration(q.usage.seconds))
-	if (back > 0) parts.push(`${count(back, 'answer', 'answers')} sent back`)
-	const toggle =
-		tools + back === 0
-			? ''
-			: `<button class="link" data-act="steps" data-key="steps" aria-expanded="${ui.stepsOpen}">${ui.stepsOpen ? 'Hide the steps' : `Show the ${count(tools, 'step', 'steps')}`}</button>`
+	if (back > 0 && q.answer) parts.push(`ken rejected ${count(back, 'earlier draft', 'earlier drafts')}`)
+	else if (back > 0) parts.push(`${count(back, 'answer', 'answers')} sent back`)
+	if (tools + back > 0) {
+		parts.push(
+			`<button class="link" data-act="steps" data-key="steps" aria-expanded="${ui.stepsOpen}">${ui.stepsOpen ? 'Hide the steps' : `Show the ${count(tools, 'step', 'steps')}`}</button>`,
+		)
+	}
 	const tokens = q.usage
 		? `<p class="small muted">${count(q.usage.inputTokens, 'token', 'tokens')} in, ${q.usage.outputTokens.toLocaleString('en-US')} out.</p>`
 		: ''
-	return `<p class="run-line">${[...parts, toggle].filter((part) => part !== '').join(' · ')}</p>${ui.stepsOpen ? stepsHtml(q.steps) + tokens : ''}`
+	// The dot goes with the part after it, so a wrapped line never ends on one.
+	const line = parts.map((part, i) => (i === 0 ? part : `<span class="nowrap">· ${part}</span>`)).join(' ')
+	return `<p class="run-line">${line}</p>${ui.stepsOpen ? stepsHtml(q.steps) + tokens : ''}`
 }
 
 function turnHtml(q, ui) {
@@ -270,7 +281,11 @@ function turnHtml(q, ui) {
 
 function movedHtml(q) {
 	if (!q.head || !q.headNow || q.head === q.headNow) return ''
-	return `<p class="moved">Asked when the project was at <code>${short(q.head)}</code>. It is at <code>${short(q.headNow)}</code> now, so the code may have changed since.</p>`
+	const again =
+		state.model?.kind === 'ok' && !state.running
+			? ' <button class="link" data-act="again" data-key="moved-again">Ask again</button>'
+			: ''
+	return `<p class="moved">Asked when the project was at <code>${short(q.head)}</code>. It is at <code>${short(q.headNow)}</code> now, so the code may have changed since.${again}</p>`
 }
 
 function threadHtml() {
@@ -305,7 +320,14 @@ function render() {
 	$('#menu').innerHTML = menuHtml()
 	const across = [...document.querySelectorAll('.drawing')].map((box) => box.scrollLeft)
 	$('#thread').innerHTML = threadHtml()
-	fillDrawings($('#thread'), schedule)
+	const tooWide = fillDrawings($('#thread'), schedule)
+	// A drawing that does not fit opens its numbered list once, so the parts cut off at the edge can be read in words.
+	const unseen = tooWide.filter((index) => !ui.partsShown.has(index))
+	for (const index of unseen) {
+		ui.partsShown.add(index)
+		ui.openParts.add(index)
+	}
+	if (unseen.length > 0) schedule()
 	for (const [i, box] of document.querySelectorAll('.drawing').entries()) box.scrollLeft = across[i] ?? 0
 	const canAsk = state.model?.kind === 'ok'
 	$('#ask').hidden = !canAsk
@@ -316,9 +338,7 @@ function render() {
 			: q
 				? ''
 				: emptyAfterHtml()
-	$('#question').placeholder = ui.wide
-		? 'What changed, why was it done that way, how does a part work now?'
-		: 'What changed, and why?'
+	$('#question').placeholder = ui.wide ? 'Ask what changed, why, or how a part works.' : 'Ask what changed, and why.'
 	panel.innerHTML = panelHtml()
 	panel.scrollTop = scroll
 	if (focused) document.querySelector(`[data-key="${CSS.escape(focused)}"]`)?.focus({ preventScroll: true })
@@ -440,6 +460,10 @@ const actions = {
 	close: closePanel,
 	summary() {
 		state.ui.summaryOpen = true
+		render()
+	},
+	note() {
+		state.ui.noteOpen = true
 		render()
 	},
 	steps() {

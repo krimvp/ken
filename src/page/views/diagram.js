@@ -7,18 +7,25 @@ export function elementKey(index, number) {
 	return `g${index}n${number}`
 }
 
-// The numbered list folds under the drawing, so the summary and the statements stay near the top. A box or an arrow
-// opens its quote all the same.
+// Only a sequence diagram numbers its messages in the order they happen. Elsewhere a number only names a part.
+const NUMBERS = {
+	sequence: 'Each number opens its quote.',
+	component: 'Each number names a part and opens its quote.',
+	'entity-relationship': 'Each number names a part and opens its quote.',
+}
+
+// The link to the numbered list sits above the drawing, so a tall drawing does not hide the way to its quotes. The list
+// itself folds under the drawing. A box or an arrow opens its quote all the same.
 export function diagramHtml(diagram, index, rows) {
 	const title = `diagram-${index}-title`
 	const open = rows.ui.openParts.has(index)
-	const toggle = `<button class="link small" data-act="parts" data-diagram="${index}" data-key="parts-${index}" aria-expanded="${open}">${open ? 'Hide the numbered list' : `Show the ${diagram.elements.length} numbered parts in words, with their quotes`}</button>`
+	const toggle = `<button class="link small" data-act="parts" data-diagram="${index}" data-key="parts-${index}" aria-expanded="${open}">${open ? 'Hide the list' : `List the ${diagram.elements.length} parts and their quotes`}</button>`
 	return `<section class="diagram" aria-labelledby="${title}">
-		<p class="caption">The agent's diagram. The arrows are not checked.</p>
+		<p class="caption">The agent's diagram. The arrows are not checked. ${NUMBERS[diagram.kind] ?? ''}</p>
 		<h3 class="diagram-title" id="${title}">${label(diagram.label)}${prose(diagram.title)}</h3>
-		<div class="drawing-frame"><div class="drawing" data-diagram="${index}" data-mermaid="${esc(diagram.mermaid)}" role="img" aria-label="Diagram: ${esc(diagram.title)}. The numbered list under it says the same in words."></div></div>
-		<p class="drawing-hint">The diagram is wider than the screen. Scroll it sideways to see the rest.</p>
 		<p class="parts-toggle">${toggle}</p>
+		<p class="drawing-hint">The diagram is wider than the screen. Scroll it sideways to see the rest.</p>
+		<div class="drawing-frame"><div class="drawing" data-diagram="${index}" data-mermaid="${esc(diagram.mermaid)}" role="img" aria-label="Diagram: ${esc(diagram.title)}. The numbered list says the same in words."></div></div>
 		${open ? `<ol class="elements">${diagram.elements.map((element) => elementHtml(element, diagram, index, rows)).join('')}</ol>` : ''}
 	</section>`
 }

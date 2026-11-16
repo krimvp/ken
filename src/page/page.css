@@ -232,6 +232,11 @@ html {
 	padding-top: var(--space-5);
 }
 
+/* On the first visit the question box, or the note that there is no model, follows the welcome with no gap. */
+.page.first-visit #thread {
+	flex: none;
+}
+
 .panel {
 	position: sticky;
 	top: var(--top);
@@ -479,7 +484,7 @@ html {
 	font-size: var(--text-note);
 }
 
-.drawing-frame.wide + .drawing-hint {
+.diagram:has(.drawing-frame.wide) .drawing-hint {
 	display: block;
 }
 
@@ -503,6 +508,34 @@ html {
 	cursor: pointer;
 }
 
+/* Mermaid writes its own styles under the drawing's id, so these start from #thread to win. A message label sits on a
+   box in the colour of the card (see backLabels), so no lifeline runs through its text. The three kinds share one look:
+   square boxes, 1 pixel borders, thin lines, and no grid inside a table. */
+#thread .drawing svg .label-back {
+	fill: var(--color-card);
+}
+
+#thread .drawing svg rect.actor {
+	rx: 0;
+	ry: 0;
+}
+
+#thread .drawing svg :is(rect.actor, .node rect, .node .outer-path path) {
+	stroke-width: 1px;
+}
+
+#thread .drawing svg .actor-line {
+	stroke-width: 1px;
+}
+
+#thread .drawing svg :is(.row-rect-odd, .row-rect-even) path {
+	stroke: none;
+}
+
+#thread .drawing svg .divider path {
+	stroke: var(--color-border);
+}
+
 .drawing-note {
 	color: var(--color-note);
 	text-align: left;
@@ -513,14 +546,30 @@ html {
 }
 
 .summary {
-	max-width: var(--measure);
 	margin-top: var(--space-1);
 	line-height: 1.6;
 	overflow-wrap: anywhere;
 }
 
 .parts-toggle {
+	margin-top: var(--space-1);
+}
+
+/* What needs the reader, counted under the summary. Each count links down to its group. */
+.needs {
 	margin-top: var(--space-2);
+	font-weight: 600;
+}
+
+.needs a {
+	color: var(--color-accent);
+	text-decoration-thickness: 1px;
+	text-underline-offset: 0.18em;
+}
+
+#decisions-head,
+#risks-head {
+	scroll-margin-top: calc(var(--top) + var(--space-4));
 }
 
 .strip {
@@ -560,6 +609,27 @@ a.strip {
 	font-size: var(--text-note);
 }
 
+.decisions .list-head {
+	margin-top: var(--space-5);
+}
+
+/* Risks are the agent's predictions, so they sit apart from the statements, behind a rule in the colour of a warning. */
+.risks {
+	margin-top: var(--space-5);
+	padding: 0 var(--space-4) var(--space-1);
+	border-left: 3px solid var(--color-warn-border);
+	background: var(--color-warn-bg);
+}
+
+.risks .list-head {
+	margin-top: 0;
+	padding-top: var(--space-3);
+}
+
+.risks .st:last-child {
+	border-bottom: 0;
+}
+
 .st {
 	display: grid;
 	grid-template-columns: 1.75rem minmax(0, 1fr);
@@ -583,8 +653,9 @@ a.strip {
 	overflow-wrap: anywhere;
 }
 
-/* Labels. A dashed outline and a hollow dot: the agent's own reading, not something written down at the time. */
-.label {
+/* Labels. A dashed outline and a hollow dot: the agent's own reading, not something written down at the time. A span,
+   because Mermaid names its own label groups "label" inside every drawing. */
+span.label {
 	display: inline-flex;
 	align-items: center;
 	gap: 0.4em;
@@ -599,7 +670,7 @@ a.strip {
 	vertical-align: 0.05em;
 }
 
-.label::before {
+span.label::before {
 	content: "";
 	width: 0.55em;
 	height: 0.55em;
@@ -783,10 +854,9 @@ a.strip {
 	font-size: var(--text-note);
 }
 
-/* Decisions, right after the summary: one line each, the question and the option taken. A line opens in place. */
+/* Decisions: the question and the option taken, in at most two lines each. A row opens in place. */
 .decisions ul {
-	margin-top: var(--space-1);
-	border-top: 1px solid var(--color-border);
+	margin-top: 0;
 }
 
 .decision {
@@ -802,7 +872,17 @@ a.strip {
 	border: 0;
 	background: none;
 	text-align: left;
-	white-space: nowrap;
+}
+
+.d-line {
+	display: -webkit-box;
+	flex: 1 1 0;
+	min-width: 0;
+	overflow: hidden;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 2;
+	line-clamp: 2;
+	line-height: 1.5;
 }
 
 .d-row::before {
@@ -818,19 +898,11 @@ a.strip {
 }
 
 .d-q {
-	flex: 0 1 auto;
-	min-width: 0;
-	overflow: hidden;
 	font-weight: 600;
-	text-overflow: ellipsis;
 }
 
 .d-chosen {
-	flex: 1 1 0;
-	min-width: 6rem;
-	overflow: hidden;
 	color: var(--color-note);
-	text-overflow: ellipsis;
 }
 
 .d-row:hover .d-q {
@@ -839,7 +911,6 @@ a.strip {
 }
 
 .your-call {
-	flex: none;
 	padding: 0 0.5em;
 	border: 1px solid var(--color-warn-border);
 	border-radius: var(--radius-sm);
@@ -855,6 +926,10 @@ a.strip {
 .d-call {
 	margin-bottom: var(--space-2);
 	font-weight: 600;
+}
+
+.d-undo {
+	margin-top: var(--space-2);
 }
 
 .facts {
@@ -965,6 +1040,10 @@ a.strip {
 
 .file {
 	border-bottom: 1px solid var(--color-border);
+}
+
+.file:last-child {
+	border-bottom: 0;
 }
 
 .file summary {
@@ -1109,11 +1188,9 @@ a.strip {
 	margin-top: var(--space-3);
 }
 
+/* A long line wraps, so its last character, often the \ that carries the command on, is never out of sight. */
 .notice pre.command {
 	margin-top: var(--space-2);
-	overflow-x: auto;
-	white-space: pre;
-	overflow-wrap: normal;
 }
 
 .settings div {
@@ -1343,19 +1420,26 @@ a.strip {
 	}
 
 	/* Two lines on a narrow screen: the question with its mark, then the option taken. */
-	.d-row {
+	.d-line {
+		display: flex;
 		flex-wrap: wrap;
 		gap: 0 var(--space-2);
 	}
 
+	.d-q,
+	.d-chosen {
+		overflow: hidden;
+		white-space: nowrap;
+		text-overflow: ellipsis;
+	}
+
 	.d-q {
 		flex: 1 1 0;
+		min-width: 0;
 	}
 
 	.d-chosen {
-		order: 1;
 		flex-basis: 100%;
-		padding-left: 1.05rem;
 	}
 
 	.d-card {
