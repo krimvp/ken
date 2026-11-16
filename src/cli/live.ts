@@ -79,14 +79,13 @@ function formatNow(now: NowBlock, paint: Paint): string {
 	return lines.join('\n')
 }
 
-function formatNote({ entry, recorded }: QuestionView, paint: Paint): string {
+function formatNote({ entry, recorded, noNote }: QuestionView, paint: Paint): string {
 	const about = entry.about ? aboutText(entry.about) : 'a change'
 	const tries = entry.steps.filter((step) => step.kind === 'rejected').length
 	const cost = entry.usage ? `${entry.usage.seconds} s, ${tokens(entry.usage)} tokens` : 'no cost counted'
 	const head = paint('bold', `Note ${at(entry.askedAt)} on ${about}`)
 	const checked = tries === 0 ? 'its quotes passed first time' : `ken sent ${tries} back before one passed`
-	if (entry.outcome !== 'answered')
-		return `${head}\n${paint('dim', 'ken could not write a checked note on this change.')}`
+	if (entry.outcome !== 'answered') return `${head}\n${paint('dim', noNote ?? '')}`
 	const answer =
 		entry.about?.kind === 'uncommitted'
 			? { ...entry.answer, change: entry.answer.change && { ...entry.answer.change, commits: [] } }

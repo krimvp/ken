@@ -149,7 +149,7 @@ export function liveViewHtml(live, ui, unfolded, canAsk, problem, { seen, hideAs
 		if (unfolded.has(view.entry.id)) {
 			return `<li class="live-item">${noteHtml(view, `n${i + 1}`, ui, canAsk, tags)}<button class="link small ln-fold" data-act="note-unfold" data-id="${id}" data-key="unfold-${id}">Fold it</button></li>`
 		}
-		const gist = view.entry.outcome === 'answered' ? prose(view.entry.answer.summary) : 'No checked note.'
+		const gist = view.entry.outcome === 'answered' ? prose(view.entry.answer.summary) : 'No note.'
 		return `<li class="live-item"><button class="ln-folded" data-act="note-unfold" data-id="${id}" data-key="unfold-${id}" aria-expanded="false"><span class="ln-line">${noteHeadHtml(view.entry, tags)} <span class="ln-gist">${gist}</span></span></button></li>`
 	})
 	const look = liveLook(live.status)

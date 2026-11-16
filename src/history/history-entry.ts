@@ -87,3 +87,24 @@ export function entryFrom(
 	}
 	return { ...asked, steps, usage, ...ending }
 }
+
+// Why a live note has no answer, in one sentence for the reader, from what the entry ended in. null when it has one.
+export function whyNoNote(entry: HistoryEntry): string | null {
+	const none = 'so there is no note for this change.'
+	switch (entry.outcome) {
+		case 'answered':
+			return null
+		case 'rejected':
+			return `ken's model wrote a note, but ken could not find one of its quotes, ${none}`
+		case 'no-answer':
+			return `ken's model stopped without sending a note, ${none}`
+		case 'out-of-turns':
+			return `ken's model ran out of turns before it sent a note, ${none}`
+		case 'stopped':
+			return `The note was stopped before it ended, ${none}`
+		case 'error':
+			return `ken's model did not answer, ${none} What came back: ${entry.error}`
+		default:
+			return entry satisfies never
+	}
+}

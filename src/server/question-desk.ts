@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import type { Answer, Chat, ChatEvent } from '../agent/index.ts'
 import { withDrawings } from '../diagram/index.ts'
 import { type LensFacts, onDay, openItems, personLens, rangeLens, topicQuestion } from '../follow-up/index.ts'
-import { entryFrom, type History, type HistoryEntry } from '../history/index.ts'
+import { entryFrom, type History, type HistoryEntry, whyNoNote } from '../history/index.ts'
 import type { About } from '../live/index.ts'
 import { areaQuestion, catchUpQuestion, deeperQuestion, type TopicState, type UnderstandingMap } from '../map/index.ts'
 import { type EntryId, type RecordEntry, type RecordRead, type RecordStore, sameName } from '../record/index.ts'
@@ -28,8 +28,14 @@ export type QuestionRow = {
 // An entry from the history, with the project record entries its answer stands on (see entriesOf). Its diagrams carry
 // their drawings. head is the project's HEAD now, which the page compares with the entry's own. topics holds the state
 // of each topic the answer names for this reader now, from the understanding map; the page folds every entry of a
-// topic whose state is "unchanged" into one line.
-export type QuestionView = { entry: HistoryEntry; recorded: RecordEntry[]; head: string | null; topics: TopicState[] }
+// topic whose state is "unchanged" into one line. noNote says why a live note has no answer, and is null otherwise.
+export type QuestionView = {
+	entry: HistoryEntry
+	recorded: RecordEntry[]
+	head: string | null
+	topics: TopicState[]
+	noNote: string | null
+}
 
 // What live mode's notes cost: how many there are and the tokens they took.
 export type Spent = { notes: number; inputTokens: number; outputTokens: number }
@@ -159,10 +165,12 @@ export function questionDesk(history: History, record: RecordStore, repo: Reposi
 
 	async function viewOf(entry: HistoryEntry): Promise<QuestionView> {
 		const head = await headNow()
-		if (entry.outcome !== 'answered') return { entry, recorded: [], head, topics: [] }
+		if (entry.outcome !== 'answered') {
+			return { entry, recorded: [], head, topics: [], noNote: entry.about ? whyNoNote(entry) : null }
+		}
 		const drawn = { ...entry, answer: withDrawings(entry.answer) }
 		const recorded = entriesOf(entry.answer, entry.recorded, await record.read())
-		return { entry: drawn, recorded, head, topics: await topicsOf(entry.answer.topics) }
+		return { entry: drawn, recorded, head, topics: await topicsOf(entry.answer.topics), noNote: null }
 	}
 
 	// In the order the answer names them. A topic the record no longer has is left out.

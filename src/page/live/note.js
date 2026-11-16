@@ -1,5 +1,5 @@
 // One live note. At a glance it shows what it is about, the agent's lead, its risks and its decisions; its statements
-// and what it cost open on request. Every older note folds to one line. The agent wrote the words; ken checked only
+// and what it cost open on request. Every older note folds to one line. The agent wrote the words; ken found only
 // that each quote is in its file, at the commit or in its own snapshot of uncommitted work.
 import { decisionHtml } from '../views/answer.js'
 import { copiesOf, count, duration, esc, label, prose, quoteRows, short, when, withCost } from '../views/format.js'
@@ -61,7 +61,7 @@ export function noteHtml(view, key, ui, canAsk, tags) {
 	const { entry, recorded } = view
 	if (entry.outcome !== 'answered') {
 		return `<article class="live-note failed"><p class="ln-head">${noteHeadHtml(entry, tags)}</p>
-			<p class="muted small">ken could not write a checked note on this change. It shows nothing it did not check.</p></article>`
+			<p class="muted small">${prose(view.noNote ?? '')}</p></article>`
 	}
 	const a = entry.answer
 	const rows = { ui, commits: false, copies: copiesOf(entry) }
@@ -85,7 +85,7 @@ export function noteHtml(view, key, ui, canAsk, tags) {
 		: ''
 	return `<article class="live-note">
 		<p class="ln-head">${noteHeadHtml(entry, tags)}</p>
-		<p class="small muted">The note from ken's model. ken checked its quotes.</p>
+		<p class="small muted">The note from ken's model. Not checked. ken found its quotes.</p>
 		<p class="summary">${prose(a.summary)}</p>
 		${risks.length > 0 ? `<section class="risks ln-risks"><h3 class="ln-sub">${risks.length === 1 ? 'A risk to watch' : `${risks.length} risks to watch`}</h3><ol class="ln-list">${claimItems(risks, `${key}r`, rows)}</ol></section>` : ''}
 		${decisions.length > 0 ? `<ul class="ln-decisions">${decisions.map((d, i) => decisionHtml(d, `${key}d${i}`, rows, all)).join('')}</ul>` : ''}
