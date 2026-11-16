@@ -57,7 +57,7 @@ export function riskPassQuestion(held: Held, later: Later[]): string {
 	return [
 		`ken checked your answer, and the reader has not seen it yet. Now check it against the code at the head commit ${head}, with the same tools. Take these steps in order:`,
 		'1. Each risk below: read the place it points at. That is the code outside the change that uses what changed, or, for what the change left undone, the later commits below. Then rewrite the risk with a quote of that place, withdraw it because the code shows it does not happen, or keep it as it is. ken marks a risk "Checked in the code" only when it quotes, at the head commit, a line the change did not touch. A dependency\'s code is not in git, so ken cannot read it.',
-		'2. Each pair of decisions that touch the same file, function, record, id or signal: what happens when both apply?',
+		'2. Each pair of decisions that touch the same file, function, record, id or signal, such as one that writes or keeps a thing and one that deletes or skips it: what happens when both apply?',
 		'3. Each early return, refusal, delete or catch in the changed lines: what no longer happens after it, and who relied on it?',
 		'4. Each reason your answer quotes from a commit message or a comment: does the code do what it says? Where it does not, that is a risk.',
 		'5. Each name below that no quote follows: read where it is used. Does the change still fit there? And each fix: what does it leave undone?',
@@ -82,6 +82,7 @@ export function riskPassQuestion(held: Held, later: Later[]): string {
 					),
 				]),
 		'',
+		'Before you call revise_answer, write what you found in steps 2 and 3, one short line each: the two decisions or the line, and what happens. These lines are not part of the answer.',
 		'Then call revise_answer once:',
 		'- risks: each new risk, and each risk above that you rewrite, with replaces set to its number. A risk is one or two sentences: what can happen, to whom, and when. Quote the place it rests on.',
 		'- withdraw: each risk above that the code shows does not happen, with what the code shows instead.',
