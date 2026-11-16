@@ -264,6 +264,8 @@ function backLabels(svg) {
 export function fillDrawings(root, redraw) {
 	const tooWide = []
 	for (const box of root.querySelectorAll('[data-mermaid]')) {
+		// A drawing that gave its place to its list has no width to draw at.
+		if (box.closest('[hidden]')) continue
 		const text = box.dataset.mermaid
 		const style = getComputedStyle(box)
 		const padding = Number.parseFloat(style.paddingLeft) + Number.parseFloat(style.paddingRight)

@@ -1,6 +1,7 @@
-// The Live view. One status line with its controls and one quiet line for the pace and the spend come first, so the
-// newest note leads. Under it, what ken sees now, read from git and the saved session with no model, then every older
-// note folded to one line, so twenty notes stay calm.
+// The Live view. One status line with its controls and one quiet line for the spend come first, so the newest note
+// leads; how ken paces notes opens from that line. On a phone one line of what ken sees now comes before the note. Under
+// the note, what ken sees now in full, read from git and the saved session with no model, then every older note folded
+// to one line, so twenty notes stay calm.
 import { at, esc, prose, short, when, withCost } from '../views/format.js'
 import { noteHeadHtml, noteHtml } from './note.js'
 
@@ -43,10 +44,26 @@ function controlsHtml(live) {
 	return `${toggle}${withCost(now)}<button class="link small" data-act="live-off" data-key="live-off">Turn off</button>`
 }
 
-function paceHtml({ pace, spent, since }) {
+// While paused ken writes no note, so the line leaves out how it paces them.
+function paceHtml({ status, pace, spent, since }, open) {
 	const tokens = (spent.inputTokens + spent.outputTokens).toLocaleString('en-US')
 	const notes = `${spent.notes} ${spent.notes === 1 ? 'note' : 'notes'}`
-	return `<p class="live-pace">ken writes a note after each commit, and when the files go quiet for ${pace.quietMs / 1000} seconds with at least ${pace.minLines} lines changed. At most 1 a minute and ${pace.perHour} an hour. Each note is a model run.${since ? ` Since you turned Live on ${at(since)}: ${notes}, ${tokens} tokens.` : ''}</p>`
+	const spend = since ? `Since you turned Live on ${at(since)}: ${notes}, ${tokens} tokens. ` : ''
+	if (status === 'paused') return spend ? `<p class="live-pace">${spend}</p>` : ''
+	const toggle = `<button class="link small" data-act="pace" data-key="pace" aria-expanded="${open}">${open ? 'Hide how ken paces notes' : 'How ken paces notes'}</button>`
+	const how = open
+		? `<p class="live-pace">ken writes a note after each commit, and when the files go quiet for ${pace.quietMs / 1000} seconds with at least ${pace.minLines} lines changed. At most 1 a minute and ${pace.perHour} an hour. Each note is a model run.</p>`
+		: ''
+	return `<p class="live-pace">${spend}${toggle}</p>${how}`
+}
+
+// The Now block in one line, for a phone, where the full block comes after the newest note.
+function nowLineHtml(now) {
+	const total = now.files.length + now.moreFiles
+	const branch = now.branch ? `on <code>${esc(now.branch)}</code>` : 'HEAD is not on a branch'
+	const files = total === 0 ? 'nothing uncommitted' : `${total} ${total === 1 ? 'file' : 'files'} uncommitted`
+	const more = total === 0 ? 'See the last commits' : 'See the files'
+	return `<p class="now-line narrow-only">Now: ${branch}, ${files}. <a href="#now-head">${more}</a></p>`
 }
 
 function fileHtml(file) {
@@ -142,8 +159,9 @@ export function liveViewHtml(live, ui, unfolded, canAsk, problem, { seen, hideAs
 			<p class="live-status is-${look}" role="status"><span class="live-mark" aria-hidden="true"></span><span>${statusText(live)}</span></p>
 			<div class="live-controls">${controlsHtml(live)}</div>
 		</div>
-		${live.status === 'off' ? '' : paceHtml(live)}
+		${live.status === 'off' ? '' : paceHtml(live, ui.paceOpen)}
 		${live.said ? `<p class="map-said" role="status">${esc(live.said)}</p>` : ''}
+		${nowLineHtml(live.now)}
 		${live.notes.length > 0 ? `<h2 class="ln-count">Notes (${live.notes.length}), newest first</h2>` : ''}
 		${newest ? noteHtml(newest, 'n0', ui, canAsk, tagsOf(newest)) : '<p class="t-empty">No notes yet. ken writes the first when a commit lands or the work goes quiet.</p>'}
 		${nowHtml(live.now, hideAsk)}

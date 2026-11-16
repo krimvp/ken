@@ -329,8 +329,12 @@ html {
 	text-align: left;
 }
 
+/* A long question shows its first two lines in the menu. */
 .row-q {
-	display: block;
+	display: -webkit-box;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 2;
+	overflow: hidden;
 	font-weight: 600;
 	line-height: 1.4;
 	overflow-wrap: anywhere;
@@ -443,6 +447,10 @@ html {
 
 /* A diagram leads a high-level answer. The drawing shrinks to the column only as far as its text stays readable (see
    draw-diagrams.js), and its box scrolls sideways past that. Then the frame fades the cut edge and a line says so. */
+.diagram {
+	margin-top: var(--space-5);
+}
+
 .diagram + .diagram {
 	margin-top: var(--space-6);
 }
@@ -636,6 +644,10 @@ a.strip {
 
 .elements .st {
 	padding: var(--space-3) 0;
+}
+
+.elements .st.folded {
+	padding: var(--space-2) 0;
 }
 
 .st-n {
@@ -1939,6 +1951,11 @@ span.label-from-the-session {
 	color: var(--color-note);
 	font-size: var(--text-sm);
 	line-height: 1.5;
+}
+
+.now-line {
+	margin-top: var(--space-3);
+	font-size: var(--text-note);
 }
 
 .ln-count {

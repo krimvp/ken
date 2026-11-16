@@ -33,15 +33,19 @@ const freshUi = () => ({
 	openQuotes: new Set(),
 	openDecisions: new Set(),
 	openParts: new Set(),
+	openElements: new Set(),
 	openFiles: new Set(),
 	stepsOpen: false,
 	keyOpen: false,
 	coverageOpen: false,
 	summaryOpen: false,
+	addedOpen: false,
+	paceOpen: false,
 	noteOpen: false,
 	openNotes: new Set(),
-	// The diagrams whose numbered list the page opened by itself, once, because the drawing did not fit.
-	partsShown: new Set(),
+	// The diagrams whose drawing does not fit the column, and those of them the reader asked to see anyway.
+	tooWide: new Set(),
+	drawingsShown: new Set(),
 	// The topics the reader knows whose entries they asked to see anyway, and the last map button they pressed.
 	unfolded: new Set(),
 	mapSaid: null,
@@ -321,9 +325,11 @@ function rowHtml(row) {
 		<span class="row-q">${esc(firstLine(row.question))}</span><span class="row-meta">${current ? 'Open now · ' : ''}${rowMeta(row)}</span></button>`
 }
 
-// A lens's question is a line the reader asked and the list ken wrote under it.
+// A lens's question is a line the reader asked and the list ken wrote under it. A question on a live note saved before
+// ken gave it a title line holds the whole prompt in its first line, so its title is that line's first sentence.
 function firstLine(question) {
-	return question.split('\n')[0]
+	const first = question.split('\n')[0]
+	return first.startsWith("Go deeper on ken's live note") ? first.split(/(?<=\.) /)[0] : first
 }
 
 // The header: the views, and the reader's questions in a menu. On a phone the views go into the menu too, beside the
@@ -390,21 +396,23 @@ function turnHtml(q, ui) {
 	else body = runLine(q, ui) + endedHtml(q)
 	return `<article class="turn" id="turn">
 		<p class="asked">You asked ${when(q.askedAt)}</p>
-		${questionHtml(q.question)}
+		${questionHtml(q.question, ui)}
 		${movedHtml(q)}
 		${body}
 	</article>`
 }
 
 // A lens's question is its first line and the list ken wrote under it, each item a line that starts with "- ". Any
-// other line is for the agent alone, such as where ken keeps a snapshot.
-function questionHtml(question) {
-	const [first, ...listed] = question.split('\n')
-	const items = listed
-		.filter((line) => line.startsWith('- '))
-		.map((line) => `<li>${prose(line.slice(2))}</li>`)
-		.join('')
-	return `<h2 class="question">${prose(first)}</h2>${items ? `<ul class="asked-list">${items}</ul>` : ''}`
+// other line is for the agent alone, such as where ken keeps a snapshot. The list folds to one line.
+function questionHtml(question, ui) {
+	const [, ...listed] = question.split('\n')
+	const first = firstLine(question)
+	const items = listed.filter((line) => line.startsWith('- ')).map((line) => `<li>${prose(line.slice(2))}</li>`)
+	const fold =
+		items.length === 0
+			? ''
+			: `<p class="asked-fold"><button class="link small" data-act="added" data-key="added" aria-expanded="${ui.addedOpen}">${ui.addedOpen ? 'Hide what ken added' : `What ken added to your question, from git (${count(items.length, 'line', 'lines')})`}</button></p>${ui.addedOpen ? `<ul class="asked-list">${items.join('')}</ul>` : ''}`
+	return `<h2 class="question">${prose(first)}</h2>${fold}`
 }
 
 // One notice for an answer older than HEAD. When a topic it names changed since the reader understood it, the notice
@@ -472,14 +480,10 @@ function render() {
 		const box = document.querySelector(`.decide-form[data-id="${CSS.escape(id)}"] textarea`)
 		if (box) box.value = note
 	}
-	const tooWide = fillDrawings($('#thread'), schedule)
-	// A drawing that does not fit opens its numbered list once, so the parts cut off at the edge can be read in words.
-	const unseen = tooWide.filter((index) => !ui.partsShown.has(index))
-	for (const index of unseen) {
-		ui.partsShown.add(index)
-		ui.openParts.add(index)
-	}
-	if (unseen.length > 0) schedule()
+	// A drawing that does not fit gives its place to its numbered list, so no part is cut off at the edge.
+	const tooWide = fillDrawings($('#thread'), schedule).filter((index) => !ui.tooWide.has(index))
+	for (const index of tooWide) ui.tooWide.add(index)
+	if (tooWide.length > 0) schedule()
 	for (const [i, box] of document.querySelectorAll('.drawing').entries()) box.scrollLeft = across[i] ?? 0
 	const canAsk = state.model?.kind === 'ok'
 	$('#ask').hidden = !canAsk || state.view !== 'question'
@@ -740,6 +744,10 @@ const actions = {
 	'live-pause': () => liveAction('pause'),
 	'live-resume': () => liveAction('resume'),
 	'live-note-now': () => liveAction('note-now'),
+	pace() {
+		state.liveUi.paceOpen = !state.liveUi.paceOpen
+		render()
+	},
 	'note-unfold'(el) {
 		toggle(state.unfolded, el.dataset.id)
 		render()
@@ -813,7 +821,10 @@ const actions = {
 		const keys = itemsOf(state.open).flatMap(({ key, item }) => item.quotes.map((_, j) => `${key}-q${j}`))
 		const allOpen = keys.every((key) => ui.openQuotes.has(key))
 		ui.openQuotes = allOpen ? new Set() : new Set(keys)
-		if (!allOpen) for (const key of keys.filter((each) => each.startsWith('d'))) ui.openDecisions.add(key.split('-')[0])
+		if (!allOpen) {
+			for (const key of keys.filter((each) => each.startsWith('d'))) ui.openDecisions.add(key.split('-')[0])
+			for (const index of state.open.answer.diagrams.keys()) ui.openParts.add(index)
+		}
 		render()
 	},
 	decision(el) {
@@ -824,6 +835,14 @@ const actions = {
 		toggle(state.ui.openParts, Number(el.dataset.diagram))
 		render()
 	},
+	drawing(el) {
+		state.ui.drawingsShown.add(Number(el.dataset.diagram))
+		render()
+	},
+	element(el) {
+		state.ui.openElements.add(el.dataset.item)
+		render()
+	},
 	step(el) {
 		const items = itemsOf(state.open)
 		const at = items.findIndex(({ key }) => key === state.ui.panel.key) + Number(el.dataset.by)
@@ -832,6 +851,10 @@ const actions = {
 	close: closePanel,
 	summary() {
 		state.ui.summaryOpen = true
+		render()
+	},
+	added() {
+		state.ui.addedOpen = !state.ui.addedOpen
 		render()
 	},
 	note() {

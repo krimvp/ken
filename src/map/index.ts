@@ -4,6 +4,6 @@
 
 export { type MapRead, openMap, type UnderstandingMap } from './file-map.ts'
 export { type MapSignal, SIGNALS } from './learn.ts'
-export { type Asked, areaQuestion, catchUpQuestion, deeperQuestion } from './lens.ts'
+export { type Asked, areaQuestion, catchUpQuestion, type DayWords, deeperQuestion, LIST_SAID } from './lens.ts'
 export { DEPTHS, type Depth, EVIDENCE, type Evidence, type MapEntry } from './map-entry.ts'
 export { LONG_AGO_DAYS, linesText, type QuotedLines, stateLine, type TopicState } from './topic-state.ts'

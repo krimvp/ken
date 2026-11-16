@@ -171,7 +171,7 @@ test('ken catch-up lists the topics whose code changed since the reader understo
 	})
 
 	assert.equal(code, 2, 'no model, so nothing explains the list')
-	assert.match(stdout, /^- totals: .*changed since: app\.py line 2$/m)
+	assert.match(stdout, /^- You understood totals .*changed since: app\.py line 2\.$/m)
 	assert.doesNotMatch(stdout, /naming/, 'a topic whose code did not change is not listed')
 	assert.match(stderr, /KEN_MODEL/)
 })
@@ -219,7 +219,7 @@ test('ken follow-up prints what is open with no model: the decision that needs t
 	})
 
 	assert.equal(code, 2, 'no model, so nothing explains the list')
-	assert.match(stdout, /^- A decision needs my call: What does an empty cart cost\? Chosen: Zero/m)
+	assert.match(stdout, /^- A decision needs your call: What does an empty cart cost\? What was chosen: "Zero/m)
 	assert.match(
 		stdout,
 		new RegExp(`^- totals changed since .*: app\\.py line 2\\. .*${hash} by Bo Helper \\(a collaborator\\)`, 'm'),

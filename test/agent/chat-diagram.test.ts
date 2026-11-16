@@ -98,7 +98,7 @@ test('a diagram arrow with a false quote rejects the answer and names the arrow;
 	const second = await ask([{ tool: 'ken__read_record', args: { id: work?.id } }, { text: 'Done.' }])
 	const read = toolResults(second.requests[1])[0] ?? ''
 	assert.ok(
-		read.includes('3. app calls store') && read.includes("\tsave('done')"),
+		read.includes('3. From app to store: calls') && read.includes("\tsave('done')"),
 		`read_record shows the diagram: ${read}`,
 	)
 })

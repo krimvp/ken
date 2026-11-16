@@ -4,7 +4,8 @@ import type { Diagram } from './diagram.ts'
 // label is null for a box, a participant or an entity: it only says where the thing is defined.
 export type DiagramElement = { number: number; text: string; label: Label | null; quotes: VerifiedGitQuote[] }
 
-// Every element of a diagram in number order, as one line of text each, for the list under the drawing.
+// Every element of a diagram in number order, as one line of text each, for the list under the drawing. An arrow, a
+// message or a relation reads "From A to B: what it says", so the names never run into the words between them.
 export function diagramElements(diagram: Diagram): DiagramElement[] {
 	const node = (each: { number: number; quotes: VerifiedGitQuote[] }, text: string) => ({
 		number: each.number,
@@ -22,12 +23,12 @@ export function diagramElements(diagram: Diagram): DiagramElement[] {
 		case 'component':
 			return [
 				...diagram.boxes.map((box) => node(box, box.group === null ? box.name : `${box.name}, in ${box.group}`)),
-				...diagram.arrows.map((arrow) => edge(arrow, `${arrow.from} ${arrow.text} ${arrow.to}`)),
+				...diagram.arrows.map((arrow) => edge(arrow, `From ${arrow.from} to ${arrow.to}: ${arrow.text}`)),
 			]
 		case 'sequence':
 			return [
 				...diagram.participants.map((participant) => node(participant, participant.name)),
-				...diagram.messages.map((message) => edge(message, `${message.from} to ${message.to}: ${message.text}`)),
+				...diagram.messages.map((message) => edge(message, `From ${message.from} to ${message.to}: ${message.text}`)),
 			]
 		case 'entity-relationship':
 			return [
@@ -38,7 +39,7 @@ export function diagramElements(diagram: Diagram): DiagramElement[] {
 				...diagram.relations.map((relation) =>
 					edge(
 						relation,
-						`${relation.from} ${relation.text} ${relation.to}, ${relation.cardinality.replaceAll('-', ' ')}`,
+						`From ${relation.from} to ${relation.to}: ${relation.text}, ${relation.cardinality.replaceAll('-', ' ')}`,
 					),
 				),
 			]
