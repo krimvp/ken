@@ -10,7 +10,7 @@ type Said = {
 }
 
 const SENTENCES: Record<string, (args: Said) => string> = {
-	resolve_ref: (args) => `Looked up which commit ${code(args.text('ref'))} is`,
+	resolve_ref: (args) => `Found ${commitNamed(args.text('ref'))}`,
 	read_file: (args) => `Read ${code(args.text('path'))}${lines(args)}${at(args)}`,
 	list_files: (args) => `Listed the files${under(args)}${at(args)}`,
 	search: (args) => `Searched for ${code(args.text('pattern'))}${under(args)}${at(args)}`,
@@ -60,6 +60,12 @@ const MAX_SHOWN = 80
 function code(value: string | undefined): string {
 	const text = (value ?? '?').replaceAll(/\s+/g, ' ').replaceAll('`', "'")
 	return `\`${text.length > MAX_SHOWN ? `${text.slice(0, MAX_SHOWN - 3)}...` : text}\``
+}
+
+// "b5a9226^1" and "b5a9226~1" are the commit before b5a9226.
+function commitNamed(value: string | undefined): string {
+	const before = value?.match(/^(.+?)(?:\^1?|~1?)$/)?.[1]
+	return before === undefined ? `which commit ${code(ref(value))} is` : `the commit before ${code(ref(before))}`
 }
 
 // A full hash says nothing to a reader that its first seven characters do not.
