@@ -1,4 +1,5 @@
 import { createSession, type RunResult } from 'aigent'
+import type { Tool } from 'aigent/plugin'
 import { fileRecordStore } from '../record/index.ts'
 import { findRoot, gitRepository } from '../repo/index.ts'
 import { type AnswerRound, answerTool, MAX_REJECTIONS } from './answer/answer-tool.ts'
@@ -20,6 +21,9 @@ export type Chat = {
 const PLUGIN = 'ken'
 // A model that calls one tool per turn needs about twenty turns to read a pull request of a dozen files.
 const MAX_TURNS = 40
+// Room for the answer, three rejected tries and the closing note. A model that ran out of turns while reading sent
+// nothing, so it is told to answer with what it has.
+const TURNS_LEFT_NOTICE = 6
 // Above the diff tool's own limit, so a whole diff reaches the model uncut.
 const MAX_TOOL_RESULT_CHARS = 64_000
 
@@ -34,6 +38,18 @@ export async function startChat(options: {
 	const repo = gitRepository(found.root)
 	const store = fileRecordStore(found.root, repo)
 	let round: AnswerRound = { rejections: 0, answer: null, emit: () => {} }
+	let turnsEnded = 0
+	const withTurnsLeft = (tool: Tool): Tool => ({
+		...tool,
+		async execute(args, ctx) {
+			const result = await tool.execute(args, ctx)
+			// This call's own turn has not ended yet, so it is not left.
+			const left = MAX_TURNS - turnsEnded - 1
+			if (left > TURNS_LEFT_NOTICE || round.answer) return result
+			const notice = `${left} ${left === 1 ? 'turn' : 'turns'} left for this question. Send the answer now with what you have read. In your closing note, say what you did not get to read.`
+			return { ...result, content: [...result.content, { type: 'text', text: notice }] }
+		},
+	})
 	const { model, baseUrl, apiKeyEnv } = options.model
 	const session = await createSession({
 		model: { kind: 'openai-compatible', baseUrl, id: model, apiKeyEnv },
@@ -46,7 +62,7 @@ export async function startChat(options: {
 					diffTool(repo),
 					recordTool(store, repo),
 					answerTool(repo, store, () => round),
-				],
+				].map(withTurnsLeft),
 			},
 		],
 		enabled: [PLUGIN],
@@ -60,6 +76,7 @@ export async function startChat(options: {
 		const events = eventQueue()
 		const current: AnswerRound = { rejections: 0, answer: null, emit: events.push }
 		round = current
+		turnsEnded = 0
 		const stop = new AbortController()
 		const tokens = { input: 0, output: 0 }
 		const unsubscribe = session.subscribe((event) => {
@@ -71,6 +88,7 @@ export async function startChat(options: {
 			// The answer tool has told the model it is out of attempts. Stopping here keeps a model that ignores that
 			// from spending more turns.
 			if (event.type === 'tool_end' && current.rejections >= MAX_REJECTIONS) stop.abort()
+			if (event.type === 'turn_end') turnsEnded += 1
 			if (event.type === 'record' && event.record.kind === 'usage') {
 				tokens.input += event.record.input + event.record.cacheRead + event.record.cacheWrite
 				tokens.output += event.record.output
