@@ -694,7 +694,6 @@ span.label-recorded {
 }
 
 .st-text .label,
-.d-line .label,
 .diagram-title .label,
 .list-head h3 .label {
 	margin-right: var(--space-2);
