@@ -3,12 +3,14 @@
 // passes checkEntry, and the store only grows. Nothing here talks to a model.
 export type { Label } from '../checks/index.ts'
 export type { EntryDraft } from './check-entry.ts'
+export { decisionWork } from './decision-work.ts'
 export { describeEntry, entryLine } from './describe-entry.ts'
 export type {
 	Decision,
 	Entry,
 	EntryId,
 	Kind,
+	Logged,
 	Note,
 	RecordEntry,
 	Statement,

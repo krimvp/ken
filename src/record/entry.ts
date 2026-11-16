@@ -3,7 +3,7 @@
 import { createHash } from 'node:crypto'
 import type { Label, VerifiedQuote } from '../checks/index.ts'
 import type { Diagram } from '../diagram/index.ts'
-import type { Range } from '../repo/index.ts'
+import type { CommitHash, Range } from '../repo/index.ts'
 
 // A short hash of the entry's content, so the same entry written twice has the same id.
 export type EntryId = string & { readonly __brand: 'EntryId' }
@@ -33,10 +33,16 @@ export type Work = {
 	diagrams: Diagram[]
 }
 
+// A decision that a coding agent or the owner logged with "ken decide" as they made it. by is the name the caller gave,
+// or null: ken never guesses it. head is the commit checked out at that moment, read from git, or null before the first
+// commit. It ties the decision to the piece of work that later covers it: see decisionWork.
+export type Logged = { by: string | null; head: CommitHash | null }
+
 // reason is why the option was chosen, with the lines it rests on, kept apart from quotes, which show what was chosen.
-// It is null in a decision written before ken asked for one. ken sets the label from the reason's quotes (see
-// decisionLabel), never the writer. A decision says why, which is never a relation found by searching, so it is never
-// "found-by-search". Slice 5 adds decisions a coding agent logs as it makes them, also "recorded".
+// It is null in a decision written before ken asked for one. ken sets the label, never the writer. A decision is
+// "recorded" when it was written down as it was made: it carries logged, or its reason quotes a commit message (see
+// decisionLabel). Otherwise it is "inferred". A decision says why, which is never a relation found by searching, so it
+// is never "found-by-search". Only a logged decision has logged, so a decision written before ken decide reads as before.
 export type Decision = {
 	kind: 'decision'
 	question: string
@@ -46,6 +52,7 @@ export type Decision = {
 	undo: Undo
 	needsOwner: boolean
 	label: Exclude<Label, 'found-by-search'>
+	logged?: Logged
 	quotes: VerifiedQuote[]
 	work: EntryId | null
 }

@@ -1,9 +1,10 @@
 // The gate in front of the project record. A writer hands in a draft, and this turns it into an entry or says what to
 // fix: every text is present and short enough, every quote passes checkQuote and is stored as verified, commits and
-// authors are read from git and never taken from the writer, and every id an entry names is in the record.
+// authors are read from git and never taken from the writer, and every id an entry names is in the record. ken sets
+// every decision's label: the writer has no say.
 import { checkQuote, decisionLabel, explainQuote, type Label, type Quote, type VerifiedQuote } from '../checks/index.ts'
 import { checkDiagrams, type DiagramDraft } from '../diagram/index.ts'
-import { type Repository, resolveRange } from '../repo/index.ts'
+import { type CommitHash, type Repository, resolveRange } from '../repo/index.ts'
 import {
 	type Decision,
 	type Entry,
@@ -41,6 +42,8 @@ export type EntryDraft =
 			needsOwner: boolean
 			quotes: Quote[]
 			work: string | null
+			// Only ken decide sends this. by is the name its caller gave, or null.
+			logged?: { by: string | null }
 	  } & Replaces)
 	| ({ kind: 'topic'; name: string; quotes: Quote[] } & Replaces)
 	| ({ kind: 'note'; topic: string; text: string } & Replaces)
@@ -134,6 +137,10 @@ export async function checkEntry(
 		case 'decision': {
 			if (draft.rejected.length > MAX.list) problems.push(`keep the rejected options to ${MAX.list}.`)
 			const reasonQuotes = await quotes('the reason', draft.reason.quotes, false)
+			const logged = draft.logged && {
+				by: draft.logged.by === null ? null : text('by', draft.logged.by, MAX.name),
+				head: await headNow(repo, signal),
+			}
 			entry = {
 				kind: 'decision',
 				question: text('question', draft.question, MAX.option),
@@ -145,8 +152,10 @@ export async function checkEntry(
 				})),
 				undo: draft.undo,
 				needsOwner: draft.needsOwner,
-				label: decisionLabel(reasonQuotes),
-				quotes: await quotes('the decision', draft.quotes),
+				label: logged ? 'recorded' : decisionLabel(reasonQuotes),
+				...(logged && { logged }),
+				// A decision logged as it is made often comes before the code it is about, so it may quote nothing.
+				quotes: await quotes('the decision', draft.quotes, !logged),
 				work: draft.work === null ? null : named('work', draft.work, 'work'),
 			} satisfies Decision
 			break
@@ -189,6 +198,11 @@ export async function checkEntry(
 			return draft satisfies never
 	}
 	return problems.length > 0 ? { kind: 'refused', problems } : { kind: 'ok', entry, replaces }
+}
+
+async function headNow(repo: Repository, signal?: AbortSignal): Promise<CommitHash | null> {
+	const head = await repo.resolve('HEAD', signal)
+	return head.kind === 'ok' ? head.commit : null
 }
 
 function sameName(a: string, b: string): boolean {

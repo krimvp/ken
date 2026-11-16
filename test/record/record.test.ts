@@ -1,8 +1,16 @@
 import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { test } from 'node:test'
-import { describeEntry, type EntryDraft, fileRecordStore, noteFreshness } from '../../src/record/index.ts'
+import {
+	decisionWork,
+	describeEntry,
+	type EntryDraft,
+	entryLine,
+	fileRecordStore,
+	noteFreshness,
+} from '../../src/record/index.ts'
 import { gitRepository } from '../../src/repo/index.ts'
 import { buildRepository } from '../fixtures/build-repository.ts'
 
@@ -227,4 +235,62 @@ test('a piece of work written before diagrams and risks still reads, with no dia
 	const described = await describeEntry(repo, record, work)
 	assert.match(described, /statement 1 \[inferred\]: The loop sleeps after each attempt\./)
 	assert.doesNotMatch(described, /^risk/m, 'an old piece of work does not claim that no risks were found')
+})
+
+// Written by ken at 1024923, before ken decide, on this file's repository. Its reason quotes the body of a commit message.
+const OLD_RECORDED_LINE = String.raw`{"id":"49a3f4091409","kind":"decision","question":"Who wrote the wait?","chosen":"The owner with an agent","reason":{"text":"The commit names its co-author.","quotes":[{"path":null,"commit":"64ca365a1f096278af5d084c364a63756ed402eb","startLine":3,"endLine":3,"text":"Co-authored-by: Claude Opus <noreply@anthropic.com>"}]},"rejected":[],"undo":"easy","needsOwner":false,"label":"recorded","quotes":[{"path":"src/retry.ts","commit":"ac026d46f80b8c52eeb8d85dbcf9a6d7a63bff69","startLine":4,"endLine":4,"text":"\t\tsleep(100)"}],"work":null,"replaces":null,"at":"2026-11-16T04:56:03.892Z"}`
+
+test('a decision recorded from a commit message before ken decide still reads, and its line says it came from a commit message', async () => {
+	const store = emptyRecord()
+	mkdirSync(path.join(root, '.ken/record'), { recursive: true })
+	writeFileSync(path.join(root, '.ken/record/decisions.jsonl'), `${OLD_RECORDED_LINE}\n`)
+
+	const record = await store.read()
+	assert.deepEqual(record.problems, [])
+	const [old] = record.current
+	assert.ok(old?.kind === 'decision', JSON.stringify(record))
+	assert.deepEqual([old.id, old.label, old.logged], ['49a3f4091409', 'recorded', undefined])
+	assert.equal(entryLine(old), 'decision 49a3f4091409 "Who wrote the wait?" [recorded from a commit message]')
+})
+
+test('a decision logged before its commits belongs to the piece of work whose range starts at or passes through the commit it was logged at, the smallest one first', async () => {
+	const words = ['one', 'two', 'three', 'four']
+	const built = buildRepository(words.map((word) => ({ message: `feat: ${word}`, files: { 'a.txt': `${word}\n` } })))
+	const builtRepo = gitRepository(built.root)
+	const store = fileRecordStore(built.root, builtRepo)
+	const logged: string[] = []
+	for (const [at, commit] of built.hashes.entries()) {
+		execFileSync('git', ['checkout', '--quiet', '--detach', commit], { cwd: built.root, stdio: 'ignore' })
+		const draft = { ...decision, question: `Logged at commit ${at}?`, quotes: [], logged: { by: 'an agent' } }
+		const [entry] = await appended(store, [draft])
+		logged.push(entry?.id ?? '')
+	}
+	const work = (base: number, head: number): EntryDraft => ({
+		kind: 'work',
+		title: `Commits ${base} to ${head}`,
+		summary: 'a.txt changed.',
+		range: { base: built.hashes[base] ?? '', head: built.hashes[head] ?? '' },
+		statements: [
+			{
+				text: 'a.txt holds one word.',
+				label: 'inferred',
+				quotes: [{ path: 'a.txt', commit: built.hashes[head] ?? '', text: words[head] ?? '' }],
+			},
+		],
+	})
+	const [, first, second] = await appended(store, [work(0, 3), work(0, 2), work(2, 3)])
+
+	const record = await store.read()
+	const workOf = (id: string | undefined) => {
+		const found = record.current.find((entry) => entry.id === id)
+		return found?.kind === 'decision' ? decisionWork(found, record) : 'not a decision'
+	}
+	assert.deepEqual(
+		logged.map(workOf),
+		[first?.id, first?.id, second?.id, null],
+		'commit 0 starts the first range and commit 1 is inside it; commit 2 ends it and starts the second; commit 3 ends every range',
+	)
+	assert.ok(first)
+	const described = await describeEntry(builtRepo, record, first)
+	assert.match(described, new RegExp(`decisions:\n  decision ${logged[0]} .*\n  decision ${logged[1]} .*$`))
 })

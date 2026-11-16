@@ -1,7 +1,8 @@
 import type { VerifiedQuote } from '../checks/index.ts'
 import { diagramElements } from '../diagram/index.ts'
 import type { Repository } from '../repo/index.ts'
-import type { RecordEntry } from './entry.ts'
+import { decisionWork } from './decision-work.ts'
+import type { Decision, RecordEntry } from './entry.ts'
 import type { RecordRead } from './file-record-store.ts'
 import { noteFreshness } from './note-freshness.ts'
 
@@ -14,7 +15,7 @@ export function entryLine(entry: RecordEntry): string {
 			return `${head} "${entry.title}", ${short(entry.range.base)}..${short(entry.range.head)}, ${commits}`
 		}
 		case 'decision':
-			return `${head} "${entry.question}" [${entry.label}]${entry.work ? `, in work ${entry.work}` : ''}`
+			return `${head} "${entry.question}" [${decisionMark(entry)}]${entry.work ? `, in work ${entry.work}` : ''}`
 		case 'topic':
 			return `${head} "${entry.name}"`
 		case 'note':
@@ -59,14 +60,25 @@ export async function describeEntry(
 					lines.push(`  ${element.number}. ${element.text}${label}`, ...element.quotes.flatMap(quoted))
 				}
 			}
-			const decisions = record.current.filter((other) => other.kind === 'decision' && other.work === entry.id)
+			const decisions = record.current.filter(
+				(other) => other.kind === 'decision' && decisionWork(other, record) === entry.id,
+			)
 			lines.push(
 				decisions.length === 0 ? 'decisions: none' : 'decisions:',
 				...decisions.map((d) => `  ${entryLine(d)}`),
 			)
 			break
 		}
-		case 'decision':
+		case 'decision': {
+			if (entry.logged) {
+				const by = entry.logged.by === null ? '' : ` by ${entry.logged.by}`
+				const head = entry.logged.head === null ? 'before the first commit' : `while HEAD was ${entry.logged.head}`
+				lines.push(`logged with ken decide${by}, ${head}`)
+			}
+			const work = decisionWork(entry, record)
+			if (work !== null && entry.work === null) {
+				lines.push(`belongs to work ${work}, whose commits came after the commit it was logged at`)
+			}
 			lines.push(`chosen: ${entry.chosen}`)
 			if (entry.reason) lines.push(`reason: ${entry.reason.text}`, ...entry.reason.quotes.flatMap(quoted))
 			if (entry.rejected.length === 0) lines.push('rejected: none shown in the code or the history')
@@ -74,6 +86,7 @@ export async function describeEntry(
 			lines.push(`undo: ${entry.undo}`, `needs the owner: ${entry.needsOwner ? 'yes' : 'no'}`)
 			lines.push(...entry.quotes.flatMap(quoted))
 			break
+		}
 		case 'topic': {
 			lines.push(...entry.quotes.flatMap(quoted))
 			const note = record.current.findLast((other) => other.kind === 'note' && other.topic === entry.id)
@@ -96,6 +109,13 @@ export async function describeEntry(
 			return entry satisfies never
 	}
 	return lines.join('\n')
+}
+
+// Which of the two kinds of recorded decision this is, so a reader can tell a logged one from a quoted message.
+function decisionMark(decision: Decision): string {
+	const by = decision.logged?.by
+	if (decision.logged) return by ? `recorded, logged by ${by}` : 'recorded, logged with ken decide'
+	return decision.label === 'recorded' ? 'recorded from a commit message' : decision.label
 }
 
 function quoted(quote: VerifiedQuote): string[] {
