@@ -54,6 +54,8 @@ const ANSWER: Turn = {
 			{
 				question: 'How long does a retry wait?',
 				chosen: 'A fixed 100 ms',
+				reason: 'One fixed wait is the simplest that works.',
+				reason_quotes: [],
 				rejected: [],
 				undo: 'easy',
 				needs_owner: true,

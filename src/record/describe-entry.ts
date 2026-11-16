@@ -68,6 +68,7 @@ export async function describeEntry(
 		}
 		case 'decision':
 			lines.push(`chosen: ${entry.chosen}`)
+			if (entry.reason) lines.push(`reason: ${entry.reason.text}`, ...entry.reason.quotes.flatMap(quoted))
 			if (entry.rejected.length === 0) lines.push('rejected: none shown in the code or the history')
 			for (const rejected of entry.rejected) lines.push(`rejected: ${rejected.option}, because ${rejected.reason}`)
 			lines.push(`undo: ${entry.undo}`, `needs the owner: ${entry.needsOwner ? 'yes' : 'no'}`)

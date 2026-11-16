@@ -1,21 +1,15 @@
 // What an accepted answer adds to the project record: the piece of work it explains, with its statements and risks,
-// the decisions it names, and its topics with a note each. Every entry goes through the record's own check first, and a refused entry rejects the
-// whole answer, the same way a bad quote does. A decision from the chat is always "inferred": the model worked it out.
+// the decisions it names, and its topics with a note each. Every entry goes through the record's own check first, and a
+// refused entry rejects the whole answer, the same way a bad quote does. The record labels each decision from its
+// reason's quotes.
 import type { Quote, VerifiedQuote } from '../../checks/index.ts'
 import { diagramDraft } from '../../diagram/index.ts'
-import type { EntryDraft, EntryId, RecordEntry, RecordStore, Statement, Undo } from '../../record/index.ts'
+import type { EntryDraft, EntryId, RecordEntry, RecordStore, Statement } from '../../record/index.ts'
 import type { Answer } from './answer.ts'
+import type { CheckedDecision } from './check-answer.ts'
 
 export type RecordArgs = {
 	work: { title: string } | null
-	decisions: {
-		question: string
-		chosen: string
-		rejected: { option: string; reason: string }[]
-		undo: Undo
-		needsOwner: boolean
-		quotes: Quote[]
-	}[]
 	topics: { name: string; quotes: Quote[]; note: string; replaces: string | undefined }[]
 }
 
@@ -26,6 +20,7 @@ export type Recorded =
 export async function recordAnswer(
 	store: RecordStore,
 	answer: Answer,
+	decisions: CheckedDecision[],
 	args: RecordArgs,
 	signal: AbortSignal,
 ): Promise<Recorded> {
@@ -65,11 +60,12 @@ export async function recordAnswer(
 		})
 		work = entry?.id ?? null
 	}
-	for (const [index, decision] of args.decisions.entries()) {
+	for (const [index, decision] of decisions.entries()) {
 		await add(`Decision ${index + 1}`, {
 			kind: 'decision',
 			...decision,
-			label: 'inferred',
+			reason: { text: decision.reason.text, quotes: decision.reason.quotes.map(raw) },
+			quotes: decision.quotes.map(raw),
 			work,
 		})
 	}

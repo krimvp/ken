@@ -51,6 +51,8 @@ test('ken ask --json prints the checked answer, what it recorded and the closing
 					{
 						question: 'How does total add the items?',
 						chosen: "Python's built-in sum",
+						reason: 'The built-in is the shortest way to add a list.',
+						reason_quotes: [],
 						rejected: [],
 						undo: 'easy',
 						needs_owner: false,

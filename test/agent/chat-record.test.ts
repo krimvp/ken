@@ -20,6 +20,8 @@ const STATEMENT = { text: 'The loop sleeps after each attempt.', label: 'inferre
 const DECISION = {
 	question: 'How long does a retry wait?',
 	chosen: 'A fixed 100 ms after each attempt',
+	reason: 'One fixed wait is the simplest that works.',
+	reason_quotes: [],
 	rejected: [],
 	undo: 'easy',
 	needs_owner: false,

@@ -3,7 +3,7 @@
 // instead of trying forever. A problem of form, which the model fixes without reading code again, comes back first and
 // does not use an attempt.
 import type { JsonObject, JsonValue, Tool } from 'aigent/plugin'
-import type { Quote } from '../../checks/index.ts'
+import { decisionLabel, type Quote } from '../../checks/index.ts'
 import { CARDINALITIES, DIAGRAM_BOUNDS, DIAGRAM_KINDS, type DiagramDraft } from '../../diagram/index.ts'
 import { type RecordEntry, type RecordStore, UNDO } from '../../record/index.ts'
 import type { Repository } from '../../repo/index.ts'
@@ -11,7 +11,7 @@ import type { ChatEvent } from '../chat-event.ts'
 import { hunkHeader } from '../tools/diff-tool.ts'
 import { readArgs, refuse, reply } from '../tools/tool-edge.ts'
 import type { Answer } from './answer.ts'
-import { type AnswerDraft, checkAnswer } from './check-answer.ts'
+import { type AnswerDraft, type CheckedDecision, checkAnswer } from './check-answer.ts'
 import { allowJsonText, readJsonText } from './json-text.ts'
 import { type RecordArgs, type Recorded, recordAnswer } from './record-answer.ts'
 
@@ -46,7 +46,7 @@ export function answerTool(repo: Repository, store: RecordStore, round: () => An
 			if (settled.kind === 'accepted') {
 				current.answer = settled.answer
 				current.emit({ kind: 'accepted', answer: settled.answer, recorded: settled.recorded.entries })
-				return reply(confirmation(settled.answer, settled.recorded))
+				return reply(confirmation(settled.answer, settled.decisions, settled.recorded))
 			}
 			current.rejections += 1
 			current.emit({ kind: 'rejected', attempt: current.rejections, problems: settled.problems })
@@ -77,24 +77,34 @@ async function settle(
 	raw: JsonObject,
 	signal: AbortSignal,
 ): Promise<
-	| { kind: 'accepted'; answer: Answer; recorded: Extract<Recorded, { kind: 'recorded' }> }
+	| {
+			kind: 'accepted'
+			answer: Answer
+			decisions: CheckedDecision[]
+			recorded: Extract<Recorded, { kind: 'recorded' }>
+	  }
 	| { kind: 'rejected'; problems: string[] }
 > {
 	const read = readJsonText(ANSWER_SCHEMA, raw)
 	if (read.kind === 'refused') return { kind: 'rejected', problems: read.problems }
 	const check = await checkAnswer(repo, draftOf(read.args), signal)
 	if (check.kind === 'rejected') return check
-	const recorded = await recordAnswer(store, check.answer, recordArgsOf(read.args), signal)
+	const recorded = await recordAnswer(store, check.answer, check.decisions, recordArgsOf(read.args), signal)
 	if (recorded.kind === 'refused') return { kind: 'rejected', problems: recorded.problems }
-	return { kind: 'accepted', answer: check.answer, recorded }
+	return { kind: 'accepted', answer: check.answer, decisions: check.decisions, recorded }
 }
 
-function confirmation(answer: Answer, recorded: Extract<Recorded, { kind: 'recorded' }>): string {
+function confirmation(
+	answer: Answer,
+	decisions: CheckedDecision[],
+	recorded: Extract<Recorded, { kind: 'recorded' }>,
+): string {
 	const claims = [...answer.statements, ...(answer.risks ?? [])]
 	const quotes = claims.reduce((sum, claim) => sum + claim.quotes.length, 0)
 	const risks = answer.risks === null ? '' : `${answer.risks.length} risks, `
+	const recordedCount = decisions.filter((decision) => decisionLabel(decision.reason.quotes) === 'recorded').length
 	const lines = [
-		`Answer accepted: ${answer.statements.length} statements, ${risks}${answer.diagrams.length} diagrams, ${quotes} quotes in the statements and risks. ken shows it to the reader.`,
+		`Answer accepted: ${answer.statements.length} statements, ${risks}${decisions.length} decisions (${recordedCount} recorded, ${decisions.length - recordedCount} inferred), ${answer.diagrams.length} diagrams, ${quotes} quotes in the statements and risks. ken shows it to the reader.`,
 	]
 	if (recorded.kept) {
 		lines.push(`Piece of work ${recorded.kept} already explains this range, so ken kept it and wrote no new one.`)
@@ -139,7 +149,26 @@ function draftOf(args: JsonObject): AnswerDraft {
 		scope: scope && { base: scope.text('base'), head: scope.text('head') },
 		statements: listOf(args.statements).map((raw) => claimOf(raw, 'answer statement')),
 		risks: args.risks === undefined ? null : listOf(args.risks).map((raw) => claimOf(raw, 'answer risk')),
+		decisions: optionalList(args.decisions).map(decisionOf),
 		diagrams: optionalList(args.diagrams).map(diagramDraftOf),
+	}
+}
+
+function decisionOf(raw: JsonObject) {
+	const decision = readArgs(raw, 'answer decision')
+	const undo = UNDO.find((known) => known === decision.text('undo'))
+	if (!undo) throw new Error('answer: undo is not in UNDO, so its schema and its reader disagree')
+	return {
+		question: decision.text('question'),
+		chosen: decision.text('chosen'),
+		reason: { text: decision.text('reason'), quotes: listOf(raw.reason_quotes).map(quoteOf) },
+		rejected: listOf(raw.rejected).map((rawRejected) => {
+			const rejected = readArgs(rawRejected, 'answer rejected option')
+			return { option: rejected.text('option'), reason: rejected.text('reason') }
+		}),
+		undo,
+		needsOwner: decision.flag('needs_owner'),
+		quotes: listOf(raw.quotes).map(quoteOf),
 	}
 }
 
@@ -197,22 +226,6 @@ function recordArgsOf(args: JsonObject): RecordArgs {
 	const work = args.work === undefined ? null : { title: readArgs(objectOf(args.work), 'answer work').text('title') }
 	return {
 		work,
-		decisions: optionalList(args.decisions).map((raw) => {
-			const decision = readArgs(raw, 'answer decision')
-			const undo = UNDO.find((known) => known === decision.text('undo'))
-			if (!undo) throw new Error('answer: undo is not in UNDO, so its schema and its reader disagree')
-			return {
-				question: decision.text('question'),
-				chosen: decision.text('chosen'),
-				rejected: listOf(raw.rejected).map((rawRejected) => {
-					const rejected = readArgs(rawRejected, 'answer rejected option')
-					return { option: rejected.text('option'), reason: rejected.text('reason') }
-				}),
-				undo,
-				needsOwner: decision.flag('needs_owner'),
-				quotes: listOf(raw.quotes).map(quoteOf),
-			}
-		}),
 		topics: optionalList(args.topics).map((raw) => {
 			const topic = readArgs(raw, 'answer topic')
 			return {
@@ -306,6 +319,13 @@ const DECISION_SCHEMA = {
 			description: 'The question the decision answers, such as "How long does a retry wait?"',
 		},
 		chosen: { type: 'string', description: 'The option the code took' },
+		reason: { type: 'string', description: 'Why this option was chosen, in one or two short sentences' },
+		reason_quotes: {
+			type: 'array',
+			description:
+				'The lines that give the reason: the lines of a commit message that state it, or a comment or doc that does. An empty list when nothing states it and you worked it out. ken labels a decision whose reason quotes the body of a commit message "recorded", and any other "inferred".',
+			items: QUOTE,
+		},
 		rejected: {
 			type: 'array',
 			description:
@@ -323,11 +343,12 @@ const DECISION_SCHEMA = {
 		undo: { type: 'string', enum: UNDO, description: 'How much work it would take to choose differently later' },
 		needs_owner: {
 			type: 'boolean',
-			description: 'true when the owner should look at it: a guess about intent, a risk, or a choice with a cost',
+			description:
+				'true when the owner should look at it: a choice a commit message leaves to the owner, a guess about intent, a risk, or a choice with a cost',
 		},
-		quotes: { type: 'array', minItems: 1, items: QUOTE },
+		quotes: { type: 'array', minItems: 1, description: 'The lines that show what was chosen', items: QUOTE },
 	},
-	required: ['question', 'chosen', 'rejected', 'undo', 'needs_owner', 'quotes'],
+	required: ['question', 'chosen', 'reason', 'reason_quotes', 'rejected', 'undo', 'needs_owner', 'quotes'],
 	additionalProperties: false,
 } as const
 

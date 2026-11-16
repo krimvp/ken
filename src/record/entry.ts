@@ -33,14 +33,18 @@ export type Work = {
 	diagrams: Diagram[]
 }
 
+// reason is why the option was chosen, with the lines it rests on, kept apart from quotes, which show what was chosen.
+// It is null in a decision written before ken asked for one. ken sets the label from the reason's quotes (see
+// decisionLabel), never the writer. A decision says why, which is never a relation found by searching, so it is never
+// "found-by-search". Slice 5 adds decisions a coding agent logs as it makes them, also "recorded".
 export type Decision = {
 	kind: 'decision'
 	question: string
 	chosen: string
+	reason: { text: string; quotes: VerifiedQuote[] } | null
 	rejected: { option: string; reason: string }[]
 	undo: Undo
 	needsOwner: boolean
-	// A decision says why, which is never a relation found by searching, so it is never "found-by-search".
 	label: Exclude<Label, 'found-by-search'>
 	quotes: VerifiedQuote[]
 	work: EntryId | null

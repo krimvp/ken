@@ -1,7 +1,7 @@
 // The gate in front of the project record. A writer hands in a draft, and this turns it into an entry or says what to
 // fix: every text is present and short enough, every quote passes checkQuote and is stored as verified, commits and
 // authors are read from git and never taken from the writer, and every id an entry names is in the record.
-import { checkQuote, explainQuote, type Label, type Quote, type VerifiedQuote } from '../checks/index.ts'
+import { checkQuote, decisionLabel, explainQuote, type Label, type Quote, type VerifiedQuote } from '../checks/index.ts'
 import { checkDiagrams, type DiagramDraft } from '../diagram/index.ts'
 import { type Repository, resolveRange } from '../repo/index.ts'
 import {
@@ -35,10 +35,10 @@ export type EntryDraft =
 			kind: 'decision'
 			question: string
 			chosen: string
+			reason: { text: string; quotes: Quote[] }
 			rejected: { option: string; reason: string }[]
 			undo: Undo
 			needsOwner: boolean
-			label: Decision['label']
 			quotes: Quote[]
 			work: string | null
 	  } & Replaces)
@@ -50,7 +50,17 @@ export type EntryCheck =
 	| { kind: 'refused'; problems: string[] }
 
 // Long enough for a plain answer, short enough that a model cannot pour a file into the record.
-const MAX = { title: 120, summary: 1200, text: 1200, name: 80, note: 2000, option: 300, quotes: 12, list: 20 }
+const MAX = {
+	title: 120,
+	summary: 1200,
+	text: 1200,
+	reason: 600,
+	name: 80,
+	note: 2000,
+	option: 300,
+	quotes: 12,
+	list: 20,
+}
 
 // known is every entry in the record plus those an append will write before this one; current is the newest entry of
 // each chain among them.
@@ -67,8 +77,8 @@ export async function checkEntry(
 		else if (trimmed.length > max) problems.push(`${field} has ${trimmed.length} characters; keep it under ${max}.`)
 		return trimmed
 	}
-	const quotes = async (field: string, raw: Quote[]) => {
-		if (raw.length === 0) problems.push(`${field} needs at least one quote: the lines it rests on.`)
+	const quotes = async (field: string, raw: Quote[], needed = true) => {
+		if (needed && raw.length === 0) problems.push(`${field} needs at least one quote: the lines it rests on.`)
 		if (raw.length > MAX.quotes) problems.push(`${field} has ${raw.length} quotes; keep it to ${MAX.quotes}.`)
 		const checks = await Promise.all(raw.map((quote) => checkQuote(repo, quote, signal)))
 		return checks.flatMap((check, index): VerifiedQuote[] => {
@@ -123,17 +133,19 @@ export async function checkEntry(
 		}
 		case 'decision': {
 			if (draft.rejected.length > MAX.list) problems.push(`keep the rejected options to ${MAX.list}.`)
+			const reasonQuotes = await quotes('the reason', draft.reason.quotes, false)
 			entry = {
 				kind: 'decision',
 				question: text('question', draft.question, MAX.option),
 				chosen: text('chosen', draft.chosen, MAX.text),
+				reason: { text: text('the reason', draft.reason.text, MAX.reason), quotes: reasonQuotes },
 				rejected: draft.rejected.slice(0, MAX.list).map((rejected, index) => ({
 					option: text(`rejected option ${index + 1}`, rejected.option, MAX.option),
 					reason: text(`the reason for rejected option ${index + 1}`, rejected.reason, MAX.text),
 				})),
 				undo: draft.undo,
 				needsOwner: draft.needsOwner,
-				label: draft.label,
+				label: decisionLabel(reasonQuotes),
 				quotes: await quotes('the decision', draft.quotes),
 				work: draft.work === null ? null : named('work', draft.work, 'work'),
 			} satisfies Decision
