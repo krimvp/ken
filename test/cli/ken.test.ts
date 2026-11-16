@@ -85,7 +85,7 @@ test('ken ask --json prints the checked answer, what it recorded and the closing
 	const verified = [{ path: 'app.py', commit: head, startLine: 2, endLine: 2, text: '    return sum(items)' }]
 	assert.deepEqual(result.answer.statements[0].quotes, verified)
 	assert.deepEqual(result.answer.risks, [
-		{ text: 'A caller that passes text now gets a TypeError.', label: 'inferred', quotes: verified },
+		{ text: 'A caller that passes text now gets a TypeError.', label: 'inferred', quotes: verified, checked: false },
 	])
 	assert.deepEqual(
 		result.answer.change.commits.map((commit: { subject: string }) => commit.subject),

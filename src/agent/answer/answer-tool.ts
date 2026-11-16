@@ -186,7 +186,7 @@ async function settle(
 	// Every topic is in the record now, so each name becomes the record's own spelling of it.
 	const names = await topicNames(store)
 	const canonical = (name: string) => names.find((other) => sameName(other, name)) ?? name
-	const claims = (list: Claim[]) =>
+	const claims = <T extends Claim>(list: T[]) =>
 		list.map((claim) => (claim.topic === undefined ? claim : { ...claim, topic: canonical(claim.topic) }))
 	const topics = [...new Set([...args.topics.map((topic) => topic.name), ...named].map(canonical))]
 	const answer: Answer = {

@@ -62,10 +62,11 @@ test('a risk with a false quote rejects the answer and names the risk; with a tr
 	assert.deepEqual(outcomes(first.events), ['rejected', 'accepted'])
 	assert.match(toolResults(first.requests[1])[0] ?? '', /Risk 1, quote 1: .*src\/load\.ts/)
 	const { answer: checked, recorded } = accepted(first.events)
-	assert.deepEqual(checked.risks, [{ ...RISK, quotes: [{ ...CALL, startLine: 2, endLine: 2 }] }])
+	const risk = { ...RISK, quotes: [{ ...CALL, startLine: 2, endLine: 2 }] }
+	assert.deepEqual(checked.risks, [{ ...risk, checked: true }])
 	const stored = recorded.find((entry) => entry.kind === 'work')
 	const onDisk = (await fileRecordStore(root, gitRepository(root)).read()).current.find((e) => e.id === stored?.id)
-	assert.deepEqual(onDisk?.kind === 'work' && onDisk.risks, checked.risks)
+	assert.deepEqual(onDisk?.kind === 'work' && onDisk.risks, [risk], 'the record keeps the risk without the mark')
 
 	const second = await ask([{ tool: 'ken__read_record', args: { id: stored?.id } }, { text: 'Done.' }])
 	const read = toolResults(second.requests[1])[0] ?? ''

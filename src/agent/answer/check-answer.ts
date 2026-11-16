@@ -3,6 +3,7 @@
 // Only then does ken read the change facts from git.
 import {
 	checkCoverage,
+	checkedInCode,
 	checkLabel,
 	countMessages,
 	followedNames,
@@ -86,7 +87,12 @@ export async function checkAnswer(
 	]
 	const change = await changeOf(repo, scope, quotes, signal)
 	if (change.kind === 'refused') return { kind: 'rejected', problems: [`Scope: ${change.problem}`] }
-	return { kind: 'accepted', answer: { ...answer, change: change.change }, decisions }
+	const { head, covered, uncovered } = change.change
+	const marked = risks?.map((risk) => ({
+		...risk,
+		checked: checkedInCode(risk.quotes, head, [...covered, ...uncovered]),
+	}))
+	return { kind: 'accepted', answer: { ...answer, risks: marked ?? null, change: change.change }, decisions }
 }
 
 async function checkClaims(

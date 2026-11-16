@@ -203,7 +203,7 @@ test('a question streams its steps and a checked answer with its diagram drawn, 
 	)
 })
 
-test('a question saved before ken kept the HEAD still opens with no HEAD of its own, and answers saved before risks, before the diagram rules, before the commit message count and before the names used elsewhere open as they were', async () => {
+test('a question saved before ken kept the HEAD still opens with no HEAD of its own, and answers saved before risks, before the diagram rules, before the commit message count, before the names used elsewhere and before ken marked a risk checked open as they were', async () => {
 	const home = tempFolder('ken-home-')
 	const old = { id: 'old-1', question: 'What changed?', askedAt: '2026-11-01T10:00:00.000Z', steps: [], usage: null }
 	// An answered question as ken wrote it at f3e1e61, before answers carried risks. Its diagram has one arrow and a box
@@ -217,7 +217,8 @@ test('a question saved before ken kept the HEAD still opens with no HEAD of its 
 	const answered = { ...old, id: 'old-2', head, outcome: 'answered', answer, recorded: [], note: '' }
 	// An answer about a change as ken wrote it at 0d81f71, before it counted the quoted commit messages.
 	const change = { base, head, commits: [], covered: [], uncovered: [], binary: [] }
-	const counted = { ...answered, id: 'old-3', answer: { ...answer, diagrams: [], risks: [], change } }
+	const risk = { text: 'A caller that needs an answer at once now waits.', label: 'inferred', quotes }
+	const counted = { ...answered, id: 'old-3', answer: { ...answer, diagrams: [], risks: [risk], change } }
 	mkdirSync(path.join(home, 'projects', base), { recursive: true })
 	writeFileSync(
 		path.join(home, 'projects', base, 'history.jsonl'),
@@ -239,6 +240,11 @@ test('a question saved before ken kept the HEAD still opens with no HEAD of its 
 		before.entry.answer.change,
 		{ ...change, messages: null, usedElsewhere: null },
 		'no count and no names, rather than a count of none and an empty list',
+	)
+	assert.deepEqual(
+		before.entry.answer.risks,
+		[risk],
+		'its risk reads with no mark of a check, rather than "not checked"',
 	)
 })
 

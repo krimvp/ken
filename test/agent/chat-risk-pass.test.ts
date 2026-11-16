@@ -112,6 +112,7 @@ test('an answer about a change is held for one risk pass: the agent gets the ris
 	const verified = (risk: typeof FIRST_RISK, line: number) => ({
 		...risk,
 		quotes: risk.quotes.map((quote) => ({ ...quote, startLine: line, endLine: line })),
+		checked: risk === CALLER_RISK,
 	})
 	assert.deepEqual(event.answer.risks, [verified(SECOND_RISK, 1), verified(CALLER_RISK, 2)])
 	assert.deepEqual(event.revision, {
@@ -120,7 +121,8 @@ test('an answer about a change is held for one risk pass: the agent gets the ris
 	})
 	assert.deepEqual(event.answer.change?.usedElsewhere, { followed: ['TIMEOUT_MS'], notFollowed: [] })
 	const work = (await fileRecordStore(root, gitRepository(root)).read()).current.find((entry) => entry.kind === 'work')
-	assert.deepEqual(work?.kind === 'work' && work.risks, event.answer.risks, 'the record keeps the merged risks')
+	const stored = event.answer.risks?.map(({ checked: _, ...risk }) => risk)
+	assert.deepEqual(work?.kind === 'work' && work.risks, stored, 'the record keeps the merged risks, without the mark')
 	const usage = events.find((each) => each.kind === 'usage')
 	const replies = (n: number) => ({
 		input: n * USAGE_PER_REPLY.prompt_tokens,

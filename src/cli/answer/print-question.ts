@@ -1,5 +1,5 @@
 import { styleText } from 'node:util'
-import type { Answer, ChatEvent, Revision } from '../../agent/index.ts'
+import type { Answer, ChatEvent, Revision, Risk } from '../../agent/index.ts'
 import { when } from '../../follow-up/index.ts'
 import { type Entry, entryLine } from '../../record/index.ts'
 import { formatDiagram, formatQuote } from './print-diagram.ts'
@@ -147,9 +147,12 @@ function revisionLine({ added, withdrawn }: Revision): string {
 	return `A second look at risks ${changes.join(', ')}. The last risks and decisions above came from it.`
 }
 
-function claims(list: Answer['statements'], paint: Paint): string[] {
+// A risk carries ken's own mark of whether it was checked past the diff; a statement, and an older risk, has none.
+const CHECKED = { true: 'Checked in the code', false: 'Not checked outside the change' } as const
+
+function claims(list: Risk[], paint: Paint): string[] {
 	return list.flatMap((claim, index) => [
-		`${index + 1}. ${claim.text} ${paint('cyan', `[${claim.label}]`)}`,
+		`${index + 1}. ${claim.text} ${paint('cyan', `[${claim.label}]`)}${claim.checked === undefined ? '' : ` ${paint('cyan', `[${CHECKED[`${claim.checked}`]}]`)}`}`,
 		...claim.quotes.flatMap((quote) => formatQuote(quote, paint)),
 	])
 }
