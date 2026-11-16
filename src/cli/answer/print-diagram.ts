@@ -1,5 +1,6 @@
 import type { Answer } from '../../agent/index.ts'
 import { type Diagram, diagramElements } from '../../diagram/index.ts'
+import { at } from '../../follow-up/index.ts'
 import type { Paint } from './print-question.ts'
 
 type Quote = Answer['statements'][number]['quotes'][number]
@@ -20,8 +21,6 @@ export function formatDiagram(diagram: Diagram, paint: Paint): string[] {
 	return lines
 }
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-
 export function formatQuote(quote: Quote, paint: Paint): string[] {
 	const span =
 		quote.startLine === quote.endLine ? `line ${quote.startLine}` : `lines ${quote.startLine}-${quote.endLine}`
@@ -36,9 +35,7 @@ export function formatQuote(quote: Quote, paint: Paint): string[] {
 // A quote of a session names no file and no commit: it says when the session ran and who wrote the lines.
 export function quoteSource(quote: Quote): string {
 	if ('session' in quote) {
-		const at = new Date(quote.at)
-		const day = `${at.getUTCDate()} ${MONTHS[at.getUTCMonth()]} ${quote.at.slice(11, 16)} UTC`
-		return `from the session of ${day}, ${quote.by === 'user' ? 'what you asked' : 'what the agent said'}`
+		return `from the session ${at(quote.at)}, ${quote.by === 'user' ? 'what you asked' : 'what the agent said'}`
 	}
 	return quote.path === null
 		? `commit message of ${quote.commit.slice(0, 7)}`

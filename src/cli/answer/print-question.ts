@@ -1,5 +1,6 @@
 import { styleText } from 'node:util'
 import type { Answer, ChatEvent } from '../../agent/index.ts'
+import { when } from '../../follow-up/index.ts'
 import { type Entry, entryLine } from '../../record/index.ts'
 import { formatDiagram, formatQuote } from './print-diagram.ts'
 
@@ -92,7 +93,7 @@ export function formatAnswer(answer: Answer, entries: Entry[], paint: Paint): st
 		const { commits, covered, uncovered, binary } = answer.change
 		if (commits.length > 0) lines.push('', paint('bold', `Commits in scope, from git (${commits.length}):`))
 		for (const commit of commits) {
-			lines.push(`  ${commit.hash.slice(0, 7)} ${commit.date.slice(0, 10)} ${commit.author}: ${commit.subject}`)
+			lines.push(`  ${commit.hash.slice(0, 7)} ${when(commit.date)} ${commit.author}: ${commit.subject}`)
 		}
 		const total = covered.length + uncovered.length
 		lines.push('', paint('bold', `Not covered by a quote (${uncovered.length} of ${total} changed hunks):`))

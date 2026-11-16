@@ -1,5 +1,6 @@
 import { styleText } from 'node:util'
 import type { ModelFlags } from '../agent/index.ts'
+import { at } from '../follow-up/index.ts'
 import type { About, NowBlock } from '../live/index.ts'
 import { openProject, type QuestionView } from '../server/index.ts'
 import { formatAnswer, type Paint } from './answer/print-question.ts'
@@ -31,7 +32,7 @@ export async function watchLive(options: { directory: string; flags: ModelFlags 
 	const view = await live.view()
 	const { pace } = view
 	out.write(
-		`ken watches ${project.root} and writes notes with ${project.model.name}. Every note is a model call: one after ${pace.quietMs / 1000} s without edits, at most one a minute and ${pace.perHour} an hour, and one for each commit. Press Ctrl-C to stop.\n\n${formatNow(view.now, paint)}\n`,
+		`ken watches ${project.root} and writes notes with ${project.model.name}. Every note is a model run: one after ${pace.quietMs / 1000} s without edits, at most one a minute and ${pace.perHour} an hour, and one for each commit. Press Ctrl-C to stop.\n\n${formatNow(view.now, paint)}\n`,
 	)
 	await new Promise<void>((resolve) => {
 		process.once('SIGINT', resolve)
@@ -68,7 +69,7 @@ function formatNow(now: NowBlock, paint: Paint): string {
 	if (now.commits.length > 0) lines.push('  Last commits:')
 	for (const commit of now.commits) lines.push(`    ${commit.hash.slice(0, 7)} ${commit.subject}`)
 	if (now.ask.kind === 'asked') {
-		lines.push(`  You last asked your agent, at ${now.ask.at.slice(11, 16)} UTC (from the session):`)
+		lines.push(`  You last asked your agent ${at(now.ask.at)} (from the session):`)
 		lines.push(...now.ask.text.split('\n').map((line) => `    ${line}`))
 	} else {
 		lines.push(
@@ -82,7 +83,7 @@ function formatNote({ entry, recorded }: QuestionView, paint: Paint): string {
 	const about = entry.about ? aboutText(entry.about) : 'a change'
 	const tries = entry.steps.filter((step) => step.kind === 'rejected').length
 	const cost = entry.usage ? `${entry.usage.seconds} s, ${tokens(entry.usage)} tokens` : 'no cost counted'
-	const head = paint('bold', `Note at ${entry.askedAt.slice(11, 16)} UTC on ${about}`)
+	const head = paint('bold', `Note ${at(entry.askedAt)} on ${about}`)
 	const checked = tries === 0 ? 'its quotes passed first time' : `ken sent ${tries} back before one passed`
 	if (entry.outcome !== 'answered')
 		return `${head}\n${paint('dim', 'ken could not write a checked note on this change.')}`
@@ -97,7 +98,7 @@ function formatNote({ entry, recorded }: QuestionView, paint: Paint): string {
 function aboutText(about: About): string {
 	return about.kind === 'commits'
 		? `the commits ${about.base.slice(0, 7)}..${about.head.slice(0, 7)}`
-		: `uncommitted work as it stood at ${about.at.slice(11, 16)} UTC (a draft, kept on this machine)`
+		: `uncommitted work as it stood ${at(about.at)} (a draft, kept on this machine)`
 }
 
 function tokens(usage: { inputTokens: number; outputTokens: number }): string {

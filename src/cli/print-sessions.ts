@@ -1,3 +1,4 @@
+import { when } from '../follow-up/index.ts'
 import { findRoot } from '../repo/index.ts'
 import { projectSessions, readSession, type Session, type TranscriptEntry } from '../transcripts/index.ts'
 
@@ -36,11 +37,12 @@ export async function printSessions(directory: string, id: string | undefined, j
 }
 
 function sessionLine(session: Session): string {
-	const when = session.started === null ? 'no messages' : `${time(session.started)} to ${time(session.ended ?? '')} UTC`
+	const ran =
+		session.started === null ? 'no messages' : `${when(session.started)} to ${when(session.ended ?? session.started)}`
 	const count = plural(session.messages, 'message')
 	const skipped = session.skipped > 0 ? `, ${plural(session.skipped, 'line')} ken could not read` : ''
 	const partial = session.partial ? ', only the start read: the file is too large' : ''
-	return `${session.id}  ${when}, ${count}${skipped}${partial}`
+	return `${session.id}  ${ran}, ${count}${skipped}${partial}`
 }
 
 function entryLines(entry: TranscriptEntry): string[] {
@@ -54,11 +56,7 @@ function entryLines(entry: TranscriptEntry): string[] {
 	}
 	const cut = entry.cut > 0 ? [`    (${plural(entry.cut, 'more character')})`] : []
 	const text = entry.text.split('\n').map((line) => `    ${line}`)
-	return [`#${entry.message} ${entry.kind}, ${time(entry.at)}`, ...text, ...cut]
-}
-
-function time(at: string): string {
-	return at.slice(0, 19).replace('T', ' ')
+	return [`#${entry.message} ${entry.kind}, ${when(entry.at)}`, ...text, ...cut]
 }
 
 function plural(count: number, word: string): string {

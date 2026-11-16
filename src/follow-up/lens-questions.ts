@@ -7,6 +7,7 @@ import type { Repository } from '../repo/index.ts'
 import type { ChangeCommit, OpenItems, OpenTopic } from './open-items.ts'
 import { authorsOf, findAuthor, type PersonChanges, personChanges } from './person.ts'
 import { type Since, sinceOf, type TimeRange, timeRange } from './time-range.ts'
+import { at, onDay } from './when.ts'
 
 export type LensQuestion = { text: string; empty: boolean }
 
@@ -67,7 +68,7 @@ export function openQuestion(open: OpenItems): LensQuestion {
 	)
 	const topics = open.topics.map(
 		({ state, commits }) =>
-			`- ${state.topic} changed since I understood it on ${state.entry.date}: ${state.changed.map(linesText).join(', ')}. ${commitsSaid(commits)}`,
+			`- ${state.topic} changed since I understood it ${onDay(state.entry.date)}: ${state.changed.map(linesText).join(', ')}. ${commitsSaid(commits)}`,
 	)
 	const list = [...decisions, ...topics]
 	if (list.length === 0) {
@@ -81,7 +82,7 @@ export function openQuestion(open: OpenItems): LensQuestion {
 export function topicQuestion({ state, commits }: OpenTopic): LensQuestion {
 	return {
 		text: [
-			`What changed in ${state.topic} since I understood it on ${state.entry.date}?`,
+			`What changed in ${state.topic} since I understood it ${onDay(state.entry.date)}?`,
 			`- Its code changed since: ${state.changed.map(linesText).join(', ')}.`,
 			...(commits.length === 0 ? ['- ken found no commit to its files since then.'] : commits.map(commitLine)),
 		].join('\n'),
@@ -97,13 +98,13 @@ export function personQuestion({ author, range, commits, topics }: PersonChanges
 			? [`- ${author.name} made no commit ${when}.`]
 			: [
 					`- ${author.name} <${author.email}> (${who}) made ${count(commits.length)} from ${short(range.base)} to ${short(range.head)}:`,
-					...commits.slice(0, MAX_LISTED).map((c) => `- ${short(c.hash)} on ${c.date.slice(0, 10)}: ${c.subject}`),
+					...commits.slice(0, MAX_LISTED).map((c) => `- ${short(c.hash)} ${at(c.date)}: ${c.subject}`),
 					...(commits.length > MAX_LISTED ? [`- and ${commits.length - MAX_LISTED} older ones`] : []),
 					...(range.fromFirst ? [fromFirst(range)] : []),
 				]
 	const known = topics.map(
 		({ state, commits: touched }) =>
-			`- ${state.topic}, which I understood on ${state.entry.date}: their ${touched.map(short).join(', ')} touched its files, and ${state.kind === 'unchanged' || state.changed.length === 0 ? 'its quoted lines are as I knew them' : `its code changed since: ${state.changed.map(linesText).join(', ')}`}.`,
+			`- ${state.topic}, which I understood ${onDay(state.entry.date)}: their ${touched.map(short).join(', ')} touched its files, and ${state.kind === 'unchanged' || state.changed.length === 0 ? 'its quoted lines are as I knew them' : `its code changed since: ${state.changed.map(linesText).join(', ')}`}.`,
 	)
 	return {
 		text: [
@@ -160,7 +161,7 @@ function commitsSaid(commits: ChangeCommit[]): string {
 }
 
 function commitLine(commit: ChangeCommit): string {
-	return `- ${short(commit.hash)} by ${commit.author} (${WHO[commit.by]}) on ${commit.date.slice(0, 10)}: ${commit.subject}`
+	return `- ${short(commit.hash)} by ${commit.author} (${WHO[commit.by]}) ${at(commit.date)}: ${commit.subject}`
 }
 
 function count(commits: number): string {
