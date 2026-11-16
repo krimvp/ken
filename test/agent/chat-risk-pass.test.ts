@@ -90,14 +90,12 @@ test('log and diff over a change end with the names used elsewhere, once per que
 	})
 })
 
-test('an answer about a change is held for one risk pass: the agent gets its risks and the names no quote follows, an eighth risk is refused with the reason and uses no attempt, an added risk with a false quote is refused, and the final risks come in the order the revise call gave, with the withdrawn one gone, in the answer, the record and the cost', async () => {
+test('an answer about a change is held for one risk pass: the agent gets its risks and the names no quote follows, an added risk with a false quote is refused, and the final risks come in the order the revise call gave, with the withdrawn one gone, in the answer, the record and the cost', async () => {
 	const falseRisk = { ...CALLER_RISK, quotes: [{ ...CALL, text: '    return await fetchWithin(TIMEOUT_MS * 2)' }] }
-	const six = Array.from({ length: 6 }, (_, n) => ({ ...CALLER_RISK, text: `load waits too long, case ${n + 1}.` }))
 	const withdraw = [{ risk: 1, reason: 'Only requests slower than 100 ms fail.' }]
 	const { events, requests } = await ask([
 		answer({ ...ABOUT_THE_CHANGE, risks: [FIRST_RISK, SECOND_RISK] }),
 		{ text: '' },
-		{ tool: 'ken__revise_answer', args: { risks: six, order: [1, 2, 3, 4, 5, 6, 7, 8] } },
 		{ tool: 'ken__revise_answer', args: { risks: [falseRisk], order: [3, 1, 2] } },
 		{ tool: 'ken__revise_answer', args: { risks: [CALLER_RISK], withdraw, order: [3, 2] } },
 		{ text: 'I left out the tests.' },
@@ -109,10 +107,7 @@ test('an answer about a change is held for one risk pass: the agent gets its ris
 	for (const fact of [FIRST_RISK.text, SECOND_RISK.text, 'TIMEOUT_MS', 'src/load.ts:2']) {
 		assert.ok(pass?.includes(fact), `the risk questions name ${fact}: ${pass}`)
 	}
-	const eight = toolResults(requests[3]).at(-1) ?? ''
-	assert.match(eight, /8 risks, and ken shows at most 7, so the owner reads every one/)
-	assert.match(eight, /did not use one of your attempts/)
-	assert.match(toolResults(requests[4]).at(-1) ?? '', /attempt 1 of 2[\s\S]*Risk 1, quote 1: .*src\/load\.ts/)
+	assert.match(toolResults(requests[3]).at(-1) ?? '', /attempt 1 of 2[\s\S]*Risk 1, quote 1: .*src\/load\.ts/)
 	const event = accepted(events)
 	const verified = (risk: typeof FIRST_RISK, line: number) => ({
 		...risk,
@@ -141,8 +136,25 @@ test('an answer about a change is held for one risk pass: the agent gets its ris
 			usage.riskPass?.inputTokens,
 			usage.riskPass?.outputTokens,
 		],
-		[replies(6).input, replies(6).output, replies(4).input, replies(4).output],
-		'the risk pass took the last four replies, and the total counts them too',
+		[replies(5).input, replies(5).output, replies(3).input, replies(3).output],
+		'the risk pass took the last three replies, and the total counts them too',
+	)
+})
+
+test('an answer with eight risks is accepted, and they reach the reader in the order the risk pass gave', async () => {
+	const eight = Array.from({ length: 8 }, (_, n) => ({ ...CALLER_RISK, text: `load waits too long, case ${n + 1}.` }))
+	const order = [8, 7, 6, 5, 4, 3, 2, 1]
+	const { events } = await ask([
+		answer({ scope: { base, head }, risks: eight }),
+		{ text: '' },
+		{ tool: 'ken__revise_answer', args: { order } },
+		{ text: 'I left out the tests.' },
+	])
+
+	const risks = accepted(events).answer.risks?.map((risk) => risk.text)
+	assert.deepEqual(
+		risks,
+		order.map((number) => `load waits too long, case ${number}.`),
 	)
 })
 

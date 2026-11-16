@@ -24,8 +24,8 @@ export type Change = {
 // this reader already knows. A claim that belongs to no topic has none.
 export type Claim = Statement & { topic?: string }
 
-// checked is ken's own mark on a risk of an answer about a change, set from git by checkedInCode. A risk saved before
-// ken set it, or one in an answer about no change, has none.
+// checked is ken's own mark on a risk of an answer about a change, set from git by quotesOutsideChange: true when a
+// quote lies wholly outside the change. A risk saved before ken set it, or one in an answer about no change, has none.
 export type Risk = Claim & { checked?: boolean }
 
 // A risk has the shape of a statement: a claim about what could go wrong or what the owner should watch, with the

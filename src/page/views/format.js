@@ -210,6 +210,13 @@ export const LABELS = {
 	},
 }
 
+// ken's own mark on a risk of an answer about a change, which it sets from git.
+export const RISK_MARKS = {
+	outside: 'Quotes code outside the change',
+	inside: 'Quotes only the changed lines',
+	means: 'ken checks where the quote is, not whether the risk is true.',
+}
+
 export function label(name) {
 	return `<span class="label label-${esc(name)}">${esc(LABELS[name]?.name ?? name)}</span>`
 }

@@ -14,6 +14,7 @@ import {
 	list,
 	prose,
 	quoteRows,
+	RISK_MARKS,
 	short,
 	when,
 } from './format.js'
@@ -150,11 +151,11 @@ function claimHtml(claim, key, i, rows, marked) {
 	</li>`
 }
 
-// ken's own mark on a risk, from git, in the label styles: solid for checked in the code, dashed for not. A statement,
-// and a risk saved before ken set it, has none.
+// ken's own mark on a risk, from git, in the label styles: solid when a quote lies outside the change, dashed when not.
+// A statement, and a risk saved before ken set it, has none.
 function checkedHtml({ checked }) {
 	if (checked === undefined) return ''
-	const [style, name] = checked ? ['recorded', 'Checked in the code'] : ['inferred', 'Not checked outside the change']
+	const [style, name] = checked ? ['recorded', RISK_MARKS.outside] : ['inferred', RISK_MARKS.inside]
 	return `<span class="label label-${style}">${name}</span>`
 }
 
@@ -174,7 +175,7 @@ function risksHtml(all, shown, aboutChange, rows, marked, labels) {
 	return `<section class="risks" aria-labelledby="risks-head">
 		<div class="list-head">
 			<h3 id="risks-head">${shown.length === 1 ? 'A risk to watch' : `${shown.length} risks to watch`}</h3>
-			<p class="list-note">A risk is something ken's model thinks could go wrong.${labels ? ` ${labels}` : ''}</p>
+			<p class="list-note">A risk is something ken's model thinks could go wrong.${shown.some(({ item }) => item.checked !== undefined) ? ` ${RISK_MARKS.means}` : ''}${labels ? ` ${labels}` : ''}</p>
 		</div>
 		<ol>${shown.map(({ item, key }, i) => claimHtml(item, key, i, rows, marked)).join('')}</ol>
 	</section>`
