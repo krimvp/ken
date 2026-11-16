@@ -47,7 +47,7 @@ export function diffTool(repo: Repository): Tool {
 			const overview = files.slice(0, MAX_OVERVIEW_FILES).map(renderOverview).join('\n')
 			const more = files.length > MAX_OVERVIEW_FILES ? `\n... and ${files.length - MAX_OVERVIEW_FILES} more files` : ''
 			return reply(
-				`${header}\nThe whole diff is ${full.length} characters, too long to show. Files and hunks:\n${overview}${more}\nCall diff again with path to see one file.`,
+				`${header}\nThe whole diff is ${full.length} characters, too long to show. Files and hunks:\n${overview}${more}\nCall diff again with path for each file you need, all in one turn.`,
 			)
 		},
 	}
