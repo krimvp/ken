@@ -229,7 +229,7 @@ function quoteOf(raw: JsonObject): Quote {
 	const quote = readArgs(raw, 'answer quote')
 	const line = quote.optionalLine('line')
 	return {
-		path: quote.text('path'),
+		path: quote.optionalText('path') ?? null,
 		commit: quote.text('commit'),
 		text: quote.text('text'),
 		...(line === undefined ? {} : { line }),
@@ -266,15 +266,19 @@ function withoutDescriptions<T>(schema: T): T {
 const QUOTE_SCHEMA = {
 	type: 'object',
 	properties: {
-		path: { type: 'string', description: 'The path from the repository root' },
-		commit: { type: 'string', description: 'The commit you read the lines at' },
+		path: {
+			type: 'string',
+			description: "The path from the repository root. Leave it out to quote the commit's message instead.",
+		},
+		commit: { type: 'string', description: 'The commit you read the lines at, or whose message you quote' },
 		text: {
 			type: 'string',
-			description: 'The exact lines, copied from read_file or diff output, without line numbers or + and - signs',
+			description:
+				'The exact whole lines, copied from read_file, diff or log output, without line numbers or + and - signs',
 		},
 		line: { type: 'integer', minimum: 1, description: 'The number of the first quoted line' },
 	},
-	required: ['path', 'commit', 'text'],
+	required: ['commit', 'text'],
 	additionalProperties: false,
 } as const
 const QUOTE = withoutDescriptions(QUOTE_SCHEMA)

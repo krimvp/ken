@@ -93,6 +93,13 @@ export function gitRepository(root: string): Repository {
 			return { kind: 'ok', commits: parseLog(run.stdout) }
 		},
 
+		async message(commit, signal) {
+			const run = await git(['log', '-1', '--no-color', '--format=%B', commit], signal)
+			if (run.kind === 'too-large') return tooLarge
+			if (run.kind === 'failed') throw new Error(`git log failed on a resolved commit: ${run.stderr}`)
+			return { kind: 'ok', text: run.stdout.replace(/\n+$/, '') }
+		},
+
 		async mainLine(head, limit, signal) {
 			const args = [
 				'log',
@@ -168,7 +175,9 @@ function parseLog(stdout: string): Commit[] {
 				.map((value) => value.trim())
 				.filter((value) => value !== '')
 			const parentList = parents.split(' ').filter((parent) => parent !== '')
-			return { hash, parents: parentList, author, email, date: isoDate(time), subject, coAuthors, paths }
+			// git printed the hash itself, so it names a commit.
+			const commit = hash as CommitHash
+			return { hash: commit, parents: parentList, author, email, date: isoDate(time), subject, coAuthors, paths }
 		})
 }
 

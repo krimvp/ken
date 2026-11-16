@@ -8,7 +8,7 @@ import { scriptedModel, type Turn, toolResults } from '../fixtures/scripted-mode
 // merge and the start.
 const commits: FixtureCommit[] = [
 	{ message: 'feat: start', files: { 'a.ts': 'start\n' } },
-	{ message: 'feat: the branch adds b', files: { 'b.ts': 'b\n' } },
+	{ message: 'feat: the branch adds b', body: 'B comes first, since c needs it.', files: { 'b.ts': 'b\n' } },
 	{ message: 'feat: the branch adds c', files: { 'c.ts': 'c\n' } },
 	{ message: 'Merge pull request #7 from ada/letters', parent: 0, merge: 2, files: {} },
 	...Array.from({ length: 21 }, (_, n) => ({ message: `fix: step ${n + 1}`, files: { 'a.ts': `step ${n + 1}\n` } })),
@@ -32,7 +32,7 @@ async function results(calls: Turn[]): Promise<string[]> {
 	return toolResults(model.requests.at(-1))
 }
 
-test('log without base lists the main line newest first, gives a merge the range it brought in, and pages to older commits; with that range it lists each commit and its files', async () => {
+test('log without base lists the main line newest first, gives a merge the range it brought in, and pages to older commits; with that range it lists each commit, its files and its message by line', async () => {
 	const [newest = '', older = '', range = ''] = await results([
 		{ tool: 'ken__log', args: {} },
 		{ tool: 'ken__log', args: { head: `${short(hashes[4])}^1` } },
@@ -52,4 +52,8 @@ test('log without base lists the main line newest first, gives a merge the range
 		range.split('\n')[range.split('\n').findIndex((line) => line.startsWith(`${hash} `)) + 1]
 	assert.equal(filesAfter(branchTwo)?.trim(), 'c.ts', 'each commit in a range shows the files it changed')
 	assert.equal(filesAfter(branchOne)?.trim(), 'b.ts')
+	assert.ok(
+		range.includes('  message:\n     1\tfeat: the branch adds b\n     2\t\n     3\tB comes first, since c needs it.'),
+		`a commit with a body shows its whole message, numbered from the subject: ${range}`,
+	)
 })

@@ -27,7 +27,11 @@ const { root, hashes } = buildRepository([
 			'docs/über.md': '# Größe\n\nDie Größe wird in Bytes gezählt. 日本語のテキスト\n',
 		},
 	},
-	{ message: 'feat: add later', files: { 'src/later.ts': 'export const later = 1\n' } },
+	{
+		message: 'feat: add later',
+		body: "Later runs after start.\nWhether it should run first is the owner's call.",
+		files: { 'src/later.ts': 'export const later = 1\n' },
+	},
 ])
 const repo = gitRepository(root)
 const [start = '', later = ''] = hashes
@@ -92,6 +96,36 @@ const cases: { name: string; quote: Quote; expected: unknown }[] = [
 			kind: 'verified',
 			quote: { path: 'src/retry.ts', commit: start, startLine: 8, endLine: 9, text: `${RETRY[1]}\n${RETRY[2]}` },
 			alsoAt: [2],
+		},
+	},
+	{
+		name: "a quote with no path is found in the commit's message, its lines counted from the subject",
+		quote: { path: null, commit: 'HEAD', text: "Whether it should run first is the owner's call." },
+		expected: {
+			kind: 'verified',
+			quote: {
+				path: null,
+				commit: later,
+				startLine: 4,
+				endLine: 4,
+				text: "Whether it should run first is the owner's call.",
+			},
+			alsoAt: [],
+		},
+	},
+	{
+		name: "a quote that is not in the commit's message is rejected, though the same words are in the file",
+		quote: { path: null, commit: later, text: 'export const later = 1' },
+		expected: { kind: 'not-found', path: null, commit: later, closest: [] },
+	},
+	{
+		name: 'a quote of half a line of the message is rejected, and points at the whole line',
+		quote: { path: null, commit: later, text: "the owner's call." },
+		expected: {
+			kind: 'not-found',
+			path: null,
+			commit: later,
+			closest: [{ line: 4, text: "Whether it should run first is the owner's call." }],
 		},
 	},
 	{

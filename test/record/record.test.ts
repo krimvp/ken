@@ -87,12 +87,17 @@ test('a correction leaves the old entry readable, and reads return the new one',
 	assert.equal(fixed?.replaces, old?.id)
 })
 
-test('a batch with a false quote or an unknown replaces is refused whole, and nothing is written', async () => {
+test('a batch with a false quote, an unknown replaces or a topic that quotes a commit message is refused whole, and nothing is written', async () => {
 	const store = emptyRecord()
 	const falseQuote = { ...decision, quotes: [{ ...SLEEP, text: '    sleep(100)' }] }
 	const unknownReplaces = { ...decision, replaces: '000000000000' }
+	const messageTopic = {
+		...topic,
+		name: 'retry wait',
+		quotes: [{ path: null, commit: 'HEAD', text: 'docs: fix a word' }],
+	}
 
-	for (const bad of [falseQuote, unknownReplaces]) {
+	for (const bad of [falseQuote, unknownReplaces, messageTopic]) {
 		const result = await store.append([topic, bad])
 		assert.equal(result.kind, 'refused')
 		assert.equal(result.kind === 'refused' && result.problems.length, 1, JSON.stringify(result))

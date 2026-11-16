@@ -110,6 +110,9 @@ async function checkOne(
 		if (raw.length > DIAGRAM_BOUNDS.quotes) {
 			problems.push(`${field} has ${raw.length} quotes; keep it to ${DIAGRAM_BOUNDS.quotes}.`)
 		}
+		if (raw.some((quote) => quote.path === null)) {
+			problems.push(`${field} quotes a commit message. A diagram shows code, so give each quote the path of its file.`)
+		}
 		const checks = await Promise.all(raw.map((quote) => checkQuote(repo, quote, signal)))
 		return checks.flatMap((check, index): VerifiedQuote[] => {
 			if (check.kind === 'verified') return [check.quote]

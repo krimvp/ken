@@ -101,7 +101,8 @@ function quoted(quote: VerifiedQuote): string[] {
 	const span =
 		quote.startLine === quote.endLine ? `line ${quote.startLine}` : `lines ${quote.startLine}-${quote.endLine}`
 	const rows = quote.text.split('\n').map((text, offset) => `${String(quote.startLine + offset).padStart(6)}\t${text}`)
-	return [`  quote ${quote.path} at ${quote.commit}, ${span}:`, ...rows]
+	const source = quote.path === null ? `the message of ${quote.commit}` : `${quote.path} at ${quote.commit}`
+	return [`  quote ${source}, ${span}:`, ...rows]
 }
 
 function short(commit: string): string {

@@ -47,6 +47,7 @@ export async function checkCoverage(
 				hunk.newLength === 0
 					? [base, file.oldPath, hunk.oldStart, hunk.oldLength]
 					: [head, file.path, hunk.newStart, hunk.newLength]
+			// A quote of a commit message has no path, so it covers no hunk.
 			const isCovered = quotes.some(
 				(quote) =>
 					quote.commit === commit && quote.path === path && quote.startLine < start + length && quote.endLine >= start,

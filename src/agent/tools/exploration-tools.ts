@@ -23,6 +23,9 @@ const MAX_MAIN_LINE = 20
 const MAX_LOGGED_PATHS = 20
 const MAX_BLAME_LINES = 200
 const MAX_LINE_CHARS = 300
+// A commit message is where a reason or a choice left for later is written, so log shows each one whole up to these.
+const MAX_MESSAGE_LINES = 80
+const MAX_MESSAGES_CHARS = 40_000
 
 const COMMIT = {
 	type: 'string',
@@ -139,7 +142,7 @@ export function explorationTools(repo: Repository): Tool[] {
 		},
 		{
 			name: 'log',
-			description: `List commits newest first, with author, date and files. Without base: the newest ${MAX_MAIN_LINE} commits on head's main line, where each merge gives the range of the change it brought in. One call finds a pull request, a merge or the last few commits. With base: the commits in base..head, the ones head has and base does not, each with the files it changed, at most ${MAX_COMMITS}.`,
+			description: `List commits newest first, with author, date and files. Without base: the newest ${MAX_MAIN_LINE} commits on head's main line, where each merge gives the range of the change it brought in. One call finds a pull request, a merge or the last few commits. With base: the commits in base..head, the ones head has and base does not, at most ${MAX_COMMITS}, each with the files it changed and its whole message, numbered by line so you can quote it.`,
 			parameters: {
 				type: 'object',
 				properties: {
@@ -157,16 +160,33 @@ export function explorationTools(repo: Repository): Tool[] {
 				if (range.kind !== 'ok') return range.result
 				const logged = await repo.log(range, ctx.signal)
 				if (logged.kind === 'too-large') return refuse('The range is too large. Ask for a shorter one.')
-				const shown = logged.commits.slice(0, MAX_COMMITS).map((commit) => {
-					if (commit.paths.length === 0) return commitLine(commit)
+				const commits = logged.commits.slice(0, MAX_COMMITS)
+				const messages = await Promise.all(commits.map((commit) => repo.message(commit.hash, ctx.signal)))
+				let budget = MAX_MESSAGES_CHARS
+				let unread = 0
+				const shown = commits.map((commit, index) => {
 					const paths = commit.paths.slice(0, MAX_LOGGED_PATHS).join(', ')
 					const more =
 						commit.paths.length > MAX_LOGGED_PATHS ? ` and ${commit.paths.length - MAX_LOGGED_PATHS} more` : ''
-					return `${commitLine(commit)}\n  ${paths}${more}`
+					const rows = [commitLine(commit), ...(paths === '' ? [] : [`  ${paths}${more}`])]
+					const message = messages[index]
+					const lines = message?.kind === 'ok' ? message.text.split('\n') : []
+					if (lines.length < 2) return rows.join('\n')
+					const numbered = lines.slice(0, MAX_MESSAGE_LINES).map((line, at) => `${String(at + 1).padStart(6)}\t${line}`)
+					const text = numbered.join('\n')
+					if (text.length > budget) {
+						unread += 1
+						return rows.join('\n')
+					}
+					budget -= text.length
+					const cut = lines.length > numbered.length ? `\n  [the message goes on to line ${lines.length}]` : ''
+					return [...rows, '  message:', `${text}${cut}`].join('\n')
 				})
 				const more = logged.commits.length > shown.length ? `\nShowing the newest ${shown.length}.` : ''
+				const left =
+					unread > 0 ? `\nThe messages of ${unread} commits did not fit. Call log on a shorter range to read them.` : ''
 				return reply(
-					`${logged.commits.length} commits in ${short(range.base)}..${short(range.head)}:\n${shown.join('\n')}${more}`,
+					`${logged.commits.length} commits in ${short(range.base)}..${short(range.head)}:\n${shown.join('\n')}${more}${left}`,
 				)
 			},
 		},

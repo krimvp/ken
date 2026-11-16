@@ -140,6 +140,11 @@ export async function checkEntry(
 			break
 		}
 		case 'topic': {
+			// A note goes stale when its topic's lines change at HEAD, and a commit message never changes, so a topic quotes
+			// files only.
+			if (draft.quotes.some((quote) => quote.path === null)) {
+				problems.push('the topic quotes a commit message. A topic rests on lines of files: give each quote its path.')
+			}
 			const topic: Topic = {
 				kind: 'topic',
 				name: text('name', draft.name, MAX.name),

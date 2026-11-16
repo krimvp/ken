@@ -1,5 +1,6 @@
 // The plan's first deterministic check: every claim about code cites a file, a commit and the exact lines, and this
-// confirms that text is in that file at that commit. The model's line number is only a hint, never trusted.
+// confirms that text is in that file at that commit. A quote with no path cites the commit's message instead, which
+// is checked the same way. The model's line number is only a hint, never trusted.
 import {
 	type CommitHash,
 	type NoCommit,
@@ -10,14 +11,21 @@ import {
 	type TooLarge,
 } from '../repo/index.ts'
 
-export type Quote = { path: string; commit: string; text: string; line?: number }
+// path is null for a quote of the commit's message rather than of a file. Its lines count from the subject, line 1.
+export type Quote = { path: string | null; commit: string; text: string; line?: number }
 
-export type VerifiedQuote = { path: string; commit: CommitHash; startLine: number; endLine: number; text: string }
+export type VerifiedQuote = {
+	path: string | null
+	commit: CommitHash
+	startLine: number
+	endLine: number
+	text: string
+}
 
 // alsoAt holds the first line of every other place the same text appears, so a caller can say which one it meant.
 export type QuoteCheck =
 	| { kind: 'verified'; quote: VerifiedQuote; alsoAt: number[] }
-	| { kind: 'not-found'; path: string; commit: CommitHash; closest: { line: number; text: string }[] }
+	| { kind: 'not-found'; path: string | null; commit: CommitHash; closest: { line: number; text: string }[] }
 	| { kind: 'empty' }
 	| Refused
 	| NoCommit
@@ -28,34 +36,30 @@ const MAX_CLOSEST = 3
 
 export async function checkQuote(repo: Repository, quote: Quote, signal?: AbortSignal): Promise<QuoteCheck> {
 	if (!/[\p{L}\p{N}]/u.test(quote.text)) return { kind: 'empty' }
-	const path = parsePath(quote.path)
-	if (path.kind !== 'ok') return path
+	const path = quote.path === null ? null : parsePath(quote.path)
+	if (path !== null && path.kind !== 'ok') return path
 	const resolved = await repo.resolve(quote.commit, signal)
 	if (resolved.kind !== 'ok') return resolved
-	const file = await repo.readFile(resolved.commit, path.path, signal)
-	if (file.kind !== 'ok') return file
+	const source =
+		path === null
+			? await repo.message(resolved.commit, signal)
+			: await repo.readFile(resolved.commit, path.path, signal)
+	if (source.kind !== 'ok') return source
 
+	const where = { path: path === null ? null : path.path, commit: resolved.commit }
 	const wanted = quotedLines(quote.text)
-	const lines = file.text.split('\n')
+	const lines = source.text.split('\n')
 	const trimmed = lines.map((line) => line.trimEnd())
 	const starts: number[] = []
 	for (let index = 0; index + wanted.length <= trimmed.length; index++) {
 		if (wanted.every((line, offset) => trimmed[index + offset] === line)) starts.push(index + 1)
 	}
 	const start = pickStart(starts, quote.line)
-	if (start === undefined) {
-		return { kind: 'not-found', path: path.path, commit: resolved.commit, closest: closestLines(lines, wanted) }
-	}
+	if (start === undefined) return { kind: 'not-found', ...where, closest: closestLines(lines, wanted) }
 	const endLine = start + wanted.length - 1
 	return {
 		kind: 'verified',
-		quote: {
-			path: path.path,
-			commit: resolved.commit,
-			startLine: start,
-			endLine,
-			text: lines.slice(start - 1, endLine).join('\n'),
-		},
+		quote: { ...where, startLine: start, endLine, text: lines.slice(start - 1, endLine).join('\n') },
 		alsoAt: starts.filter((other) => other !== start),
 	}
 }

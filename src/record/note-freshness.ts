@@ -25,8 +25,13 @@ export async function noteFreshness(
 		),
 	)
 	const atHead = checks.flatMap((check) => (check.kind === 'verified' ? [check.quote] : []))
-	const changed = topic.quotes.filter((_, index) => checks[index]?.kind !== 'verified').map((quote) => quote.path)
-	if (changed.length > 0) return { kind: 'stale', changed: [...new Set(changed)] }
-	if (codeHash(atHead) !== note.codeHash) return { kind: 'stale', changed: [...new Set(atHead.map((q) => q.path))] }
+	const changed = topic.quotes.filter((_, index) => checks[index]?.kind !== 'verified')
+	if (changed.length > 0) return { kind: 'stale', changed: files(changed) }
+	if (codeHash(atHead) !== note.codeHash) return { kind: 'stale', changed: files(atHead) }
 	return { kind: 'fresh' }
+}
+
+// A topic quotes only files: checkEntry refuses a quote of a commit message in a topic.
+function files(quotes: VerifiedQuote[]): string[] {
+	return [...new Set(quotes.flatMap((quote) => quote.path ?? []))]
 }
