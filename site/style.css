@@ -82,7 +82,7 @@ body {
 main {
 	max-width: calc(var(--measure) + 2 * var(--gutter));
 	margin: 0 auto;
-	padding: var(--space-8) var(--gutter);
+	padding: var(--space-8) var(--gutter) var(--space-6);
 }
 
 h1,
@@ -146,27 +146,37 @@ code {
 	border-left: 3px solid var(--color-accent);
 }
 
-/* A screenshot of ken's page. It links to the full-size file, which matters on a phone. */
+/* A screenshot of ken's page, at 2x. On a wide screen the picture grows past the text column, up to 50rem, so that
+   the product's text shows at its own size. Under 34rem the page loads a capture taken at a phone's width. */
 .shot {
 	margin: var(--space-6) 0;
 }
 
 .shot a {
 	display: block;
+	margin-inline: calc(50% - min(25rem, 50vw - var(--gutter)));
 }
 
 .shot img {
 	display: block;
-	width: 100%;
+	max-width: 100%;
 	height: auto;
+	margin: 0 auto;
 	border: 1px solid color-mix(in srgb, var(--color-muted) 45%, transparent);
 	border-radius: var(--radius-md);
 }
 
 .shot figcaption {
 	margin-top: var(--space-3);
+	color: var(--color-muted);
 	font-size: 1rem;
 	line-height: 1.55;
+}
+
+@media (prefers-color-scheme: dark) {
+	.shot img {
+		border-color: var(--color-muted);
+	}
 }
 
 /* The drawing of how ken works. Drawn at 420 units wide, so its text keeps about 12 pixels on a 390-pixel screen. */
@@ -204,10 +214,6 @@ code {
 	font-size: 14px;
 }
 
-.flow-edges .flow-loop {
-	font-size: 13px;
-}
-
 .flow .flow-code {
 	font-family: var(--font-code);
 	font-size: 13.5px;
@@ -223,8 +229,8 @@ code {
 	fill: var(--color-muted);
 }
 
-/* The labels look as they do on ken's page: a dashed outline and a hollow dot for the agent's own reading, and a
-   dotted outline and a square for a link found by search. */
+/* The labels look as they do on ken's page. Recorded is solid with a filled dot, From the session solid with a hollow
+   dot, Inferred dashed with a hollow dot, and Found by search dotted with a square. */
 .label {
 	display: inline-flex;
 	align-items: center;
@@ -246,6 +252,15 @@ code {
 	border-radius: 50%;
 }
 
+.label-recorded,
+.label-session {
+	border-style: solid;
+}
+
+.label-recorded::before {
+	background: currentColor;
+}
+
 .label-search {
 	border-style: dotted;
 	background: var(--color-label-bg);
@@ -258,12 +273,12 @@ code {
 
 .labels {
 	display: grid;
-	gap: var(--space-3);
+	gap: var(--space-4);
 }
 
 .labels div {
 	display: grid;
-	grid-template-columns: 9rem 1fr;
+	grid-template-columns: 10.5rem 1fr;
 	gap: var(--space-3);
 	align-items: baseline;
 }
@@ -271,6 +286,25 @@ code {
 .labels dt,
 .labels dd {
 	margin: 0;
+}
+
+footer {
+	max-width: calc(var(--measure) + 2 * var(--gutter));
+	margin: 0 auto;
+	padding: 0 var(--gutter) var(--space-7);
+	color: var(--color-muted);
+	font-size: 1rem;
+}
+
+footer p {
+	margin: 0;
+	padding-top: var(--space-5);
+	border-top: 1px solid var(--color-border);
+}
+
+footer p + p {
+	padding-top: var(--space-2);
+	border-top: 0;
 }
 
 @media (max-width: 34rem) {
@@ -288,6 +322,16 @@ code {
 
 	.labels div {
 		grid-template-columns: 1fr;
-		gap: var(--space-1);
+		gap: var(--space-2);
+	}
+
+	section {
+		margin-top: var(--space-6);
+		padding-top: var(--space-5);
+	}
+
+	/* ken's own diagrams scroll sideways on a phone, so a capture of one cannot be read there. */
+	.shot-wide-only {
+		display: none;
 	}
 }

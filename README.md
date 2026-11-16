@@ -1,34 +1,29 @@
 # ken
 
-ken explains a software project to the developer who owns it. It tells you what changed, why it changed, and how a part of the code works now. It is built for projects where AI agents write most of the code.
+ken explains a software project to the developer who owns it. It tells you what changed, why it changed, and how a part of the code works now, and each claim in its answer quotes lines you can check. It is built for projects where AI agents write most of the code.
 
-![ken's side panel for the first statement of an answer. The statement says that the answer tool checks every quote against git and that a question ends after three rejected answers. Under it are the label Inferred and two quotes at commit b5a9226: lines 1 to 3 of src/agent/answer/check-answer.ts and line 17 of src/agent/answer/answer-tool.ts, export const MAX_REJECTIONS = 3.](site/images/ken-statement-with-quotes.png)
+![Risk 1 of 5 in an answer: the page and the terminal show times differently, because the page shows note times in the browser's local time with no zone, while the terminal slices the ISO string and labels it UTC. Under it are two quotes at commit 53567b4: line 16 of src/page/live/note.js and line 71 of src/cli/live.ts.](site/images/ken-risk-with-quotes-wide.png)
 
-ken answering a question about its own code, on glm-5.3. The panel shows the answer's first statement, its label, and two of its four quotes, read from git at commit `b5a9226`.
+Screenshot of ken's page, on Claude Opus: the first of five risks in its answer to "What did the last three commits do, and why?" about this repository.
 
 ## Status
 
-ken is early work. It is not released, it has no license yet, and there is nothing to install. You run it from a checkout. [site/](site/index.html) holds a public page about it, not yet published.
+Early work. ken is not released, it has no license yet, there is nothing to install from a registry, and the repository is private. You run it from a checkout. [site/](site/index.html) holds a public page about it, not yet published.
 
-Slices 0 to 3 of [the plan](docs/plan.md) run: a chat in the terminal about one repository, a project record, and a page in the browser. The model reads the files and the git history with tools that cannot change the project. It must send its answer through a tool that checks every quote against git, and it gets three tries. An accepted answer lists the commits in scope, read from git, and the changed lines that no quote covers. A question about a branch counts only what the branch did since it split from main.
+What runs today:
 
-The project record keeps what earlier answers found: pieces of work, the decisions in them, topics, and a note on each topic. It lives in `.ken/record/` in the project's repository, as one JSON Lines file per kind (`work.jsonl`, `decisions.jsonl`, `topics.jsonl`, `notes.jsonl`). ken only adds lines to it, and only through checks: every quote must pass, and commits and authors come from git. ken labels every decision itself. A decision is "recorded" when its reason was written down when the work was done: a coding agent logged it with `ken decide` as it made it, or its reason quotes a commit message. It is "from the session" when its reason quotes a session the coding agent saved, read afterwards. Otherwise it is "inferred", because the model worked it out from the diff. When a reason quotes a saved session, the record keeps the session's id, the message's number, who wrote it and when, and the quoted lines after ken hid what looks like a secret in them, and no other text of the session. Commit `.ken/` only if you are happy to share those lines. Each question starts by showing the model the record, so asking again reads the stored answer instead of exploring again. ken never commits. You commit `.ken/` yourself, so a collaborator and their agents can read it.
+- `ken open` starts a page on your machine, and `ken chat` and `ken ask` answer in the terminal. `ken record`, `ken map`, `ken follow-up`, `ken who`, `ken since`, `ken catch-up`, `ken area`, `ken decide`, `ken sessions` and `ken live` are described under [Run it](#run-it).
+- An answer has a short summary, one or two basic diagrams for a high-level question, then the decisions with their reasons, the risks, and statements. Each carries quotes of lines of code, of a commit message, or of a saved session of the coding agent. ken checks that every quoted line is where the quote says, and rejects an answer with a quote that is not there. It does not check that a sentence, a risk or an arrow is true, and it does not check the summary. The commits, authors and dates, and which changed blocks and commit messages the quotes cover, come from git.
+- ken sets a label where it can. "Recorded" means a coding agent logged the decision with `ken decide` as it worked, or the reason is quoted from a commit message. "From the session" means the reason is quoted from a saved session. "Inferred" means the agent worked it out. "Found by search" marks a link between pieces of code that the agent found by searching and did not prove.
+- The project record lives in `.ken/record/` in your repository, as JSON Lines files that ken only adds to. You commit it, so a collaborator and their agents can read it. ken never commits, and never writes to your project besides `.ken/`. Your question history and your understanding map live in `~/.ken/projects/<first commit>/` on your machine.
+- The understanding map keeps what you said you know, topic by topic. A topic you know whose quoted code has not changed folds to one line. When the code changed, the answer leads with the change. "Open" lists the decisions that need your call and the topics that changed since you understood them, with who changed them.
+- Live mode runs beside your coding agent and writes short notes as the work moves, on each commit and on uncommitted work that has gone quiet. For uncommitted work it keeps snapshots in its own store under `~/.ken/` and never writes to the project, so such a note is a draft on your machine. Live mode is off until you turn it on, and it shows what it spends.
+- ken reads the sessions Claude Code saves. Before any session text reaches the model, the page, your history or the record, ken hides what looks like a credential. This is best effort: a secret written in plain words, or a short one, gets through. The record keeps only the quoted lines of a session, so commit `.ken/` only if you are happy to share them. Set `KEN_SESSIONS=off` to stop ken reading sessions.
+- ken works with any OpenAI-compatible endpoint, and the code and session text it reads go to that provider. It has been run on glm-5.3 and kimi-k3.1-pro through Ollama Cloud, and on Claude Opus through the Claude Code command with ken's local adapter, `npm run claude-endpoint`. gpt-oss:120b, as served on Ollama Cloud in November 2026, could not follow the quoting rules.
 
-Slice 3 adds the page. `ken open` starts a server on your machine and opens the page in your browser. You ask in a box at the bottom. While the agent works, the page shows each step it takes in plain words, and a Stop button. The answer comes as statements, decisions and risks, each with its label and the code it quotes; open a quote to read all its lines. Beside the answer, ken shows what it checked: the quotes, the changed code that no quote covers (as diffs), and the commits, all read from git. The page keeps every question you ask, with its answer, in `~/.ken/projects/<first commit>/history.jsonl`. That file is yours and stays out of the project. Come back the next day and the page shows the answers again without asking the model.
+Not built: readers for other coding tools' sessions, anything for teams, and a parser or index of the code.
 
-![The panel headed What ken checked, beside an answer about the last commit. All 12 quotes are in git at b5a9226. 7 of 175 changed blocks are quoted, and the panel names the files of the other 168 and says to read them before trusting the answer about them. Last comes the commit, from git: b5a9226, by Claude, 15 November at 22:50 UTC.](site/images/ken-what-it-checked.png)
-
-What ken checked, beside its answer to "What did the last commit do?" about its own repository.
-
-A high-level question, such as how the parts fit together or what happens when a request comes in, gets an answer that leads with one or two basic diagrams: boxes and arrows, the steps of a sequence, or the data and how it relates. The model sends the boxes and arrows as data, never diagram syntax. Every arrow must quote the lines that show it, and those quotes pass the same check as any other. ken writes the Mermaid text itself, and the page draws it. Under each drawing, a numbered row for each box and arrow shows the lines it quotes. ken checked that those lines exist. It did not check that an arrow is true, just as it does not check a sentence.
-
-![The question: What happens, step by step, when the reader asks a question on the page, from the browser to the answer? Below it, the agent's sequence diagram, labelled Inferred: the page, the server, the question desk, the agent, and git and the record, with eight numbered arrows from the page posting the question to the page getting the saved answer back. A link under it reads: Show the 13 numbered parts in words, with their quotes.](site/images/ken-answer-with-diagram.png)
-
-ken's answer to a question about how its own page works, on glm-5.3. It opens with a sequence diagram.
-
-Slice 5 adds recorded decisions and saved sessions. A coding agent logs a decision as it makes it with `ken decide`, and ken labels it "recorded". "Decisions" in the page's header lists every decision in the record, newest first, with its label, who logged it, and the piece of work it belongs to. ken also reads the sessions Claude Code saved while it worked on the project: what the person who ran the session asked, and what the agent said. When you ask why something was done and neither the code nor the commit messages say, the agent looks for the session that ran when those commits were made and quotes it. ken checks that the quoted lines are in that session, and labels what rests on them "from the session". It does not check that they give the true reason. A session quote shows when the session ran and who wrote the lines, with no file and no commit.
-
-Before any session text reaches the model, the page, your history or the record, ken hides what looks like a credential: keys with a known start such as `sk-` or `ghp_`, bearer tokens, random-looking values given to a name such as `KEY`, `TOKEN`, `SECRET` or `PASSWORD`, and the values of such variables in ken's own environment. This is best effort: a secret written in plain words, or a short one, gets through. The session text the agent reads goes to the model provider you chose, as the code does. Set `KEN_SESSIONS=off` to stop ken reading sessions.
+The plan says ken must beat a plain chat with a coding agent on at least one of three counts and lose on none: finding a decision or a risk the other missed, trusting the answer because the quotes are there, and finding the answer again the next day. In three rounds on merged pull requests of another project by the same owner, scored by a second AI agent and not yet by the owner, ken did not pass. Each time it won the second and third counts and lost the first, so today ken is not better than a plain chat at finding risks. The four verdicts are in [docs/checkpoint/](docs/checkpoint/).
 
 How ken works today:
 
@@ -36,40 +31,27 @@ How ken works today:
 flowchart LR
   reader(["You"])
   page["The page<br/>ken open, on your machine"]
+  history["History and map<br/>~/.ken/, yours only"]
   agent["The agent<br/>a model you choose, read-only tools"]
   repo["Your repository<br/>files and git history"]
-  checks["Three checks<br/>each quote is in git<br/>change facts from git<br/>the record only grows"]
-  record["Project record<br/>.ken/record/, shared"]
-  history["Your history<br/>~/.ken/, personal"]
+  sessions["Saved sessions<br/>of Claude Code, ~/.claude/"]
+  checks["Three checks<br/>every quote is found<br/>commits come from git<br/>entries never change"]
+  record["Project record<br/>.ken/record/, committed"]
   reader -->|asks and reads| page
-  page -->|runs the question in| agent
+  page -->|saves| history
+  page -->|runs the question| agent
   agent -->|reads| repo
+  agent -->|reads| sessions
   agent -->|sends the answer to| checks
-  checks -->|read quoted lines from| repo
-  checks -->|add what passed to| record
+  checks -->|adds what passed to| record
   record -->|is read before each question by| agent
-  page -->|saves each answer in| history
 ```
 
 The public page in `site/` draws the same parts and arrows.
 
-`ken chat` and `ken ask` take the place of the page in the terminal. They print a diagram as its numbered rows, and `--json` carries its Mermaid text.
+![A draft note in the Live view, marked Draft, on this machine only. It says a 404 now throws a NotFound error and retry rethrows it at once, and that letting the caller choose the number of attempts is not done yet. Statement 1 quotes lines 8 to 9 of src/http.ts.](site/images/ken-live-draft-note-wide.png)
 
-ken runs on a model you choose. It has been run on glm-5.3 through Ollama Cloud. One open-weight model that was tried could not follow the quoting rules.
-
-Slice 4 adds the understanding map: what you understand of the project, topic by topic. It is personal, so it lives beside your history in `~/.ken/projects/<first commit>/map.jsonl` and never in the project. Each line is a small JSON object you can read and type: the topic, a depth (`heard-of`, `can-follow` or `could-change`), the evidence (`asked`, `read`, `said` or `wrote`), the day, and the hash of the topic's quoted code that day. ken only adds lines, and the newest line for a topic wins. A line you add or change by hand counts as long as it parses; a line that does not parse is skipped and named. A question marks the topics it names as met, which is interest, not understanding. Under each answer, "I know this" marks its topics as understood at the code as it is now, "Too much" makes the next answer on them shorter, and "Go deeper" asks for more and tells the map you need it. The next answer folds each topic you know whose code is unchanged into one line, "You know quote check. Unchanged since 16 Nov. Show it anyway." When a commit changes a line the topic quotes, ken marks it as changed since you understood it and names the lines, whoever made the change. Two lenses use the map: catch up, and what you need to know to work in one part today. A reformat or a rename of a quoted file also marks a topic as changed.
-
-Slice 6 adds following up: ken brings back what waits on you, worked out by plain code from the record, the map and git, with no model. Open means two things. One is a decision the agent marked as needing your call, which you have not answered. The other is a topic you said you know whose quoted code changed since. For each such topic, ken lists the commits that touched its files since you understood it, and who made each by the record's rule: your agent, a collaborator, or unknown. A topic you never met is never listed. "Open (3)" in the page's header leads to the list. "I have decided", with a note if you like, adds to the record a copy of the decision that no longer needs you and keeps your answer; the old entry stays readable. A topic leaves the list when you press "I know this" on it again. Asking about it does not take it off, since a question is interest, not understanding. Two more lenses sit under the question box: what one person or agent changed, and what happened in a span of time, such as the last 14 days or since your last question. The person lens lists their commits and the topics you know that those commits touched, then asks the agent to explain them. The time lens lists the commits and the pieces of work the record has in that span, then asks the agent.
-
-Live mode, which the plan did not have, lets ken explain the work while a coding agent does it. Run it beside your agent, on the page's "Live" view or with `ken live` in a terminal pane. Without a model, ken shows what it sees now: the branch, the files with uncommitted changes and how many lines changed, the last commits, and the last thing you asked your agent, read from its saved session with secrets hidden and no tool output. Then it writes a short note each time a commit lands, and each time uncommitted work has been quiet for 20 seconds and changed by 3 lines or more: what changed since the last note and why, with each claim quoting its lines, a risk when there is a real one, and the reason quoted from the session when the session gives one. A note goes through the same checks as an answer, and a note whose quotes fail is shown as failed. Notes come one at a time, at most one a minute and 12 an hour, and take turns with your questions. Every note is a model call, so live mode is off until you turn it on, and the page shows the pace and what this run spent.
-
-ken never writes to your project, and that holds in live mode. To quote lines nobody has committed, ken copies the uncommitted work into a commit in its own git object folder, `~/.ken/projects/<first commit>/snapshots/`, with HEAD as parent. The project's `.git` and working tree do not change: no object, ref, index or lock. A snapshot takes in what `.gitignore` allows, leaves out `.ken/`, binary files and files over 1 MB, takes at most 8 MB, and says how many files it left out. ken empties the folder when it starts and finds it over 200 MB. A note on uncommitted work cites a commit only your machine has, so it is a draft: it stays in your history, shown as uncommitted work at that time, and adds nothing to `.ken/record/`. A note on commits that landed records what any answer records.
-
-These parts of the plan are not built yet:
-
-- A reader for the saved sessions of a coding tool other than Claude Code.
-
-The plan's checkpoint after slice 3 compares ken with a plain chat with a coding agent, on real pieces of agent work. In round 1, on three pull requests on 15 November 2026, ken won on trusting an answer because of its quotes and on finding it again the next day. It lost on finding a decision or a risk the other missed, so ken did not pass yet. Since then, risks are their own part of an answer, and the prompt asks the agent to read the code outside the diff. The judge's verdict is in [docs/checkpoint/round-1.md](docs/checkpoint/round-1.md). Rounds 2 and 3 were scored by an AI judge and not yet by the owner: [round 2](docs/checkpoint/round-2.md), [round 3](docs/checkpoint/round-3.md), and [round 3 with Claude Opus on both sides](docs/checkpoint/round-3-same-model.md).
+Screenshot of the top of a draft note in ken's Live view, written by Claude Opus as a coding agent worked on a small made-up project.
 
 ## Run it
 
@@ -123,7 +105,7 @@ npm run ken -- sessions 0b7e4c2a-5f1d-4c3e-9a8b-2d6f1e0c9b7a --repo ../my-projec
 
 Claude Code keeps sessions in `~/.claude/projects/`. Set `KEN_CLAUDE_PROJECTS` to read them from another folder.
 
-The chat and the page read the same sessions. The agent can list them, read one around a time or a message, and search them, and it quotes them only to say why something was done. What it reads of a session goes to your model provider. ken hides what looks like a credential first, as best it can. `KEN_SESSIONS=off` turns reading off for `sessions`, the chat and the page. Two labels come from this: "recorded" means the reason was written down when the work was done, by `ken decide` or in a commit message, and "from the session" means it was read afterwards from a saved session, and quoted.
+The chat and the page read the same sessions. The agent can list them, read one around a time or a message, and search them, and it quotes them only to say why something was done. `KEN_SESSIONS=off` turns reading off for `sessions`, the chat and the page.
 
 `map` prints your understanding map and the path of its file. It needs no model. To correct the map, add a line to that file; `map` shows the hash each topic has now, and an example line to copy. `catch-up` lists, without a model, the topics whose code changed since you understood them and the work recorded since your last question, then asks the agent to explain them. `area` does the same for one part of the project. With no model set, both still print their list.
 
@@ -141,7 +123,7 @@ npm run ken -- who bo@example.com --since 14d --repo ../my-project
 npm run ken -- since 2026-11-01 --repo ../my-project
 ```
 
-`open` starts the page for the repository in the current folder, or the one you name, and opens it in your browser. It prints the address too, in case no browser opens. Press Ctrl-C to stop it. With no model set, the page still opens: it shows your earlier answers and says what to set. Ask how the parts of a project fit together and the answer leads with a diagram; choose a numbered row, or a box or an arrow in the drawing, to read the code it rests on. The page draws with Mermaid, which ken serves from its own address. Under each answer, three buttons update your map; "Your map" in the header shows it, and the lenses sit under the question box: catch up, an area, and what changed, by one person or by everyone, in a span you pick. "Decisions" in the header lists the record's decisions, those `ken decide` logged among them. When something waits on you, "Open" in the header lists it, with "I have decided" on each decision and "Explain what changed" and "I know this" on each changed topic.
+`open` starts the page for the repository in the current folder, or the one you name, and opens it in your browser. It prints the address too, in case no browser opens. Press Ctrl-C to stop it. With no model set, the page still opens: it shows your earlier answers and says what to set. The page draws diagrams with Mermaid, which ken serves from its own address. Under each answer, "I know this", "Too much" and "Go deeper" update your map. The header links to "Your map", to "Decisions", and to "Open" when something waits on you. The lenses sit under the question box: catch up, an area, and what changed, by one person or by everyone, in a span you pick.
 
 ```sh
 npm run ken -- open
