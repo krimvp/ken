@@ -433,7 +433,7 @@ test('what looks like a secret in a saved session reaches the model, the history
 				plain[0],
 				`Test it on staging with the key ${secrets.prefix}.`,
 				`curl -H "Authorization: Bearer ${secrets.bearer}" https://staging.example.com/health`,
-				`DEPLOY_TOKEN=${secrets.assigned}`,
+				`Deploy with DEPLOY_TOKEN=${secrets.assigned}.`,
 				`The staging gateway answers to ${secrets.environment} today.`,
 				plain[1],
 				plain[2],
@@ -443,7 +443,7 @@ test('what looks like a secret in a saved session reaches the model, the history
 	const hidden = [
 		'Test it on staging with the key [hidden by ken].',
 		'curl -H "Authorization: Bearer [hidden by ken]" https://staging.example.com/health',
-		'DEPLOY_TOKEN=[hidden by ken]',
+		'Deploy with DEPLOY_TOKEN=[hidden by ken].',
 		'The staging gateway answers to [hidden by ken] today.',
 	].join('\n')
 	const session = (text: string) => ({ session: 'staging-session', text })

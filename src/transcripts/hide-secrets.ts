@@ -24,9 +24,10 @@ const KNOWN_KEYS = [
 // A token has a digit somewhere, which keeps "Bearer authentication" in prose.
 const BEARER = /\b(Bearer\s+)(?=[A-Za-z0-9._~+/-]*\d)[A-Za-z0-9._~+/-]{8,}=*/gi
 const SECRET_NAME = /key|token|secret|passw(?:or)?d|pwd|credential/i
-// A name, then = or :, maybe inside quotes as in JSON, then the value up to a space, quote or separator.
+// A name, then = or :, maybe inside quotes as in JSON, then the value up to a space, quote or separator. The value
+// leaves out the full stop or bracket that may end its sentence.
 const ASSIGNMENT =
-	/\b([A-Za-z0-9_.-]*(?:key|token|secret|passw(?:or)?d|pwd|credential)[A-Za-z0-9_]*)(["']?\s*[:=]\s*["']?)([^\s"'`,;]+)/gi
+	/\b([A-Za-z0-9_.-]*(?:key|token|secret|passw(?:or)?d|pwd|credential)[A-Za-z0-9_]*)(["']?\s*[:=]\s*["']?)([^\s"'`,;]*[^\s"'`,;.!?:)\]}])/gi
 // Long, with a digit and a letter, and none of the dots and brackets of code such as process.env.API_KEY.
 const RANDOM_LOOKING = /^(?=.*\d)(?=.*[A-Za-z])[A-Za-z0-9+/=_~-]{12,}$/
 // Shorter values in the environment, such as "off" or "1", are settings, not secrets.
