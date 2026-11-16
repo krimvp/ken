@@ -77,7 +77,7 @@ export async function describeEntry(
 			}
 			const work = decisionWork(entry, record)
 			if (work !== null && entry.work === null) {
-				lines.push(`belongs to work ${work}, whose commits came after the commit it was logged at`)
+				lines.push(`belongs to work ${work}: its range starts at or passes through the commit it was logged at`)
 			}
 			lines.push(`chosen: ${entry.chosen}`)
 			if (entry.reason) lines.push(`reason: ${entry.reason.text}`, ...entry.reason.quotes.flatMap(quoted))

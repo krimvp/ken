@@ -49,14 +49,14 @@ export function claudeCodeTranscripts(root: string, env: Record<string, string |
 		files.sort((a, b) => b.changed - a.changed)
 		const listed: Session[] = []
 		for (const { id } of files.slice(0, MAX_SESSIONS)) {
-			const read = await readFile(id, signal)
+			const read = await session(id, signal)
 			if (read) listed.push(read.session)
 		}
 		listed.sort((a, b) => (b.started ?? '').localeCompare(a.started ?? ''))
 		return { sessions: listed, older: Math.max(0, files.length - MAX_SESSIONS) }
 	}
 
-	async function readFile(raw: string, signal?: AbortSignal): Promise<SessionRead | null> {
+	async function session(raw: string, signal?: AbortSignal): Promise<SessionRead | null> {
 		const id = sessionId(raw)
 		if (id === null) return null
 		const file = path.join(where, `${id}.jsonl`)
@@ -67,7 +67,7 @@ export function claudeCodeTranscripts(root: string, env: Record<string, string |
 			const read = await scan(root, input)
 			if (read === null) return null
 			const times = read.entries.filter((entry) => entry.kind !== 'tool').map((entry) => entry.at)
-			const session: Session = {
+			const facts: Session = {
 				id,
 				started: times[0] ?? null,
 				ended: times.at(-1) ?? null,
@@ -75,13 +75,13 @@ export function claudeCodeTranscripts(root: string, env: Record<string, string |
 				skipped: read.skipped,
 				partial: info.size > MAX_SESSION_BYTES,
 			}
-			return { session, entries: read.entries, more: 0 }
+			return { session: facts, entries: read.entries, more: 0 }
 		} finally {
 			input.destroy()
 		}
 	}
 
-	return { tool: 'Claude Code', where, sessions, session: readFile }
+	return { tool: 'Claude Code', where, sessions, session }
 }
 
 function sessionId(raw: string): SessionId | null {
