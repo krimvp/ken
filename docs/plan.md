@@ -245,6 +245,18 @@ The owner has not answered these questions yet. Work started on 2026-11-15 with 
 | First transcripts to read         | Claude Code.                                                                                                                                                                                                      |
 | "Following up"                    | Read as the plan reads it.                                                                                                                                                                                        |
 
+### Answered by the owner
+
+The owner answered these on 2026-11-16, after the sixth round of the test.
+
+| Question                           | Answer                                                               |
+| ---------------------------------- | -------------------------------------------------------------------- |
+| The second look at risks           | It stays on by default for an answer about a change.                 |
+| Leading indentation in a quote     | The quote check stays strict about it.                               |
+| Reading saved sessions             | On by default. `KEN_SESSIONS=off` turns it off.                      |
+| own-your-diff in ken               | Not set up.                                                          |
+| The public page                    | Not published for now.                                               |
+
 ## Out of scope for the first version
 
 - Teams, accounts, sharing and any hosted service.
