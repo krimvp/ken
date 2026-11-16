@@ -127,7 +127,6 @@ export function answerHtml(q, ui, running) {
 				weighed,
 				statements,
 				statementsList,
-				claims,
 				all: a.risks,
 			})
 		: `${decisionsHtml(decisions, rows)}
@@ -157,13 +156,13 @@ const FIRST_DECISIONS = 3
 
 // An answer about a change: the first risks, then the first decisions with their reasons, those that need the reader's
 // call first. The other decisions and what the change did each fold behind one line with its count.
-function changeBody({ ui, rows, marked, decisions, risks, weighed, statements, statementsList, claims, all }) {
+function changeBody({ ui, rows, marked, decisions, risks, weighed, statements, statementsList, all }) {
 	const ordered = [
 		...decisions.filter(({ item }) => item.needsOwner),
 		...decisions.filter(({ item }) => !item.needsOwner),
 	]
 	const others = ordered.slice(FIRST_DECISIONS)
-	const labels = labelLine(claims)
+	const labels = labelLine(risks.map(({ item }) => item))
 	const risksPart = weighed
 		? weighedHtml(risks, ui, rows, marked, labels)
 		: risksHtml(all, risks, true, rows, marked, labels)
