@@ -7,7 +7,7 @@
 		<title>ken</title>
 		<meta
 			name="description"
-			content="ken explains your own software project to you. Each decision, risk and statement in its answer quotes the lines it rests on, and ken checks that each quote is really there. Early work, not released."
+			content="ken explains your own software project to you. Every decision, risk and statement in its answer comes with the lines it rests on, and ken looks up each quote before you see the answer. Early work, not released."
 		/>
 		<link rel="stylesheet" href="style.css" />
 	</head>
@@ -16,19 +16,17 @@
 			<header class="intro">
 				<h1>ken</h1>
 				<p class="lead">
-					Ask ken what changed in your software project, why, or how a part works now. Each decision, risk and
-					statement in its answer quotes the lines it rests on, in code, a commit message or a saved session of your
-					coding agent.
+					Ask ken what changed in your software project, why, or how a part works now. Every decision, risk and
+					statement in its answer comes with the exact lines it rests on.
 				</p>
 				<p>
-					ken runs on your machine, in a page it opens in your browser, and a model you choose writes the answer. ken
-					looks up every quote. If one is not where it says it is, ken throws the answer out. It checks where each
-					quote is, not whether the sentence is true.
+					The lines come from your code, a commit message or your coding agent's saved session. ken looks up each
+					quote before you see the answer. An answer with a quote ken cannot find goes back to the model, and you
+					never see it. ken checks where a quote is, not whether the sentence is true.
 				</p>
 				<p>
-					Why not ask your coding agent? In <a href="#test">ken's own test</a>, a plain chat with a coding agent found
-					as many risks as ken, and often more, and ken was slower, at about half a million input tokens per answer on
-					Claude Opus. What ken adds is quotes you can look up, and answers you can find again the next day.
+					Why not ask your coding agent? Its answer is prose you take on trust, and it stays in that chat. ken's
+					answer points at lines you can open, and ken keeps it so you can find it again.
 				</p>
 				<p class="status">
 					<strong>Early work, not released.</strong> Nothing to install, no license, private repository.
@@ -47,12 +45,12 @@
 				<figcaption>Screenshot of ken's local page, answering a question about a commit in a small made-up project. The model was Claude Opus.</figcaption>
 			</figure>
 
-			<section aria-labelledby="check">
-				<h2 id="check">What is in an answer, and what ken checks</h2>
+			<section aria-labelledby="answer">
+				<h2 id="answer">What an answer holds</h2>
 				<p>
 					An answer has a short summary, then the decisions with their reasons, the risks, and plain statements. Ask
-					how the parts fit together, or about a change that touches two or more parts, and it opens with a basic
-					diagram, where each box and arrow quotes its lines too.
+					how parts fit together, or about a change that touches two or more parts, and the answer opens with a
+					diagram. Every arrow in the diagram quotes the lines that show it, and ken looks those up too.
 				</p>
 				<figure class="shot">
 					<a href="images/ken-answer-with-diagram-wide.png">
@@ -63,39 +61,63 @@
 							<img src="images/ken-answer-with-diagram-wide.png" srcset="images/ken-answer-with-diagram-wide.png 2x" width="794" height="387" loading="lazy" alt="A drawing of five numbered boxes and the arrows between them. 1, Page and 2, CLI sit at the top. Arrow 6: the page fetches /api/ from 3, Server. Arrow 7: the CLI starts the server, for ken open and ken live. Arrow 8: the CLI starts a chat with 4, Agent, for ken ask. Arrow 9: the server starts a chat with the agent. Arrow 10: the server runs watchStep and snapshots in 5, Live." />
 						</picture>
 					</a>
-					<figcaption>Screenshot of ken describing its own code, in the first diagram of its answer to "What are the main parts of ken, and how do they connect?" The model was Claude Opus. Boxes are numbered 1 to 5 and arrows 6 to 10, because each number opens the quote behind it.</figcaption>
+					<figcaption>Screenshot of the first diagram in ken's answer to "What are the main parts of ken, and how do they connect?" The model was Claude Opus.</figcaption>
 				</figure>
 				<p>
-					When you ask about a change, ken also gives the model the places in the code that use a name the change
-					touched. Once an answer passes, ken asks the model for a second look at its risks.
+					Each decision carries a label that says where its reason comes from. ken sets that label from the quotes,
+					so a model cannot mark its own guess as recorded.
 				</p>
-				<p>
-					The check covers only the quotes. It does not check that a sentence, a risk or an arrow is true, and it
-					does not check the summary. If the check rejects an answer, the agent tries again, up to three times.
-					Commits, authors, dates, and any changed lines the answer did not quote come from git, not from the model.
-				</p>
-				<p>A label says how the agent knows each claim:</p>
 				<ul class="labels">
 					<li>
 						<span class="label label-recorded">Recorded</span>
-						<span>Written down at the time, in a commit or with <code>ken decide</code>.</span>
+						<span>Written down at the time, in a commit message or by your coding agent with <code>ken decide</code>.</span>
 					</li>
 					<li>
 						<span class="label label-session">From the session</span>
-						<span>Quoted from a saved session, with anything that looks like a secret key removed.</span>
+						<span>Quoted from your coding agent's saved session.</span>
 					</li>
 					<li>
 						<span class="label">Inferred</span>
-						<span>Worked out from the code or the diff.</span>
+						<span>Worked out by the model from the code.</span>
 					</li>
 					<li>
 						<span class="label label-search">Found by search</span>
-						<span>A link between two pieces of code that rests on a text search, not on code the model read. Nobody proved it.</span>
+						<span>A link between two pieces of code that rests on a text search. Nobody proved it.</span>
 					</li>
 				</ul>
+			</section>
+
+			<section aria-labelledby="keep">
+				<h2 id="keep">Find every answer again</h2>
 				<p>
-					In an answer about a change, ken, not the model, marks each risk "Quotes code outside the change" or
-					"Quotes only the changed lines".
+					ken keeps your questions and its answers on your machine, under "Your questions". It adds the decisions,
+					their reasons and what each piece of work did to the project record in <code>.ken/record/</code>. You
+					commit the record with the project, so a collaborator and their coding agents can read it.
+				</p>
+				<p>
+					"Waiting on you" brings back the decisions a coding agent left open for you, and the code that changed
+					since you said you understood it. Answer a decision with "Keep what was chosen" or "I want it changed".
+					ken saves your answer and changes no code.
+				</p>
+				<figure class="shot shot-wide-only">
+					<a href="images/ken-decisions-wide.png">
+						<picture>
+							<source media="(max-width: 34rem) and (prefers-color-scheme: dark)" srcset="images/ken-decisions-narrow-dark.png 2x" width="390" height="270" />
+							<source media="(max-width: 34rem)" srcset="images/ken-decisions-narrow.png 2x" width="390" height="270" />
+							<source media="(prefers-color-scheme: dark)" srcset="images/ken-decisions-wide-dark.png 2x" width="796" height="540" />
+							<img src="images/ken-decisions-wide.png" srcset="images/ken-decisions-wide.png 2x" width="796" height="540" loading="lazy" alt="Two decisions in the Decisions view. The first is labelled Recorded: should the wait between tries be fixed or grow with each try? Chosen: the wait doubles after each failed try. Why: a fixed wait kept hitting the API while it was down, quoted from the commit message of a32ffb8. The second is labelled From the session: how are failed attempts made visible? Chosen: each failed attempt writes one console.warn line. Why: the owner wants the logs to show how often the network fails, quoted from the coding agent's saved session of 06:44." />
+						</picture>
+					</a>
+					<figcaption>Screenshot of ken's Decisions view for a small made-up project. One reason is quoted from a commit message, the other from the coding agent's saved session.</figcaption>
+				</figure>
+			</section>
+
+			<section aria-labelledby="live">
+				<h2 id="live">Live mode</h2>
+				<p>
+					Live mode runs beside your coding agent. When a commit lands, or uncommitted work goes quiet, ken writes a
+					short note on what changed, and looks up its quotes. Each note is a model call, so live mode is off until
+					you turn it on, and the page shows what it spends.
 				</p>
 			</section>
 
@@ -199,162 +221,24 @@
 					</svg>
 				</figure>
 				<p>
-					The agent sends the model provider the code and session text the model reads. ken hides what looks like a
-					secret key in session text as it reads a session, before that text reaches the model, the page, your
-					history or the record. It hides nothing in your code or git history.
+					ken runs on your machine and only reads. It never edits your code, commits or pushes. It writes only in
+					<code>.ken/</code> in the project and <code>~/.ken/</code> on your machine.
 				</p>
 				<p>
-					Outside <code>.ken/</code> in the project and <code>~/.ken/</code> on your machine, ken writes nothing. It
-					never edits your code, commits or pushes. The project record holds what passed the check: decisions, topics,
-					and which commits belong together as one task, with a short summary. You commit it for collaborators and
-					their agents.
+					You choose the model. ken sends the code and session text the model reads to that model's provider. ken
+					hides what looks like a secret key in session text before the model sees it. It hides nothing in your code or git
+					history.
 				</p>
 				<p>
-					What ken works with today: git repositories, Claude Code sessions only, and one developer. ken finds code by
-					text search only. It uses an OpenAI-compatible endpoint, or the <code>claude</code> command through a small
-					local endpoint that ken includes, and has been tried on glm-5.3, kimi-k3.1-pro and Claude Opus.
-				</p>
-			</section>
-
-			<section aria-labelledby="known">
-				<h2 id="known">What ken keeps for you</h2>
-				<p>
-					Press "I know this" under an answer to mark its topics as known. A later answer shortens a topic you know to
-					one line, or starts with what changed if the code it quotes has changed.
-				</p>
-				<p>
-					"Waiting on you" lists the decisions an agent left open for you, and topics you marked as known whose code
-					has changed since. Answer a decision with "Keep what was chosen" or "I want it changed". ken saves your
-					answer and note, and changes no code.
-				</p>
-				<p>
-					"Decisions" lists every decision saved for the project, with its label and where its reason comes from. A
-					later decision on the same question replaces the older one.
-				</p>
-				<figure class="shot shot-wide-only">
-					<a href="images/ken-decisions-wide.png">
-						<picture>
-							<source media="(max-width: 34rem) and (prefers-color-scheme: dark)" srcset="images/ken-decisions-narrow-dark.png 2x" width="390" height="270" />
-							<source media="(max-width: 34rem)" srcset="images/ken-decisions-narrow.png 2x" width="390" height="270" />
-							<source media="(prefers-color-scheme: dark)" srcset="images/ken-decisions-wide-dark.png 2x" width="796" height="540" />
-							<img src="images/ken-decisions-wide.png" srcset="images/ken-decisions-wide.png 2x" width="796" height="540" loading="lazy" alt="Two decisions in the Decisions view. The first is labelled Recorded: should the wait between tries be fixed or grow with each try? Chosen: the wait doubles after each failed try. Why: a fixed wait kept hitting the API while it was down, quoted from the commit message of a32ffb8. The second is labelled From the session: how are failed attempts made visible? Chosen: each failed attempt writes one console.warn line. Why: the owner wants the logs to show how often the network fails, quoted from the coding agent's saved session of 06:44." />
-						</picture>
-					</a>
-					<figcaption>Screenshot of ken's Decisions view for a small made-up project.</figcaption>
-				</figure>
-			</section>
-
-			<section aria-labelledby="live">
-				<h2 id="live">Live mode</h2>
-				<p>
-					Live mode runs beside your coding agent. When a commit lands, or your uncommitted changes stop changing for
-					a while, ken's model writes a short note. ken checks its quotes, not its words. A note on uncommitted work
-					is a draft kept in <code>~/.ken/</code>. Each note is a model call, so live mode is off until you turn it
-					on, and ken's local page shows what it spends.
-				</p>
-				<figure class="shot shot-wide-only">
-					<a href="images/ken-live-note-wide.png">
-						<picture>
-							<source media="(prefers-color-scheme: dark)" srcset="images/ken-live-note-wide-dark.png 2x" width="796" height="758" />
-							<img src="images/ken-live-note-wide.png" srcset="images/ken-live-note-wide.png 2x" width="796" height="758" loading="lazy" alt="A note in the Live view, headed Uncommitted work, 07:17, and marked Committed since, in a32ffb8. It says retry's wait now doubles after each failed try, 200, 400 and 800 ms. Under it are a risk labelled Inferred, that retry still waits once more after the last failed try, with a quote of lines 13 to 16 of src/retry.ts, a decision labelled From the session, and a statement labelled Inferred with a quote of line 1 of src/retry.ts." />
-						</picture>
-					</a>
-					<figcaption>Screenshot of a note in ken's Live view for a small made-up project, with its risk, its decision and a statement, and the first line of each quote.</figcaption>
-				</figure>
-			</section>
-
-			<section aria-labelledby="test">
-				<h2 id="test">In its test, ken found no more than a plain chat</h2>
-				<p>
-					Each round put the same question about real merged pull requests of another project by the same owner to
-					ken and to a plain chat with a coding agent on Claude Opus: what did it do, why that way, and what decisions
-					and risks are in it. ken ran on glm-5.3 or on Claude Opus. Rounds 1 and 2 used three pull requests, and ken
-					was tuned on these three. Round 3 added two more. Rounds 4, 5 and 6 each added three new ones that ken had
-					never seen. One AI judge, a fresh one each time, scored each round against the code. ken's author has not scored
-					them.
-				</p>
-				<p>ken's own plan says ken must win at least one of three counts and lose none:</p>
-				<ul class="counts">
-					<li><strong>Finding more.</strong> The answer names a decision or a risk the other answer missed.</li>
-					<li>
-						<strong>Checking without the diff.</strong> Each claim points at lines you can look up. The plan calls this
-						trusting the answer without opening the diff.
-					</li>
-					<li><strong>Finding it again.</strong> You can find the answer again the next day.</li>
-				</ul>
-				<p>
-					ken scored on two counts a plain chat cannot score on at all, in every round and on both models: checking
-					without the diff, because the plain chat quotes nothing ken can look up, and finding it again, because the
-					plain chat keeps nothing. So each pass of the rule rests on those two counts, and whether ken passes turns on
-					finding more alone.
-				</p>
-				<div class="table-box">
-					<table class="rounds-table">
-						<thead>
-							<tr><th scope="col">Round</th><th scope="col">ken's model</th><th scope="col">Pull requests</th><th scope="col">Finding more</th><th scope="col">Passes</th></tr>
-						</thead>
-						<tbody>
-							<tr><td>1</td><td>glm-5.3</td><td>3 tuned</td><td>lost</td><td>no</td></tr>
-							<tr><td>2</td><td>glm-5.3</td><td>3 tuned</td><td>narrow loss</td><td>no</td></tr>
-							<tr><td>3</td><td>glm-5.3</td><td>3 tuned</td><td>lost</td><td>no</td></tr>
-							<tr><td>3</td><td>glm-5.3</td><td>2 more</td><td>lost</td><td>no</td></tr>
-							<tr><td>3</td><td>Claude Opus</td><td>3 tuned</td><td>lost</td><td>no</td></tr>
-							<tr><td>3</td><td>Claude Opus</td><td>2 more</td><td>tie</td><td>yes</td></tr>
-							<tr><td>4</td><td>Claude Opus</td><td>3 tuned</td><td>tie</td><td>yes</td></tr>
-							<tr><td>4</td><td>Claude Opus</td><td>2 more</td><td>lost</td><td>no</td></tr>
-							<tr><td>4</td><td>Claude Opus</td><td>3 new</td><td>tie</td><td>yes</td></tr>
-							<tr><td>4</td><td>glm-5.3</td><td>same 3</td><td>lost</td><td>no</td></tr>
-							<tr><td>5</td><td>Claude Opus</td><td>3 tuned</td><td>tie</td><td>yes</td></tr>
-							<tr><td>5</td><td>Claude Opus</td><td>2 more</td><td>narrow loss</td><td>no</td></tr>
-							<tr><td>5</td><td>Claude Opus</td><td>round 4's 3</td><td>lost</td><td>no</td></tr>
-							<tr><td>5</td><td>Claude Opus</td><td>3 new</td><td>narrow win</td><td>yes</td></tr>
-							<tr><td>5</td><td>glm-5.3</td><td>same 3</td><td>tie</td><td>yes</td></tr>
-							<tr><td>6</td><td>Claude Opus</td><td>3 new</td><td>tie</td><td>yes, only just</td></tr>
-						</tbody>
-					</table>
-				</div>
-				<p>
-					The same three pull requests passed in round 4 and failed in round 5, so one answer per pull request is a
-					noisy measure, and a pass is not proof. ken's answers are longer and slower, at two to four minutes on
-					Claude Opus and four to eight on glm-5.3 against one to three, and in round 6 about half a million input
-					tokens each, half of them for the second look at risks. In round 5 one of ken's risks was false, and still
-					carried the mark "Quotes code outside the change".
-				</p>
-				<details class="rounds">
-					<summary>Rounds 1 to 5, one by one</summary>
-					<ul>
-						<li>
-							<strong>Rounds 1 to 3.</strong> ken ran on glm-5.3, then on Claude Opus. Rounds 1 and 2 used three
-							pull requests, and ken was tuned on these three. Round 3 added two more. ken lost finding more in every
-							round, taken over all its pull requests together. The first verdict opens with "No. ken does not meet
-							its plan's rule."
-						</li>
-						<li>
-							<strong>Round 4</strong> added two things: the list of places that use the names a change touches, and
-							the second look at risks. With Claude Opus on both sides, ken passed on the three tuned pull requests
-							for the first time, with finding more a tie. It failed on the two others, losing finding more
-							clearly on one and narrowly on the other. On three new pull requests it had never seen, it passed narrowly, with a tie. With ken on
-							glm-5.3, those three failed.
-						</li>
-						<li>
-							<strong>Round 5</strong> made the second look read the code each risk points at, and ask what happens
-							when two decisions touch the same thing. It also put the risks in order and added ken's two marks on risks. With
-							Claude Opus on both sides, three more pull requests ken had never seen passed. Finding more was a tie on
-							two and a narrow win for ken on one, and the judge said a count of finds gives a tie, or ken by one. The
-							three tuned ones passed. The two others failed narrowly on finding more, and so did the three that had
-							passed narrowly in round 4. With ken on glm-5.3, the three newest passed, with a tie.
-						</li>
-					</ul>
-				</details>
-				<p>
-					Every pull request came from one repository. The verdicts are in the repository, which is private today,
-					under <code>docs/checkpoint/</code>.
+					ken works today with git repositories, Claude Code sessions and one developer. It uses an
+					OpenAI-compatible endpoint, or the <code>claude</code> command through a small local endpoint that ken
+					includes. It has been tried on glm-5.3, kimi-k3.1-pro and Claude Opus.
 				</p>
 			</section>
 		</main>
 		<footer>
 			<p>
-				Not built yet: a reader for other coding tools' sessions, anything for teams, and a parser or index of the
+				Not built yet: readers for other coding tools' sessions, anything for teams, and a parser or index of the
 				code.
 			</p>
 			<p>Built by <a href="https://github.com/krimvp">krimvp</a>. Updated on 16 November 2026.</p>

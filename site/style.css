@@ -307,56 +307,6 @@ code {
 	justify-self: start;
 }
 
-.counts li + li,
-.rounds li + li {
-	margin-top: var(--space-2);
-}
-
-.rounds {
-	margin: 0 0 var(--space-4);
-}
-
-/* The rounds of the test. On a narrow screen the table scrolls inside its box, never the page. */
-.table-box {
-	margin: 0 0 var(--space-4);
-	overflow-x: auto;
-}
-
-.rounds-table {
-	border-collapse: collapse;
-	font-size: 1rem;
-	line-height: 1.4;
-}
-
-.rounds-table th,
-.rounds-table td {
-	padding: var(--space-1) var(--space-3) var(--space-1) 0;
-	border-bottom: 1px solid var(--color-border);
-	text-align: left;
-	vertical-align: top;
-}
-
-.rounds-table th {
-	font-weight: 600;
-}
-
-.rounds-table td {
-	white-space: nowrap;
-}
-
-.rounds-table td:nth-child(n + 4) {
-	white-space: normal;
-}
-
-.rounds summary {
-	color: var(--color-accent);
-	cursor: pointer;
-}
-
-.rounds ul {
-	margin: var(--space-3) 0 0;
-}
-
 footer {
 	max-width: calc(var(--measure) + 2 * var(--gutter));
 	margin: 0 auto;
@@ -394,7 +344,7 @@ footer p + p {
 		padding-top: var(--space-4);
 	}
 
-	/* A phone skips the captures of Decisions and of a live note, to keep the page short. */
+	/* A phone skips the capture of Decisions, to keep the page short. */
 	.shot-wide-only {
 		display: none;
 	}
@@ -402,14 +352,5 @@ footer p + p {
 	.labels {
 		column-gap: var(--space-3);
 		font-size: 1rem;
-	}
-
-	.rounds-table {
-		font-size: 0.875rem;
-	}
-
-	.rounds-table th,
-	.rounds-table td {
-		padding-right: var(--space-2);
 	}
 }
