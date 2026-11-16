@@ -137,14 +137,21 @@ export function formatAnswer(answer: Answer, entries: Entry[], paint: Paint): st
 	return lines.join('\n')
 }
 
-function revisionLine({ added, withdrawn }: Revision): string {
+function revisionLine({ risks, decisions, withdrawn }: Revision): string {
+	const count = (n: number, one: string) => (n === 1 ? `1 ${one}` : `${n} ${one}s`)
+	const numbers = (kind: 'added' | 'rewritten') => risks.flatMap((risk, at) => (risk.kind === kind ? [at + 1] : []))
+	const [added, rewritten] = [numbers('added'), numbers('rewritten')]
 	const changes = [
-		added.risks > 0 ? `added ${added.risks === 1 ? '1 risk' : `${added.risks} risks`}` : '',
-		added.decisions > 0 ? `added ${added.decisions === 1 ? '1 decision' : `${added.decisions} decisions`}` : '',
-		withdrawn.length > 0 ? `withdrew ${withdrawn.length === 1 ? '1 risk' : `${withdrawn.length} risks`}` : '',
+		added.length > 0 ? `added ${count(added.length, 'risk')} (number ${added.join(', ')})` : '',
+		rewritten.length > 0 ? `rewrote ${count(rewritten.length, 'risk')} (number ${rewritten.join(', ')})` : '',
+		decisions > 0 ? `added ${count(decisions, 'decision')}, the last above` : '',
+		withdrawn.length > 0 ? `withdrew ${count(withdrawn.length, 'risk')}` : '',
 	].filter((part) => part !== '')
-	if (changes.length === 0) return 'A second look at risks found nothing to change.'
-	return `A second look at risks ${changes.join(', ')}. The last risks and decisions above came from it.`
+	const kept = risks.flatMap((risk) => (risk.kind === 'added' ? [] : [risk.was]))
+	const moved = kept.some((was, at) => at > 0 && was < (kept[at - 1] ?? 0))
+	if (changes.length === 0 && !moved) return 'A second look at risks found nothing to change.'
+	const order = moved ? ' It put the risks in a new order, the heaviest first.' : ''
+	return `A second look at risks ${changes.length === 0 ? 'changed nothing in them' : changes.join(', ')}.${order}`
 }
 
 // A risk carries ken's own mark of whether it was checked past the diff; a statement, and an older risk, has none.

@@ -6,7 +6,7 @@ import { gitRepository } from '../../src/repo/index.ts'
 import { buildRepository } from '../fixtures/build-repository.ts'
 import {
 	type ChatRequest,
-	NOTHING_TO_REVISE,
+	nothingToRevise,
 	scriptedModel,
 	type Turn,
 	toolResults,
@@ -71,7 +71,7 @@ test('log and diff over a change end with the names used elsewhere, once per que
 		{ tool: 'ken__log', args: { base, head } },
 		// No work title, so the record keeps nothing that would spare the next test's change its risk pass.
 		answer({ scope: { base, head }, risks: [] }),
-		...NOTHING_TO_REVISE,
+		...nothingToRevise(0),
 		{ text: 'I left out the tests.' },
 	])
 
@@ -90,14 +90,16 @@ test('log and diff over a change end with the names used elsewhere, once per que
 	})
 })
 
-test('an answer about a change is held for one risk pass: the agent gets the risks and the names no quote follows, an added risk with a false quote is refused, a true one is added, a withdrawn risk is gone, and the record and the cost show the merged answer', async () => {
+test('an answer about a change is held for one risk pass: the agent gets its risks and the names no quote follows, an eighth risk is refused with the reason and uses no attempt, an added risk with a false quote is refused, and the final risks come in the order the revise call gave, with the withdrawn one gone, in the answer, the record and the cost', async () => {
 	const falseRisk = { ...CALLER_RISK, quotes: [{ ...CALL, text: '    return await fetchWithin(TIMEOUT_MS * 2)' }] }
+	const six = Array.from({ length: 6 }, (_, n) => ({ ...CALLER_RISK, text: `load waits too long, case ${n + 1}.` }))
 	const withdraw = [{ risk: 1, reason: 'Only requests slower than 100 ms fail.' }]
 	const { events, requests } = await ask([
 		answer({ ...ABOUT_THE_CHANGE, risks: [FIRST_RISK, SECOND_RISK] }),
 		{ text: '' },
-		{ tool: 'ken__revise_answer', args: { risks: [falseRisk] } },
-		{ tool: 'ken__revise_answer', args: { risks: [CALLER_RISK], withdraw } },
+		{ tool: 'ken__revise_answer', args: { risks: six, order: [1, 2, 3, 4, 5, 6, 7, 8] } },
+		{ tool: 'ken__revise_answer', args: { risks: [falseRisk], order: [3, 1, 2] } },
+		{ tool: 'ken__revise_answer', args: { risks: [CALLER_RISK], withdraw, order: [3, 2] } },
 		{ text: 'I left out the tests.' },
 	])
 
@@ -107,16 +109,20 @@ test('an answer about a change is held for one risk pass: the agent gets the ris
 	for (const fact of [FIRST_RISK.text, SECOND_RISK.text, 'TIMEOUT_MS', 'src/load.ts:2']) {
 		assert.ok(pass?.includes(fact), `the risk questions name ${fact}: ${pass}`)
 	}
-	assert.match(toolResults(requests[3]).at(-1) ?? '', /Risk 1, quote 1: .*src\/load\.ts/)
+	const eight = toolResults(requests[3]).at(-1) ?? ''
+	assert.match(eight, /8 risks, and ken shows at most 7, so the owner reads every one/)
+	assert.match(eight, /did not use one of your attempts/)
+	assert.match(toolResults(requests[4]).at(-1) ?? '', /attempt 1 of 2[\s\S]*Risk 1, quote 1: .*src\/load\.ts/)
 	const event = accepted(events)
 	const verified = (risk: typeof FIRST_RISK, line: number) => ({
 		...risk,
 		quotes: risk.quotes.map((quote) => ({ ...quote, startLine: line, endLine: line })),
 		checked: risk === CALLER_RISK,
 	})
-	assert.deepEqual(event.answer.risks, [verified(SECOND_RISK, 1), verified(CALLER_RISK, 2)])
+	assert.deepEqual(event.answer.risks, [verified(CALLER_RISK, 2), verified(SECOND_RISK, 1)], 'in the order 3, 2')
 	assert.deepEqual(event.revision, {
-		added: { risks: 1, decisions: 0 },
+		risks: [{ kind: 'added' }, { kind: 'kept', was: 2 }],
+		decisions: 0,
 		withdrawn: [{ risk: verified(FIRST_RISK, 1), reason: withdraw[0]?.reason }],
 	})
 	assert.deepEqual(event.answer.change?.usedElsewhere, { followed: ['TIMEOUT_MS'], notFollowed: [] })
@@ -135,8 +141,8 @@ test('an answer about a change is held for one risk pass: the agent gets the ris
 			usage.riskPass?.inputTokens,
 			usage.riskPass?.outputTokens,
 		],
-		[replies(5).input, replies(5).output, replies(3).input, replies(3).output],
-		'the risk pass took the last three replies, and the total counts them too',
+		[replies(6).input, replies(6).output, replies(4).input, replies(4).output],
+		'the risk pass took the last four replies, and the total counts them too',
 	)
 })
 

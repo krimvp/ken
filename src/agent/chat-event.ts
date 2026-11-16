@@ -4,9 +4,14 @@
 import type { Decision, RecordEntry } from '../record/index.ts'
 import type { Answer, Claim } from './answer/answer.ts'
 
-// What the risk pass changed in the first answer: how many risks and decisions it added, at the end of each list, and
-// the risks it withdrew, each with the reason it gave. Zero and none when it found nothing to change.
-export type Revision = { added: { risks: number; decisions: number }; withdrawn: { risk: Claim; reason: string }[] }
+// What the risk pass changed in the first answer. risks gives, for each risk of the final answer in its order, where it
+// came from: its number in the first answer, kept as it was or rewritten, or added by the pass. decisions is how many
+// decisions the pass added, at the end of their list. withdrawn holds each risk it took out, with the reason it gave.
+export type Revision = {
+	risks: ({ kind: 'kept' | 'rewritten'; was: number } | { kind: 'added' })[]
+	decisions: number
+	withdrawn: { risk: Claim; reason: string }[]
+}
 
 export type Cost = { inputTokens: number; outputTokens: number; seconds: number }
 

@@ -10,7 +10,7 @@ import { gitRepository } from '../../src/repo/index.ts'
 import { type KenServer, openServer } from '../../src/server/index.ts'
 import { buildRepository } from '../fixtures/build-repository.ts'
 import { asked, claudeProjects, writeSession } from '../fixtures/claude-sessions.ts'
-import { NOTHING_TO_REVISE, scriptedModel, type Turn, toolResults } from '../fixtures/scripted-model.ts'
+import { nothingToRevise, scriptedModel, type Turn, toolResults } from '../fixtures/scripted-model.ts'
 
 const RETRY = 'export function retry(times: number) {\n\tfor (let i = 0; i < times; i++) {\n\t\tattempt()\n'
 const HISTORY = [
@@ -122,7 +122,7 @@ async function ask(server: KenServer, question: string) {
 
 test('a question streams its steps and a checked answer with its diagram drawn, and the history shows it again with no model, from a clone too', async () => {
 	const home = tempFolder('ken-home-')
-	const model = await scriptedModel([READ, ANSWER, ...NOTHING_TO_REVISE, { text: 'I left out the tests.' }])
+	const model = await scriptedModel([READ, ANSWER, ...nothingToRevise(1), { text: 'I left out the tests.' }])
 	const server = await open(home, model.baseUrl)
 
 	const lines = await ask(server, 'What did the last commit do?')
@@ -254,7 +254,7 @@ test('a second question about the same commits shows the decision the first one 
 	// The prompt tells the model not to send a decision the record already has.
 	const again: Turn = { tool: 'ken__answer', args: { ...ANSWER.args, ...work, decisions: [] } }
 	// The second answer keeps the piece of work the first one stored, so it gets no risk pass.
-	const model = await scriptedModel([first, ...NOTHING_TO_REVISE, { text: 'Done.' }, again, { text: 'Done.' }])
+	const model = await scriptedModel([first, ...nothingToRevise(1), { text: 'Done.' }, again, { text: 'Done.' }])
 	const repo = tempFolder('ken-clone-')
 	execFileSync('git', ['clone', '--quiet', root, repo])
 	const server = await open(tempFolder('ken-home-'), model.baseUrl, repo)

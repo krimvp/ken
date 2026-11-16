@@ -8,7 +8,7 @@ import { openMap } from '../../src/map/index.ts'
 import { fileRecordStore } from '../../src/record/index.ts'
 import { gitRepository } from '../../src/repo/index.ts'
 import { buildRepository } from '../fixtures/build-repository.ts'
-import { NOTHING_TO_REVISE, scriptedModel } from '../fixtures/scripted-model.ts'
+import { nothingToRevise, scriptedModel } from '../fixtures/scripted-model.ts'
 
 const KEN = path.join(import.meta.dirname, '../../src/cli/main.ts')
 const { root, hashes } = buildRepository([
@@ -66,7 +66,7 @@ test('ken ask --json prints the checked answer, what it recorded and the closing
 				],
 			},
 		},
-		...NOTHING_TO_REVISE,
+		...nothingToRevise(1),
 		{ text: 'Nothing was left out.' },
 	])
 	const env = {

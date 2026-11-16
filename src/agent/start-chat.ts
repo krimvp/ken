@@ -6,7 +6,7 @@ import { fileRecordStore } from '../record/index.ts'
 import { findRoot, gitRepository } from '../repo/index.ts'
 import { projectSessions } from '../transcripts/index.ts'
 import { type AnswerRound, accept, answerTool, MAX_REJECTIONS } from './answer/answer-tool.ts'
-import { MAX_PASS_REJECTIONS, reviseTool, riskPassQuestion } from './answer/risk-pass.ts'
+import { laterCommits, MAX_PASS_REJECTIONS, reviseTool, riskPassQuestion } from './answer/risk-pass.ts'
 import type { ChatEvent, Cost } from './chat-event.ts'
 import type { ModelConfig } from './model-config.ts'
 import { readerIndex } from './reader-index.ts'
@@ -77,11 +77,12 @@ export async function startChat(options: {
 			return { ...result, content: [...result.content, { type: 'text', text: notice }] }
 		},
 	})
-	// A question reads the names used elsewhere once per range, at the first log or diff of it. A note does without.
+	// A question reads the names used elsewhere once per range, at the first log or diff of it. A note does without, and
+	// so does the risk pass, which reads the later commits and has the names in its question.
 	const shown = new Set<string>()
 	const elsewhere: Elsewhere = async (range, signal) => {
 		const key = `${range.base}..${range.head}`
-		if (!round.asked || shown.has(key)) return null
+		if (!round.asked || inPass || shown.has(key)) return null
 		shown.add(key)
 		const found = await usedElsewhere(repo, range, signal)
 		return found.kind === 'ok' ? elsewhereText(found.used) : null
@@ -163,9 +164,10 @@ export async function startChat(options: {
 				// A model that failed after the answer was held would fail the pass too, so the held answer stands.
 				if (result.stop !== 'error') {
 					const before = { ...tokens, at: performance.now() }
+					const later = held.answer.change ? await laterCommits(repo, held.answer.change, signal) : []
 					inPass = true
 					turnsEnded = 0
-					result = await prompt(riskPassQuestion(held), passStop)
+					result = await prompt(riskPassQuestion(held, later), passStop)
 					riskPass = costSince(before, tokens)
 				}
 				if (!current.answer && !signal?.aborted) {
