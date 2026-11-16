@@ -2,7 +2,8 @@
 // The ken command. "ken chat" talks about a repository in the terminal. "ken ask" answers one question and exits, as
 // text or as JSON for scripts. Exit code 0 means a checked answer, 1 means none, 2 means ken could not start.
 // "ken record" shows the project record and needs no model. "ken open" serves the page on 127.0.0.1.
-// "ken decide" logs a decision a coding agent makes as it works, and needs no model either.
+// "ken decide" logs a decision a coding agent makes as it works, and "ken sessions" reads the sessions Claude Code
+// saved for the project. Neither needs a model.
 import { createInterface } from 'node:readline/promises'
 import { parseArgs } from 'node:util'
 import { type Answer, type Chat, type ChatEvent, type Outcome, readModelConfig, startChat } from '../agent/index.ts'
@@ -12,6 +13,7 @@ import { decide } from './decide.ts'
 import { openPage } from './open-page.ts'
 import { printQuestion } from './print-question.ts'
 import { printRecord } from './print-record.ts'
+import { printSessions } from './print-sessions.ts'
 
 const USAGE = `Usage:
   ken chat [--repo <path>]
@@ -20,6 +22,7 @@ const USAGE = `Usage:
   ken open [--repo <path>] [--port <n>]
   ken decide --question <text> --chosen <text> --reason <text> --undo <how easy> [...]
   ken decide --json < decision.json
+  ken sessions [<id>] [--repo <path>] [--json]
 
 Name the model with --model, --base-url and --api-key-env,
 or with KEN_MODEL, KEN_BASE_URL and KEN_API_KEY_ENV.
@@ -34,6 +37,8 @@ async function main(argv: string[]): Promise<number> {
 	}
 	const { values } = parsed
 	if (parsed.kind === 'record') return await printRecord(values.repo ?? process.cwd(), parsed.id, values.json === true)
+	if (parsed.kind === 'sessions')
+		return await printSessions(values.repo ?? process.cwd(), parsed.id, values.json === true)
 	const flags = { model: values.model, baseUrl: values['base-url'], apiKeyEnv: values['api-key-env'] }
 	if (parsed.kind === 'open')
 		return await openPage({ directory: values.repo ?? process.cwd(), port: values.port, flags })
@@ -78,6 +83,7 @@ function parseCommand(argv: string[]) {
 	if (command === 'ask' && rest.length === 1 && rest[0]) return { kind: 'ask', values, question: rest[0] } as const
 	if (command === 'ask') return { kind: 'usage', problem: 'ken ask takes one question, in quotes.' } as const
 	if (command === 'record' && rest.length <= 1) return { kind: 'record', values, id: rest[0] } as const
+	if (command === 'sessions' && rest.length <= 1) return { kind: 'sessions', values, id: rest[0] } as const
 	if (command === 'open' && rest.length === 0 && !values.json) return { kind: 'open', values } as const
 	return {
 		kind: 'usage',
