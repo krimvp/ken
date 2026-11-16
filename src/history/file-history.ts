@@ -81,6 +81,10 @@ function parseLine(line: string): HistoryEntry | null {
 	if (isObject(value.answer) && isObject(value.answer.change) && value.answer.change.messages === undefined) {
 		value.answer.change.messages = null
 	}
+	// One saved before ken searched for the names a change touched has no list of them.
+	if (isObject(value.answer) && isObject(value.answer.change) && value.answer.change.usedElsewhere === undefined) {
+		value.answer.change.usedElsewhere = null
+	}
 	if (typeof value.head !== 'string') value.head = null
 	return value as HistoryEntry
 }

@@ -2,7 +2,13 @@
 // answer that failed a check, at most one "accepted", then "usage", then "done" or "error" as the last event.
 // Plain data, so the terminal and a server can pass it on as it is.
 import type { Decision, RecordEntry } from '../record/index.ts'
-import type { Answer } from './answer/answer.ts'
+import type { Answer, Claim } from './answer/answer.ts'
+
+// What the risk pass changed in the first answer: how many risks and decisions it added, at the end of each list, and
+// the risks it withdrew, each with the reason it gave. Zero and none when it found nothing to change.
+export type Revision = { added: { risks: number; decisions: number }; withdrawn: { risk: Claim; reason: string }[] }
+
+export type Cost = { inputTokens: number; outputTokens: number; seconds: number }
 
 export type ChatEvent =
 	| { kind: 'text'; delta: string }
@@ -12,8 +18,10 @@ export type ChatEvent =
 	// recorded holds the entries this answer added to the project record; an entry already there is not repeated. draft
 	// is set when the answer cites ken's snapshot of uncommitted work: nothing was recorded, and it holds the answer's
 	// decisions as ken checked and labelled them, for the reader's history alone.
-	| { kind: 'accepted'; answer: Answer; recorded: RecordEntry[]; draft: Decision[] | null }
-	| { kind: 'usage'; inputTokens: number; outputTokens: number; seconds: number }
+	// revision is null when there was no risk pass, or when nothing it sent passed and the first answer stands.
+	| { kind: 'accepted'; answer: Answer; recorded: RecordEntry[]; draft: Decision[] | null; revision: Revision | null }
+	// The whole question's cost. riskPass is the part the risk pass took, or null when the question had none.
+	| ({ kind: 'usage'; riskPass: Cost | null } & Cost)
 	| { kind: 'done'; outcome: Outcome }
 	| { kind: 'error'; message: string }
 

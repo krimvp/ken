@@ -1,7 +1,7 @@
 // What ken tells its reader, as checked data. Every statement and every risk carries a label from the plan and at
 // least one quote that passed checkQuote, and so does every arrow, message and relation in its diagrams. An answer
 // about a change also carries the change facts, which ken reads from git and the model never supplies.
-import type { ChangedHunk, MessageCount } from '../../checks/index.ts'
+import type { ChangedHunk, Followed, MessageCount } from '../../checks/index.ts'
 import type { Diagram } from '../../diagram/index.ts'
 import type { Statement } from '../../record/index.ts'
 import type { Commit, CommitHash } from '../../repo/index.ts'
@@ -15,6 +15,9 @@ export type Change = {
 	binary: string[]
 	// The commits whose message a quote in the answer cites, and the others. null in a change saved before ken counted.
 	messages: MessageCount | null
+	// The names the change touched that ken found used elsewhere by search, split by whether a quote of the answer holds
+	// one of their places. null in a change saved before ken looked, or too large to search.
+	usedElsewhere: Followed | null
 }
 
 // A statement or a risk. topic names the topic it belongs to, as the project record names it, so the page can fold what

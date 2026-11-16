@@ -1,14 +1,15 @@
 // The one way an answer reaches the reader. The model sends it here, checkAnswer decides, and the result tells the
 // model what to fix. A question allows MAX_REJECTIONS rejected answers, so a model that cannot quote stops there
 // instead of trying forever. A problem of form, which the model fixes without reading code again, comes back first and
-// does not use an attempt.
+// does not use an attempt. An answer about a change that the reader asked for is held once it passes, for the risk
+// pass (see risk-pass.ts); accept writes and shows an answer, the held one or the one the risk pass revised.
 import type { JsonObject, JsonValue, Tool } from 'aigent/plugin'
 import { decisionLabel, type Label, type Quote, type QuoteSources } from '../../checks/index.ts'
 import { CARDINALITIES, DIAGRAM_BOUNDS, DIAGRAM_KINDS, type DiagramDraft } from '../../diagram/index.ts'
 import type { UnderstandingMap } from '../../map/index.ts'
 import { type RecordEntry, type RecordStore, sameName, UNDO } from '../../record/index.ts'
 import type { Repository } from '../../repo/index.ts'
-import type { ChatEvent } from '../chat-event.ts'
+import type { ChatEvent, Revision } from '../chat-event.ts'
 import { hunkHeader } from '../tools/diff-tool.ts'
 import { readArgs, refuse, reply } from '../tools/tool-edge.ts'
 import type { Answer, Claim } from './answer.ts'
@@ -22,24 +23,30 @@ const MAX_LISTED_MESSAGES = 40
 // Two short sentences. A longer summary pushes the checked part of the answer off the reader's first screen.
 export const MAX_SUMMARY_CHARS = 280
 
-// What one question has seen of the answer tool. The session makes a new one for each question. learns is false for a
-// note ken wrote by itself in live mode: the reader did not ask it, so it tells their map nothing.
+// What one question has seen of the answer tool. The session makes a new one for each question. asked is false for a
+// note ken wrote by itself in live mode: the reader did not ask it, so it tells their map nothing, and it gets neither
+// the list of names used elsewhere nor the risk pass, which a note's own rules leave out. held is the answer that
+// passed every check while ken runs the risk pass, with the arguments it came in and the revisions the pass had refused.
 export type AnswerRound = {
 	rejections: number
 	answer: Answer | null
-	learns: boolean
+	asked: boolean
+	held: Held | null
 	emit: (event: ChatEvent) => void
 }
+export type Held = { args: JsonObject; answer: Answer; decisions: CheckedDecision[]; rejections: number }
 
-// map is the reader's understanding map. An accepted answer marks the topics it names as met there. project reads the
-// project's own git, without ken's snapshots, for the draft rule in recordAnswer.
-export function answerTool(
-	sources: QuoteSources,
-	store: RecordStore,
-	project: Repository,
-	map: UnderstandingMap | null,
-	round: () => AnswerRound,
-): Tool {
+// What the answer tool checks against and writes to. map is the reader's understanding map: an accepted answer marks
+// the topics it names as met there. project reads the project's own git, without ken's snapshots, for the draft rule
+// in recordAnswer.
+export type Gate = {
+	sources: QuoteSources
+	store: RecordStore
+	project: Repository
+	map: UnderstandingMap | null
+}
+
+export function answerTool(gate: Gate, round: () => AnswerRound): Tool {
 	return {
 		name: 'answer',
 		description:
@@ -50,19 +57,28 @@ export function answerTool(
 			if (current.answer) {
 				return reply('An answer is already accepted for this question. Write your one or two closing sentences now.')
 			}
+			if (current.held) {
+				return refuse('ken has checked your answer and holds it. Answer the questions about risks with revise_answer.')
+			}
 			if (current.rejections >= MAX_REJECTIONS) return refuse('No attempts are left for this question. Stop now.')
 			const form = formProblems(args)
 			if (form.length > 0) return sentBack(form)
-			const settled = await settle(sources, store, project, args, ctx.signal)
+			const holds = current.asked && args.scope !== undefined
+			const settled = await settle(gate, args, ctx.signal, !holds)
 			if (settled.kind === 'form') return sentBack(settled.problems)
 			if (settled.kind === 'accepted') {
-				if (current.learns) await map?.learn('asked', settled.answer.topics, new Date(), ctx.signal)
-				current.answer = settled.answer
 				const { recorded } = settled
-				const draft = recorded.kind === 'draft' ? recorded.decisions : null
-				const entries = recorded.kind === 'recorded' ? recorded.entries : []
-				current.emit({ kind: 'accepted', answer: settled.answer, recorded: entries, draft })
-				return reply(confirmation(settled.answer, settled.decisions, recorded))
+				// A piece of work the record already holds keeps its risks, so a second look could change nothing it stores.
+				if (holds && !(recorded.kind === 'checked' && recorded.kept !== null)) {
+					current.held = { args: settled.args, answer: settled.answer, decisions: settled.decisions, rejections: 0 }
+					const next =
+						'The reader has not seen it yet. ken will now ask you a few questions about risks. Write nothing more in this turn.'
+					return reply(confirmation(settled.answer, settled.decisions, recorded, next))
+				}
+				if (!holds) return reply(await shown(gate, current, settled, null, ctx.signal))
+				const accepted = await accept(gate, current, settled.args, null, ctx.signal)
+				if (accepted.kind === 'accepted') return reply(accepted.reply)
+				return refuse(accepted.problems.join('\n'))
 			}
 			current.rejections += 1
 			current.emit({ kind: 'rejected', attempt: current.rejections, problems: settled.problems })
@@ -71,7 +87,42 @@ export function answerTool(
 	}
 }
 
-function sentBack(problems: string[]) {
+type Settled = Awaited<ReturnType<typeof settle>>
+type Accepted = Extract<Settled, { kind: 'accepted' }>
+
+// Writes an answer to the record, marks its topics on the reader's map and shows it to the reader. The arguments are
+// checked again in full first, so what is written is exactly what passed.
+export async function accept(
+	gate: Gate,
+	current: AnswerRound,
+	args: JsonObject,
+	revision: Revision | null,
+	signal: AbortSignal,
+): Promise<{ kind: 'accepted'; reply: string } | { kind: 'rejected' | 'form'; problems: string[] }> {
+	const settled = await settle(gate, args, signal, true)
+	if (settled.kind !== 'accepted') return settled
+	return { kind: 'accepted', reply: await shown(gate, current, settled, revision, signal) }
+}
+
+async function shown(
+	gate: Gate,
+	current: AnswerRound,
+	settled: Accepted,
+	revision: Revision | null,
+	signal: AbortSignal,
+): Promise<string> {
+	if (current.asked) await gate.map?.learn('asked', settled.answer.topics, new Date(), signal)
+	current.answer = settled.answer
+	const { recorded } = settled
+	const draft = recorded.kind === 'draft' ? recorded.decisions : null
+	const entries = recorded.kind === 'recorded' ? recorded.entries : []
+	current.emit({ kind: 'accepted', answer: settled.answer, recorded: entries, draft, revision })
+	const next =
+		'Now write one or two sentences to the reader that say what the answer left out. Say nothing else, and do not repeat the answer.'
+	return confirmation(settled.answer, settled.decisions, recorded, next)
+}
+
+export function sentBack(problems: string[]) {
 	const head = 'Answer sent back. This did not use one of your attempts. The reader saw nothing.'
 	return refuse(
 		[head, ...problems.map((problem) => `- ${problem}`), 'Fix this and send the whole answer again.'].join('\n'),
@@ -94,21 +145,23 @@ function formProblems(args: JsonObject): string[] {
 	return problems
 }
 
+// args comes back as ken read it, with any list sent as JSON text parsed, so the risk pass can add to it.
 async function settle(
-	sources: QuoteSources,
-	store: RecordStore,
-	project: Repository,
+	gate: Gate,
 	raw: JsonObject,
 	signal: AbortSignal,
+	write: boolean,
 ): Promise<
 	| {
 			kind: 'accepted'
 			answer: Answer
 			decisions: CheckedDecision[]
 			recorded: Exclude<Recorded, { kind: 'refused' }>
+			args: JsonObject
 	  }
 	| { kind: 'rejected' | 'form'; problems: string[] }
 > {
+	const { sources, store, project } = gate
 	const read = readJsonText(ANSWER_SCHEMA, raw)
 	if (read.kind === 'refused') return { kind: 'rejected', problems: read.problems }
 	const sourceProblems: string[] = []
@@ -128,7 +181,7 @@ async function settle(
 	}
 	const check = await checkAnswer(sources, draft, signal)
 	if (check.kind === 'rejected') return check
-	const recorded = await recordAnswer(store, project, check.answer, check.decisions, args, signal)
+	const recorded = await recordAnswer(store, project, check.answer, check.decisions, args, signal, write)
 	if (recorded.kind === 'refused') return { kind: 'rejected', problems: recorded.problems }
 	// Every topic is in the record now, so each name becomes the record's own spelling of it.
 	const names = await topicNames(store)
@@ -142,7 +195,23 @@ async function settle(
 		risks: check.answer.risks && claims(check.answer.risks),
 		topics,
 	}
-	return { kind: 'accepted', answer, decisions: check.decisions, recorded }
+	return { kind: 'accepted', answer, decisions: check.decisions, recorded, args: read.args }
+}
+
+// The risk pass's additions on their own, numbered as the agent sent them, through the same checks as an answer.
+export async function checkAdditions(
+	sources: QuoteSources,
+	raw: { risks: JsonObject[]; decisions: JsonObject[] },
+	signal: AbortSignal,
+): Promise<{ kind: 'ok' } | { kind: 'rejected' | 'form'; problems: string[] }> {
+	const problems: string[] = []
+	const quote = (each: JsonObject) => quoteOf(each, problems)
+	const risks = raw.risks.map((each) => claimOf(each, 'answer risk', quote))
+	const decisions = raw.decisions.map((each) => decisionOf(each, quote))
+	if (problems.length > 0) return { kind: 'form', problems }
+	const draft = { summary: '', scope: null, statements: [], risks, decisions, diagrams: [] }
+	const check = await checkAnswer(sources, draft, signal)
+	return check.kind === 'rejected' ? check : { kind: 'ok' }
 }
 
 async function topicNames(store: RecordStore): Promise<string[]> {
@@ -153,6 +222,7 @@ function confirmation(
 	answer: Answer,
 	decisions: CheckedDecision[],
 	recorded: Exclude<Recorded, { kind: 'refused' }>,
+	next: string,
 ): string {
 	const claims = [...answer.statements, ...(answer.risks ?? [])]
 	const quotes = claims.reduce((sum, claim) => sum + claim.quotes.length, 0)
@@ -193,10 +263,14 @@ function confirmation(
 				.map((hash) => `- ${hash.slice(0, 7)} ${subjects.get(hash) ?? ''}`)
 			if (listed.length > 0) lines.push('Commit messages no quote cites:', ...listed)
 		}
+		const { usedElsewhere } = answer.change
+		if (usedElsewhere && usedElsewhere.notFollowed.length > 0) {
+			const total = usedElsewhere.followed.length + usedElsewhere.notFollowed.length
+			const names = usedElsewhere.notFollowed.map((name) => name.name).join(', ')
+			lines.push(`Of ${total} names used elsewhere, no quote holds a place of ${names}.`)
+		}
 	}
-	lines.push(
-		'Now write one or two sentences to the reader that say what the answer left out. Say nothing else, and do not repeat the answer.',
-	)
+	lines.push(next)
 	return lines.join('\n')
 }
 
@@ -352,7 +426,7 @@ function quoteOf(raw: JsonObject, problems: string[]): Quote {
 	}
 }
 
-function optionalList(value: JsonValue | undefined): JsonObject[] {
+export function optionalList(value: JsonValue | undefined): JsonObject[] {
 	return value === undefined ? [] : listOf(value)
 }
 
@@ -375,7 +449,7 @@ function isList(value: JsonValue | undefined): value is readonly JsonValue[] {
 
 // Every request sends the whole tool list again, and this schema is most of it. The quote, claim and edge shapes
 // repeat, so each keeps its descriptions where the model first reads it and drops them in the copies after.
-function withoutDescriptions<T>(schema: T): T {
+export function withoutDescriptions<T>(schema: T): T {
 	return JSON.parse(JSON.stringify(schema, (key, value) => (key === 'description' ? undefined : value)))
 }
 
@@ -409,7 +483,7 @@ const TOPIC_NAME = {
 		"The topic it belongs to, if any: a topic name from the record's index, or one this answer sends in topics",
 } as const
 
-const CLAIM_SCHEMA = {
+export const CLAIM_SCHEMA = {
 	type: 'object',
 	properties: {
 		text: { type: 'string', description: 'One idea in one or two short sentences, in plain words' },
@@ -425,7 +499,7 @@ const CLAIM_SCHEMA = {
 	additionalProperties: false,
 } as const
 
-const DECISION_SCHEMA = {
+export const DECISION_SCHEMA = {
 	type: 'object',
 	properties: {
 		question: {

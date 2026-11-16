@@ -5,9 +5,11 @@ import {
 	checkCoverage,
 	checkLabel,
 	countMessages,
+	followedNames,
 	gitQuotes,
 	type Quote,
 	type QuoteSources,
+	usedElsewhere,
 	type VerifiedGitQuote,
 	type VerifiedQuote,
 	verifyQuote,
@@ -147,8 +149,9 @@ async function changeOf(
 	if (coverage.kind !== 'ok') throw new Error(`a resolved scope failed the coverage check: ${coverage.kind}`)
 	const { covered, uncovered, binary } = coverage
 	const messages = countMessages(logged.commits, quotes)
-	return {
-		kind: 'ok',
-		change: { base: scope.base, head: scope.head, commits: logged.commits, covered, uncovered, binary, messages },
-	}
+	const used = await usedElsewhere(repo, scope, signal)
+	const followed = used.kind === 'ok' ? followedNames(used.used, quotes) : null
+	const { base, head } = scope
+	const facts = { base, head, commits: logged.commits, covered, uncovered, binary, messages }
+	return { kind: 'ok', change: { ...facts, usedElsewhere: followed } }
 }

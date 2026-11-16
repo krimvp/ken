@@ -120,7 +120,27 @@ export function checksHtml(q, ui) {
 			${ui.keyOpen ? labelKey(labelsOf(q)) : ''}
 		</section>
 		${coverageSection(q, ui)}
+		${elsewhereSection(q)}
 		${commitsSection(q)}`
+}
+
+// The names the change touched that ken found used elsewhere, by search, and those no quote of the answer follows.
+function elsewhereSection(q) {
+	const used = q.answer.change?.usedElsewhere
+	const total = used ? used.followed.length + used.notFollowed.length : 0
+	if (total === 0) return ''
+	const missed = used.notFollowed.map(
+		(name) => `<code>${esc(name.name)}</code> (${count(name.places, 'place', 'places')})`,
+	)
+	const said =
+		missed.length === 0
+			? `A quote follows each of the ${count(total, 'name', 'names')} to a place that uses it.`
+			: `No quote follows ${missed.length} of the ${count(total, 'name', 'names')} to a place that uses it: ${list(missed)}.`
+	return `<section class="check" id="check-elsewhere">
+		<h3>Used elsewhere</h3>
+		<p>${said}</p>
+		<p class="muted small">ken found the names the change touched, and the other lines that hold them, by search. It can miss a use or find a different thing with the same name.</p>
+	</section>`
 }
 
 // The list of statements counts only their own quotes, so say where the others are.

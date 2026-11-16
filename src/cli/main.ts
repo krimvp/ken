@@ -8,7 +8,15 @@
 // does on the page.
 import { createInterface } from 'node:readline/promises'
 import { parseArgs } from 'node:util'
-import { type Answer, type Chat, type ChatEvent, type Outcome, readModelConfig, startChat } from '../agent/index.ts'
+import {
+	type Answer,
+	type Chat,
+	type ChatEvent,
+	type Outcome,
+	type Revision,
+	readModelConfig,
+	startChat,
+} from '../agent/index.ts'
 import { withDrawings } from '../diagram/index.ts'
 import type { RecordEntry } from '../record/index.ts'
 import { printQuestion } from './answer/print-question.ts'
@@ -165,12 +173,23 @@ async function askForJson(chat: Chat, question: string): Promise<number> {
 		outcome: Outcome | 'error'
 		answer: Answer | null
 		recorded: RecordEntry[]
+		revision: Revision | null
 		tools: Extract<ChatEvent, { kind: 'tool' }>[]
 		rejected: Extract<ChatEvent, { kind: 'rejected' }>[]
 		usage: Extract<ChatEvent, { kind: 'usage' }> | null
 		note: string
 		error: string | null
-	} = { outcome: 'error', answer: null, recorded: [], tools: [], rejected: [], usage: null, note: '', error: null }
+	} = {
+		outcome: 'error',
+		answer: null,
+		recorded: [],
+		revision: null,
+		tools: [],
+		rejected: [],
+		usage: null,
+		note: '',
+		error: null,
+	}
 	for await (const event of chat.ask(question)) {
 		// The note is what the agent wrote after ken accepted its answer. What it wrote before belongs to its steps.
 		if (event.kind === 'text' && result.answer) result.note += event.delta
@@ -179,6 +198,7 @@ async function askForJson(chat: Chat, question: string): Promise<number> {
 		if (event.kind === 'accepted') {
 			result.answer = withDrawings(event.answer)
 			result.recorded = event.recorded
+			result.revision = event.revision
 		}
 		if (event.kind === 'usage') result.usage = event
 		if (event.kind === 'done') result.outcome = event.outcome

@@ -1,5 +1,5 @@
 import { styleText } from 'node:util'
-import type { Answer, ChatEvent } from '../../agent/index.ts'
+import type { Answer, ChatEvent, Revision } from '../../agent/index.ts'
 import { when } from '../../follow-up/index.ts'
 import { type Entry, entryLine } from '../../record/index.ts'
 import { formatDiagram, formatQuote } from './print-diagram.ts'
@@ -30,14 +30,20 @@ export async function printQuestion(events: AsyncIterable<ChatEvent>, out: NodeJ
 				break
 			case 'accepted':
 				line(`\n${formatAnswer(event.answer, event.recorded, paint)}`)
+				if (event.revision) line(`\n${revisionLine(event.revision)}`)
 				if (event.recorded.length > 0) {
 					line(paint('bold', `\nAdded to the project record (${event.recorded.length}):`))
 					for (const entry of event.recorded) line(`  ${entryLine(entry)}`)
 				}
 				break
-			case 'usage':
-				line(paint('dim', `\n${event.inputTokens} tokens in, ${event.outputTokens} out, ${event.seconds} s`))
+			case 'usage': {
+				const { riskPass } = event
+				const pass = riskPass
+					? `, of which the second look at risks took ${riskPass.inputTokens} in, ${riskPass.outputTokens} out, ${riskPass.seconds} s`
+					: ''
+				line(paint('dim', `\n${event.inputTokens} tokens in, ${event.outputTokens} out, ${event.seconds} s${pass}`))
 				break
+			}
 			case 'done':
 				answered = event.outcome === 'answered'
 				if (event.outcome === 'rejected') {
@@ -115,8 +121,30 @@ export function formatAnswer(answer: Answer, entries: Entry[], paint: Paint): st
 			const subjects = new Map(commits.map((commit) => [commit.hash, commit.subject]))
 			for (const hash of messages.unquoted) lines.push(`  - ${hash.slice(0, 7)} ${subjects.get(hash) ?? ''}`)
 		}
+		const { usedElsewhere } = answer.change
+		if (usedElsewhere) {
+			const total = usedElsewhere.followed.length + usedElsewhere.notFollowed.length
+			const head = `Names used elsewhere, found by search, that no quote follows: ${usedElsewhere.notFollowed.length} of ${total}.`
+			lines.push('', paint('bold', head))
+			for (const { name, places, first } of usedElsewhere.notFollowed) {
+				const at = first.slice(0, 2).map((site) => `${site.path}:${site.line}`)
+				lines.push(
+					`  - ${name}, at ${places === 1 ? '1 place' : `${places} places`}: ${at.join(', ')}${places > at.length ? ', ...' : ''}`,
+				)
+			}
+		}
 	}
 	return lines.join('\n')
+}
+
+function revisionLine({ added, withdrawn }: Revision): string {
+	const changes = [
+		added.risks > 0 ? `added ${added.risks === 1 ? '1 risk' : `${added.risks} risks`}` : '',
+		added.decisions > 0 ? `added ${added.decisions === 1 ? '1 decision' : `${added.decisions} decisions`}` : '',
+		withdrawn.length > 0 ? `withdrew ${withdrawn.length === 1 ? '1 risk' : `${withdrawn.length} risks`}` : '',
+	].filter((part) => part !== '')
+	if (changes.length === 0) return 'A second look at risks found nothing to change.'
+	return `A second look at risks ${changes.join(', ')}. The last risks and decisions above came from it.`
 }
 
 function claims(list: Answer['statements'], paint: Paint): string[] {

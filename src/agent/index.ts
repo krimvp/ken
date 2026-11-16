@@ -2,7 +2,7 @@
 // model explores with tools that only read, and each question streams events that end in an answer whose quotes all
 // passed the quote check, or in a clear reason why there is none.
 export type { Answer, Change } from './answer/answer.ts'
-export type { ChatEvent, Outcome } from './chat-event.ts'
+export type { ChatEvent, Cost, Outcome, Revision } from './chat-event.ts'
 export {
 	MODEL_EXAMPLE,
 	type ModelConfig,

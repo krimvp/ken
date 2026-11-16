@@ -19,13 +19,16 @@ export type RecordArgs = {
 }
 
 // draft: the answer cites a commit only ken's store holds, so nothing was recorded and decisions are its decisions as
-// ken checked and labelled them.
+// ken checked and labelled them. checked: every entry passed the record's check and none was written yet. kept names
+// the piece of work the record already holds for this range.
 export type Recorded =
 	| { kind: 'recorded'; entries: RecordEntry[]; kept: EntryId | null }
+	| { kind: 'checked'; kept: EntryId | null }
 	| { kind: 'draft'; decisions: Decision[] }
 	| { kind: 'refused'; problems: string[] }
 
-// project reads the project's own git, never ken's snapshot store.
+// project reads the project's own git, never ken's snapshot store. write is false while ken holds the answer for the
+// risk pass: the record checks every entry, so a problem goes back to the agent now, and writes none of them.
 export async function recordAnswer(
 	store: RecordStore,
 	project: Repository,
@@ -33,6 +36,7 @@ export async function recordAnswer(
 	decisions: CheckedDecision[],
 	args: RecordArgs,
 	signal: AbortSignal,
+	write: boolean,
 ): Promise<Recorded> {
 	if (await citesUnshared(project, answer, decisions, signal)) {
 		return { kind: 'draft', decisions: decisions.map(asDraft) }
@@ -94,6 +98,7 @@ export async function recordAnswer(
 		})
 	}
 	if (problems.length > 0) return { kind: 'refused', problems }
+	if (!write) return { kind: 'checked', kept: args.work ? kept : null }
 
 	const appended = await store.append(drafts, signal)
 	if (appended.kind === 'refused') return appended

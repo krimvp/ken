@@ -13,6 +13,12 @@ export type ChatRequest = { messages: { role: string; content: unknown }[] }
 // Each reply reports this usage, so a test can check the sum over a question.
 export const USAGE_PER_REPLY = { prompt_tokens: 100, completion_tokens: 10 }
 
+// What a model sends after ken holds its answer about a change, when the risk pass finds nothing to change: it ends the
+// question's turn, then calls revise_answer with nothing in it. The closing note comes after. A script that stops after
+// the answer leaves the risk pass no reply, so the pass fails and the answer ken held stands, as it would for a model
+// that failed there.
+export const NOTHING_TO_REVISE: Turn[] = [{ text: '' }, { tool: 'ken__revise_answer', args: {} }]
+
 // A local OpenAI-compatible endpoint that streams the script, one turn per request, because aigent reaches a model
 // only over HTTP. The server closes when the test file ends.
 export async function scriptedModel(script: Turn[]): Promise<{ baseUrl: string; requests: ChatRequest[] }> {
