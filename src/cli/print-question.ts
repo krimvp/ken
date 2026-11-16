@@ -74,7 +74,8 @@ export function formatAnswer(answer: Answer, recorded: RecordEntry[], paint: Pai
 	if (answer.risks?.length === 0) lines.push(paint('bold', 'Risks: the agent looked and found none.'), '')
 	if (answer.risks?.length)
 		lines.push(paint('bold', `Risks (${answer.risks.length}):`), ...claims(answer.risks, paint), '')
-	lines.push(paint('bold', `Statements (${answer.statements.length}):`), ...claims(answer.statements, paint))
+	const said = answer.change ? 'What the change did' : 'Statements'
+	lines.push(paint('bold', `${said} (${answer.statements.length}):`), ...claims(answer.statements, paint))
 	if (answer.change) {
 		const { commits, covered, uncovered, binary } = answer.change
 		lines.push('', paint('bold', `Commits in scope, from git (${commits.length}):`))

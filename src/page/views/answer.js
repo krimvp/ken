@@ -52,6 +52,7 @@ export function answerHtml(q, ui, running) {
 	const hidden = foldedTopics(q, ui)
 	const statements = shownOf(a.statements, 's', hidden)
 	const quotes = statements.reduce((n, { item }) => n + item.quotes.length, 0)
+	const counted = `${count(statements.length, 'statement', 'statements')}, ${count(quotes, 'quote', 'quotes')}`
 	const allOpen = ui.wide
 		? ui.panel.kind === 'all'
 		: itemsOf(q).every(({ key, item }) => item.quotes.every((_, j) => ui.openQuotes.has(`${key}-q${j}`)))
@@ -62,9 +63,9 @@ export function answerHtml(q, ui, running) {
 		statements.length === 0
 			? ''
 			: `<div class="list-head">
-			<h3>${count(statements.length, 'statement', 'statements')}, ${count(quotes, 'quote', 'quotes')}</h3>
+			<h3>${a.change ? 'What the change did' : counted}</h3>
 			<button class="link small" data-act="all-quotes" data-key="all-quotes">${allOpen ? 'Close all quotes' : 'Open all quotes'}</button>
-			<p class="list-note">${labelLine(statements.map(({ item }) => item))}</p>
+			<p class="list-note">${a.change ? `${sentence(counted)}. ` : ''}${labelLine(statements.map(({ item }) => item))}</p>
 		</div>
 		<ol>${statements.map(({ item, key }, i) => claimHtml(item, key, i, rows, marked)).join('')}</ol>`
 	return `
@@ -173,19 +174,16 @@ function decisionHtml(d, key, { ui, commits }, marked) {
 	const row = `<button class="d-row" data-act="decision" data-item="${key}" data-key="${key}-row" aria-expanded="${open}">
 		<span class="d-line">${call}${mark}<span class="d-q">${prose(d.question)}</span> <span class="d-chosen">Chosen: ${prose(d.chosen)}</span></span></button>`
 	if (!open) return `<li class="decision" id="item-${key}">${row}</li>`
-	const others =
-		d.rejected.length === 0
-			? '<dd class="muted">none found in the code or history</dd>'
-			: d.rejected
-					.map((r) => `<dd>${prose(r.option)}<span class="why">Why not: ${prose(r.reason)}</span></dd>`)
-					.join('')
+	const others = d.rejected
+		.map((r) => `<dd>${prose(r.option)}<span class="why">Why not: ${prose(r.reason)}</span></dd>`)
+		.join('')
 	return `<li class="decision open" id="item-${key}">${row}
 		<div class="d-card">
 			${d.needsOwner ? `<p class="d-call">You decide: ${prose(d.question)}</p>` : ''}
 			<dl class="facts">
 				<div><dt>Chosen</dt><dd>${prose(d.chosen)}</dd></div>
 				${d.reason ? `<div><dt>Why</dt><dd>${prose(d.reason.text)}${fromHtml(d)}</dd></div>` : ''}
-				<div><dt>Other options</dt>${others}</div>
+				${others ? `<div><dt>Other options</dt>${others}</div>` : ''}
 			</dl>
 			<p class="d-undo">${UNDO[d.undo] ?? esc(d.undo)}</p>
 			${quoteRows(decisionQuotes(d), key, { ui, commits })}
