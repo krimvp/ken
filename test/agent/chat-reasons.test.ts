@@ -38,13 +38,13 @@ const DECISION = {
 	quotes: [SLEEP],
 }
 
-function answer(decisions: unknown): Turn {
+function answer(decisions: unknown, statementQuote = SLEEP): Turn {
 	return {
 		tool: 'ken__answer',
 		args: {
 			scope: { base, head: merge },
 			summary: 'Retries now wait 100 ms.',
-			statements: [{ text: 'The loop sleeps after each attempt.', label: 'inferred', quotes: [SLEEP] }],
+			statements: [{ text: 'The loop sleeps after each attempt.', label: 'inferred', quotes: [statementQuote] }],
 			risks: [],
 			decisions,
 		},
@@ -95,10 +95,13 @@ test('a reason quoted from a commit message is checked like a file quote: half a
 	])
 })
 
-test('an accepted answer tells the model which commit messages no quote cites, leaving out the merge, and carries the same count', async () => {
-	const { events, requests } = await ask([answer([DECISION]), { text: 'I left out the README commit.' }])
+test('an accepted answer counts every quote it shows: a decision covers the hunk it quotes, and the model is told which commit messages no quote cites, leaving out the merge', async () => {
+	const readme = { path: 'README.md', commit: merge, text: 'Waits.' }
+	const { events, requests } = await ask([answer([DECISION], readme), { text: 'I left out the README commit.' }])
 
-	assert.deepEqual(accepted(events).answer.change?.messages, { quoted: [waits], unquoted: [docs] })
+	const change = accepted(events).answer.change
+	assert.deepEqual(change?.uncovered, [], 'the sleep line is quoted only in the decision')
+	assert.deepEqual(change?.messages, { quoted: [waits], unquoted: [docs] })
 	const told = toolResults(requests[1])[0] ?? ''
 	assert.match(told, /cite 1 of 2 commit messages/)
 	assert.ok(told.includes(`- ${docs.slice(0, 7)} docs: say how long`), `the model is told which one: ${told}`)

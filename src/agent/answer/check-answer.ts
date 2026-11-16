@@ -66,17 +66,13 @@ export async function checkAnswer(repo: Repository, draft: AnswerDraft, signal: 
 	const answer = { summary: draft.summary, statements, risks, diagrams }
 	if (scope === null) return { kind: 'accepted', answer: { ...answer, change: null }, decisions }
 
-	// Hunk coverage counts the quotes of the claims and the diagrams, as it always has. The commit messages count every
-	// quote the reader sees, so the decisions' too.
-	const claimQuotes = [...statements, ...(risks ?? [])].flatMap((claim) => claim.quotes)
-	const diagramQuotes = diagrams.flatMap((diagram) => diagramElements(diagram).flatMap((element) => element.quotes))
-	const decisionQuotes = decisions.flatMap((decision) => [...decision.quotes, ...decision.reason.quotes])
-	const change = await changeOf(
-		repo,
-		scope,
-		{ coverage: [...claimQuotes, ...diagramQuotes], messages: [...claimQuotes, ...decisionQuotes] },
-		signal,
-	)
+	// Every quote the reader sees counts, the decisions' too: a statement need not repeat a decision's lines to cover them.
+	const quotes = [
+		...[...statements, ...(risks ?? [])].flatMap((claim) => claim.quotes),
+		...decisions.flatMap((decision) => [...decision.quotes, ...decision.reason.quotes]),
+		...diagrams.flatMap((diagram) => diagramElements(diagram).flatMap((element) => element.quotes)),
+	]
+	const change = await changeOf(repo, scope, quotes, signal)
 	if (change.kind === 'refused') return { kind: 'rejected', problems: [`Scope: ${change.problem}`] }
 	return { kind: 'accepted', answer: { ...answer, change: change.change }, decisions }
 }
@@ -129,17 +125,17 @@ async function resolveScope(
 async function changeOf(
 	repo: Repository,
 	scope: Scope,
-	quotes: { coverage: VerifiedQuote[]; messages: VerifiedQuote[] },
+	quotes: VerifiedQuote[],
 	signal: AbortSignal,
 ): Promise<{ kind: 'ok'; change: Change } | { kind: 'refused'; problem: string }> {
 	const tooLarge = { kind: 'refused', problem: 'the change is too large to read. Ask about a shorter range.' } as const
 	const logged = await repo.log(scope, signal)
 	if (logged.kind === 'too-large') return tooLarge
-	const coverage = await checkCoverage(repo, scope, quotes.coverage, signal)
+	const coverage = await checkCoverage(repo, scope, quotes, signal)
 	if (coverage.kind === 'too-large') return tooLarge
 	if (coverage.kind !== 'ok') throw new Error(`a resolved scope failed the coverage check: ${coverage.kind}`)
 	const { covered, uncovered, binary } = coverage
-	const messages = countMessages(logged.commits, quotes.messages)
+	const messages = countMessages(logged.commits, quotes)
 	return {
 		kind: 'ok',
 		change: { base: scope.base, head: scope.head, commits: logged.commits, covered, uncovered, binary, messages },
