@@ -10,9 +10,14 @@ type Module = { job: string; imports: string[]; packages: string[] }
 // node: built-ins are always allowed. Add a module here before you create its folder.
 export const MODULES: Record<string, Module> = {
 	repo: { job: "Reads a project's files and git history, and never writes to them.", imports: [], packages: [] },
+	transcripts: {
+		job: 'Reads the saved sessions of a coding agent for this project, so ken can quote what was said while the work was done.',
+		imports: [],
+		packages: [],
+	},
 	checks: {
-		job: 'Checks an answer: its quotes exist in git, its labels are allowed, and it covers every changed hunk.',
-		imports: ['repo'],
+		job: 'Checks an answer: its quotes exist in git or in a saved session, its labels are allowed, and it covers every changed hunk.',
+		imports: ['repo', 'transcripts'],
 		packages: [],
 	},
 	diagram: {
@@ -46,8 +51,8 @@ export const MODULES: Record<string, Module> = {
 		packages: [],
 	},
 	cli: {
-		job: 'Runs ken in the terminal: a chat, one question for scripts, the project record, or the page.',
-		imports: ['agent', 'diagram', 'record', 'repo', 'server'],
+		job: 'Runs ken in the terminal: a chat, one question for scripts, the project record, the page, a logged decision, or saved sessions.',
+		imports: ['agent', 'diagram', 'record', 'repo', 'server', 'transcripts'],
 		packages: [],
 	},
 }
