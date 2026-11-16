@@ -257,6 +257,12 @@ function isList(value: JsonValue | undefined): value is readonly JsonValue[] {
 	return Array.isArray(value)
 }
 
+// Every request sends the whole tool list again, and this schema is most of it. The quote, claim and edge shapes
+// repeat, so each keeps its descriptions where the model first reads it and drops them in the copies after.
+function withoutDescriptions<T>(schema: T): T {
+	return JSON.parse(JSON.stringify(schema, (key, value) => (key === 'description' ? undefined : value)))
+}
+
 const QUOTE_SCHEMA = {
 	type: 'object',
 	properties: {
@@ -271,6 +277,7 @@ const QUOTE_SCHEMA = {
 	required: ['path', 'commit', 'text'],
 	additionalProperties: false,
 } as const
+const QUOTE = withoutDescriptions(QUOTE_SCHEMA)
 
 const CLAIM_SCHEMA = {
 	type: 'object',
@@ -314,7 +321,7 @@ const DECISION_SCHEMA = {
 			type: 'boolean',
 			description: 'true when the owner should look at it: a guess about intent, a risk, or a choice with a cost',
 		},
-		quotes: { type: 'array', minItems: 1, items: QUOTE_SCHEMA },
+		quotes: { type: 'array', minItems: 1, items: QUOTE },
 	},
 	required: ['question', 'chosen', 'rejected', 'undo', 'needs_owner', 'quotes'],
 	additionalProperties: false,
@@ -324,7 +331,7 @@ const TOPIC_SCHEMA = {
 	type: 'object',
 	properties: {
 		name: { type: 'string', description: 'A short name for a part of the project, such as "retry logic"' },
-		quotes: { type: 'array', minItems: 1, items: QUOTE_SCHEMA },
+		quotes: { type: 'array', minItems: 1, items: QUOTE },
 		note: { type: 'string', description: 'A few sentences on how this part works, for the next question about it' },
 		replaces: { type: 'string', description: 'The id of a topic in the record that this one updates' },
 	},
@@ -336,7 +343,7 @@ const NAME = { type: 'string', description: 'A short name, unique in the diagram
 const DEFINED_AT = {
 	type: 'array',
 	description: 'Optional: the lines where it is defined, such as its header or its declaration',
-	items: QUOTE_SCHEMA,
+	items: QUOTE,
 } as const
 const EDGE_PROPERTIES = {
 	from: { type: 'string', description: 'The name of the box, participant or entity it starts at' },
@@ -354,7 +361,7 @@ const EDGE_PROPERTIES = {
 	quotes: {
 		type: 'array',
 		description: 'At least one: the lines that show the call, the message or the link',
-		items: QUOTE_SCHEMA,
+		items: QUOTE,
 	},
 } as const
 const EDGE_SCHEMA = {
@@ -407,7 +414,7 @@ const DIAGRAM_SCHEMA = {
 		messages: {
 			type: 'array',
 			description: `A sequence diagram's messages, in the order they happen, at most ${DIAGRAM_BOUNDS.edges}`,
-			items: EDGE_SCHEMA,
+			items: withoutDescriptions(EDGE_SCHEMA),
 		},
 		entities: {
 			type: 'array',
@@ -438,7 +445,7 @@ const DIAGRAM_SCHEMA = {
 			items: {
 				type: 'object',
 				properties: {
-					...EDGE_PROPERTIES,
+					...withoutDescriptions(EDGE_PROPERTIES),
 					cardinality: {
 						type: 'string',
 						enum: CARDINALITIES,
@@ -493,7 +500,7 @@ const ANSWER_SCHEMA = {
 			type: 'array',
 			description:
 				'Required when the answer has a scope. Each thing that could go wrong or that the owner should watch after the change, one per item, with the lines it starts from: often a caller or another user of a changed value outside the diff. An empty list says you looked and found none.',
-			items: CLAIM_SCHEMA,
+			items: withoutDescriptions(CLAIM_SCHEMA),
 		},
 	},
 	required: ['summary', 'statements'],
