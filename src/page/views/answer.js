@@ -270,8 +270,8 @@ function leftOutHtml(a, ui) {
 	const head = n === 1 ? '1 point of the draft had no line to quote' : `${n} points of the draft had no line to quote`
 	const points = a.leftOutPoints ?? []
 	if (points.length === 0)
-		return `<p class="caption">${head}, so the answer leaves it out. The draft is in the steps.</p>`
-	const body = `<p class="caption">ken's model named ${n === 1 ? 'it' : 'them'} this way, and left ${n === 1 ? 'it' : 'them'} out of the answer. Its words, not checked.</p>
+		return `<p class="caption">${head} and ${n === 1 ? 'was' : 'were'} left out. The draft is in the steps.</p>`
+	const body = `<p class="caption">In the words of ken's model. ken did not check them.</p>
 		<ul class="left-out">${points.map((point) => `<li>${prose(point)}</li>`).join('')}</ul>`
 	return `<div class="folds left-out">${foldHtml('left-out', head, ui, body)}</div>`
 }

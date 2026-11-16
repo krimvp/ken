@@ -953,9 +953,21 @@ span.label-from-the-session {
 	margin-top: var(--space-3);
 }
 
-.withdrawn .fold-head {
+.withdrawn .fold-head,
+.left-out .fold-head {
 	font-size: var(--text-note);
 	font-weight: 600;
+}
+
+/* The points the draft left out: the model's own words, as a plain list under its caption. */
+.folds.left-out {
+	margin-top: var(--space-3);
+}
+
+ul.left-out {
+	margin: var(--space-2) 0 0;
+	padding-left: 1.25em;
+	list-style: disc;
 }
 
 .fold-body > .list-head:first-child,
