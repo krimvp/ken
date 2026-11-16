@@ -132,10 +132,13 @@ function elsewhereSection(q) {
 	const missed = used.notFollowed.map(
 		(name) => `<code>${esc(name.name)}</code> (${count(name.places, 'place', 'places')})`,
 	)
+	const names = total === 1 ? 'the name' : `${missed.length === 0 ? 'each' : 'any'} of the ${total} names`
 	const said =
 		missed.length === 0
-			? `A quote follows each of the ${count(total, 'name', 'names')} to a place that uses it.`
-			: `No quote follows ${missed.length} of the ${count(total, 'name', 'names')} to a place that uses it: ${list(missed)}.`
+			? `A quote follows ${names} to a place that uses it.`
+			: missed.length === total
+				? `No quote follows ${names} to a place that uses it: ${list(missed)}.`
+				: `No quote follows ${missed.length} of the ${total} names to a place that uses it: ${list(missed)}.`
 	return `<section class="check" id="check-elsewhere">
 		<h3>Used elsewhere</h3>
 		<p>${said}</p>
