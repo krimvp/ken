@@ -68,6 +68,9 @@ export interface Repository {
 	// The newest commits on head's main line, newest first: head, its first parent, that one's first parent, and so on.
 	// A merge's paths are the ones it changed against its first parent, so they are the paths of the change it brought.
 	mainLine(head: CommitHash, limit: number, signal?: AbortSignal): Promise<{ kind: 'ok'; commits: Commit[] } | TooLarge>
+	// The newest commit on head's main line that git committed at or before the moment, an ISO date. Null when every
+	// commit is newer. The commit date, not the author date, so a commit rebased onto the line counts from when it landed.
+	before(head: CommitHash, moment: string, signal?: AbortSignal): Promise<CommitHash | null>
 	diff(range: Range, signal?: AbortSignal): Promise<{ kind: 'ok'; files: FileDiff[] } | TooLarge>
 	blame(
 		commit: CommitHash,

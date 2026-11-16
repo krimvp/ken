@@ -35,13 +35,15 @@ export type EntryDraft =
 			kind: 'decision'
 			question: string
 			chosen: string
-			reason: { text: string; quotes: Quote[] }
+			// null only in the answer to a decision written before ken asked for reasons.
+			reason: { text: string; quotes: Quote[] } | null
 			rejected: { option: string; reason: string }[]
 			undo: Undo
 			needsOwner: boolean
 			quotes: Quote[]
 			work: string | null
 			topic?: string | undefined
+			answer?: { at: string; note: string | null }
 	  } & Replaces)
 	| ({ kind: 'topic'; name: string; quotes: Quote[] } & Replaces)
 	| ({ kind: 'note'; topic: string; text: string } & Replaces)
@@ -140,22 +142,34 @@ export async function checkEntry(
 		}
 		case 'decision': {
 			if (draft.rejected.length > MAX.list) problems.push(`keep the rejected options to ${MAX.list}.`)
-			const reasonQuotes = await quotes('the reason', draft.reason.quotes, false)
+			const answered = record.known.find((other) => other.id === replaces)
+			if (draft.answer && (answered?.kind !== 'decision' || !answered.needsOwner)) {
+				problems.push('the decision does not wait on the owner, so it takes no answer.')
+			}
+			if (draft.reason === null && !draft.answer) problems.push('the decision needs a reason: why this option.')
+			const reasonQuotes = await quotes('the reason', draft.reason?.quotes ?? [], false)
 			entry = {
 				kind: 'decision',
 				question: text('question', draft.question, MAX.option),
 				chosen: text('chosen', draft.chosen, MAX.text),
-				reason: { text: text('the reason', draft.reason.text, MAX.reason), quotes: reasonQuotes },
+				reason: draft.reason && { text: text('the reason', draft.reason.text, MAX.reason), quotes: reasonQuotes },
 				rejected: draft.rejected.slice(0, MAX.list).map((rejected, index) => ({
 					option: text(`rejected option ${index + 1}`, rejected.option, MAX.option),
 					reason: text(`the reason for rejected option ${index + 1}`, rejected.reason, MAX.text),
 				})),
 				undo: draft.undo,
-				needsOwner: draft.needsOwner,
+				// An answered decision no longer waits on the owner, whatever the draft says.
+				needsOwner: draft.answer === undefined && draft.needsOwner,
 				label: decisionLabel(reasonQuotes),
 				quotes: await quotes('the decision', draft.quotes),
 				work: draft.work === null ? null : named('work', draft.work, 'work'),
 				topic: draft.topic === undefined ? null : topicNamed(draft.topic),
+				answer: draft.answer
+					? {
+							at: draft.answer.at,
+							note: draft.answer.note === null ? null : text("the owner's note", draft.answer.note, MAX.text),
+						}
+					: null,
 			} satisfies Decision
 			break
 		}

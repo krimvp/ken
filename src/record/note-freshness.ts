@@ -14,12 +14,18 @@ export function codeHash(quotes: VerifiedQuote[]): string {
 	return hash.digest('hex').slice(0, 16)
 }
 
-// Each quote is looked for again at HEAD, near the line it was at, so lines that moved within their file still count.
-// A quote that is gone leaves the hash, so the hash differs from the one taken when every quote was there.
-export async function topicCode(repo: Repository, topic: Topic, signal?: AbortSignal): Promise<TopicCode> {
+// Each quote is looked for again at HEAD, or at the commit given, near the line it was at, so lines that moved within
+// their file still count. A quote that is gone leaves the hash, so the hash differs from the one taken when every quote
+// was there.
+export async function topicCode(
+	repo: Repository,
+	topic: Topic,
+	signal?: AbortSignal,
+	commit = 'HEAD',
+): Promise<TopicCode> {
 	const checks = await Promise.all(
 		topic.quotes.map((quote) =>
-			checkQuote(repo, { path: quote.path, commit: 'HEAD', text: quote.text, line: quote.startLine }, signal),
+			checkQuote(repo, { path: quote.path, commit, text: quote.text, line: quote.startLine }, signal),
 		),
 	)
 	const atHead = checks.flatMap((check) => (check.kind === 'verified' ? [check.quote] : []))

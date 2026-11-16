@@ -37,7 +37,8 @@ export type Work = {
 // It is null in a decision written before ken asked for one. ken sets the label from the reason's quotes (see
 // decisionLabel), never the writer. A decision says why, which is never a relation found by searching, so it is never
 // "found-by-search". Slice 5 adds decisions a coding agent logs as it makes them, also "recorded". topic names the
-// topic the decision belongs to, as the record names it, or is null.
+// topic the decision belongs to, as the record names it, or is null. answer is the owner's "I have decided" on a decision
+// that needed them: when, and their note. ken writes it as a new entry that replaces the old one with the same content.
 export type Decision = {
 	kind: 'decision'
 	question: string
@@ -50,6 +51,7 @@ export type Decision = {
 	quotes: VerifiedQuote[]
 	work: EntryId | null
 	topic: string | null
+	answer: { at: string; note: string | null } | null
 }
 
 export type Topic = { kind: 'topic'; name: string; quotes: VerifiedQuote[] }
