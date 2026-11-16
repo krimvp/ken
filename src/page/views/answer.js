@@ -128,10 +128,13 @@ function decisionsHtml(decisions, rows) {
 			: decisions.length === 1
 				? ', and it needs your call'
 				: `, ${calls} ${calls === 1 ? 'needs' : 'need'} your call`
+	// One label for all of them goes on the head, as on a diagram's title. Mixed labels are counted under it.
+	const labels = labelCounts(decisions)
+	const one = labels.length === 1 ? label(labels[0][0]) : ''
 	return `<section class="decisions" aria-labelledby="decisions-head">
 		<div class="list-head">
-			<h3 id="decisions-head">${head}${needs}</h3>
-			<p class="list-note">${labelLine(decisions)}</p>
+			<h3 id="decisions-head">${one}${head}${needs}</h3>
+			${one ? '' : `<p class="list-note">${labelLine(decisions)}</p>`}
 		</div>
 		<ul>${decisions.map((d, i) => decisionHtml(d, `d${i}`, rows)).join('')}</ul>
 	</section>`

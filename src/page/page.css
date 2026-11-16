@@ -593,7 +593,7 @@ a.strip {
 	align-items: baseline;
 	justify-content: space-between;
 	gap: var(--space-1) var(--space-4);
-	margin-top: var(--space-6);
+	margin-top: var(--space-5);
 	padding-bottom: var(--space-2);
 	border-bottom: 1px solid var(--color-border);
 }
@@ -607,10 +607,6 @@ a.strip {
 	flex-basis: 100%;
 	color: var(--color-note);
 	font-size: var(--text-note);
-}
-
-.decisions .list-head {
-	margin-top: var(--space-5);
 }
 
 /* Risks are the agent's predictions, so they sit apart from the statements, behind a rule in the colour of a warning. */
@@ -689,7 +685,8 @@ span.label::before {
 }
 
 .st-text .label,
-.diagram-title .label {
+.diagram-title .label,
+.list-head h3 .label {
 	margin-right: var(--space-2);
 }
 
