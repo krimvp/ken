@@ -2132,6 +2132,17 @@ q.subject {
 	font-weight: 650;
 }
 
+/* A note's risks are amber, as in an answer, with the room of a note. */
+.ln-risks {
+	margin-top: var(--space-3);
+	padding: var(--space-3) var(--space-4);
+}
+
+.ln-risks .st {
+	padding: var(--space-2) 0 0;
+	border-bottom: 0;
+}
+
 .ln-list {
 	display: grid;
 	gap: var(--space-3);

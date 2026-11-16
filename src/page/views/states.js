@@ -79,7 +79,7 @@ export function endedPanelHtml() {
 
 const ORDINAL = ['first', 'second', 'third']
 
-// Tries that were sent back for the same reasons fold into one item: "Second and third answers".
+// Drafts rejected for the same reasons fold into one item: "Second and third drafts".
 function triesHtml(tries) {
 	const groups = []
 	for (const [i, step] of tries.entries()) {
@@ -91,7 +91,7 @@ function triesHtml(tries) {
 	return groups
 		.map(({ tries: which, said }) => {
 			const names = list(which.map((i) => ORDINAL[i] ?? `number ${i + 1}`))
-			const name = which.length === 3 ? 'all three answers' : `${names} ${which.length === 1 ? 'answer' : 'answers'}`
+			const name = which.length === 3 ? 'all three drafts' : `${names} ${which.length === 1 ? 'draft' : 'drafts'}`
 			return `<li><span class="try">${name[0].toUpperCase()}${name.slice(1)}</span><ul>${said.map((p) => `<li>${prose(p)}</li>`).join('')}</ul></li>`
 		})
 		.join('')

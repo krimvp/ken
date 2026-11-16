@@ -87,7 +87,7 @@ export function noteHtml(view, key, ui, canAsk, tags) {
 		<p class="ln-head">${noteHeadHtml(entry, tags)}</p>
 		<p class="small muted">The note from ken's model. ken checked its quotes.</p>
 		<p class="summary">${prose(a.summary)}</p>
-		${risks.length > 0 ? `<h3 class="ln-sub">${risks.length === 1 ? 'A risk to watch' : `${risks.length} risks to watch`}</h3><ol class="ln-list">${claimItems(risks, `${key}r`, rows)}</ol>` : ''}
+		${risks.length > 0 ? `<section class="risks ln-risks"><h3 class="ln-sub">${risks.length === 1 ? 'A risk to watch' : `${risks.length} risks to watch`}</h3><ol class="ln-list">${claimItems(risks, `${key}r`, rows)}</ol></section>` : ''}
 		${decisions.length > 0 ? `<ul class="ln-decisions">${decisions.map((d, i) => decisionHtml(d, `${key}d${i}`, rows, all)).join('')}</ul>` : ''}
 		${rest}
 		<p class="ln-foot">${more}${ask}</p>
