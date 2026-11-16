@@ -2,29 +2,30 @@
 
 ken explains a software project to the developer who owns it. Ask what changed, why, or how a part works now. Every decision, risk and statement in the answer comes with the exact lines it rests on, and ken looks up each quote before you see the answer. ken is built for projects where AI agents write most of the code.
 
-<img src="site/images/ken-risk-with-quotes-wide.png" width="480" alt="An answer on ken's local page to &quot;What did the last commit do, and why? Name the decisions it made and any risk I should know about.&quot; Under the summary and one decision labelled Recorded, risk 1 is marked Quotes code outside the change: every fetchUser call where all 3 tries fail now waits about 1.4 s before it throws, up from 0.6 s, because retry still sleeps 800 ms after the last try. Its first quote is open and shows line 8 of src/user.ts at a32ffb8, where fetchUser calls retry.">
+<img src="site/images/ken-risk-with-quotes-wide.png" width="440" alt="The question What did the last commit do, and why? Name the decisions it made and any risk I should know about. Under it, the summary from ken's model, not checked, tells the story: before a32ffb8, retry waited a fixed 200 ms between tries, so it kept hitting the API while the API was down. Now the wait doubles after each failed try, 200, 400, then 800 ms. The thing to watch is that retry still waits after the last try. Then come the line 3 risks, 1 of them serious, and the risks, heaviest first. Risk 1 is marked Quotes code outside the change and Serious: every fetchUser call where all 3 tries fail now waits about 1.4 s before it throws, up from 0.6 s. Its first quote is open and shows line 8 of src/user.ts at a32ffb8, where fetchUser calls retry. Two more quotes of src/retry.ts are folded.">
 
-Screenshot of ken's local page, answering a question about a commit in a small made-up project. The model was Claude Opus.
+Screenshot of the first view of an answer on ken's local page, about a commit in a small made-up project. The model was Claude Opus.
 
 ## What ken gives you
 
 - **Claims you can look up.** Each decision, risk and statement quotes lines of code, a commit message, or a saved session of your coding agent. ken finds every quoted line where the quote says it is. If a quote is not there, the model tries again, up to three times, and you never see the failed answer. ken checks where a quote is, not whether a sentence is true. It does not check the summary.
+- **Answers about a change.** ken asks its model for a free draft first, then for an answer that backs each decision and risk with quoted lines and lists the points it found no line for. A second look tries to rule each risk out. It can withdraw a risk only with a quote of the line that rules it out, which ken looks up, and the withdrawn risk stays in view with that line. A claim that something is missing or untested must name the missing text, and ken searches the code for it and shows the search. A risk that a later commit fixed is marked "Fixed since, in" that commit, from git, after the open ones.
+- **The first view.** An answer about a change opens on the model's story of the change, which ken does not check, then a diagram, the first three risks and up to three decisions with their reasons. The rest is one click away. Every arrow in a diagram quotes its lines.
 - **Answers you can find again.** Your questions and ken's answers stay on your machine, in `~/.ken/projects/<first commit>/`. The decisions, their reasons and what each piece of work did go into the project record, in `.ken/record/`, as JSON Lines files that ken only adds to. You commit the record, so a collaborator and their coding agents can read it.
-- **Where each reason comes from.** ken labels each decision from its quotes. "Recorded" means it was written down at the time, in a commit message or with `ken decide`. "From the session" means the reason is quoted from a saved session. "Inferred" means the model worked it out. "Found by search" marks a link between pieces of code that rests on a text search.
+- **Where each reason comes from.** ken labels each decision from its quotes, so a model cannot mark its own guess as recorded. "Recorded" means written down at the time, in a commit message or with `ken decide`. "From the session" means quoted from a saved session. "Inferred" means the model worked it out. "Found by search" marks a link between pieces of code that rests on a text search.
 - **What waits on you.** "Waiting on you" lists the decisions a coding agent left for you, and the topics you marked as known whose code has changed since, with who changed them. Answer a decision with "Keep what was chosen" or "I want it changed". ken saves your answer and changes no code.
-- **Diagrams.** Ask how parts fit together, or about a change that touches two or more parts, and the answer opens with one or two basic diagrams. Every arrow quotes the lines that show it.
 - **Live mode.** Beside your coding agent, ken writes a short note on each commit and on uncommitted work that has gone quiet. Live mode is off until you turn it on, and it shows what it spends.
+
+In ken's last two test rounds, on pull requests it had never seen, fresh AI judges compared its answers with a plain chat on the same model, and each time rated ken's narrowly better overall, for its checked quotes and its kept record. The verdicts are in [docs/checkpoint/](docs/checkpoint/).
 
 ## Status
 
 Early work, not released. Nothing to install, no license, private repository. You run ken from a checkout. [site/](site/index.html) holds a public page about it, not yet published.
 
 - ken runs on your machine and only reads. It never edits your code, commits or pushes, and it writes only in `.ken/` in the project and in `~/.ken/`. It works with git repositories, Claude Code sessions and one developer.
-- It talks to an OpenAI-compatible endpoint, and the code and session text it reads go to that provider. It has been run on glm-5.3 and kimi-k3.1-pro through Ollama Cloud, and on Claude Opus through ken's local adapter for the Claude Code command. gpt-oss:120b, as served on Ollama Cloud in November 2026, could not follow the quoting rules.
-- In a saved session, ken hides what looks like a credential before that text reaches the model, the page, your history or the record. It hides nothing in your code or git history. A secret written in plain words, or a short one, gets through. The record keeps the quoted lines of a session, so commit `.ken/` only if you are happy to share them. `KEN_SESSIONS=off` stops ken reading sessions.
+- It talks to an OpenAI-compatible endpoint, and the code and session text it reads go to that provider. It has been run on glm-5.3 and kimi-k3.1-pro through Ollama Cloud, and on Claude Opus through ken's local adapter for the Claude Code command.
+- ken hides what looks like a credential in a saved session before the model sees it, and hides nothing in your code or git history. A secret written in plain words, or a short one, gets through. The record keeps the quoted lines of a session, so commit `.ken/` only if you are happy to share them. `KEN_SESSIONS=off` stops ken reading sessions.
 - Not built: readers for other coding tools' sessions, anything for teams, and a parser or index of the code.
-
-ken's test rounds and their verdicts are in [docs/checkpoint/](docs/checkpoint/).
 
 ## Run it
 
