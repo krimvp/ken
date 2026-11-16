@@ -1,14 +1,14 @@
 // ken's page: one state object and one render per frame, with no framework. The thread on the left holds the words;
 // the panel on the right holds what ken checked. Under 1100 pixels the panel goes away and the same things open in
 // place. The page talks only to the server that sent it.
-import { fillDrawings } from './draw-diagrams.js'
+import { fillDrawings, markPart } from './draw-diagrams.js'
 import { liveLook, liveViewHtml } from './live/live-view.js'
 import { answerHtml, isMoved, itemsOf } from './views/answer.js'
 import { allQuotesHtml, checksHtml, quoteCardHtml } from './views/checks.js'
 import { decisionsViewHtml } from './views/decisions.js'
 import { elementKey } from './views/diagram.js'
 import { count, duration, esc, folderHtml, prose, short, when, withCost } from './views/format.js'
-import { changedTopics, lensHtml, linesText, mapViewHtml } from './views/map.js'
+import { changedLine, changedTopics, lensHtml, mapViewHtml } from './views/map.js'
 import { openCount, openViewHtml } from './views/open.js'
 import {
 	emptyAfterHtml,
@@ -67,6 +67,7 @@ const state = {
 	view: 'question',
 	map: null,
 	decisions: null,
+	decisionsKey: false,
 	ui: freshUi(),
 	// What is open, with its own open decisions and quotes, the line that says what the last button saved, and the
 	// decisions the reader answered on this visit.
@@ -424,14 +425,14 @@ function movedHtml(q) {
 			? ` ${withCost('<button class="link" data-act="again" data-key="moved-again">Ask again</button>')}`
 			: ''
 	const changed = q.answer ? changedTopics(q) : []
-	const lines = changed.map((t) => `${esc(t.topic)} changed since you understood it: ${linesText(t.changed)}.`)
+	const lines = changed.map(changedLine)
 	const head = changed.length > 0 ? '<strong>Out of date.</strong> ' : ''
 	return `<p class="moved${changed.length > 0 ? ' stale' : ''}">${head}Asked when the project was at <code>${short(q.head)}</code>. It is at <code>${short(q.headNow)}</code> now, so the code may have changed since. ${lines.join(' ')}${again}</p>`
 }
 
 function threadHtml() {
 	if (state.view === 'map') return mapViewHtml(state.map)
-	if (state.view === 'decisions') return decisionsViewHtml(state.decisions)
+	if (state.view === 'decisions') return decisionsViewHtml(state.decisions, state.decisionsKey)
 	if (state.view === 'live') {
 		const canAsk = state.model?.kind === 'ok' && !state.running
 		const seen = { seen: state.liveSeen, hideAsk: state.hideAsk }
@@ -485,6 +486,8 @@ function render() {
 	for (const index of tooWide) ui.tooWide.add(index)
 	if (tooWide.length > 0) schedule()
 	for (const [i, box] of document.querySelectorAll('.drawing').entries()) box.scrollLeft = across[i] ?? 0
+	const part = ui.wide && ui.panel.kind === 'quote' && ui.panel.key.match(/^g(\d+)n(\d+)$/)
+	if (part) markPart($('#thread'), part[1], part[2])
 	const canAsk = state.model?.kind === 'ok'
 	$('#ask').hidden = !canAsk || state.view !== 'question'
 	$('#send').disabled = state.running !== null
@@ -736,6 +739,10 @@ const actions = {
 	map: () => (state.view === 'map' ? closeMap() : showMap()),
 	decisions: () => (state.view === 'decisions' ? closeDecisions() : showDecisions()),
 	'decisions-close': closeDecisions,
+	'dv-key'() {
+		state.decisionsKey = !state.decisionsKey
+		render()
+	},
 	'decision-show': (el) => showDecisions(el.dataset.id),
 	live: () => (state.view === 'live' ? closeLive() : showLive()),
 	'live-close': closeLive,

@@ -169,7 +169,7 @@ function uncoveredFiles(change) {
 function coverageSection(q, ui) {
 	const change = q.answer.change
 	if (!change) {
-		return `<section class="check"><h3>Changed code</h3><p class="muted">Not checked. This answer is not about a set of commits, so there is no changed code to compare.</p></section>`
+		return `<section class="check"><h3>Changed code</h3><p class="muted">Nothing to compare. This answer is not about a commit.</p></section>`
 	}
 	const total = change.covered.length + change.uncovered.length
 	const uncovered = change.uncovered.length

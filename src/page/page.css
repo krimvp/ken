@@ -519,6 +519,22 @@ html {
 /* Mermaid writes its own styles under the drawing's id, so these start from #thread to win. A message label sits on a
    box in the colour of the card (see backLabels), so no lifeline runs through its text. The three kinds share one look:
    square boxes, 1 pixel borders, thin lines, and no grid inside a table. */
+/* The part of the drawing whose quotes the panel shows. */
+#thread .drawing svg .is-open :is(rect, polygon, path),
+#thread .drawing svg rect.is-open {
+	stroke: var(--color-focus);
+	stroke-width: 3px;
+}
+
+#thread .drawing svg .is-open :is(span, p, text, tspan),
+#thread .drawing svg text.is-open {
+	font-weight: 700;
+}
+
+#thread .drawing svg :is(.edgeLabel, .relationshipLabel).is-open :is(span, p) {
+	outline: 2px solid var(--color-focus);
+}
+
 #thread .drawing svg .label-back {
 	fill: var(--color-card);
 }
@@ -2146,13 +2162,11 @@ q.subject {
 	cursor: pointer;
 }
 
+/* A folded note: its head line, then up to two lines of its gist. */
 .ln-line {
 	display: block;
-	overflow: hidden;
 	color: var(--color-note);
 	font-size: var(--text-note);
-	white-space: nowrap;
-	text-overflow: ellipsis;
 }
 
 .ln-folded:hover .ln-about,
@@ -2161,7 +2175,10 @@ q.subject {
 }
 
 .ln-gist {
-	margin-left: var(--space-2);
+	display: -webkit-box;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 2;
+	overflow: hidden;
 }
 
 .ln-fold {
@@ -2227,19 +2244,6 @@ q.subject {
 
 	.top-menu {
 		flex: none;
-	}
-
-	/* A folded note keeps its time and its "Committed since" mark on a phone. Only the gist is cut. */
-	.ln-line {
-		white-space: normal;
-	}
-
-	.ln-gist {
-		display: block;
-		overflow: hidden;
-		margin-left: 0;
-		white-space: nowrap;
-		text-overflow: ellipsis;
 	}
 }
 

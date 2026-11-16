@@ -10,7 +10,6 @@ import {
 	decisionQuotes,
 	esc,
 	isSession,
-	LABELS,
 	label,
 	list,
 	prose,
@@ -129,6 +128,14 @@ function needsHtml(q) {
 		)
 	}
 	if (risks > 0) parts.push(`<a href="#risks-head">${count(risks, 'risk', 'risks')} to watch</a>`)
+	// Fewer than half the changed blocks quoted means most of the change is not explained here, so it is said up front.
+	const change = q.answer.change
+	const total = change ? change.covered.length + change.uncovered.length : 0
+	if (total > 0 && change.covered.length * 2 < total) {
+		parts.push(
+			`<a href="#check-coverage">Only ${change.covered.length} of ${count(total, 'changed block', 'changed blocks')} quoted</a>`,
+		)
+	}
 	return parts.length === 0 ? '' : `<p class="needs">${parts.join(' · ')}</p>`
 }
 
@@ -192,19 +199,25 @@ export function decisionHtml(d, key, rows, marked) {
 	const row = `<button class="d-row" data-act="decision" data-item="${key}" data-key="${key}-row" aria-expanded="${open}">
 		<span class="d-line">${call}${mark}<span class="d-q">${prose(d.question)}</span> <span class="d-chosen"><span class="d-field">Chosen</span> ${prose(d.chosen)}</span></span></button>`
 	if (!open) return `<li class="decision" id="item-${key}">${row}</li>`
-	const others = d.rejected
-		.map((r) => `<dd>${prose(r.option)}<span class="why">Why not: ${prose(r.reason)}</span></dd>`)
-		.join('')
 	return `<li class="decision open" id="item-${key}">${row}
 		<div class="d-card">
-			<dl class="facts">
-				${d.reason ? `<div><dt>Why</dt><dd>${prose(d.reason.text)}${fromHtml(d)}</dd></div>` : ''}
-				${others ? `<div><dt>Other options</dt>${others}</div>` : ''}
-				<div><dt>Reversing it later</dt><dd>${UNDO[d.undo] ?? esc(d.undo)}</dd></div>
-			</dl>
+			${factsHtml(d)}
 			${quoteRows(decisionQuotes(d), key, rows)}
 		</div>
 	</li>`
+}
+
+// A decision's facts under what was chosen, the same in an answer, in "Waiting on you" and in Decisions: why, the
+// other options when there are any, and how hard it is to reverse.
+export function factsHtml(d) {
+	const others = d.rejected
+		.map((r) => `<dd>${prose(r.option)}<span class="why">Why not: ${prose(r.reason)}</span></dd>`)
+		.join('')
+	return `<dl class="facts">
+		${d.reason ? `<div><dt>Why</dt><dd>${prose(d.reason.text)}${fromHtml(d)}</dd></div>` : ''}
+		${others ? `<div><dt>Other options</dt>${others}</div>` : ''}
+		<div><dt>Reversing it later</dt><dd>${UNDO[d.undo] ?? esc(d.undo)}</dd></div>
+	</dl>`
 }
 
 // Where a decision's reason comes from, by its label: who logged it with ken decide, the commit messages its reason
@@ -213,7 +226,7 @@ function fromHtml(d) {
 	return d.reason || d.logged ? `<span class="why">${sourceLine(d)}</span>` : ''
 }
 
-export function sourceLine(d) {
+function sourceLine(d) {
 	if (d.logged) {
 		const by = d.logged.by ? ` (${esc(d.logged.by)})` : ''
 		const head = d.logged.head ? `, at commit <code>${short(d.logged.head)}</code>` : ', before the first commit'
@@ -235,10 +248,16 @@ export function sourceLine(d) {
 
 // What each label means, said of one statement and of several.
 const MEANS = {
-	recorded: ['was written down when the work was done', 'were written down when the work was done'],
-	'from-the-session': ['is quoted from a saved session', 'are quoted from a saved session'],
-	inferred: ['is worked out from the code', 'are worked out from the code'],
-	'found-by-search': ['comes from a text search and is not traced', 'come from a text search and are not traced'],
+	recorded: [
+		'rests on what was written down when the work was done',
+		'rest on what was written down when the work was done',
+	],
+	'from-the-session': ["rests on your coding agent's session", "rest on your coding agent's session"],
+	inferred: ['rests on the code', 'rest on the code'],
+	'found-by-search': [
+		"comes from a text search; ken's model did not follow the code to confirm it",
+		"come from a text search; ken's model did not follow the code to confirm them",
+	],
 }
 
 function labelCounts(statements) {
@@ -270,8 +289,7 @@ export function labelLine(statements) {
 		const all = n === 1 ? 'It' : n === 2 ? 'Both' : `All ${n}`
 		return `${all} ${means(common)}.`
 	}
-	const rest = marked.map((each) => `${each[1]}, marked ${LABELS[each[0]]?.name ?? each[0]}, ${means(each)}.`)
-	return [`${common[1]} ${means(common)}.`, ...rest].join(' ')
+	return [common, ...marked].map((each) => `${each[1] === 1 ? 'One' : each[1]} ${means(each)}.`).join(' ')
 }
 
 // A note saved before ken kept only what the agent wrote after its answer can hold all its working text, so a long

@@ -40,6 +40,11 @@ export function foldedTopics(q, ui) {
 	)
 }
 
+// The one way the page says a topic the reader knew has changed, under an answer and in its out-of-date notice.
+export function changedLine(t) {
+	return `${esc(t.topic)} changed since you understood it ${onDay(t.entry.date)}: ${linesText(t.changed)}.`
+}
+
 // The topics of this answer whose code changed since the reader understood them, each as "topic: the lines".
 export function changedTopics(q) {
 	return (q.topics ?? []).filter((t) => (t.kind === 'changed' || t.kind === 'long-ago') && t.changed.length > 0)
@@ -52,14 +57,12 @@ export function knownHtml(q, ui, named, moved) {
 		if (t.kind === 'unchanged' && named.has(t.topic)) {
 			const open = ui.unfolded.has(t.topic)
 			return [
-				`<p class="known">You know ${esc(t.topic)}. ken compared the quoted lines with git: unchanged since ${sinceDay(t.entry.date)}. <button class="link" data-act="unfold" data-topic="${esc(t.topic)}" data-key="unfold-${esc(t.topic)}" aria-expanded="${open}">${open ? 'Fold it again' : 'Show it anyway'}</button></p>`,
+				`<p class="known">You said you know ${esc(t.topic)}, and the lines quoted here have not changed since ${sinceDay(t.entry.date)}, so its entries are folded. <button class="link" data-act="unfold" data-topic="${esc(t.topic)}" data-key="unfold-${esc(t.topic)}" aria-expanded="${open}">${open ? 'Fold them again' : 'Show them anyway'}</button></p>`,
 			]
 		}
 		if ((t.kind === 'changed' || t.kind === 'long-ago') && t.changed.length > 0) {
 			if (moved) return []
-			return [
-				`<p class="known changed">${esc(t.topic)} changed since you understood it ${onDay(t.entry.date)}: ${linesText(t.changed)}.</p>`,
-			]
+			return [`<p class="known changed">${changedLine(t)}</p>`]
 		}
 		if (t.kind === 'long-ago') {
 			return [
@@ -91,7 +94,7 @@ export function mapBarHtml(q, ui, running) {
 		<ul class="map-buttons">
 			<li><button class="quiet-button" data-act="map-know" data-key="map-know">I know this</button><span>Later answers show it as one line.</span></li>
 			<li><button class="quiet-button" data-act="map-too-much" data-key="map-too-much">Too much</button><span>The next answer on it is shorter.</span></li>
-			<li>${deeper}<span>ken asks for more detail.</span></li>
+			<li>${deeper}<span>The next answer on it goes into more detail. One model run.</span></li>
 		</ul>
 		${said}
 	</section>`
@@ -164,7 +167,7 @@ export function lensHtml(where, pick) {
 	return `<div class="lenses lenses-${where}">
 		${catchUp}
 		<form class="area-form" data-area="${where}" autocomplete="off">
-			<label for="area-${where}">Work in an area today</label>
+			<label for="area-${where}">I'm about to work in</label>
 			<span class="area-row"><input id="area-${where}" name="path" placeholder="for example src/server" spellcheck="false" /><button class="quiet-button" type="submit"${off}>What do I need to know?</button></span>
 		</form>
 		<form class="change-form" autocomplete="off">
