@@ -168,7 +168,7 @@ export function noModelHtml(model, hasHistory, heading) {
 			: `<li>Set these:
 				<dl class="settings">${model.missing.map((s) => `<div><dt><code>${esc(s.name)}</code></dt><dd>${esc(s.means)}. Or give <code class="nowrap">${esc(s.flag)}</code>.</dd></div>`).join('')}</dl></li>
 				<li>Start it again. For example:
-				<pre class="command">${esc(`${model.example.split(' ').join(' \\\n')} \\\nnpm run ken -- open`)}</pre></li>`
+				<pre class="command">${[...model.example.split(' ').map((part) => `${part} \\`), 'npm run ken -- open'].map((line) => `<span>${esc(line)}</span>`).join('')}</pre></li>`
 	return `<div class="notice" role="alert" id="no-model">
 		${heading ? '<h3>ken has no model to ask</h3>' : ''}
 		<p>ken sends your project's code to the model you choose, so it has no default model.</p>

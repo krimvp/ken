@@ -1188,9 +1188,16 @@ span.label::before {
 	margin-top: var(--space-3);
 }
 
-/* A long line wraps, so its last character, often the \ that carries the command on, is never out of sight. */
+/* A long line wraps, so its last character, often the \ that carries the command on, is never out of sight. The
+   wrapped part is indented, so it does not read as a line of its own. */
 .notice pre.command {
 	margin-top: var(--space-2);
+}
+
+.command span {
+	display: block;
+	padding-left: 2ch;
+	text-indent: -2ch;
 }
 
 .settings div {
