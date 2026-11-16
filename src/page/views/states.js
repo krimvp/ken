@@ -133,6 +133,9 @@ export function endedHtml(q) {
 			<p class="actions">${again}</p>
 		</div>`
 	}
+	if (q.outcome === 'unasked') {
+		return `<div class="notice" role="status"><h3>ken did not ask the agent</h3><p>${esc(q.error)}</p></div>`
+	}
 	const said = {
 		stopped: ['You stopped this question', 'ken shows nothing for a question you stopped.'],
 		'no-answer': [

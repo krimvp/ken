@@ -3,7 +3,8 @@
 // text or as JSON for scripts. Exit code 0 means a checked answer, 1 means none, 2 means ken could not start.
 // "ken record" shows the project record and "ken map" the reader's understanding map. "ken decide" logs a decision a
 // coding agent makes as it works, and "ken sessions" reads the sessions Claude Code saved for the project. None of
-// these needs a model. "ken open" serves the page on 127.0.0.1.
+// these needs a model. "ken open" serves the page on 127.0.0.1. The lenses print their list with no model, then ask
+// the agent when one is set.
 import { createInterface } from 'node:readline/promises'
 import { parseArgs } from 'node:util'
 import { type Answer, type Chat, type ChatEvent, type Outcome, readModelConfig, startChat } from '../agent/index.ts'
@@ -24,6 +25,9 @@ const USAGE = `Usage:
   ken map [--repo <path>] [--json]
   ken catch-up [--repo <path>]
   ken area <path> [--repo <path>]
+  ken follow-up [--repo <path>]
+  ken who <author> [--since <day or Nd>] [--repo <path>]
+  ken since <day or Nd> [--repo <path>]
   ken open [--repo <path>] [--port <n>]
   ken decide --question <text> --chosen <text> --reason <text> --undo <how easy> [...]
   ken decide --json < decision.json
@@ -49,12 +53,13 @@ async function main(argv: string[]): Promise<number> {
 	if (parsed.kind === 'open')
 		return await openPage({ directory: values.repo ?? process.cwd(), port: values.port, flags })
 	const directory = values.repo ?? process.cwd()
-	const lens = parsed.kind === 'catch-up' || parsed.kind === 'area' ? await lensQuestion(parsed, directory) : null
+	const lens = parsed.kind === 'chat' || parsed.kind === 'ask' ? null : await lensQuestion(parsed, directory)
 	if (lens?.kind === 'refused') {
 		process.stderr.write(`${lens.message}\n`)
 		return 2
 	}
 	if (lens) process.stdout.write(`${lens.text}\n\n`)
+	if (lens?.empty) return 0
 	const config = readModelConfig(flags, process.env)
 	if (config.kind !== 'ok') {
 		process.stderr.write(`${config.message}\n`)
@@ -84,6 +89,7 @@ function parseCommand(argv: string[]) {
 		repo: { type: 'string' },
 		json: { type: 'boolean' },
 		port: { type: 'string' },
+		since: { type: 'string' },
 		model: { type: 'string' },
 		'base-url': { type: 'string' },
 		'api-key-env': { type: 'string' },
@@ -105,6 +111,13 @@ function parseCommand(argv: string[]) {
 	if (command === 'catch-up' && rest.length === 0 && !values.json) return { kind: 'catch-up', values } as const
 	if (command === 'area' && rest.length === 1 && rest[0] && !values.json) {
 		return { kind: 'area', values, path: rest[0] } as const
+	}
+	if (command === 'follow-up' && rest.length === 0 && !values.json) return { kind: 'follow-up', values } as const
+	if (command === 'who' && rest.length === 1 && rest[0] && !values.json) {
+		return { kind: 'who', values, author: rest[0], since: values.since ?? 'question' } as const
+	}
+	if (command === 'since' && rest.length === 1 && rest[0] && !values.json) {
+		return { kind: 'since', values, since: rest[0] } as const
 	}
 	if (command === 'open' && rest.length === 0 && !values.json) return { kind: 'open', values } as const
 	return {

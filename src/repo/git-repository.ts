@@ -119,6 +119,12 @@ export function gitRepository(root: string): Repository {
 			return { kind: 'ok', commits: parseLog(run.stdout) }
 		},
 
+		async before(head, moment, signal) {
+			const run = await git(['rev-list', '--first-parent', '--max-count=1', `--before=${moment}`, head], signal)
+			const hash = run.kind === 'ok' ? run.stdout.trim() : ''
+			return HASH.test(hash) ? (hash as CommitHash) : null
+		},
+
 		async diff({ base, head }, signal) {
 			const common = ['-M', '--no-color', '--no-ext-diff', '--no-textconv', base, head, ...OUTSIDE_RECORD]
 			const [numstat, patch] = await Promise.all([

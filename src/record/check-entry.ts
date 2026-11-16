@@ -46,7 +46,8 @@ export type EntryDraft =
 			kind: 'decision'
 			question: string
 			chosen: string
-			reason: { text: string; quotes: Quote[] }
+			// null only in the answer to a decision written before ken asked for reasons.
+			reason: { text: string; quotes: Quote[] } | null
 			rejected: { option: string; reason: string }[]
 			// One of UNDO. ken decide passes what its caller typed, so the gate checks it.
 			undo: string
@@ -56,6 +57,7 @@ export type EntryDraft =
 			// Only ken decide sends this. by is the name its caller gave, or null.
 			logged?: { by: string | null }
 			topic?: string | undefined
+			answer?: { at: string; note: string | null }
 	  } & Replaces)
 	| ({ kind: 'topic'; name: string; quotes: Quote[] } & Replaces)
 	| ({ kind: 'note'; topic: string; text: string } & Replaces)
@@ -157,11 +159,21 @@ export async function checkEntry(
 		}
 		case 'decision': {
 			if (draft.rejected.length > MAX.list) problems.push(`keep the rejected options to ${MAX.list}.`)
-			const reasonQuotes = await quotes('the reason', draft.reason.quotes, false)
-			const logged = draft.logged && {
-				by: draft.logged.by === null ? null : text('by', draft.logged.by, MAX.name),
-				head: await headNow(repo, signal),
+			const answered = record.known.find((other) => other.id === replaces)
+			if (draft.answer && (answered?.kind !== 'decision' || !answered.needsOwner)) {
+				problems.push('the decision does not wait on the owner, so it takes no answer.')
 			}
+			if (draft.reason === null && !draft.answer) problems.push('the decision needs a reason: why this option.')
+			const reasonQuotes = await quotes('the reason', draft.reason?.quotes ?? [], false)
+			// An answer keeps the log of the decision it answers: who logged it and the commit checked out then are facts of
+			// that decision, and reading HEAD again now would move it.
+			const logged =
+				draft.answer && answered?.kind === 'decision'
+					? answered.logged
+					: draft.logged && {
+							by: draft.logged.by === null ? null : text('by', draft.logged.by, MAX.name),
+							head: await headNow(repo, signal),
+						}
 			const undo = UNDO.find((known) => known === draft.undo)
 			const given = draft.undo.trim() === '' ? '' : `, not "${draft.undo}"`
 			if (undo === undefined) problems.push(`say how easy it is to undo: easy, some-work or hard${given}.`)
@@ -169,20 +181,27 @@ export async function checkEntry(
 				kind: 'decision',
 				question: text('question', draft.question, MAX.option),
 				chosen: text('chosen', draft.chosen, MAX.text),
-				reason: { text: text('the reason', draft.reason.text, MAX.reason), quotes: reasonQuotes },
+				reason: draft.reason && { text: text('the reason', draft.reason.text, MAX.reason), quotes: reasonQuotes },
 				rejected: draft.rejected.slice(0, MAX.list).map((rejected, index) => ({
 					option: text(`rejected option ${index + 1}`, rejected.option, MAX.option),
 					reason: text(`the reason for rejected option ${index + 1}`, rejected.reason, MAX.text),
 				})),
 				// An unknown undo is refused above, so this entry is never written.
 				undo: undo ?? 'hard',
-				needsOwner: draft.needsOwner,
+				// An answered decision no longer waits on the owner, whatever the draft says.
+				needsOwner: draft.answer === undefined && draft.needsOwner,
 				label: decisionLabel(reasonQuotes, logged !== undefined),
 				...(logged && { logged }),
 				// A decision logged as it is made often comes before the code it is about, so it may quote nothing.
 				quotes: await quotes('the decision', draft.quotes, !logged),
 				work: draft.work === null ? null : named('work', draft.work, 'work'),
 				topic: draft.topic === undefined ? null : topicNamed(draft.topic),
+				answer: draft.answer
+					? {
+							at: draft.answer.at,
+							note: draft.answer.note === null ? null : text("the owner's note", draft.answer.note, MAX.text),
+						}
+					: null,
 			} satisfies Decision
 			break
 		}

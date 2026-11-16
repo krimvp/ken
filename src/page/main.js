@@ -8,6 +8,7 @@ import { decisionsViewHtml } from './views/decisions.js'
 import { elementKey } from './views/diagram.js'
 import { count, duration, esc, folderHtml, prose, short, when } from './views/format.js'
 import { lensHtml, mapViewHtml } from './views/map.js'
+import { openCount, openViewHtml } from './views/open.js'
 import {
 	emptyAfterHtml,
 	emptyHtml,
@@ -54,18 +55,32 @@ const state = {
 	running: null,
 	menuOpen: false,
 	problem: null,
-	// "map" shows the reader's understanding map in place of the question, and "decisions" the record's decisions.
+	// "map" shows the reader's understanding map in place of the question, "decisions" the record's decisions, and
+	// "follow-up" what is open.
 	view: 'question',
 	map: null,
 	decisions: null,
 	ui: freshUi(),
+	// What is open, with its own open decisions and quotes, and the line that says what the last button saved.
+	followUp: null,
+	followUi: freshUi(),
+	followSaid: '',
+	// The authors of recent commits, and the person and span the reader picked in the lens "What changed".
+	authors: [],
+	pick: { author: '', since: '' },
 }
+
+// The open decisions and quotes of the view on screen.
+const uiNow = () => (state.view === 'follow-up' ? state.followUi : state.ui)
 
 // What the page shows as the question until ken sends the one it wrote for a lens.
 const LENS_TITLES = {
 	'catch-up': 'Catch me up: what differs from what I understood?',
 	area: 'What do I need to know to work here today?',
 	deeper: 'Go one level deeper',
+	person: 'What did they change?',
+	range: 'What happened?',
+	topic: 'What changed since I understood it?',
 }
 
 // A saved question as the page shows it: the history entry with its project record entries in place of their ids, and
@@ -176,8 +191,12 @@ async function send(body) {
 			signal: controller.signal,
 		})
 		if (!response.ok) {
-			q.outcome = 'error'
-			q.error = (await response.json()).message
+			const refused = await response.json()
+			// A lens ken refused, or one with nothing to explain, never reached the model.
+			const unasked = body.lens && (response.status === 400 || response.status === 422)
+			q.outcome = unasked ? 'unasked' : 'error'
+			q.error = refused.message
+			if (refused.question) q.question = refused.question
 			return
 		}
 		for await (const line of linesOf(response.body)) {
@@ -201,7 +220,7 @@ async function send(body) {
 	} finally {
 		q.live = false
 		state.running = null
-		await loadRows()
+		await Promise.all([loadRows(), loadFollowUp()])
 		const saved = state.rows.at(-1)
 		// A stopped question has no saved line, so it is read back from the history.
 		if (state.open === q && controller.signal.aborted && saved?.question === q.question) await openQuestion(saved.id)
@@ -212,6 +231,14 @@ async function send(body) {
 async function loadRows() {
 	try {
 		state.rows = (await getJson('/api/questions')).questions
+	} catch (error) {
+		state.problem = error.message
+	}
+}
+
+async function loadFollowUp() {
+	try {
+		state.followUp = await getJson('/api/open')
 	} catch (error) {
 		state.problem = error.message
 	}
@@ -266,7 +293,12 @@ function firstLine(question) {
 function menuHtml() {
 	const n = state.rows.length
 	const current = (view) => (state.view === view ? ' aria-current="page"' : '')
-	const map = `<button class="link" data-act="decisions" data-key="decisions"${current('decisions')}>Decisions</button><button class="link" data-act="map" data-key="map"${current('map')}>Your map</button>`
+	const waiting = openCount(state.followUp)
+	const open =
+		waiting === 0
+			? ''
+			: `<button class="link" data-act="follow-up" data-key="follow-up"${current('follow-up')}>Open (${waiting})</button>`
+	const map = `${open}<button class="link" data-act="decisions" data-key="decisions"${current('decisions')}>Decisions</button><button class="link" data-act="map" data-key="map"${current('map')}>Your map</button>`
 	if (n === 0) return map
 	const button = `${map}<button class="link" data-act="menu" data-key="menu" aria-expanded="${state.menuOpen}">Your questions (${n})</button>`
 	if (!state.menuOpen) return button
@@ -329,6 +361,9 @@ function movedHtml(q) {
 function threadHtml() {
 	if (state.view === 'map') return mapViewHtml(state.map)
 	if (state.view === 'decisions') return decisionsViewHtml(state.decisions)
+	if (state.view === 'follow-up') {
+		return openViewHtml(state.followUp, state.followUi, state.model?.kind === 'ok' && !state.running, state.followSaid)
+	}
 	const q = state.open
 	if (state.problem && !q)
 		return `<div class="notice" role="alert"><h3>ken did not answer</h3><p>${esc(state.problem)}</p></div>`
@@ -359,7 +394,15 @@ function render() {
 	$('#project').innerHTML = state.project ? `reads ${folderHtml(state.project)}` : ''
 	$('#menu').innerHTML = menuHtml()
 	const across = [...document.querySelectorAll('.drawing')].map((box) => box.scrollLeft)
+	const notes = [...document.querySelectorAll('.decide-form')].map((form) => [
+		form.dataset.id,
+		form.elements.note.value,
+	])
 	$('#thread').innerHTML = threadHtml()
+	for (const [id, note] of notes) {
+		const box = document.querySelector(`.decide-form[data-id="${CSS.escape(id)}"] textarea`)
+		if (box) box.value = note
+	}
 	const tooWide = fillDrawings($('#thread'), schedule)
 	// A drawing that does not fit opens its numbered list once, so the parts cut off at the edge can be read in words.
 	const unseen = tooWide.filter((index) => !ui.partsShown.has(index))
@@ -374,14 +417,15 @@ function render() {
 	$('#send').disabled = state.running !== null
 	// The area box is drawn again with the rest, so what the reader typed in it is carried over.
 	const typed = [...document.querySelectorAll('.area-form input')].find((input) => input.value !== '')?.value ?? ''
+	const pick = { ...state.pick, authors: state.authors, asked: state.rows.length > 0 }
 	$('#after').innerHTML =
 		state.model?.kind === 'unset'
 			? noModelHtml(state.model, state.rows.length > 0, q !== null)
 			: state.view !== 'question'
 				? ''
 				: q
-					? lensHtml('ask')
-					: emptyAfterHtml(lensHtml('start'))
+					? lensHtml('ask', pick)
+					: emptyAfterHtml(lensHtml('start', pick))
 	for (const input of document.querySelectorAll('.area-form input')) input.value = typed
 	$('#question').placeholder = ui.wide ? 'Ask what changed, why, or how a part works.' : 'Ask what changed, and why.'
 	panel.innerHTML = panelHtml()
@@ -458,6 +502,7 @@ async function postMap(signal) {
 	})
 	if (!response.ok) throw new Error((await response.json()).message)
 	state.ui.mapSaid = signal
+	await loadFollowUp()
 	render()
 }
 
@@ -502,10 +547,62 @@ function closeDecisions() {
 	$('[data-key="decisions"]')?.focus({ preventScroll: true })
 }
 
+async function showFollowUp() {
+	state.view = 'follow-up'
+	state.menuOpen = false
+	state.followSaid = ''
+	await loadFollowUp()
+	// Every decision shows open here: the reader came to decide.
+	state.followUi = {
+		...freshUi(),
+		wide: false,
+		openDecisions: new Set(state.followUp?.decisions.map((_, i) => `o${i}`)),
+	}
+	render()
+	window.scrollTo({ top: 0 })
+}
+
+function closeFollowUp() {
+	state.view = 'question'
+	render()
+	$('[data-key="follow-up"], [data-key="map"]')?.focus({ preventScroll: true })
+}
+
+async function post(url, body) {
+	const response = await fetch(url, {
+		method: 'POST',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify(body),
+	})
+	const answer = await response.json()
+	if (!response.ok) throw new Error(answer.message)
+	return answer
+}
+
+// A button in the open list: it saves, then the list is read again and a line says what was saved.
+async function followUpSaved(save, said) {
+	try {
+		await save()
+		state.followSaid = said
+	} catch (error) {
+		state.followSaid = error.message
+	}
+	await loadFollowUp()
+	render()
+}
+
 const actions = {
 	map: () => (state.view === 'map' ? closeMap() : showMap()),
 	decisions: () => (state.view === 'decisions' ? closeDecisions() : showDecisions()),
 	'decisions-close': closeDecisions,
+	'follow-up': () => (state.view === 'follow-up' ? closeFollowUp() : showFollowUp()),
+	'open-close': closeFollowUp,
+	'explain-topic': (el) => send({ lens: { kind: 'topic', topic: el.dataset.topic } }),
+	'know-topic': (el) =>
+		followUpSaved(
+			() => post('/api/map', { signal: 'know', topics: [el.dataset.topic] }),
+			`Saved. Your map says you know ${el.dataset.topic}, as the code is now.`,
+		),
 	'map-close': closeMap,
 	'map-know': () => postMap('know'),
 	'map-too-much': () => postMap('too-much'),
@@ -538,8 +635,8 @@ const actions = {
 	quote(el) {
 		const key = el.dataset.item
 		const quote = Number(el.dataset.quote)
-		if (state.ui.wide) return choose(key, quote)
-		toggle(state.ui.openQuotes, `${key}-q${quote}`)
+		if (uiNow().wide) return choose(key, quote)
+		toggle(uiNow().openQuotes, `${key}-q${quote}`)
 		render()
 	},
 	'all-quotes'() {
@@ -557,7 +654,7 @@ const actions = {
 		render()
 	},
 	decision(el) {
-		toggle(state.ui.openDecisions, el.dataset.item)
+		toggle(uiNow().openDecisions, el.dataset.item)
 		render()
 	},
 	parts(el) {
@@ -634,6 +731,7 @@ document.addEventListener('keydown', (event) => {
 	}
 	if (state.view === 'map') return closeMap()
 	if (state.view === 'decisions') return closeDecisions()
+	if (state.view === 'follow-up') return closeFollowUp()
 	if (closePanel()) return
 	if (ui.coverageOpen || ui.stepsOpen || ui.keyOpen || ui.openQuotes.size > 0 || ui.openDecisions.size > 0) {
 		ui.coverageOpen = ui.stepsOpen = ui.keyOpen = false
@@ -655,11 +753,32 @@ $('#ask').addEventListener('submit', (event) => {
 })
 
 document.addEventListener('submit', (event) => {
-	const form = event.target.closest('.area-form')
+	const form = event.target.closest('.area-form, .change-form, .decide-form')
 	if (!form) return
 	event.preventDefault()
+	if (form.matches('.decide-form')) {
+		const body = { decision: form.dataset.id, note: form.elements.note.value }
+		void followUpSaved(
+			() => post('/api/decided', body),
+			'Saved. The record keeps your answer and the decision as it was.',
+		)
+		return
+	}
+	if (form.matches('.change-form')) {
+		const { author, since } = form.elements
+		const lens = author.value === '' ? { kind: 'range' } : { kind: 'person', author: author.value }
+		void send({ lens: { ...lens, since: since.value } })
+		return
+	}
 	const path = form.elements.path.value.trim()
 	if (path !== '') void send({ lens: { kind: 'area', path } })
+})
+
+// The lens forms are drawn again with the rest, so the person and the span the reader picked are kept here.
+document.addEventListener('change', (event) => {
+	const form = event.target.closest('.change-form')
+	if (!form) return
+	state.pick = { author: form.elements.author.value, since: form.elements.since.value }
 })
 
 $('#question').addEventListener('keydown', (event) => {
@@ -675,9 +794,15 @@ darkQuery.addEventListener('change', render)
 setInterval(tick, 1000)
 
 try {
-	const [server] = await Promise.all([getJson('/api/state'), loadRows()])
+	const [server, recent] = await Promise.all([
+		getJson('/api/state'),
+		getJson('/api/authors'),
+		loadRows(),
+		loadFollowUp(),
+	])
 	state.project = server.project
 	state.model = server.model
+	state.authors = recent.authors
 	const last = state.rows.at(-1)
 	if (last) await openQuestion(last.id)
 } catch (error) {

@@ -5,7 +5,7 @@ import { request as httpRequest } from 'node:http'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { after, test } from 'node:test'
-import { fileRecordStore } from '../../src/record/index.ts'
+import { type EntryDraft, fileRecordStore } from '../../src/record/index.ts'
 import { gitRepository } from '../../src/repo/index.ts'
 import { type KenServer, openServer } from '../../src/server/index.ts'
 import { buildRepository } from '../fixtures/build-repository.ts'
@@ -13,10 +13,11 @@ import { asked, claudeProjects, writeSession } from '../fixtures/claude-sessions
 import { scriptedModel, type Turn, toolResults } from '../fixtures/scripted-model.ts'
 
 const RETRY = 'export function retry(times: number) {\n\tfor (let i = 0; i < times; i++) {\n\t\tattempt()\n'
-const { root, hashes } = buildRepository([
+const HISTORY = [
 	{ message: 'feat: start', files: { 'src/retry.ts': `${RETRY}\t}\n}\n` } },
 	{ message: 'feat: wait between attempts', files: { 'src/retry.ts': `${RETRY}\t\tsleep(100)\n\t}\n}\n` } },
-])
+]
+const { root, hashes } = buildRepository(HISTORY)
 const [base = '', head = ''] = hashes
 const KEY_ENV = 'KEN_TEST_SERVER_KEY'
 const KEN = path.join(import.meta.dirname, '../../src/cli/main.ts')
@@ -495,4 +496,97 @@ test('what looks like a secret in a saved session reaches the model, the history
 		}
 		assert.ok(text.includes(JSON.stringify(hidden).slice(1, -1)), `the ${where} holds the hidden lines`)
 	}
+})
+
+// A repository of its own with the same history, whose record holds these entries, run by the owner.
+async function projectWith(drafts: EntryDraft[]) {
+	const { root: repo } = buildRepository(HISTORY)
+	const appended = await fileRecordStore(repo, gitRepository(repo)).append(drafts)
+	if (appended.kind !== 'appended') assert.fail(appended.problems.join(' '))
+	return { repo, entries: appended.entries.map(({ entry }) => entry) }
+}
+
+test("the person lens lists a collaborator's commits and the topics the owner knew that they touched before any model text, and the model's question names them", async () => {
+	const at = { path: 'src/retry.ts', commit: 'HEAD' }
+	const { repo } = await projectWith([
+		{ kind: 'topic', name: 'retry wait', quotes: [{ ...at, text: '\t\tsleep(100)' }] },
+		{ kind: 'topic', name: 'retry loop', quotes: [{ ...at, text: '\t\tattempt()' }] },
+	])
+	const model = await scriptedModel([{ text: 'Bo made the wait four times longer.' }])
+	const server = await open(tempFolder('ken-home-'), model.baseUrl, repo)
+	const know = await send(server, '/api/map', { body: { signal: 'know', topics: ['retry wait'] } }).response
+	assert.equal(know.status, 200, know.text)
+	const bo = { GIT_AUTHOR_NAME: 'Bo Helper', GIT_AUTHOR_EMAIL: 'bo@example.com' }
+	const commit = (file: string, text: string) => {
+		writeFileSync(path.join(repo, file), text)
+		execFileSync('git', ['-c', 'commit.gpgsign=false', 'add', file], { cwd: repo })
+		execFileSync('git', ['-c', 'commit.gpgsign=false', 'commit', '--quiet', '--message', `edit ${file}`], {
+			cwd: repo,
+			env: { ...process.env, ...bo, GIT_COMMITTER_NAME: 'Bo Helper', GIT_COMMITTER_EMAIL: 'bo@example.com' },
+		})
+		return execFileSync('git', ['rev-parse', '--short=7', 'HEAD'], { cwd: repo, encoding: 'utf8' }).trim()
+	}
+	const wait = commit('src/retry.ts', `${RETRY}\t\tsleep(400)\n\t}\n}\n`)
+	const readme = commit('README.md', '# retry\n')
+
+	const lens = { kind: 'person', author: 'bo@example.com', since: '1d' }
+	const { status, text } = await send(server, '/api/questions', { body: { lens } }).response
+	assert.equal(status, 200, text)
+	const lines = text
+		.trim()
+		.split('\n')
+		.map((line) => JSON.parse(line))
+
+	assert.equal(lines[0]?.kind, 'asked')
+	assert.ok(lines.findIndex((line) => line.kind === 'text') > 0, 'the list comes before anything the model wrote')
+	const list = lines[0].question
+	for (const named of [wait, readme, 'retry wait']) assert.ok(list.includes(named), `the list names ${named}: ${list}`)
+	assert.doesNotMatch(list, /retry loop/, 'a topic the owner never met is not listed, though Bo changed its file')
+	const toModel = questionPrompt(model.requests[0])
+	for (const named of [wait, readme, 'retry wait']) assert.ok(toModel.includes(named), `the model is told ${named}`)
+})
+
+test('"I have decided" through the server reads only the decision and a note, so a caller cannot change what was decided', async () => {
+	const sleep = { path: 'src/retry.ts', commit: 'HEAD', text: '\t\tsleep(100)' }
+	const { repo, entries } = await projectWith([
+		{
+			kind: 'decision',
+			question: 'How long does a retry wait?',
+			chosen: 'A fixed 100 ms',
+			reason: { text: 'One fixed wait is the simplest that works.', quotes: [] },
+			rejected: [],
+			undo: 'easy',
+			needsOwner: true,
+			quotes: [sleep],
+			work: null,
+		},
+	])
+	const server = await open(tempFolder('ken-home-'), null, repo)
+	const id = entries[0]?.id
+	const openIds = async () => (await json(server, '/api/open')).decisions.map((d: { id: string }) => d.id)
+	assert.deepEqual(await openIds(), [id])
+
+	const forged = {
+		chosen: 'A wait that doubles',
+		needsOwner: true,
+		answer: { at: '2000-01-01T00:00:00.000Z', note: 'x' },
+	}
+	const { status, text } = await send(server, '/api/decided', { body: { decision: id, note: 'Fine.', ...forged } })
+		.response
+	assert.equal(status, 200, text)
+
+	assert.deepEqual(await openIds(), [])
+	const current = (await fileRecordStore(repo, gitRepository(repo)).read()).current
+	const decision = current.find((entry) => entry.kind === 'decision')
+	assert.ok(decision?.kind === 'decision')
+	assert.deepEqual(
+		{
+			chosen: decision.chosen,
+			needsOwner: decision.needsOwner,
+			note: decision.answer?.note,
+			replaces: decision.replaces,
+		},
+		{ chosen: 'A fixed 100 ms', needsOwner: false, note: 'Fine.', replaces: id },
+	)
+	assert.notEqual(decision.answer?.at, forged.answer.at, 'ken sets when the owner answered')
 })

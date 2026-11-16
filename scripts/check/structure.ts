@@ -35,6 +35,11 @@ export const MODULES: Record<string, Module> = {
 		imports: ['record', 'repo'],
 		packages: [],
 	},
+	'follow-up': {
+		job: 'What is open for the owner, and the lenses on a person and on a time range, from the record, the map and git.',
+		imports: ['map', 'record', 'repo'],
+		packages: [],
+	},
 	agent: {
 		job: 'Runs a chat with a model that explores the project and its saved sessions with read-only tools, and answers only with checked quotes.',
 		imports: ['repo', 'checks', 'diagram', 'map', 'record', 'transcripts'],
@@ -52,12 +57,12 @@ export const MODULES: Record<string, Module> = {
 	},
 	server: {
 		job: 'Serves the page on 127.0.0.1 and runs the questions it sends, one at a time.',
-		imports: ['agent', 'diagram', 'history', 'map', 'page', 'record', 'repo'],
+		imports: ['agent', 'diagram', 'follow-up', 'history', 'map', 'page', 'record', 'repo', 'transcripts'],
 		packages: [],
 	},
 	cli: {
-		job: 'Runs ken in the terminal: a chat, one question for scripts, the project record, the map, the page, a logged decision, or saved sessions.',
-		imports: ['agent', 'diagram', 'history', 'map', 'record', 'repo', 'server', 'transcripts'],
+		job: 'Runs ken in the terminal: a chat, one question for scripts, the project record, the map, what is open, the page, a logged decision, or saved sessions.',
+		imports: ['agent', 'diagram', 'follow-up', 'history', 'map', 'record', 'repo', 'server', 'transcripts'],
 		packages: [],
 	},
 }

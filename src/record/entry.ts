@@ -46,7 +46,8 @@ export type Logged = { by: string | null; head: CommitHash | null }
 // message. It is "from-the-session" when its reason quotes a saved session instead, and "inferred" otherwise. A
 // decision says why, which is never a relation found by searching, so it is never "found-by-search". Only a logged
 // decision has logged, so a decision written before ken decide reads as before. topic names the topic the decision
-// belongs to, as the record names it, or is null.
+// belongs to, as the record names it, or is null. answer is the owner's "I have decided" on a decision that needed
+// them: when, and their note. ken writes it as a new entry that replaces the old one with the same content.
 export type Decision = {
 	kind: 'decision'
 	question: string
@@ -60,6 +61,7 @@ export type Decision = {
 	quotes: VerifiedQuote[]
 	work: EntryId | null
 	topic: string | null
+	answer: { at: string; note: string | null } | null
 }
 
 // A topic rests on lines of files, so a change to them shows: see noteFreshness.

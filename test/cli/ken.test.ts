@@ -175,3 +175,54 @@ test('ken catch-up lists the topics whose code changed since the reader understo
 	assert.doesNotMatch(stdout, /naming/, 'a topic whose code did not change is not listed')
 	assert.match(stderr, /KEN_MODEL/)
 })
+
+test('ken follow-up prints what is open with no model: the decision that needs the owner, and the topic a collaborator changed with their commit', async () => {
+	const project = buildRepository([
+		{ message: 'feat: start', files: { 'app.py': 'def total(items):\n    return 0\n' } },
+	])
+	const home = mkdtempSync(path.join(tmpdir(), 'ken-home-'))
+	after(() => rmSync(home, { recursive: true, force: true }))
+	const repo = gitRepository(project.root)
+	const record = fileRecordStore(project.root, repo)
+	const zero = { path: 'app.py', commit: 'HEAD', text: '    return 0' }
+	await record.append([
+		{ kind: 'topic', name: 'totals', quotes: [zero] },
+		{
+			kind: 'decision',
+			question: 'What does an empty cart cost?',
+			chosen: 'Zero',
+			reason: { text: 'Nothing bought costs nothing.', quotes: [] },
+			rejected: [],
+			undo: 'easy',
+			needsOwner: true,
+			quotes: [zero],
+			work: null,
+		},
+	])
+	const opened = await openMap(home, repo, record)
+	if (opened.kind !== 'ok') assert.fail('the repository has commits')
+	await opened.map.learn('know', ['totals'], new Date())
+	writeFileSync(path.join(project.root, 'app.py'), 'def total(items):\n    return sum(items)\n')
+	const bo = { NAME: 'Bo Helper', EMAIL: 'bo@example.com' }
+	const as = Object.fromEntries(
+		['AUTHOR', 'COMMITTER'].flatMap((who) => Object.entries(bo).map(([key, value]) => [`GIT_${who}_${key}`, value])),
+	)
+	execFileSync('git', ['-c', 'commit.gpgsign=false', 'commit', '--quiet', '--all', '--message', 'fix: add them'], {
+		cwd: project.root,
+		env: { ...process.env, ...as },
+	})
+	const hash = execFileSync('git', ['rev-parse', '--short=7', 'HEAD'], { cwd: project.root, encoding: 'utf8' }).trim()
+
+	const { code, stdout, stderr } = await ken(['follow-up', '--repo', project.root], {
+		...NO_KEN_VARIABLES,
+		KEN_HOME: home,
+	})
+
+	assert.equal(code, 2, 'no model, so nothing explains the list')
+	assert.match(stdout, /^- A decision needs my call: What does an empty cart cost\? Chosen: Zero/m)
+	assert.match(
+		stdout,
+		new RegExp(`^- totals changed since .*: app\\.py line 2\\. .*${hash} by Bo Helper \\(a collaborator\\)`, 'm'),
+	)
+	assert.match(stderr, /KEN_MODEL/)
+})
