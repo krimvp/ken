@@ -7,7 +7,7 @@
 		<title>ken</title>
 		<meta
 			name="description"
-			content="ken explains your own software project to you. Each decision, risk and statement in its answer quotes the lines it rests on. Early work, not released."
+			content="ken explains your own software project to you. Each decision, risk and statement in its answer quotes the lines it rests on, and ken checks that each quote is really there. Early work, not released."
 		/>
 		<link rel="stylesheet" href="style.css" />
 	</head>
@@ -17,18 +17,18 @@
 				<h1>ken</h1>
 				<p class="lead">
 					Ask ken what changed in your software project, why, or how a part works now. Each decision, risk and
-					statement in its answer quotes the lines it rests on: code, a commit message, or what was said in a session
-					your coding agent saved.
+					statement in its answer quotes the lines it rests on: code, a commit message, or what was said in a saved
+					session of your coding agent. Today ken reads only Claude Code sessions.
 				</p>
 				<p>
-					Why not ask your coding agent? In <a href="#test">ken's own test</a>, a plain chat found as many risks or
-					more, and ken lost that count in every round. But ken adds two things. It rejects any answer with a quote it
-					cannot find at the place the quote names, so each quote you see is real. And it keeps the answers, the
-					decisions and the topics you marked as known, so you can find them the next day.
+					Why not ask your coding agent? In <a href="#test">ken's own test</a>, a coding agent asked the same
+					question in a plain chat found as many risks as ken, and sometimes more. But ken adds two things. It rejects
+					any answer with a quote it cannot find where the quote says it is, so each quote you see is really there.
+					And it keeps the answers, the decisions and the topics you marked as known, so you can find them the next
+					day.
 				</p>
 				<p class="status">
-					<strong>Early work, not released.</strong> There is nothing to install and no license yet, and the
-					repository is private, so there is nothing for you to do yet. This page will change when there is.
+					<strong>Early work, not released.</strong> Nothing to install, no license, private repository.
 				</p>
 			</header>
 
@@ -41,7 +41,7 @@
 						<img src="images/ken-risk-with-quotes-wide.png" srcset="images/ken-risk-with-quotes-wide.png 2x" width="794" height="405" alt="The heading 5 risks to watch, then risk 1: The page and the terminal show times differently. The page shows note times and &quot;you last asked&quot; in the browser's local time with no zone. The terminal slices the ISO string and labels it UTC. The two can disagree by hours. Under it are two quotes at commit 53567b4. The first is open and shows line 16 of src/page/live/note.js, which builds the time from getHours and getMinutes. The second is line 71 of src/cli/live.ts, which prints the time with the word UTC." />
 					</picture>
 				</a>
-				<figcaption>Screenshot of ken's page, on Claude Opus. It shows the first of five risks in its answer to "What did the last three commits do, and why?" about ken's own repository, with the first quote open.</figcaption>
+				<figcaption>Screenshot of ken's own page. The model was Claude Opus. It shows the first of five risks in its answer to "What did the last three commits do, and why?" about ken's own repository, with the first quote open.</figcaption>
 			</figure>
 
 			<section aria-labelledby="check">
@@ -51,185 +51,261 @@
 					how the parts fit together and it opens with one or two basic diagrams, where each box and arrow quotes its
 					lines too.
 				</p>
-				<figure class="shot shot-wide-only">
+				<figure class="shot">
 					<a href="images/ken-answer-with-diagram-wide.png">
 						<picture>
+							<source media="(max-width: 34rem) and (prefers-color-scheme: dark)" srcset="images/ken-answer-with-diagram-narrow-dark.png 2x" width="520" height="350" />
+							<source media="(max-width: 34rem)" srcset="images/ken-answer-with-diagram-narrow.png 2x" width="520" height="350" />
 							<source media="(prefers-color-scheme: dark)" srcset="images/ken-answer-with-diagram-wide-dark.png 2x" width="794" height="387" />
 							<img src="images/ken-answer-with-diagram-wide.png" srcset="images/ken-answer-with-diagram-wide.png 2x" width="794" height="387" loading="lazy" alt="A drawing of five numbered boxes and the arrows between them. 1, Page and 2, CLI sit at the top. Arrow 6: the page fetches /api/ from 3, Server. Arrow 7: the CLI starts the server, for ken open and ken live. Arrow 8: the CLI starts a chat with 4, Agent, for ken ask. Arrow 9: the server starts a chat with the agent. Arrow 10: the server runs watchStep and snapshots in 5, Live." />
 						</picture>
 					</a>
-					<figcaption>Screenshot of the first diagram in ken's answer to "What are the main parts of ken, and how do they connect?", on Claude Opus.</figcaption>
+					<figcaption>Screenshot of the first diagram in ken's answer to "What are the main parts of ken, and how do they connect?" The model was Claude Opus.</figcaption>
 				</figure>
 				<p>
-					The check covers only the quotes. It does not check that a sentence, a risk or an arrow is true, and it
-					does not check the summary. The commits, their authors and dates, and the changed lines that no quote
-					covers come from git, not from the model. A label says how the agent knows each claim:
+					For a change, ken also gives the model a list of the places that use the names the change touches. Once an
+					answer passes, ken asks the model for a second look at its risks.
 				</p>
+				<p>
+					The check covers only the quotes. It does not check that a sentence, a risk or an arrow is true, and it
+					does not check the summary. ken never shows an answer that fails the check. The agent tries again, up to three
+					times. The commits, their authors and dates, and the changed lines no quote covers come from git.
+				</p>
+				<p>A label says how the agent knows each claim:</p>
 				<ul class="labels">
 					<li>
-						<span class="label label-recorded">Recorded</span> written down at the time, in a commit or with
-						<code>ken decide</code>.
+						<span class="label label-recorded">Recorded</span>
+						<span>Written down at the time, in a commit or with <code>ken decide</code>.</span>
 					</li>
 					<li>
-						<span class="label label-session">From the session</span> quoted from a saved Claude Code session, with
-						anything that looks like a secret key removed.
+						<span class="label label-session">From the session</span>
+						<span>Quoted from a saved session, with anything that looks like a secret key removed.</span>
 					</li>
-					<li><span class="label">Inferred</span> worked out from the code or the diff.</li>
-					<li><span class="label label-search">Found by search</span> a link between two pieces of code, not proved.</li>
+					<li>
+						<span class="label">Inferred</span>
+						<span>Worked out from the code or the diff.</span>
+					</li>
+					<li>
+						<span class="label label-search">Found by search</span>
+						<span>A link between two pieces of code, not proved.</span>
+					</li>
 				</ul>
+				<p>
+					ken, not the model, also marks each risk "Quotes code outside the change" or "Quotes only the changed
+					lines". That label says where a quote is. It does not say the risk is true.
+				</p>
 			</section>
 
 			<section aria-labelledby="how">
 				<h2 id="how">How ken works</h2>
 				<figure class="flow">
-					<svg viewBox="0 0 420 584" width="420" height="584" role="img" aria-labelledby="flow-title flow-desc">
+					<svg viewBox="0 0 440 624" width="440" height="624" role="img" aria-labelledby="flow-title flow-desc">
 						<title id="flow-title">How ken answers a question</title>
 						<desc id="flow-desc">
-							You ask and read on the page, which ken open starts on your machine. The page saves your history and the
-							topics you know in ~/.ken/, and runs each question in the agent, which has read-only tools and a model
-							you choose. The agent sends the code and session text it reads to the model provider. It reads your
-							repository and this project's sessions that Claude Code saved in ~/.claude/, and sends its answer to
-							code that is not a model: it checks every quote, takes the commits from git, and only adds to the
-							record. What passes goes into the project record in .ken/record/, which the agent reads before each
-							question.
+							Everything but the model provider runs on your machine. You ask and read on ken's page, which ken open
+							starts. ken's page saves your history and the topics you know in ~/.ken/, and runs each question in the
+							agent, which has read-only tools and a model you choose. The agent sends the code and session text it
+							reads to the model provider, off your machine. It reads your repository and this project's sessions
+							that Claude Code saved in ~/.claude/, and sends its answer to the check, which is plain code with no
+							model: it checks every quote, takes the commits from git, and only adds to the record. What passed goes
+							into the project record in .ken/record/, which the agent reads before each question.
 						</desc>
 						<defs>
 							<marker id="flow-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
 								<path d="M0 0 L10 5 L0 10 z" />
 							</marker>
 						</defs>
+						<path class="flow-machine" d="M4 58 H436 V206 H252 V330 H436 V620 H4 Z" />
+						<text class="flow-machine-label" x="428" y="78" text-anchor="end">Your machine</text>
 						<g class="flow-boxes">
-							<rect x="62" y="0" width="100" height="36" rx="18" />
-							<rect x="28" y="76" width="168" height="96" />
-							<rect x="244" y="76" width="172" height="96" />
-							<rect x="28" y="212" width="168" height="96" />
-							<rect class="flow-off" x="244" y="212" width="172" height="96" />
-							<rect class="flow-checks" x="28" y="348" width="168" height="96" />
-							<rect x="244" y="348" width="172" height="96" />
-							<rect x="28" y="484" width="168" height="96" />
-							<rect x="244" y="484" width="172" height="96" />
+							<rect x="56" y="0" width="100" height="36" rx="18" />
+							<rect x="16" y="88" width="180" height="96" />
+							<rect x="264" y="88" width="164" height="96" />
+							<rect x="16" y="220" width="180" height="96" />
+							<rect x="264" y="220" width="164" height="96" />
+							<rect class="flow-checks" x="16" y="356" width="180" height="114" />
+							<rect x="264" y="356" width="164" height="114" />
+							<rect x="16" y="510" width="180" height="100" />
+							<rect x="264" y="510" width="164" height="100" />
 						</g>
 						<g class="flow-titles" text-anchor="middle">
-							<text x="112" y="23">You</text>
-							<text x="112" y="100">The page</text>
-							<text x="330" y="100">Your history</text>
-							<text x="112" y="236">The agent</text>
-							<text x="330" y="236">Model provider</text>
-							<text x="112" y="372">Code, not a model</text>
-							<text x="330" y="372">Your repository</text>
-							<text x="112" y="508">Project record</text>
-							<text x="330" y="508">Saved sessions</text>
+							<text x="106" y="23">You</text>
+							<text x="106" y="112">ken's page</text>
+							<text x="346" y="112">Your history</text>
+							<text x="106" y="244">The agent</text>
+							<text x="346" y="244">Model provider</text>
+							<text x="106" y="380">The check</text>
+							<text x="346" y="380">Your repository</text>
+							<text x="106" y="534">Project record</text>
+							<text x="346" y="534">Saved sessions</text>
 						</g>
 						<g class="flow-notes" text-anchor="middle">
-							<text x="112" y="120">started by ken open</text>
-							<text x="112" y="138">on your machine</text>
-							<text x="330" y="120">and topics you know,</text>
-							<text x="330" y="138">saved by the page</text>
-							<text x="330" y="158" class="flow-code">~/.ken/</text>
-							<text x="112" y="256">read-only tools,</text>
-							<text x="112" y="274">a model you choose</text>
-							<text x="330" y="256">gets the code and</text>
-							<text x="330" y="274">session text the</text>
-							<text x="330" y="292">agent reads</text>
-							<text x="112" y="392">checks every quote</text>
-							<text x="112" y="410">takes commits from git</text>
-							<text x="112" y="428">only adds to the record</text>
-							<text x="330" y="392">files and</text>
-							<text x="330" y="410">git history</text>
-							<text x="112" y="530" class="flow-code">.ken/record/</text>
-							<text x="112" y="550">the agent reads it</text>
-							<text x="112" y="568">before each question</text>
-							<text x="330" y="528">of Claude Code,</text>
-							<text x="330" y="546">this project only</text>
-							<text x="330" y="566" class="flow-code">~/.claude/</text>
+							<text x="106" y="132">started by ken open</text>
+							<text x="346" y="132">and topics you know,</text>
+							<text x="346" y="150">saved by ken's page</text>
+							<text x="346" y="170" class="flow-code">~/.ken/</text>
+							<text x="106" y="264">read-only tools,</text>
+							<text x="106" y="282">a model you choose</text>
+							<text x="346" y="264">gets the code and</text>
+							<text x="346" y="282">session text the</text>
+							<text x="346" y="300">agent reads</text>
+							<text x="106" y="400">plain code, no model</text>
+							<text x="106" y="420">checks every quote</text>
+							<text x="106" y="438">takes commits from git</text>
+							<text x="106" y="456">only adds to the record</text>
+							<text x="346" y="400">files and</text>
+							<text x="346" y="418">git history</text>
+							<text x="106" y="554" class="flow-code">.ken/record/</text>
+							<text x="106" y="574">the agent reads it</text>
+							<text x="106" y="592">before each question</text>
+							<text x="346" y="554">of Claude Code,</text>
+							<text x="346" y="572">this project only</text>
+							<text x="346" y="592" class="flow-code">~/.claude/</text>
 						</g>
 						<g class="flow-lines" marker-end="url(#flow-arrow)">
-							<path d="M112 36 V74" />
-							<path d="M196 124 H242" />
-							<path d="M112 172 V210" />
-							<path d="M196 248 H242" />
-							<path d="M196 292 H220 V396 H242" />
-							<path d="M220 396 V532 H242" />
-							<path d="M112 308 V346" />
-							<path d="M112 444 V482" />
-							<path d="M28 532 H12 V260 H26" />
+							<path d="M106 36 V86" />
+							<path d="M196 136 H262" />
+							<path d="M106 184 V218" />
+							<path d="M196 252 H262" />
+							<path d="M196 296 H214 V413 H262" />
+							<path d="M214 413 V560 H262" />
+							<path d="M106 316 V354" />
+							<path d="M106 470 V508" />
 						</g>
 						<g class="flow-edges">
-							<text x="122" y="60">asks and reads</text>
-							<text x="122" y="196">runs the question</text>
-							<text x="122" y="332">the answer</text>
-							<text x="122" y="468">what passed</text>
+							<text x="116" y="76">asks and reads</text>
+							<text x="116" y="206">runs the question</text>
+							<text x="116" y="340">the answer</text>
+							<text x="116" y="494">what passed</text>
+						</g>
+						<g class="flow-edges" text-anchor="middle">
+							<text x="229" y="128">saves</text>
+							<text x="224" y="244">sends</text>
+							<text x="238" y="405">reads</text>
+							<text x="238" y="552">reads</text>
 						</g>
 					</svg>
 				</figure>
 				<p>
-					The model provider can be any OpenAI-compatible endpoint. For Claude, ken ships a small local adapter that
-					turns the <code>claude</code> command into one. It has run on glm-5.3 and kimi-k3.1-pro through Ollama
-					Cloud, and on Claude Opus through that adapter. gpt-oss:120b, as served on Ollama Cloud in November 2026,
-					could not follow the quoting rules.
-				</p>
-				<p>
-					The project record holds what passed the checks: decisions, topics and pieces of work. You commit it for
-					collaborators and their agents, and ken only adds to it, so an entry never changes.
-				</p>
-				<p>
 					Outside <code>.ken/</code> in the project and <code>~/.ken/</code> on your machine, ken writes nothing. It
-					never edits your code, commits or pushes. If the check rejects an answer, the agent tries again, and after
-					three rejected answers ken says it has no checked answer.
+					never edits your code, commits or pushes. The project record holds what passed the check: decisions, topics, and which commits belong together as one
+					task, with a short summary. You commit it for collaborators and their agents. ken only adds to it.
+				</p>
+				<p>
+					ken uses any OpenAI-compatible endpoint, or the <code>claude</code> command through a small local endpoint
+					that ken includes. It has run on glm-5.3, kimi-k3.1-pro and Claude Opus.
 				</p>
 			</section>
 
 			<section aria-labelledby="known">
-				<h2 id="known">What you already know</h2>
+				<h2 id="known">What ken keeps for you</h2>
 				<p>
 					Press "I know this" under an answer to mark its topics as known. A later answer shortens a topic you know to
-					one line, or leads with the change if the code it quotes has changed. The page also lists the decisions an
-					agent left for you, and the topics you knew that changed since, with who changed them.
+					one line, or starts with what changed if the code it quotes has changed.
 				</p>
+				<p>
+					"Waiting on you" lists the decisions an agent left open for you, and the topics you knew that changed since.
+					Answer a decision with "Keep what was chosen" or "I want it changed". ken saves your answer and note, and
+					changes no code.
+				</p>
+				<p>
+					"Decisions" lists every decision saved for the project, with its label and where its reason comes from. A
+					later decision on the same question replaces the older one.
+				</p>
+				<figure class="shot">
+					<a href="images/ken-decisions-wide.png">
+						<picture>
+							<source media="(max-width: 34rem) and (prefers-color-scheme: dark)" srcset="images/ken-decisions-narrow-dark.png 2x" width="390" height="270" />
+							<source media="(max-width: 34rem)" srcset="images/ken-decisions-narrow.png 2x" width="390" height="270" />
+							<source media="(prefers-color-scheme: dark)" srcset="images/ken-decisions-wide-dark.png 2x" width="796" height="540" />
+							<img src="images/ken-decisions-wide.png" srcset="images/ken-decisions-wide.png 2x" width="796" height="540" loading="lazy" alt="Two decisions in the Decisions view. The first is labelled Recorded: should the wait between tries be fixed or grow with each try? Chosen: the wait doubles after each failed try. Why: a fixed wait kept hitting the API while it was down, quoted from the commit message of a32ffb8. The second is labelled From the session: how are failed attempts made visible? Chosen: each failed attempt writes one console.warn line. Why: the owner wants the logs to show how often the network fails, quoted from the coding agent's saved session of 06:44." />
+						</picture>
+					</a>
+					<figcaption>Screenshot of ken's Decisions view for a small made-up project.</figcaption>
+				</figure>
 			</section>
 
 			<section aria-labelledby="live">
 				<h2 id="live">Live mode</h2>
 				<p>
-					Live mode runs beside your coding agent. It writes a short note whose quotes ken has checked each time a
-					commit lands or uncommitted changes stop for a while. A note on uncommitted work is a draft that stays in
-					ken's store under <code>~/.ken/</code>. Each note is a model call, so live mode is off until you turn it on,
-					and the page shows what it spends.
+					Live mode runs beside your coding agent. When a commit lands, or uncommitted changes go quiet, ken's model
+					writes a short note. ken checks its quotes, not its words. A note on uncommitted work is a draft kept in
+					<code>~/.ken/</code>. Each note is a model call, so live mode is off until you turn it on, and ken's page
+					shows what it spends.
 				</p>
-				<figure class="shot">
-					<a href="images/ken-live-draft-note-wide.png">
+				<figure class="shot shot-wide-only">
+					<a href="images/ken-live-note-wide.png">
 						<picture>
-							<source media="(max-width: 34rem) and (prefers-color-scheme: dark)" srcset="images/ken-live-draft-note-narrow-dark.png 2x" width="360" height="316" />
-							<source media="(max-width: 34rem)" srcset="images/ken-live-draft-note-narrow.png 2x" width="360" height="316" />
-							<source media="(prefers-color-scheme: dark)" srcset="images/ken-live-draft-note-wide-dark.png 2x" width="578" height="212" />
-							<img src="images/ken-live-draft-note-wide.png" srcset="images/ken-live-draft-note-wide.png 2x" width="578" height="212" loading="lazy" alt="A note in the Live view, headed 06:40, Uncommitted work as it stood at 06:40, and marked Draft, on this machine only. It says a 404 now throws a NotFound error and retry rethrows it at once with no wait, so missing users are no longer retried, and that letting the caller choose the number of attempts, which the owner also asked for, is not done yet." />
+							<source media="(prefers-color-scheme: dark)" srcset="images/ken-live-note-wide-dark.png 2x" width="796" height="758" />
+							<img src="images/ken-live-note-wide.png" srcset="images/ken-live-note-wide.png 2x" width="796" height="758" loading="lazy" alt="An earlier note in the Live view, headed Uncommitted work, 07:17, and marked Committed since, in a32ffb8. It says retry's wait now doubles after each failed try, 200, 400 and 800 ms. Under it are a risk labelled Inferred, that retry still waits once more after the last failed try, with a quote of lines 13 to 16 of src/retry.ts, a decision labelled From the session, and a statement labelled Inferred with a quote of line 1 of src/retry.ts." />
 						</picture>
 					</a>
-					<figcaption>Screenshot of the top of a draft note in ken's Live view, written by Claude Opus as a coding agent worked on a small made-up project.</figcaption>
+					<figcaption>Screenshot of an earlier note in ken's Live view for a small made-up project, with its risk, its decision and a statement, and the first line of each quote.</figcaption>
 				</figure>
 			</section>
 
 			<section aria-labelledby="test">
-				<h2 id="test">ken has not passed its own test</h2>
+				<h2 id="test">In its test, ken found no more than a plain chat</h2>
 				<p>
-					The plain chat was a coding agent in the same repository, asked the same question. The plan says ken must
-					beat it on at least one of three counts and lose on none: finding a decision or a risk the other missed,
-					trusting the answer because of its quotes, and finding it again the next day.
+					The test asked ken and a plain chat with a coding agent on Claude Opus the same question about real merged
+					pull requests of another project by the same owner: what did it do, why that way, and what decisions and risks
+					are in it. A second AI agent, fresh each time, scored each round against the code. The owner has not scored
+					them.
+				</p>
+				<p>ken's own plan says ken must win at least one of three counts and lose none:</p>
+				<ul class="counts">
+					<li><strong>Finding more.</strong> The answer names a decision or a risk the other answer missed.</li>
+					<li><strong>Trust without the diff.</strong> The quotes let you trust the answer without opening the diff.</li>
+					<li><strong>Finding it again.</strong> You can find the answer again the next day.</li>
+				</ul>
+				<p>
+					ken won trust without the diff and finding it again in every round, on both models it ran on. The plain chat
+					cannot win those two. It quotes nothing ken can check, and it keeps nothing.
 				</p>
 				<p>
-					Three rounds ran ken on glm-5.3, an open-weight model, against a plain chat on Claude Opus. They used merged
-					pull requests of another project by the same owner, three in the first two rounds and five in the third. A
-					fourth round put Claude Opus on both sides, over the same five. A second AI agent scored each round. The
-					owner has not scored them.
+					Finding more is where ken lost. It lost that count in each of the first three rounds. In rounds 4 and 5,
+					after changes to ken, it came out about level with a plain chat: sometimes a tie, sometimes a narrow loss, once
+					a narrow win. It does not find more. The same three pull requests passed in one round and failed in the next, so one answer
+					per pull request is a noisy measure, and a pass is not proof.
 				</p>
 				<p>
-					In all four, ken won the second and third counts and lost the first. The first verdict opens with
-					"No. ken does not meet its plan's rule." With Claude Opus on both sides, the first count came to three ties
-					and two wins for the plain chat. The two counts ken won, quotes and finding the answer again, are things a
-					plain chat does not have by design.
+					ken is also slower. An answer took two to four minutes on Claude Opus and four to eight on glm-5.3, against
+					one to three in the plain chat. The second look took about half of ken's input tokens. ken's answers are
+					longer, and the plain chat reads faster. In round 5 one of ken's risks was false, and still carried the label
+					for quoting code outside the change.
+				</p>
+				<details class="rounds">
+					<summary>The five rounds, one by one</summary>
+					<ul>
+						<li>
+							<strong>Rounds 1 to 3.</strong> ken ran on glm-5.3, then on Claude Opus. Rounds 1 and 2 used three
+							pull requests, and ken was tuned on these three. Round 3 added two more. ken lost finding more in every
+							round, taken over all its pull requests together. The first verdict opens with "No. ken does not meet
+							its plan's rule."
+						</li>
+						<li>
+							<strong>Round 4</strong> added two things: the list of places that use the names a change touches, and
+							the second look at risks. With Claude Opus on both sides, ken passed on the three tuned pull requests
+							for the first time, with finding more a tie. It failed on the two others, and lost finding more on one
+							of them. On three new pull requests it had never seen, it passed narrowly, with a tie. With ken on
+							glm-5.3, those three failed.
+						</li>
+						<li>
+							<strong>Round 5</strong> made the second look read the code each risk points at, and ask what happens
+							when two decisions touch the same thing. It also put the risks in order and added the risk labels. With
+							Claude Opus on both sides, three more pull requests ken had never seen passed. Finding more was a tie on
+							two and a narrow win for ken on one, and the judge said a count of finds gives a tie, or ken by one. The
+							three tuned ones passed. The two others failed narrowly on finding more, and so did the three that had
+							passed narrowly in round 4. With ken on glm-5.3, the three newest passed, with a tie.
+						</li>
+					</ul>
+				</details>
+				<p id="last-confirmation" class="pending">
+					A last check on three more pull requests that ken has never seen is still running. Its result will go here.
 				</p>
 				<p>
-					The verdicts are in the repository, which is private today, under <code>docs/checkpoint/</code>.
+					Every pull request came from one repository, and one AI judge scored each round. The verdicts are in the
+					repository, which is private today, under <code>docs/checkpoint/</code>.
 				</p>
 			</section>
 		</main>
@@ -238,7 +314,7 @@
 				Not built yet: a reader for other coding tools' sessions, anything for teams, and a parser or index of the
 				code.
 			</p>
-			<p>Built by <a href="https://github.com/krimvp">krimvp</a>. Page updated on 16 November 2026.</p>
+			<p>Built by <a href="https://github.com/krimvp">krimvp</a>. Updated on 16 November 2026.</p>
 		</footer>
 	</body>
 </html>
