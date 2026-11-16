@@ -70,13 +70,17 @@ export async function checkAnswer(
 	if (scope?.kind === 'refused') return { kind: 'rejected', problems: [`Scope: ${scope.problem}`] }
 	const problems: string[] = []
 	const verify = (where: string, quotes: Quote[]) => verifyQuotes(sources, where, quotes, problems, signal)
-	const headNow = async () => {
+	// Read once, and only when an entry needs a search.
+	let at: Promise<CommitHash | null> | undefined
+	const commit = async () => {
 		const resolved = await repo.resolve('HEAD', signal)
-		if (resolved.kind !== 'ok') throw new Error('an answer is checked in a repository with no HEAD commit')
-		return resolved.commit
+		return resolved.kind === 'ok' ? resolved.commit : null
 	}
-	const at = scope?.head ?? searchAt ?? (await headNow())
-	const search = (where: string, sought: Sought | undefined) => searchAbsent(repo, at, where, sought, problems, signal)
+	const search = async (where: string, sought: Sought | undefined) => {
+		if (sought === undefined) return {}
+		at ??= scope?.head ? Promise.resolve(scope.head) : searchAt ? Promise.resolve(searchAt) : commit()
+		return await searchAbsent(repo, await at, where, sought, problems, signal)
+	}
 
 	const statements = await checkClaims(sources, 'Statement', draft.statements, problems, search, signal)
 	const risks = draft.risks && (await checkClaims(sources, 'Risk', draft.risks, problems, search, signal))
@@ -141,13 +145,16 @@ async function checkClaims(
 
 async function searchAbsent(
 	repo: Repository,
-	at: CommitHash,
+	at: CommitHash | null,
 	where: string,
-	sought: Sought | undefined,
+	sought: Sought,
 	problems: string[],
 	signal: AbortSignal,
 ): Promise<{ absent?: Absence }> {
-	if (sought === undefined) return {}
+	if (at === null) {
+		problems.push(`${where}: the repository has no commit to search for "${sought.text}".`)
+		return {}
+	}
 	const checked = await checkAbsent(repo, at, sought, signal)
 	if (checked.kind === 'absent') return { absent: checked.absence }
 	problems.push(`${where}: ${checked.problem}`)

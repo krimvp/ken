@@ -1,8 +1,8 @@
 // The risk pass. Once an answer about a change passes every check, ken asks the same session once more, before the
 // reader sees it, to check the answer's own risks against the code and to look for what two parts of the change do
 // together, in fixed steps. The agent may rewrite, add and withdraw risks, which go through the same checks, and sends
-// the final order of the risks, heaviest first. ken merges what passes into one answer. When nothing passes, the first
-// answer stands.
+// the final order of the risks, heaviest first. A withdrawal carries the lines that rule its risk out. ken merges what
+// passes into one answer. When nothing passes, the first answer stands.
 import type { JsonObject, Tool } from 'aigent/plugin'
 import { type Quote, type QuoteSources, type VerifiedQuote, verifyQuote } from '../../checks/index.ts'
 import type { Commit, CommitHash, Range, Repository } from '../../repo/index.ts'

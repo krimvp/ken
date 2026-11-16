@@ -206,7 +206,9 @@ function reasonedHtml(d, key, rows) {
 	const quotes = decisionQuotes(d)
 	const call = d.needsOwner ? '<span class="your-call">Your call</span> ' : ''
 	const why = d.reason ? `<p class="d-why"><span class="d-field">Why</span> ${prose(d.reason.text)}</p>` : ''
-	const what = open ? 'Hide' : `Show ${count(quotes.length, 'quote', 'quotes')} and how hard it is to reverse`
+	const what = open
+		? 'Hide the quotes'
+		: `Show ${count(quotes.length, 'quote', 'quotes')} and how hard it is to reverse`
 	const answerIt = d.needsOwner && !d.answer && !rows.waiting ? `<p class="small">${answerItLink(key)}</p>` : ''
 	const card = open
 		? `<div class="d-card">${fromHtml(d)}${factsHtml(d, false)}${answerIt}${quoteRows(quotes, key, rows)}</div>`

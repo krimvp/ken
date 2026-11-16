@@ -948,6 +948,16 @@ span.label-from-the-session {
 	padding-bottom: var(--space-4);
 }
 
+/* The risks the second look withdrew: a line beside the caption on left-out points, quieter than a group of the answer. */
+.folds.withdrawn {
+	margin-top: var(--space-3);
+}
+
+.withdrawn .fold-head {
+	font-size: var(--text-note);
+	font-weight: 600;
+}
+
 .fold-body > .list-head:first-child,
 .fold-body > .risks:first-child {
 	margin-top: 0;
