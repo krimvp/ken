@@ -13,7 +13,7 @@ import { type Repository, resolveRange } from '../../repo/index.ts'
 import type { ChatEvent, Revision } from '../chat-event.ts'
 import { hunkHeader } from '../tools/diff-tool.ts'
 import { readArgs, refuse, reply } from '../tools/tool-edge.ts'
-import { type Answer, type Claim, WEIGHTS } from './answer.ts'
+import { type Answer, type Claim, WEIGHTS, type Withdrawn } from './answer.ts'
 import { type AnswerDraft, type CheckedDecision, checkAnswer } from './check-answer.ts'
 import { allowJsonText, readJsonText } from './json-text.ts'
 import { type RecordArgs, type Recorded, recordAnswer } from './record-answer.ts'
@@ -101,33 +101,38 @@ export function answerTool(gate: Gate, round: () => AnswerRound): Tool {
 type Settled = Awaited<ReturnType<typeof settle>>
 type Accepted = Extract<Settled, { kind: 'accepted' }>
 
+// What a risk pass sent that passed its checks: what it changed in the risks, and the risks it took out with their proof.
+export type Pass = { revision: Revision; withdrawn: Withdrawn[] }
+
 // Writes an answer to the record, marks its topics on the reader's map and shows it to the reader. The arguments are
 // checked again in full first, so what is written is exactly what passed.
 export async function accept(
 	gate: Gate,
 	current: AnswerRound,
 	args: JsonObject,
-	revision: Revision | null,
+	pass: Pass | null,
 	signal: AbortSignal,
 ): Promise<{ kind: 'accepted'; reply: string } | { kind: 'rejected' | 'form'; problems: string[] }> {
 	const settled = await settle(gate, args, signal, true)
 	if (settled.kind !== 'accepted') return settled
-	return { kind: 'accepted', reply: await shown(gate, current, settled, revision, signal) }
+	return { kind: 'accepted', reply: await shown(gate, current, settled, pass, signal) }
 }
 
 async function shown(
 	gate: Gate,
 	current: AnswerRound,
 	settled: Accepted,
-	revision: Revision | null,
+	pass: Pass | null,
 	signal: AbortSignal,
 ): Promise<string> {
 	if (current.asked) await gate.map?.learn('asked', settled.answer.topics, new Date(), signal)
-	current.answer = settled.answer
+	const withdrawn = pass?.withdrawn ?? []
+	const answer = withdrawn.length === 0 ? settled.answer : { ...settled.answer, withdrawn }
+	current.answer = answer
 	const { recorded } = settled
 	const draft = recorded.kind === 'draft' ? recorded.decisions : null
 	const entries = recorded.kind === 'recorded' ? recorded.entries : []
-	current.emit({ kind: 'accepted', answer: settled.answer, recorded: entries, draft, revision })
+	current.emit({ kind: 'accepted', answer, recorded: entries, draft, revision: pass?.revision ?? null })
 	const next =
 		'Now write one or two sentences to the reader that say what the answer left out. Say nothing else, and do not repeat the answer.'
 	return confirmation(settled.answer, settled.decisions, recorded, next)
@@ -431,7 +436,7 @@ function recordArgsOf(args: JsonObject, quoteOf: ReadQuote): RecordArgs {
 
 // A quote names one source: a session, or a commit with a path for a file and none for the commit's message. A quote
 // that names both, or neither, adds a problem, and the answer goes back before ken checks any quote.
-function quoteOf(raw: JsonObject, problems: string[]): Quote {
+export function quoteOf(raw: JsonObject, problems: string[]): Quote {
 	const quote = readArgs(raw, 'answer quote')
 	const text = quote.text('text')
 	const session = quote.optionalText('session')
@@ -508,7 +513,7 @@ const QUOTE_SCHEMA = {
 	required: ['text'],
 	additionalProperties: false,
 } as const
-const QUOTE = withoutDescriptions(QUOTE_SCHEMA)
+export const QUOTE = withoutDescriptions(QUOTE_SCHEMA)
 
 const TOPIC_NAME = {
 	type: 'string',

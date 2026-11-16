@@ -176,6 +176,47 @@ test('ken ask prints the risks in the order the answer gives them, whatever thei
 	assert.match(stdout, /1 point of the draft had no line to quote/)
 })
 
+test('ken ask prints the risks the second look withdrew as one count, each with the line that rules it out', async () => {
+	const risk = (text: string) => ({ text, label: 'inferred', quotes: [SUM], weight: 'minor' })
+	const model = await scriptedModel([
+		DRAFT,
+		{
+			tool: 'ken__answer',
+			args: {
+				scope: { base, head },
+				summary: 'total returned 0 for every list. It now adds the items.',
+				statements: [{ text: 'total returns the sum of the items instead of 0.', label: 'inferred', quotes: [SUM] }],
+				risks: [risk('An empty list now fails.'), risk('A caller that passes text now gets a TypeError.')],
+			},
+		},
+		{ text: '' },
+		{
+			tool: 'ken__revise_answer',
+			args: {
+				withdraw: [{ risk: 1, reason: 'sum of an empty list is 0.', quotes: [SUM] }],
+				order: [2],
+			},
+		},
+		{ text: 'Nothing else.' },
+	])
+	const env = {
+		...NO_KEN_VARIABLES,
+		KEN_MODEL: 'scripted',
+		KEN_BASE_URL: model.baseUrl,
+		KEN_API_KEY_ENV: 'KEN_TEST_KEY',
+		KEN_TEST_KEY: 'scripted-model-key',
+	}
+	const { code, stdout, stderr } = await ken(['ask', 'What did the fix do?', '--repo', root], env)
+
+	assert.equal(code, 0, `${stderr}${stdout}`)
+	assert.match(
+		stdout,
+		/1 risk withdrawn by the second look, with the line that rules it out:\n1\. An empty list now fails\.[^\n]*\n {3}Ruled out: sum of an empty list is 0\.\n {3}app\.py @ \w{7}, line 2\n.*return sum\(items\)/,
+		stdout,
+	)
+	assert.match(stdout, /Risks, heaviest first \(1\):/, 'the withdrawn risk is not among the risks')
+})
+
 test('ken refuses to start without a model, and says what to set', async () => {
 	const cases = [
 		{ env: NO_KEN_VARIABLES, names: ['KEN_MODEL', 'KEN_BASE_URL', 'KEN_API_KEY_ENV'] },

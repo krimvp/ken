@@ -30,7 +30,7 @@ export async function printQuestion(events: AsyncIterable<ChatEvent>, out: NodeJ
 				break
 			case 'accepted':
 				line(`\n${formatAnswer(event.answer, event.recorded, paint)}`)
-				if (event.revision) line(`\n${revisionLine(event.revision)}`)
+				if (event.revision) line(`\n${revisionLine(event.revision, event.answer.withdrawn?.length ?? 0)}`)
 				if (event.recorded.length > 0) {
 					line(paint('bold', `\nAdded to the project record (${event.recorded.length}):`))
 					for (const entry of event.recorded) line(`  ${entryLine(entry)}`)
@@ -80,6 +80,16 @@ export function formatAnswer(answer: Answer, entries: Entry[], paint: Paint): st
 				? '1 point of the draft had no line to quote and was'
 				: `${leftOut} points of the draft had no line to quote and were`
 		lines.push(paint('dim', `${said} left out.`), '')
+	}
+	const withdrawn = answer.withdrawn ?? []
+	if (withdrawn.length > 0) {
+		lines.push(paint('bold', `${withdrawnLine(withdrawn.length)}:`))
+		for (const [index, { risk, reason, proof }] of withdrawn.entries()) {
+			const weight = risk.weight === undefined ? '' : ` ${paint('cyan', `[${risk.weight}, by ken's model]`)}`
+			lines.push(`${index + 1}. ${risk.text}${weight}`, `   Ruled out: ${reason}`)
+			for (const quote of proof) lines.push(...formatQuote(quote, paint))
+		}
+		lines.push('')
 	}
 	for (const diagram of answer.diagrams) lines.push(...formatDiagram(diagram, paint), '')
 	const decisions = entries.flatMap((entry) => (entry.kind === 'decision' ? [entry] : []))
@@ -175,7 +185,14 @@ function costLine(cost: Cost): string {
 	return `${cost.inputTokens} tokens in, ${cost.outputTokens} out, ${cost.seconds} s`
 }
 
-function revisionLine({ risks, decisions, withdrawn }: Revision): string {
+// The same words as the page's line, so the reader meets one name for it.
+function withdrawnLine(n: number): string {
+	return n === 1
+		? '1 risk withdrawn by the second look, with the line that rules it out'
+		: `${n} risks withdrawn by the second look, each with the line that rules it out`
+}
+
+function revisionLine({ risks, decisions }: Revision, withdrawn: number): string {
 	const count = (n: number, one: string) => (n === 1 ? `1 ${one}` : `${n} ${one}s`)
 	const numbers = (kind: 'added' | 'rewritten') => risks.flatMap((risk, at) => (risk.kind === kind ? [at + 1] : []))
 	const [added, rewritten] = [numbers('added'), numbers('rewritten')]
@@ -183,7 +200,7 @@ function revisionLine({ risks, decisions, withdrawn }: Revision): string {
 		added.length > 0 ? `added ${count(added.length, 'risk')} (number ${added.join(', ')})` : '',
 		rewritten.length > 0 ? `rewrote ${count(rewritten.length, 'risk')} (number ${rewritten.join(', ')})` : '',
 		decisions > 0 ? `added ${count(decisions, 'decision')}, the last above` : '',
-		withdrawn.length > 0 ? `withdrew ${count(withdrawn.length, 'risk')}` : '',
+		withdrawn > 0 ? `withdrew ${count(withdrawn, 'risk')}, listed above` : '',
 	].filter((part) => part !== '')
 	const kept = risks.flatMap((risk) => (risk.kind === 'added' ? [] : [risk.was]))
 	const moved = kept.some((was, at) => at > 0 && was < (kept[at - 1] ?? 0))

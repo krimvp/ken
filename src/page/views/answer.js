@@ -61,6 +61,12 @@ export function itemsOf(q) {
 	const risks = risksOf(q).risks.map((each) => ({ ...each, kind: 'risk' }))
 	const calls = decisions.filter(({ item }) => item.needsOwner)
 	const others = decisions.filter(({ item }) => !item.needsOwner)
+	const withdrawn = (q.answer.withdrawn ?? []).map(({ risk, proof }, i) => ({
+		key: `w${i}`,
+		kind: 'withdrawn',
+		item: { text: risk.text, quotes: proof },
+		n: i + 1,
+	}))
 	return [
 		...q.answer.diagrams.flatMap((diagram, i) =>
 			diagram.elements
@@ -69,6 +75,7 @@ export function itemsOf(q) {
 		),
 		...(q.answer.change ? [...risks, ...calls, ...others] : [...decisions, ...risks]),
 		...q.answer.statements.map((s, i) => ({ key: `s${i}`, kind: 'statement', item: s, n: i + 1 })),
+		...withdrawn,
 	]
 }
 
@@ -134,6 +141,7 @@ export function answerHtml(q, ui, running) {
 		<p class="summary">${summary}</p>
 		${needsHtml(q)}
 		${leftOutHtml(a)}
+		${withdrawnHtml(a, ui, rows)}
 		${knownHtml(q, ui, named, isMoved(q))}
 		<a class="strip narrow-only" href="#checks-inline" title="See what ken checked">${checkStrip(q)}</a>
 		${a.diagrams.map((diagram, i) => diagramHtml(diagram, i, rows)).join('')}
@@ -211,6 +219,30 @@ function leftOutHtml(a) {
 			? '1 point of the draft had no line to quote and was'
 			: `${n} points of the draft had no line to quote and were`
 	return `<p class="caption">${said} left out. The draft is in the steps.</p>`
+}
+
+// The risks the second look took out: one line with the count, which opens to each risk, why it was withdrawn and the
+// lines that rule it out. ken checked those lines; the reason is the model's.
+function withdrawnHtml(a, ui, rows) {
+	const all = a.withdrawn ?? []
+	if (all.length === 0) return ''
+	const head =
+		all.length === 1
+			? '1 risk withdrawn by the second look, with the line that rules it out'
+			: `${all.length} risks withdrawn by the second look, each with the line that rules it out`
+	const items = all
+		.map(
+			({ risk, reason, proof }, i) => `<li class="st" id="item-w${i}">
+				<span class="st-n">${i + 1}</span>
+				<div>
+					<p class="st-text">${weightHtml(risk)}${prose(risk.text)}</p>
+					<p class="small"><span class="d-field">Ruled out</span> ${prose(reason)}</p>
+					${quoteRows(proof, `w${i}`, rows)}
+				</div>
+			</li>`,
+		)
+		.join('')
+	return `<div class="folds withdrawn">${foldHtml('withdrawn', head, ui, `<ol>${items}</ol>`)}</div>`
 }
 
 // Whole sentences, so a cut never ends mid-word or hides half of a caveat.

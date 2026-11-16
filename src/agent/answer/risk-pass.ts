@@ -4,7 +4,8 @@
 // the final order of the risks, heaviest first. ken merges what passes into one answer. When nothing passes, the first
 // answer stands.
 import type { JsonObject, Tool } from 'aigent/plugin'
-import type { Commit, Range, Repository } from '../../repo/index.ts'
+import { type Quote, type QuoteSources, type VerifiedQuote, verifyQuote } from '../../checks/index.ts'
+import type { Commit, CommitHash, Range, Repository } from '../../repo/index.ts'
 import type { Revision } from '../chat-event.ts'
 import { namesText } from '../tools/elsewhere-text.ts'
 import { readArgs, refuse, reply, short } from '../tools/tool-edge.ts'
@@ -16,6 +17,8 @@ import {
 	type Gate,
 	type Held,
 	optionalList,
+	QUOTE,
+	quoteOf,
 	RISK_SCHEMA,
 	sentBack,
 	WEIGHT_RULE,
@@ -103,7 +106,7 @@ export function riskPassQuestion(held: Held, later: LaterCommits): string {
 	const listed = laterText(later, head)
 	return [
 		`ken checked your answer, and the reader has not seen it yet. Now check it against the code at the head commit ${head}, with the same tools. Take these steps in order:`,
-		'1. Each risk below: find the code that would make it false, and read it: a check that stops the case, a caller that never passes the value. Withdraw the risk when that code shows it does not happen; that is a normal result. A later commit below that fixed the risk shows it was real: keep it, and say it was fixed since, in which commit. A risk that begins with "if" ends settled: rewrite it without the "if" and quote the line that settles it, or withdraw it. It may stay unsettled only when the code that decides it is not in git, such as a dependency\'s, and then it says so. Otherwise rewrite the risk with a quote of the place it rests on, or keep it as it is. ken marks a risk "Quotes code outside the change" only when one of its quotes, at the head commit, holds no line the change touched, and "Quotes only the changed lines" otherwise. A dependency\'s code is not in git, so ken cannot read it.',
+		`1. Each risk below: find the code that would make it false, and read it: a check that stops the case, a caller that never passes the value. Withdraw the risk when that code shows it does not happen; that is a normal result. A withdrawal quotes the line that makes the risk false, the code at ${head} or a line of a later commit's message below, and ken refuses a withdrawal with no such quote. "This is not new behaviour" and "this costs little" are not reasons to withdraw: such a risk stays, weighed minor. A later commit below that fixed the risk shows it was real: keep it, and say it was fixed since, in which commit. A risk that begins with "if" ends settled: rewrite it without the "if" and quote the line that settles it, or withdraw it. It may stay unsettled only when the code that decides it is not in git, such as a dependency's, and then it says so. Otherwise rewrite the risk with a quote of the place it rests on, or keep it as it is. ken marks a risk "Quotes code outside the change" only when one of its quotes, at the head commit, holds no line the change touched, and "Quotes only the changed lines" otherwise. A dependency's code is not in git, so ken cannot read it.`,
 		'2. Each pair of decisions that touch the same file, function, record, id or signal, such as one that writes or keeps a thing and one that deletes or skips it: what happens when both apply?',
 		'3. Each early return, refusal, delete or catch in the changed lines: what no longer happens after it, and who relied on it?',
 		'4. Which new behaviour has no test? And what does the change lean on outside the repository, such as a setting, a service or the way a dependency behaves?',
@@ -125,9 +128,9 @@ export function riskPassQuestion(held: Held, later: LaterCommits): string {
 		'',
 		'Before you call revise_answer, write what you found in steps 2, 3, 4 and 6, one short line each: the two decisions, the line or the behaviour, and what happens. These lines are not part of the answer.',
 		'Then call revise_answer once:',
-		`- risks: each new risk, and each risk above that you rewrite, with replaces set to its number. A risk is one or two sentences: what can happen, who hits it (a host, an operator, a reader of results, a later developer) and when (always, on resume, only for runs made before this change, only under load). Quote the place it rests on, and give it its weight: ${WEIGHT_RULE}.`,
-		'- withdraw: each risk above that the code shows does not happen, with what the code shows instead.',
-		`- order: the numbers of all the risks the answer keeps, the heaviest first, by who hits each and when. A risk above keeps its number; the risks you send are ${risks.length + 1}, ${risks.length + 2} and on, in the order you send them. A minor or speculative risk goes last, or withdraw it.`,
+		`- risks: each new risk, and each risk above that you rewrite, with replaces set to its number. A risk is one or two sentences: what can happen, who hits it (a host, an operator, a reader of results, a later developer) and when (always, on resume, only for runs made before this change, only under load). Quote the place it rests on, and give it its weight: ${WEIGHT_RULE}. A new risk that needs a rare case and costs little is left out, not sent as minor; ten risks is a sign of padding.`,
+		`- withdraw: each risk above that the code shows does not happen, with what the code shows instead and, in quotes, the lines that show it: code at ${head}, or a line of a later commit's message.`,
+		`- order: the numbers of all the risks the answer keeps, the heaviest first, by who hits each and when. A risk above keeps its number; the risks you send are ${risks.length + 1}, ${risks.length + 2} and on, in the order you send them. A minor or speculative risk goes last.`,
 		'- decisions: a decision your answer missed, with its quotes.',
 	].join('\n')
 }
@@ -155,9 +158,11 @@ export function reviseTool(gate: Gate, round: () => AnswerRound): Tool {
 				return { risk, replaces: readArgs(raw, 'revise_answer risk').optionalLine('replaces') }
 			})
 			const decisions = optionalList(read.args.decisions)
+			const sourceProblems: string[] = []
 			const asked = optionalList(read.args.withdraw).map((each) => {
 				const item = readArgs(each, 'revise_answer withdraw')
-				return { number: item.optionalLine('risk') ?? 0, reason: item.text('reason') }
+				const quotes = optionalList(each.quotes).map((quote) => quoteOf(quote, sourceProblems))
+				return { number: item.optionalLine('risk') ?? 0, reason: item.text('reason'), quotes }
 			})
 			const withdrawn = asked.filter(({ number }, at) => asked.findIndex((other) => other.number === number) === at)
 			const given = read.args.order
@@ -172,11 +177,18 @@ export function reviseTool(gate: Gate, round: () => AnswerRound): Tool {
 							withdrawn.map(({ number }) => number),
 							order,
 						)
-			if (form.length > 0) return sentBack(form)
+			const head = held.answer.change?.head
+			if (!head) throw new Error('revise_answer: ken holds only an answer about a change, so it has a head commit')
+			const proofForm = await proofProblems(gate.sources.repo, head, withdrawn, ctx.signal)
+			if (form.length + sourceProblems.length + proofForm.length > 0) {
+				return sentBack([...form, ...sourceProblems, ...proofForm])
+			}
 			const risks = sent.map(({ risk }) => risk)
 			const added = await checkAdditions(gate.sources, { risks, decisions }, ctx.signal)
 			if (added.kind === 'form') return sentBack(added.problems)
 			if (added.kind === 'rejected') return rejected(current, held, added.problems)
+			const proved = await checkProof(gate.sources, withdrawn, ctx.signal)
+			if (proved.kind === 'rejected') return rejected(current, held, proved.problems)
 			const pick = (number: number) => (number <= first.length ? first[number - 1] : risks[number - first.length - 1])
 			const merged: JsonObject = {
 				...held.args,
@@ -190,17 +202,86 @@ export function reviseTool(gate: Gate, round: () => AnswerRound): Tool {
 					return was === undefined ? { kind: 'added' } : { kind: 'rewritten', was }
 				}),
 				decisions: decisions.length,
-				withdrawn: withdrawn.flatMap(({ number, reason }) => {
-					const risk = held.answer.risks?.[number - 1]
-					return risk ? [{ risk, reason }] : []
-				}),
 			}
-			const accepted = await accept(gate, current, merged, revision, ctx.signal)
+			const taken = proved.withdrawn.flatMap(({ number, reason, proof }) => {
+				const risk = held.answer.risks?.[number - 1]
+				return risk ? [{ risk, reason, proof }] : []
+			})
+			const accepted = await accept(gate, current, merged, { revision, withdrawn: taken }, ctx.signal)
 			if (accepted.kind === 'accepted') return reply(accepted.reply)
 			if (accepted.kind === 'form') return sentBack(accepted.problems)
 			return rejected(current, held, accepted.problems)
 		},
 	}
+}
+
+type Withdrawal = { number: number; reason: string; quotes: Quote[] }
+
+// A withdrawal's form: it quotes at least one line, and each is the code at the change's head commit, where the risk
+// would happen, or a line of the message of a commit made after it.
+async function proofProblems(
+	repo: Repository,
+	head: CommitHash,
+	withdrawn: Withdrawal[],
+	signal: AbortSignal,
+): Promise<string[]> {
+	const problems: string[] = []
+	const at = short(head)
+	for (const { number, quotes } of withdrawn) {
+		const where = `The withdrawal of risk ${number}`
+		if (quotes.length === 0) {
+			problems.push(
+				`${where} has no quote. Quote the line that makes the risk false: code at the head commit ${at}, or a line of a later commit's message. A risk that is not new, or that costs little, is not withdrawn: keep it, weighed minor.`,
+			)
+		}
+		for (const quote of quotes) {
+			if ('session' in quote) {
+				problems.push(`${where} quotes a saved session. Quote code at ${at} or a line of a later commit's message.`)
+				continue
+			}
+			const resolved = await repo.resolve(quote.commit, signal)
+			if (resolved.kind !== 'ok') continue
+			if (quote.path !== null && resolved.commit !== head) {
+				problems.push(`${where} quotes ${quote.path} at ${short(resolved.commit)}. Quote it at the head commit ${at}.`)
+			}
+			if (quote.path === null && !(await isLater(repo, head, resolved.commit, signal))) {
+				problems.push(
+					`${where} quotes the message of ${short(resolved.commit)}, which is not a commit made after ${at}. Quote code at ${at} or a later commit's message.`,
+				)
+			}
+		}
+	}
+	return problems
+}
+
+async function isLater(repo: Repository, head: CommitHash, commit: CommitHash, signal: AbortSignal) {
+	if (commit === head) return false
+	const base = await repo.mergeBase(head, commit, signal)
+	return base.kind === 'ok' && base.commit === head
+}
+
+// Each withdrawal's quotes are checked as every quote is: a line that is not there rejects the revision.
+async function checkProof(
+	sources: QuoteSources,
+	withdrawn: Withdrawal[],
+	signal: AbortSignal,
+): Promise<
+	| { kind: 'ok'; withdrawn: { number: number; reason: string; proof: VerifiedQuote[] }[] }
+	| { kind: 'rejected'; problems: string[] }
+> {
+	const problems: string[] = []
+	const checked = await Promise.all(
+		withdrawn.map(async ({ number, reason, quotes }) => {
+			const verdicts = await Promise.all(quotes.map((quote) => verifyQuote(sources, quote, signal)))
+			const proof = verdicts.flatMap((verdict, at) => {
+				if (verdict.kind === 'verified') return [verdict.quote]
+				problems.push(`The withdrawal of risk ${number}, quote ${at + 1}: ${verdict.problem}`)
+				return []
+			})
+			return { number, reason, proof }
+		}),
+	)
+	return problems.length > 0 ? { kind: 'rejected', problems } : { kind: 'ok', withdrawn: checked }
 }
 
 // A revision's form, which the model fixes without reading code again: each risk of the first answer is kept in order,
@@ -270,6 +351,12 @@ const REVISE_SCHEMA = {
 				properties: {
 					risk: { type: 'integer', minimum: 1, description: 'Its number in the list ken sent' },
 					reason: { type: 'string', description: 'What the code shows instead, in one sentence' },
+					quotes: {
+						type: 'array',
+						description:
+							"The lines that make the risk false: code at the head commit, or a line of a later commit's message. ken refuses a withdrawal without one.",
+						items: QUOTE,
+					},
 				},
 				required: ['risk', 'reason'],
 				additionalProperties: false,

@@ -1,7 +1,7 @@
 // What ken tells its reader, as checked data. Every statement and every risk carries a label from the plan and at
 // least one quote that passed checkQuote, and so does every arrow, message and relation in its diagrams. An answer
 // about a change also carries the change facts, which ken reads from git and the model never supplies.
-import type { ChangedHunk, Followed, MessageCount } from '../../checks/index.ts'
+import type { ChangedHunk, Followed, MessageCount, VerifiedQuote } from '../../checks/index.ts'
 import type { Diagram } from '../../diagram/index.ts'
 import type { Statement } from '../../record/index.ts'
 import type { Commit, CommitHash } from '../../repo/index.ts'
@@ -32,12 +32,18 @@ export const WEIGHTS = ['serious', 'minor'] as const
 export type Weight = (typeof WEIGHTS)[number]
 export type Risk = Claim & { checked?: boolean; weight?: Weight }
 
+// A risk the second look took out, with its reason and the lines that make it false: code at the change's head commit
+// or a line of a later commit's message. ken checked those lines as it checks every quote. A judge found that two
+// risks withdrawn on a sentence alone were the two the project later had to fix.
+export type Withdrawn = { risk: Risk; reason: string; proof: VerifiedQuote[] }
+
 // A risk has the shape of a statement: a claim about what could go wrong or what the owner should watch, with the
 // lines it starts from. topics names every topic the answer names: those it sends and those its claims and decisions
 // belong to. They are the topics the reader's three buttons act on. risks is null when the answer says nothing about risks, as for a question about how a part
 // works or an answer saved before ken asked for them; an empty list means the agent looked and found none. change is
 // null when the question was not about a range of commits. leftOut counts the points of the model's draft that it
-// found no line to quote for and left out; only an answer made from a draft has it.
+// found no line to quote for and left out; only an answer made from a draft has it. withdrawn holds what the second
+// look took out; only an answer it revised has it.
 export type Answer = {
 	summary: string
 	statements: Claim[]
@@ -46,4 +52,5 @@ export type Answer = {
 	diagrams: Diagram[]
 	change: Change | null
 	leftOut?: number
+	withdrawn?: Withdrawn[]
 }

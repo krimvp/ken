@@ -193,7 +193,7 @@ test('a question not about a change, and a live note about one, get no draft ste
 
 test('an answer about a change is held for one risk pass: the agent gets its risks and the names no quote follows, an added risk with a false quote is refused, and the final risks come in the order the revise call gave, with the withdrawn one gone, in the answer, the record and the cost', async () => {
 	const falseRisk = { ...CALLER_RISK, quotes: [{ ...CALL, text: '    return await fetchWithin(TIMEOUT_MS * 2)' }] }
-	const withdraw = [{ risk: 1, reason: 'Only requests slower than 100 ms fail.' }]
+	const withdraw = [{ risk: 1, reason: 'Only requests slower than 100 ms fail.', quotes: [LIMIT] }]
 	const { events, requests } = await ask([
 		DRAFT,
 		answer({ ...ABOUT_THE_CHANGE, risks: [FIRST_RISK, SECOND_RISK] }),
@@ -217,11 +217,12 @@ test('an answer about a change is held for one risk pass: the agent gets its ris
 		checked: risk === CALLER_RISK,
 	})
 	assert.deepEqual(event.answer.risks, [verified(CALLER_RISK, 2), verified(SECOND_RISK, 1)], 'in the order 3, 2')
-	assert.deepEqual(event.revision, {
-		risks: [{ kind: 'added' }, { kind: 'kept', was: 2 }],
-		decisions: 0,
-		withdrawn: [{ risk: verified(FIRST_RISK, 1), reason: withdraw[0]?.reason }],
-	})
+	assert.deepEqual(event.revision, { risks: [{ kind: 'added' }, { kind: 'kept', was: 2 }], decisions: 0 })
+	assert.deepEqual(
+		event.answer.withdrawn,
+		[{ risk: verified(FIRST_RISK, 1), reason: withdraw[0]?.reason, proof: verified(FIRST_RISK, 1).quotes }],
+		'the withdrawn risk is kept with the answer, with the line that rules it out',
+	)
 	assert.deepEqual(event.answer.change?.usedElsewhere, { followed: ['TIMEOUT_MS'], notFollowed: [] })
 	const work = (await fileRecordStore(root, gitRepository(root)).read()).current.find((entry) => entry.kind === 'work')
 	const stored = event.answer.risks?.map(({ checked: _, weight: __, ...risk }) => risk)
@@ -245,6 +246,28 @@ test('an answer about a change is held for one risk pass: the agent gets its ris
 		[replies(6).input, replies(6).output, replies(3).input, replies(3).output],
 		'the risk pass took the last three replies, and the total counts them too',
 	)
+})
+
+test('a withdrawal with no quote goes back without using an attempt, and the risk stays in the answer', async () => {
+	const { events, requests } = await ask([
+		DRAFT,
+		answer({ scope: { base, head }, risks: [FIRST_RISK, SECOND_RISK] }),
+		{ text: '' },
+		{ tool: 'ken__revise_answer', args: { withdraw: [{ risk: 1, reason: 'This is not new behaviour.' }], order: [2] } },
+		{ text: 'I keep both risks.' },
+	])
+
+	assert.match(toolResults(requests[4]).at(-1) ?? '', /did not use one of your attempts[\s\S]*risk 1 has no quote/)
+	assert.equal(
+		events.some((event) => event.kind === 'rejected'),
+		false,
+	)
+	const shown = accepted(events).answer
+	assert.deepEqual(
+		shown.risks?.map((risk) => risk.text),
+		[FIRST_RISK.text, SECOND_RISK.text],
+	)
+	assert.equal(shown.withdrawn, undefined)
 })
 
 test('an answer with eight risks is accepted, and they reach the reader in the order the risk pass gave', async () => {

@@ -331,6 +331,7 @@ function titleOf(q, { kind, item, n }) {
 	if (kind === 'element') return `Part ${item.number} of the diagram`
 	if (kind === 'decision') return `Decision ${n} of ${decisionsOf(q).length}`
 	if (kind === 'risk') return `Risk ${n} of ${q.answer.risks.length}`
+	if (kind === 'withdrawn') return `Withdrawn risk ${n} of ${q.answer.withdrawn.length}`
 	return `Statement ${n} of ${q.answer.statements.length}`
 }
 
@@ -357,9 +358,10 @@ function quotesHtml(q, quotes, prefix, opened) {
 export function quoteCardHtml(q, ui, items) {
 	const at = items.findIndex(({ key }) => key === ui.panel.key)
 	const shown = items[at]
-	const { kind, item } = shown
-	// A box only shows where a part is defined, so it has no label; an arrow is a claim and has one.
-	const means = kind === 'element' && item.label === null ? null : item.label
+	const { item } = shown
+	// A box only shows where a part is defined, so it has no label, and neither has a withdrawn risk's proof; an arrow is
+	// a claim and has one.
+	const means = item.label ?? null
 	return `<div class="panel-head"><h2>${titleOf(q, shown)}</h2>
 			<div class="panel-nav">
 				<button class="quiet-button" data-act="step" data-by="-1" data-key="prev"${at === 0 ? ' disabled' : ''}>Previous</button>
