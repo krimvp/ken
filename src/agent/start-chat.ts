@@ -19,8 +19,8 @@ export type Chat = {
 }
 
 const PLUGIN = 'ken'
-// A model that calls one tool per turn needs about twenty turns to read a pull request of a dozen files.
-const MAX_TURNS = 40
+// A pull request of seventeen files, read past its diff, needs more than 40 turns. A turn costs only when it is used.
+const MAX_TURNS = 60
 // Room for the answer, three rejected tries and the closing note. A model that ran out of turns while reading sent
 // nothing, so it is told to answer with what it has.
 const TURNS_LEFT_NOTICE = 6
