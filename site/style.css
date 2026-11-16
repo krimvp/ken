@@ -181,7 +181,7 @@ code {
 	}
 }
 
-/* The drawing of how ken works. Drawn at 440 units wide: its notes keep about 12 pixels on a 390-pixel screen, and
+/* The drawing of how ken works. Drawn at 464 units wide: its notes keep about 12 pixels on a 390-pixel screen, and
    at 32rem wide they match the body text. */
 .flow {
 	margin: var(--space-5) 0 var(--space-6);
@@ -316,6 +316,38 @@ code {
 	margin: 0 0 var(--space-4);
 }
 
+/* The rounds of the test. On a narrow screen the table scrolls inside its box, never the page. */
+.table-box {
+	margin: 0 0 var(--space-4);
+	overflow-x: auto;
+}
+
+.rounds-table {
+	border-collapse: collapse;
+	font-size: 1rem;
+	line-height: 1.4;
+}
+
+.rounds-table th,
+.rounds-table td {
+	padding: var(--space-1) var(--space-3) var(--space-1) 0;
+	border-bottom: 1px solid var(--color-border);
+	text-align: left;
+	vertical-align: top;
+}
+
+.rounds-table th {
+	font-weight: 600;
+}
+
+.rounds-table td {
+	white-space: nowrap;
+}
+
+.rounds-table td:nth-child(n + 4) {
+	white-space: normal;
+}
+
 .rounds summary {
 	color: var(--color-accent);
 	cursor: pointer;
@@ -370,5 +402,14 @@ footer p + p {
 	.labels {
 		column-gap: var(--space-3);
 		font-size: 1rem;
+	}
+
+	.rounds-table {
+		font-size: 0.875rem;
+	}
+
+	.rounds-table th,
+	.rounds-table td {
+		padding-right: var(--space-2);
 	}
 }
