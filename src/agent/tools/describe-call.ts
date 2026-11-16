@@ -33,6 +33,14 @@ const SENTENCES: Record<string, (args: Said) => string> = {
 		if (words !== undefined) return `Searched the project record for ${code(words)}`
 		return 'Read the list of entries in the project record'
 	},
+	list_sessions: () => 'Listed the saved sessions of this project',
+	read_session: (args) => {
+		const message = args.line('message')
+		const at = args.text('at')
+		const part = message !== undefined ? `, around message ${message}` : at !== undefined ? ` near ${code(at)}` : ''
+		return `Read saved session ${code(args.text('session')?.slice(0, 8))}${part}`
+	},
+	search_sessions: (args) => `Searched the saved sessions for ${code(args.text('text'))}`,
 	answer: (args) => {
 		const statements = args.count('statements')
 		const risks = args.count('risks')

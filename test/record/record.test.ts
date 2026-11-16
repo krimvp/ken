@@ -12,7 +12,9 @@ import {
 	noteFreshness,
 } from '../../src/record/index.ts'
 import { gitRepository } from '../../src/repo/index.ts'
+import { projectSessions } from '../../src/transcripts/index.ts'
 import { buildRepository } from '../fixtures/build-repository.ts'
+import { asked, claudeProjects, writeSession } from '../fixtures/claude-sessions.ts'
 
 const RETRY = 'export function retry(times: number) {\n\tfor (let i = 0; i < times; i++) {\n\t\tattempt()\n'
 const COLLABORATOR = { name: 'Bo Helper', email: 'bo@example.com' }
@@ -115,7 +117,7 @@ test('a batch with a false quote, an unknown replaces, a decision with no reason
 	assert.deepEqual((await store.read()).entries, [])
 })
 
-test('ken labels a decision recorded when its reason quotes the body of a commit message, and inferred when the message only shows the choice, the quote is the subject alone, or the reason quotes code', async () => {
+test('ken labels a decision by its strongest evidence: logged with ken decide, then the body of a commit message, then a saved session, then inferred, which a subject line or code alone stays', async () => {
 	const built = buildRepository([
 		{
 			message: 'feat: wait between attempts',
@@ -124,12 +126,24 @@ test('ken labels a decision recorded when its reason quotes the body of a commit
 		},
 	])
 	const [commit = ''] = built.hashes
+	const projects = claudeProjects()
+	writeSession(projects, built.root, 'wait-session', [
+		asked(built.root, '2026-01-01T09:00:00.000Z', 'Wait between attempts.\nThe queue drains within a second.'),
+	])
+	const sessions = projectSessions(built.root, { KEN_CLAUDE_PROJECTS: projects })
 	const code = { path: 'retry.ts', commit, text: '\t\tsleep(100)' }
 	const body = { path: null, commit, text: 'A fixed wait keeps the retry simple.' }
 	const subject = { path: null, commit, text: 'feat: wait between attempts' }
+	const session = { session: 'wait-session', text: 'The queue drains within a second.' }
+	const logged = { by: 'claude-code' }
 	const cases = [
+		{ reason: [session, body], quotes: [code], logged, label: 'recorded' },
+		{ reason: [session], quotes: [], logged, label: 'recorded' },
+		{ reason: [session, body], quotes: [code], label: 'recorded' },
 		{ reason: [body], quotes: [code], label: 'recorded' },
-		{ reason: [], quotes: [code, body], label: 'inferred' },
+		{ reason: [subject, session], quotes: [code], label: 'from-the-session' },
+		{ reason: [code, session], quotes: [code], label: 'from-the-session' },
+		{ reason: [], quotes: [code, body, session], label: 'inferred' },
 		{ reason: [subject], quotes: [code], label: 'inferred' },
 		{ reason: [code], quotes: [code], label: 'inferred' },
 	]
@@ -139,18 +153,30 @@ test('ken labels a decision recorded when its reason quotes the body of a commit
 			question: `Question ${at + 1}?`,
 			reason: { text: 'A fixed wait is simple.', quotes: each.reason },
 			quotes: each.quotes,
+			...(each.logged && { logged: each.logged }),
 		}),
 	)
-	const entries = await appended(fileRecordStore(built.root, gitRepository(built.root)), drafts)
+	const entries = await appended(fileRecordStore(built.root, gitRepository(built.root), sessions), drafts)
 
 	assert.deepEqual(
 		entries.map((entry) => entry.kind === 'decision' && entry.label),
 		cases.map((each) => each.label),
 	)
-	const [recorded] = entries
+	const recorded = entries[3]
 	assert.deepEqual(recorded?.kind === 'decision' && recorded.reason, {
 		text: 'A fixed wait is simple.',
 		quotes: [{ path: null, commit, startLine: 3, endLine: 3, text: 'A fixed wait keeps the retry simple.' }],
+	})
+	const fromSession = entries[4]
+	assert.deepEqual(fromSession?.kind === 'decision' && fromSession.reason?.quotes[1], {
+		tool: 'Claude Code',
+		session: 'wait-session',
+		message: 1,
+		by: 'user',
+		at: '2026-01-01T09:00:00.000Z',
+		startLine: 2,
+		endLine: 2,
+		text: 'The queue drains within a second.',
 	})
 })
 
@@ -211,7 +237,7 @@ test('a decision written before decisions had a reason still reads, inferred and
 	const [old] = record.current
 	assert.ok(old?.kind === 'decision', JSON.stringify(record))
 	assert.deepEqual(
-		[old.id, old.label, old.reason, old.quotes[0]?.path],
+		[old.id, old.label, old.reason, old.quotes[0] && 'path' in old.quotes[0] && old.quotes[0].path],
 		['9c1aca2a254d', 'inferred', null, 'src/retry.ts'],
 	)
 	const described = await describeEntry(repo, record, old)

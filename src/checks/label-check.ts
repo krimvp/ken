@@ -1,31 +1,44 @@
 // The plan's four labels, which let the reader tell a recorded fact from a guess. Every statement carries one, and so
-// does every arrow, message and relation in a diagram. A statement or a risk is "inferred" or "found-by-search". ken
-// labels a decision itself, from its evidence: "recorded" needs its reason quoted from a commit message, which was
-// written with the work. "from-the-session" needs saved transcripts, which arrive in slice 5.
-import type { VerifiedQuote } from './quote-check.ts'
+// does every arrow, message and relation in a diagram. ken never takes "recorded" from a writer, and takes
+// "from-the-session" only with a quote of a saved session to show for it. ken labels a decision itself, from its
+// evidence, the strongest first: logged with ken decide, then a commit message, then a saved session, then inferred.
+import type { Quote, VerifiedQuote } from './verify-quote.ts'
 
 export type Label = 'recorded' | 'from-the-session' | 'inferred' | 'found-by-search'
 
-const ALLOWED = ['inferred', 'found-by-search'] as const satisfies Label[]
+const ALLOWED = ['inferred', 'found-by-search', 'from-the-session'] as const satisfies Label[]
 
 export type LabelCheck = { kind: 'ok'; label: Label } | { kind: 'refused'; problem: string }
 
-// Models write "Found by search" as often as "found-by-search", so case and spaces do not count.
-export function checkLabel(raw: string): LabelCheck {
+// quotes are the ones the statement sends with its label. Models write "Found by search" as often as
+// "found-by-search", so case and spaces do not count.
+export function checkLabel(raw: string, quotes: Quote[]): LabelCheck {
 	const wanted = raw.trim().toLowerCase().replaceAll(' ', '-')
 	const label = ALLOWED.find((known) => known === wanted)
-	if (label) return { kind: 'ok', label }
-	if (wanted === 'recorded' || wanted === 'from-the-session') {
+	if (label === 'from-the-session' && !quotes.some((quote) => 'session' in quote)) {
 		return {
 			kind: 'refused',
-			problem: `the label "${raw}" is for a decision whose reason is quoted from a commit message, and ken sets it. Label a statement or a risk "inferred" or "found-by-search".`,
+			problem: `the label "${raw}" says the claim was read from a saved session, but none of its quotes is from one. Add the session's lines as a quote with session and text, or label it "inferred".`,
 		}
 	}
-	return { kind: 'refused', problem: `"${raw}" is not a label. Use "inferred" or "found-by-search".` }
+	if (label) return { kind: 'ok', label }
+	if (wanted === 'recorded') {
+		return {
+			kind: 'refused',
+			problem: `the label "${raw}" is for a decision written down when it was made, and ken sets it. Label a statement or a risk "inferred", "found-by-search" or "from-the-session".`,
+		}
+	}
+	return {
+		kind: 'refused',
+		problem: `"${raw}" is not a label. Use "inferred", "found-by-search" or "from-the-session".`,
+	}
 }
 
-// The quotes of the reason alone decide, not those that show what was chosen. A quote of the subject line alone does
-// not count: a subject says what the commit did, and the reason is in the body.
-export function decisionLabel(reasonQuotes: VerifiedQuote[]): 'recorded' | 'inferred' {
-	return reasonQuotes.some((quote) => quote.path === null && quote.endLine > 1) ? 'recorded' : 'inferred'
+// The quotes of the reason alone decide, not those that show what was chosen. A quote of a commit's subject line alone
+// does not count: a subject says what the commit did, and the reason is in the body.
+export function decisionLabel(reasonQuotes: VerifiedQuote[], logged: boolean): Exclude<Label, 'found-by-search'> {
+	if (logged) return 'recorded'
+	if (reasonQuotes.some((quote) => !('session' in quote) && quote.path === null && quote.endLine > 1)) return 'recorded'
+	if (reasonQuotes.some((quote) => 'session' in quote)) return 'from-the-session'
+	return 'inferred'
 }

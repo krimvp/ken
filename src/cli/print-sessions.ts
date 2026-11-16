@@ -1,16 +1,20 @@
 import { findRoot } from '../repo/index.ts'
-import { claudeCodeTranscripts, readSession, type Session, type TranscriptEntry } from '../transcripts/index.ts'
+import { projectSessions, readSession, type Session, type TranscriptEntry } from '../transcripts/index.ts'
 
 // "ken sessions" lists the sessions Claude Code saved for the project, and "ken sessions <id>" prints one, cut to a
 // size a person can read. Neither needs a model. Exit code 0 means it printed, 1 means no such session, 2 means no
-// repository.
+// repository or KEN_SESSIONS=off.
 export async function printSessions(directory: string, id: string | undefined, json: boolean): Promise<number> {
 	const found = await findRoot(directory)
 	if (found.kind !== 'ok') {
 		process.stderr.write(`${directory} is not inside a git repository.\n`)
 		return 2
 	}
-	const transcripts = claudeCodeTranscripts(found.root, process.env)
+	const transcripts = projectSessions(found.root, process.env)
+	if (transcripts === null) {
+		process.stderr.write('ken reads no saved sessions: KEN_SESSIONS is off.\n')
+		return 2
+	}
 	const write = (value: unknown, lines: string[]) =>
 		process.stdout.write(`${json ? JSON.stringify(value, null, 2) : lines.join('\n')}\n`)
 

@@ -1,14 +1,16 @@
-// The plan's rule for an answer: ken accepts it only when every quote passes checkQuote, every statement and every risk
-// carries a label this slice allows, and every diagram passes checkDiagrams. One bad quote rejects the whole answer.
+// The plan's rule for an answer: ken accepts it only when every quote passes verifyQuote, every statement and every risk
+// carries a label its quotes allow, and every diagram passes checkDiagrams. One bad quote rejects the whole answer.
 // Only then does ken read the change facts from git.
 import {
 	checkCoverage,
 	checkLabel,
-	checkQuote,
 	countMessages,
-	explainQuote,
+	gitQuotes,
 	type Quote,
+	type QuoteSources,
+	type VerifiedGitQuote,
 	type VerifiedQuote,
+	verifyQuote,
 } from '../../checks/index.ts'
 import { checkDiagrams, type DiagramDraft, diagramElements } from '../../diagram/index.ts'
 import type { Undo } from '../../record/index.ts'
@@ -46,14 +48,19 @@ export type AnswerCheck =
 	| { kind: 'accepted'; answer: Omit<Answer, 'topics'>; decisions: CheckedDecision[] }
 	| { kind: 'rejected'; problems: string[] }
 
-export async function checkAnswer(repo: Repository, draft: AnswerDraft, signal: AbortSignal): Promise<AnswerCheck> {
+export async function checkAnswer(
+	sources: QuoteSources,
+	draft: AnswerDraft,
+	signal: AbortSignal,
+): Promise<AnswerCheck> {
+	const { repo } = sources
 	const scope = draft.scope && (await resolveScope(repo, draft.scope, signal))
 	if (scope?.kind === 'refused') return { kind: 'rejected', problems: [`Scope: ${scope.problem}`] }
 	const problems: string[] = []
-	const verify = (where: string, quotes: Quote[]) => verifyQuotes(repo, where, quotes, problems, signal)
+	const verify = (where: string, quotes: Quote[]) => verifyQuotes(sources, where, quotes, problems, signal)
 
-	const statements = await checkClaims(repo, 'Statement', draft.statements, problems, signal)
-	const risks = draft.risks && (await checkClaims(repo, 'Risk', draft.risks, problems, signal))
+	const statements = await checkClaims(sources, 'Statement', draft.statements, problems, signal)
+	const risks = draft.risks && (await checkClaims(sources, 'Risk', draft.risks, problems, signal))
 	const decisions: CheckedDecision[] = []
 	for (const [index, decision] of draft.decisions.entries()) {
 		const where = `Decision ${index + 1}`
@@ -68,10 +75,11 @@ export async function checkAnswer(repo: Repository, draft: AnswerDraft, signal: 
 	const answer = { summary: draft.summary, statements, risks, diagrams }
 	if (scope === null) return { kind: 'accepted', answer: { ...answer, change: null }, decisions }
 
-	// Every quote the reader sees counts, the decisions' too: a statement need not repeat a decision's lines to cover them.
+	// Every quote of git the reader sees counts, the decisions' too: a statement need not repeat a decision's lines to
+	// cover them. A quote of a session covers no changed block and no commit message.
 	const quotes = [
-		...[...statements, ...(risks ?? [])].flatMap((claim) => claim.quotes),
-		...decisions.flatMap((decision) => [...decision.quotes, ...decision.reason.quotes]),
+		...gitQuotes([...statements, ...(risks ?? [])].flatMap((claim) => claim.quotes)),
+		...gitQuotes(decisions.flatMap((decision) => [...decision.quotes, ...decision.reason.quotes])),
 		...diagrams.flatMap((diagram) => diagramElements(diagram).flatMap((element) => element.quotes)),
 	]
 	const change = await changeOf(repo, scope, quotes, signal)
@@ -80,7 +88,7 @@ export async function checkAnswer(repo: Repository, draft: AnswerDraft, signal: 
 }
 
 async function checkClaims(
-	repo: Repository,
+	sources: QuoteSources,
 	what: 'Statement' | 'Risk',
 	drafts: ClaimDraft[],
 	problems: string[],
@@ -89,9 +97,9 @@ async function checkClaims(
 	const claims: Claim[] = []
 	for (const [index, claim] of drafts.entries()) {
 		const where = `${what} ${index + 1}`
-		const label = checkLabel(claim.label)
+		const label = checkLabel(claim.label, claim.quotes)
 		if (label.kind === 'refused') problems.push(`${where}: ${label.problem}`)
-		const quotes = await verifyQuotes(repo, where, claim.quotes, problems, signal)
+		const quotes = await verifyQuotes(sources, where, claim.quotes, problems, signal)
 		const topic = claim.topic === undefined ? {} : { topic: claim.topic }
 		if (label.kind === 'ok') claims.push({ text: claim.text, label: label.label, quotes, ...topic })
 	}
@@ -99,16 +107,16 @@ async function checkClaims(
 }
 
 async function verifyQuotes(
-	repo: Repository,
+	sources: QuoteSources,
 	where: string,
 	raw: Quote[],
 	problems: string[],
 	signal: AbortSignal,
 ): Promise<VerifiedQuote[]> {
-	const checks = await Promise.all(raw.map((quote) => checkQuote(repo, quote, signal)))
-	return checks.flatMap((check, at) => {
-		if (check.kind === 'verified') return [check.quote]
-		problems.push(`${where}, quote ${at + 1}: ${explainQuote(check, raw[at])}`)
+	const verdicts = await Promise.all(raw.map((quote) => verifyQuote(sources, quote, signal)))
+	return verdicts.flatMap((verdict, at) => {
+		if (verdict.kind === 'verified') return [verdict.quote]
+		problems.push(`${where}, quote ${at + 1}: ${verdict.problem}`)
 		return []
 	})
 }
@@ -128,7 +136,7 @@ async function resolveScope(
 async function changeOf(
 	repo: Repository,
 	scope: Scope,
-	quotes: VerifiedQuote[],
+	quotes: VerifiedGitQuote[],
 	signal: AbortSignal,
 ): Promise<{ kind: 'ok'; change: Change } | { kind: 'refused'; problem: string }> {
 	const tooLarge = { kind: 'refused', problem: 'the change is too large to read. Ask about a shorter range.' } as const

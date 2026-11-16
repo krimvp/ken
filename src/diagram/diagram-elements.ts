@@ -1,18 +1,18 @@
-import type { Label, VerifiedQuote } from '../checks/index.ts'
+import type { Label, VerifiedGitQuote } from '../checks/index.ts'
 import type { Diagram } from './diagram.ts'
 
 // label is null for a box, a participant or an entity: it only says where the thing is defined.
-export type DiagramElement = { number: number; text: string; label: Label | null; quotes: VerifiedQuote[] }
+export type DiagramElement = { number: number; text: string; label: Label | null; quotes: VerifiedGitQuote[] }
 
 // Every element of a diagram in number order, as one line of text each, for the list under the drawing.
 export function diagramElements(diagram: Diagram): DiagramElement[] {
-	const node = (each: { number: number; quotes: VerifiedQuote[] }, text: string) => ({
+	const node = (each: { number: number; quotes: VerifiedGitQuote[] }, text: string) => ({
 		number: each.number,
 		text,
 		label: null,
 		quotes: each.quotes,
 	})
-	const edge = (each: { number: number; label: Label; quotes: VerifiedQuote[] }, text: string) => ({
+	const edge = (each: { number: number; label: Label; quotes: VerifiedGitQuote[] }, text: string) => ({
 		number: each.number,
 		text,
 		label: each.label,

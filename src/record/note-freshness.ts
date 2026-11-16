@@ -1,14 +1,14 @@
 import { createHash } from 'node:crypto'
-import { checkQuote, type VerifiedQuote } from '../checks/index.ts'
+import { checkQuote, type VerifiedGitQuote } from '../checks/index.ts'
 import type { Repository } from '../repo/index.ts'
 import type { Note, Topic } from './entry.ts'
 
 export type Freshness = { kind: 'fresh' } | { kind: 'stale'; changed: string[] }
 
 // A topic's code as it is at HEAD: the hash of its quoted lines found there, and the quotes no longer found there.
-export type TopicCode = { hash: string; gone: VerifiedQuote[] }
+export type TopicCode = { hash: string; gone: VerifiedGitQuote[] }
 
-export function codeHash(quotes: VerifiedQuote[]): string {
+export function codeHash(quotes: VerifiedGitQuote[]): string {
 	const hash = createHash('sha256')
 	for (const quote of quotes) hash.update(`${quote.text}\0`)
 	return hash.digest('hex').slice(0, 16)
@@ -41,6 +41,6 @@ export async function noteFreshness(
 }
 
 // A topic quotes only files: checkEntry refuses a quote of a commit message in a topic.
-function files(quotes: VerifiedQuote[]): string[] {
+function files(quotes: VerifiedGitQuote[]): string[] {
 	return [...new Set(quotes.flatMap((quote) => quote.path ?? []))]
 }

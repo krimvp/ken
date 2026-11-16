@@ -3,7 +3,15 @@
 // and every node has an edge, every label is allowed, and every quote passes checkQuote. One problem refuses all the
 // diagrams, the same way one bad quote refuses an answer. Only new answers pass through here: ken reads a stored
 // diagram as it was accepted.
-import { checkLabel, checkQuote, explainQuote, type Label, type Quote, type VerifiedQuote } from '../checks/index.ts'
+import {
+	checkLabel,
+	type GitQuote,
+	gitQuotes,
+	type Label,
+	type Quote,
+	type VerifiedGitQuote,
+	verifyGitQuote,
+} from '../checks/index.ts'
 import type { Repository } from '../repo/index.ts'
 import type { Arrow, Diagram, DiagramDraft, DiagramKind } from './diagram.ts'
 
@@ -53,9 +61,9 @@ export async function checkDiagrams(
 
 // The draft that checks back to the same diagram, so the project record can check a stored diagram again.
 export function diagramDraft(diagram: Diagram): DiagramDraft {
-	const raw = (quotes: VerifiedQuote[]): Quote[] =>
+	const raw = (quotes: VerifiedGitQuote[]): GitQuote[] =>
 		quotes.map((quote) => ({ path: quote.path, commit: quote.commit, text: quote.text, line: quote.startLine }))
-	const node = (each: { name: string; quotes: VerifiedQuote[] }) => ({ name: each.name, quotes: raw(each.quotes) })
+	const node = (each: { name: string; quotes: VerifiedGitQuote[] }) => ({ name: each.name, quotes: raw(each.quotes) })
 	const edge = (each: Arrow) => ({
 		from: each.from,
 		to: each.to,
@@ -99,8 +107,8 @@ async function checkOne(
 		else if (trimmed.length > max) problems.push(`${field} has ${trimmed.length} characters; keep it under ${max}.`)
 		return trimmed
 	}
-	const label = (field: string, raw: string): Label => {
-		const checked = checkLabel(raw)
+	const label = (field: string, raw: string, quotes: Quote[]): Label => {
+		const checked = checkLabel(raw, quotes)
 		if (checked.kind === 'ok') return checked.label
 		problems.push(`${field}: ${checked.problem}`)
 		return 'inferred'
@@ -110,20 +118,21 @@ async function checkOne(
 		if (raw.length > DIAGRAM_BOUNDS.quotes) {
 			problems.push(`${field} has ${raw.length} quotes; keep it to ${DIAGRAM_BOUNDS.quotes}.`)
 		}
-		if (raw.some((quote) => quote.path === null)) {
-			problems.push(`${field} quotes a commit message. A diagram shows code, so give each quote the path of its file.`)
+		if (raw.some((quote) => 'session' in quote || quote.path === null)) {
+			problems.push(
+				`${field} quotes a commit message or a saved session. A diagram shows code, so give each quote the path of its file.`,
+			)
 		}
-		const checks = await Promise.all(raw.map((quote) => checkQuote(repo, quote, signal)))
-		return checks.flatMap((check, index): VerifiedQuote[] => {
-			if (check.kind === 'verified') return [check.quote]
-			const quote = raw[index]
-			problems.push(`${field}, quote ${index + 1}: ${explainQuote(check, quote)}`)
+		const verdicts = await Promise.all(gitQuotes(raw).map((quote) => verifyGitQuote(repo, quote, signal)))
+		return verdicts.flatMap((verdict, index): VerifiedGitQuote[] => {
+			if (verdict.kind === 'verified') return [verdict.quote]
+			problems.push(`${field}, quote ${index + 1}: ${verdict.problem}`)
 			return []
 		})
 	}
 
 	const title = text(`${where}: the title`, draft.title, DIAGRAM_BOUNDS.title)
-	const own = label(`${where}: the label`, draft.label)
+	const own = label(`${where}: the label`, draft.label, [])
 	for (const [kind, other] of Object.entries(LISTS)) {
 		if (kind === draft.kind) continue
 		for (const list of [other.nodes, other.edges]) {
@@ -191,7 +200,7 @@ async function checkOne(
 			from: end(field, draftEdge.from),
 			to: end(field, draftEdge.to),
 			text: text(`${field}: the text`, draftEdge.text, DIAGRAM_BOUNDS.text),
-			label: draftEdge.label === undefined ? own : label(field, draftEdge.label),
+			label: draftEdge.label === undefined ? own : label(field, draftEdge.label, draftEdge.quotes),
 			quotes: await quotes(field, draftEdge.quotes, true),
 		}
 	}

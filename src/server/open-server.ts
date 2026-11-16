@@ -54,7 +54,7 @@ export async function openServer(options: {
 	const config = readModelConfig(options.flags, options.env)
 	let model: { kind: 'ok'; chat: Chat; name: string } | ModelUnset
 	if (config.kind === 'ok') {
-		const started = await startChat({ directory: root, model: config.config, map })
+		const started = await startChat({ directory: root, model: config.config, env: options.env, map })
 		if (started.kind !== 'ok') return { kind: 'refused', message: started.message }
 		model = { kind: 'ok', chat: started.chat, name: config.config.model }
 	} else {

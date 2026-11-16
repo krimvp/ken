@@ -2,12 +2,14 @@
 // session started in with every character that is not a letter or digit turned into "-". A file is hostile input: it
 // can be huge, hold lines that do not parse, and hold secrets and other projects' paths. So ken reads at most the
 // first MAX_SESSION_BYTES of a file, counts the lines it cannot read, keeps only the first lines of tool output, never
-// names a file outside the project, and reads no further once a file shows it belongs to another project.
+// names a file outside the project, reads no further once a file shows it belongs to another project, and passes every
+// text it returns through secretHider.
 import { createReadStream } from 'node:fs'
 import { readdir, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import path from 'node:path'
 import { createInterface } from 'node:readline'
+import { secretHider } from './hide-secrets.ts'
 import type { Session, SessionId, SessionList, SessionRead, TranscriptEntry, Transcripts } from './transcripts.ts'
 
 const MAX_SESSIONS = 100
@@ -30,6 +32,7 @@ export function claudeCodeTranscripts(root: string, env: Record<string, string |
 	const projects =
 		env.KEN_CLAUDE_PROJECTS ?? path.join(env.CLAUDE_CONFIG_DIR ?? path.join(homedir(), '.claude'), 'projects')
 	const where = path.join(projects, root.replaceAll(/[^A-Za-z0-9]/g, '-'))
+	const hide = secretHider(env)
 
 	async function sessions(signal?: AbortSignal): Promise<SessionList> {
 		let names: string[]
@@ -64,7 +67,7 @@ export function claudeCodeTranscripts(root: string, env: Record<string, string |
 		if (!info?.isFile()) return null
 		const input = createReadStream(file, { end: MAX_SESSION_BYTES - 1, ...(signal && { signal }) })
 		try {
-			const read = await scan(root, input)
+			const read = await scan(root, input, hide)
 			if (read === null) return null
 			const times = read.entries.filter((entry) => entry.kind !== 'tool').map((entry) => entry.at)
 			const facts: Session = {
@@ -90,7 +93,7 @@ function sessionId(raw: string): SessionId | null {
 
 // Null when the file's first working directory is not the project's root or a folder inside it, or when it names
 // none, since then nothing shows that the session belongs to this project.
-async function scan(root: string, input: NodeJS.ReadableStream) {
+async function scan(root: string, input: NodeJS.ReadableStream, hide: (text: string) => string) {
 	const entries: TranscriptEntry[] = []
 	const calls = new Map<string, Tool>()
 	let skipped = 0
@@ -119,7 +122,7 @@ async function scan(root: string, input: NodeJS.ReadableStream) {
 		for (const part of parts) {
 			if (!isObject(part)) continue
 			if (part.type === 'text' && typeof part.text === 'string' && person) {
-				const said = line.type === 'user' ? withoutReminders(part.text) : part.text.trim()
+				const said = hide(line.type === 'user' ? withoutReminders(part.text) : part.text.trim())
 				if (said === '') continue
 				messages++
 				entries.push({ kind: line.type === 'user' ? 'user' : 'agent', message: messages, at, text: said, cut: 0 })
@@ -129,7 +132,7 @@ async function scan(root: string, input: NodeJS.ReadableStream) {
 					kind: 'tool',
 					at,
 					name: part.name,
-					target: targetOf(part.input, root),
+					target: targetOf(part.input, root, hide),
 					output: [],
 					more: 0,
 				}
@@ -138,7 +141,7 @@ async function scan(root: string, input: NodeJS.ReadableStream) {
 			}
 			if (part.type === 'tool_result' && typeof part.tool_use_id === 'string') {
 				const tool = calls.get(part.tool_use_id)
-				if (tool) Object.assign(tool, firstLines(outputOf(part.content)))
+				if (tool) Object.assign(tool, firstLines(hide(outputOf(part.content))))
 			}
 		}
 	}
@@ -156,14 +159,14 @@ function withoutReminders(text: string): string {
 	return text.replaceAll(/<system-reminder>[\s\S]*?<\/system-reminder>/g, '').trim()
 }
 
-function targetOf(input: unknown, root: string): string | null {
+function targetOf(input: unknown, root: string, hide: (text: string) => string): string | null {
 	if (!isObject(input)) return null
 	for (const key of TARGETS) {
 		const value = input[key]
 		if (typeof value !== 'string' || value.trim() === '') continue
 		if (PATHS.has(key) && path.isAbsolute(value))
 			return inside(root, value) ? path.relative(root, value) || '.' : OUTSIDE
-		return cutLine(value.split('\n')[0] ?? '')
+		return cutLine(hide(value).split('\n')[0] ?? '')
 	}
 	return null
 }

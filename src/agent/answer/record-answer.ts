@@ -1,7 +1,7 @@
 // What an accepted answer adds to the project record: the piece of work it explains, with its statements and risks,
 // the decisions it names, and its topics with a note each. Every entry goes through the record's own check first, and a
 // refused entry rejects the whole answer, the same way a bad quote does. The record labels each decision from its
-// reason's quotes.
+// reason's quotes, and checks each quote of a session again in the session itself.
 import type { Quote, VerifiedQuote } from '../../checks/index.ts'
 import { diagramDraft } from '../../diagram/index.ts'
 import type { EntryDraft, EntryId, RecordEntry, RecordStore, Statement } from '../../record/index.ts'
@@ -88,6 +88,7 @@ export async function recordAnswer(
 	return { kind: 'recorded', entries, kept: args.work ? kept : null }
 }
 
-function raw(quote: VerifiedQuote) {
+function raw(quote: VerifiedQuote): Quote {
+	if ('session' in quote) return { session: quote.session, text: quote.text }
 	return { path: quote.path, commit: quote.commit, text: quote.text, line: quote.startLine }
 }

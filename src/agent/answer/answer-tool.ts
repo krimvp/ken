@@ -3,11 +3,10 @@
 // instead of trying forever. A problem of form, which the model fixes without reading code again, comes back first and
 // does not use an attempt.
 import type { JsonObject, JsonValue, Tool } from 'aigent/plugin'
-import { decisionLabel, type Quote } from '../../checks/index.ts'
+import { decisionLabel, type Label, type Quote, type QuoteSources } from '../../checks/index.ts'
 import { CARDINALITIES, DIAGRAM_BOUNDS, DIAGRAM_KINDS, type DiagramDraft } from '../../diagram/index.ts'
 import type { UnderstandingMap } from '../../map/index.ts'
 import { type RecordEntry, type RecordStore, sameName, UNDO } from '../../record/index.ts'
-import type { Repository } from '../../repo/index.ts'
 import type { ChatEvent } from '../chat-event.ts'
 import { hunkHeader } from '../tools/diff-tool.ts'
 import { readArgs, refuse, reply } from '../tools/tool-edge.ts'
@@ -27,7 +26,7 @@ export type AnswerRound = { rejections: number; answer: Answer | null; emit: (ev
 
 // map is the reader's understanding map. An accepted answer marks the topics it names as met there.
 export function answerTool(
-	repo: Repository,
+	sources: QuoteSources,
 	store: RecordStore,
 	map: UnderstandingMap | null,
 	round: () => AnswerRound,
@@ -45,7 +44,7 @@ export function answerTool(
 			if (current.rejections >= MAX_REJECTIONS) return refuse('No attempts are left for this question. Stop now.')
 			const form = formProblems(args)
 			if (form.length > 0) return sentBack(form)
-			const settled = await settle(repo, store, args, ctx.signal)
+			const settled = await settle(sources, store, args, ctx.signal)
 			if (settled.kind === 'form') return sentBack(settled.problems)
 			if (settled.kind === 'accepted') {
 				await map?.learn('asked', settled.answer.topics, new Date(), ctx.signal)
@@ -84,7 +83,7 @@ function formProblems(args: JsonObject): string[] {
 }
 
 async function settle(
-	repo: Repository,
+	sources: QuoteSources,
 	store: RecordStore,
 	raw: JsonObject,
 	signal: AbortSignal,
@@ -99,8 +98,11 @@ async function settle(
 > {
 	const read = readJsonText(ANSWER_SCHEMA, raw)
 	if (read.kind === 'refused') return { kind: 'rejected', problems: read.problems }
-	const draft = draftOf(read.args)
-	const args = recordArgsOf(read.args)
+	const sourceProblems: string[] = []
+	const quote = (each: JsonObject) => quoteOf(each, sourceProblems)
+	const draft = draftOf(read.args, quote)
+	const args = recordArgsOf(read.args, quote)
+	if (sourceProblems.length > 0) return { kind: 'form', problems: sourceProblems }
 	const named = [...draft.statements, ...(draft.risks ?? []), ...draft.decisions].flatMap((each) => each.topic ?? [])
 	const known = [...(await topicNames(store)), ...args.topics.map((topic) => topic.name)]
 	const unknown = [...new Set(named.filter((name) => !known.some((other) => sameName(other, name))))]
@@ -111,7 +113,7 @@ async function settle(
 		)
 		return { kind: 'form', problems }
 	}
-	const check = await checkAnswer(repo, draft, signal)
+	const check = await checkAnswer(sources, draft, signal)
 	if (check.kind === 'rejected') return check
 	const recorded = await recordAnswer(store, check.answer, check.decisions, args, signal)
 	if (recorded.kind === 'refused') return { kind: 'rejected', problems: recorded.problems }
@@ -142,9 +144,11 @@ function confirmation(
 	const claims = [...answer.statements, ...(answer.risks ?? [])]
 	const quotes = claims.reduce((sum, claim) => sum + claim.quotes.length, 0)
 	const risks = answer.risks === null ? '' : `${answer.risks.length} risks, `
-	const recordedCount = decisions.filter((decision) => decisionLabel(decision.reason.quotes) === 'recorded').length
+	const labels = decisions.map((decision) => decisionLabel(decision.reason.quotes, false))
+	const labelled = (label: Label) => labels.filter((each) => each === label).length
+	const counts = `${labelled('recorded')} recorded, ${labelled('from-the-session')} from the session, ${labelled('inferred')} inferred`
 	const lines = [
-		`Answer accepted: ${answer.statements.length} statements, ${risks}${decisions.length} decisions (${recordedCount} recorded, ${decisions.length - recordedCount} inferred), ${answer.diagrams.length} diagrams, ${quotes} quotes in the statements and risks. ken shows it to the reader.`,
+		`Answer accepted: ${answer.statements.length} statements, ${risks}${decisions.length} decisions (${counts}), ${answer.diagrams.length} diagrams, ${quotes} quotes in the statements and risks. ken shows it to the reader.`,
 	]
 	if (recorded.kept) {
 		lines.push(`Piece of work ${recorded.kept} already explains this range, so ken kept it and wrote no new one.`)
@@ -191,20 +195,22 @@ function rejection(problems: string[], attempt: number): string {
 	return [head, ...problems.map((problem) => `- ${problem}`), tail].join('\n')
 }
 
-function draftOf(args: JsonObject): AnswerDraft {
+type ReadQuote = (raw: JsonObject) => Quote
+
+function draftOf(args: JsonObject, quoteOf: ReadQuote): AnswerDraft {
 	const read = readArgs(args, 'answer')
 	const scope = args.scope === undefined ? null : readArgs(objectOf(args.scope), 'answer scope')
 	return {
 		summary: read.text('summary'),
 		scope: scope && { base: scope.text('base'), head: scope.text('head') },
-		statements: listOf(args.statements).map((raw) => claimOf(raw, 'answer statement')),
-		risks: args.risks === undefined ? null : listOf(args.risks).map((raw) => claimOf(raw, 'answer risk')),
-		decisions: optionalList(args.decisions).map(decisionOf),
-		diagrams: optionalList(args.diagrams).map(diagramDraftOf),
+		statements: listOf(args.statements).map((raw) => claimOf(raw, 'answer statement', quoteOf)),
+		risks: args.risks === undefined ? null : listOf(args.risks).map((raw) => claimOf(raw, 'answer risk', quoteOf)),
+		decisions: optionalList(args.decisions).map((raw) => decisionOf(raw, quoteOf)),
+		diagrams: optionalList(args.diagrams).map((raw) => diagramDraftOf(raw, quoteOf)),
 	}
 }
 
-function decisionOf(raw: JsonObject) {
+function decisionOf(raw: JsonObject, quoteOf: ReadQuote) {
 	const decision = readArgs(raw, 'answer decision')
 	const undo = UNDO.find((known) => known === decision.text('undo'))
 	if (!undo) throw new Error('answer: undo is not in UNDO, so its schema and its reader disagree')
@@ -227,7 +233,7 @@ function topicOf(topic: string | undefined): { topic?: string } {
 	return topic === undefined ? {} : { topic }
 }
 
-function claimOf(raw: JsonObject, what: string) {
+function claimOf(raw: JsonObject, what: string, quoteOf: ReadQuote) {
 	const claim = readArgs(raw, what)
 	return {
 		text: claim.text('text'),
@@ -237,7 +243,7 @@ function claimOf(raw: JsonObject, what: string) {
 	}
 }
 
-function diagramDraftOf(raw: JsonObject): DiagramDraft {
+function diagramDraftOf(raw: JsonObject, quoteOf: ReadQuote): DiagramDraft {
 	const diagram = readArgs(raw, 'answer diagram')
 	const kind = DIAGRAM_KINDS.find((known) => known === diagram.text('kind'))
 	if (!kind) throw new Error('answer: a diagram kind is not in DIAGRAM_KINDS, so its schema and its reader disagree')
@@ -282,7 +288,7 @@ function diagramDraftOf(raw: JsonObject): DiagramDraft {
 	}
 }
 
-function recordArgsOf(args: JsonObject): RecordArgs {
+function recordArgsOf(args: JsonObject, quoteOf: ReadQuote): RecordArgs {
 	const work = args.work === undefined ? null : { title: readArgs(objectOf(args.work), 'answer work').text('title') }
 	return {
 		work,
@@ -298,13 +304,32 @@ function recordArgsOf(args: JsonObject): RecordArgs {
 	}
 }
 
-function quoteOf(raw: JsonObject): Quote {
+// A quote names one source: a session, or a commit with a path for a file and none for the commit's message. A quote
+// that names both, or neither, adds a problem, and the answer goes back before ken checks any quote.
+function quoteOf(raw: JsonObject, problems: string[]): Quote {
 	const quote = readArgs(raw, 'answer quote')
+	const text = quote.text('text')
+	const session = quote.optionalText('session')
+	const commit = quote.optionalText('commit')
+	const first = JSON.stringify(text.trim().split('\n')[0]?.slice(0, 60) ?? '')
+	if (session !== undefined) {
+		if (commit !== undefined || quote.optionalText('path') !== undefined) {
+			problems.push(
+				`The quote ${first} names a session and a commit. A quote has one source: leave out path and commit to quote a session.`,
+			)
+		}
+		return { session, text }
+	}
+	if (commit === undefined) {
+		problems.push(
+			`The quote ${first} names no source. Give commit, and path for a file, or give session to quote a saved session.`,
+		)
+	}
 	const line = quote.optionalLine('line')
 	return {
 		path: quote.optionalText('path') ?? null,
-		commit: quote.text('commit'),
-		text: quote.text('text'),
+		commit: commit ?? '',
+		text,
 		...(line === undefined ? {} : { line }),
 	}
 }
@@ -344,14 +369,18 @@ const QUOTE_SCHEMA = {
 			description: "The path from the repository root. Leave it out to quote the commit's message instead.",
 		},
 		commit: { type: 'string', description: 'The commit you read the lines at, or whose message you quote' },
+		session: {
+			type: 'string',
+			description: 'To quote a saved session instead: its id from list_sessions. Then leave out path and commit.',
+		},
 		text: {
 			type: 'string',
 			description:
-				'The exact whole lines, copied from read_file, diff or log output, without line numbers or + and - signs',
+				'The exact whole lines, copied from read_file, diff, log or read_session output, without line numbers or + and - signs',
 		},
-		line: { type: 'integer', minimum: 1, description: 'The number of the first quoted line' },
+		line: { type: 'integer', minimum: 1, description: 'The number of the first quoted line of a file' },
 	},
-	required: ['commit', 'text'],
+	required: ['text'],
 	additionalProperties: false,
 } as const
 const QUOTE = withoutDescriptions(QUOTE_SCHEMA)
@@ -369,7 +398,7 @@ const CLAIM_SCHEMA = {
 		label: {
 			type: 'string',
 			description:
-				'"inferred" for what you worked out from the code or the diff, every reason why included. "found-by-search" for a relation between pieces of code, such as "this calls that", that you found by searching and did not prove.',
+				'"inferred" for what you worked out from the code or the diff, every reason why included. "found-by-search" for a relation between pieces of code, such as "this calls that", that you found by searching and did not prove. "from-the-session" for what you read in a saved session and quote from it.',
 		},
 		quotes: { type: 'array', minItems: 1, items: QUOTE_SCHEMA },
 		topic: TOPIC_NAME,
@@ -390,7 +419,7 @@ const DECISION_SCHEMA = {
 		reason_quotes: {
 			type: 'array',
 			description:
-				'Only lines that say why the option was chosen: lines of a commit message, a comment or a doc that state the reason, not lines that say what was done. An empty list when nothing you read says why. ken labels a decision whose reason quotes the body of a commit message "recorded", and any other "inferred".',
+				'Only lines that say why the option was chosen: lines of a commit message, a comment, a doc or a saved session that state the reason, not lines that say what was done. An empty list when nothing you read says why. ken labels a decision whose reason quotes the body of a commit message "recorded", one whose reason quotes a session "from-the-session", and any other "inferred".',
 			items: QUOTE,
 		},
 		rejected: {

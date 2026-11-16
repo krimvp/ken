@@ -1,8 +1,18 @@
 // The gate in front of the project record. A writer hands in a draft, and this turns it into an entry or says what to
-// fix: every text is present and short enough, every quote passes checkQuote and is stored as verified, commits and
+// fix: every text is present and short enough, every quote passes verifyQuote and is stored as verified, commits and
 // authors are read from git and never taken from the writer, and every id an entry names is in the record. ken sets
 // every decision's label: the writer has no say.
-import { checkQuote, decisionLabel, explainQuote, type Label, type Quote, type VerifiedQuote } from '../checks/index.ts'
+import {
+	decisionLabel,
+	gitQuotes,
+	type Label,
+	type Quote,
+	type QuoteSources,
+	type VerifiedGitQuote,
+	type VerifiedQuote,
+	verifyGitQuote,
+	verifyQuote,
+} from '../checks/index.ts'
 import { checkDiagrams, type DiagramDraft } from '../diagram/index.ts'
 import { type CommitHash, type Repository, resolveRange } from '../repo/index.ts'
 import {
@@ -70,7 +80,7 @@ const MAX = {
 // known is every entry in the record plus those an append will write before this one; current is the newest entry of
 // each chain among them.
 export async function checkEntry(
-	repo: Repository,
+	sources: QuoteSources,
 	record: { known: RecordEntry[]; current: RecordEntry[] },
 	draft: EntryDraft,
 	signal?: AbortSignal,
@@ -82,14 +92,17 @@ export async function checkEntry(
 		else if (trimmed.length > max) problems.push(`${field} has ${trimmed.length} characters; keep it under ${max}.`)
 		return trimmed
 	}
-	const quotes = async (field: string, raw: Quote[], needed = true) => {
+	const { repo } = sources
+	const counted = (field: string, raw: Quote[], needed: boolean) => {
 		if (needed && raw.length === 0) problems.push(`${field} needs at least one quote: the lines it rests on.`)
 		if (raw.length > MAX.quotes) problems.push(`${field} has ${raw.length} quotes; keep it to ${MAX.quotes}.`)
-		const checks = await Promise.all(raw.map((quote) => checkQuote(repo, quote, signal)))
-		return checks.flatMap((check, index): VerifiedQuote[] => {
-			if (check.kind === 'verified') return [check.quote]
-			const quote = raw[index]
-			problems.push(`${field}, quote ${index + 1}: ${explainQuote(check, quote)}`)
+	}
+	const quotes = async (field: string, raw: Quote[], needed = true) => {
+		counted(field, raw, needed)
+		const verdicts = await Promise.all(raw.map((quote) => verifyQuote(sources, quote, signal)))
+		return verdicts.flatMap((verdict, index): VerifiedQuote[] => {
+			if (verdict.kind === 'verified') return [verdict.quote]
+			problems.push(`${field}, quote ${index + 1}: ${verdict.problem}`)
 			return []
 		})
 	}
@@ -164,7 +177,7 @@ export async function checkEntry(
 				// An unknown undo is refused above, so this entry is never written.
 				undo: undo ?? 'hard',
 				needsOwner: draft.needsOwner,
-				label: logged ? 'recorded' : decisionLabel(reasonQuotes),
+				label: decisionLabel(reasonQuotes, logged !== undefined),
 				...(logged && { logged }),
 				// A decision logged as it is made often comes before the code it is about, so it may quote nothing.
 				quotes: await quotes('the decision', draft.quotes, !logged),
@@ -174,15 +187,23 @@ export async function checkEntry(
 			break
 		}
 		case 'topic': {
-			// A note goes stale when its topic's lines change at HEAD, and a commit message never changes, so a topic quotes
-			// files only.
-			if (draft.quotes.some((quote) => quote.path === null)) {
-				problems.push('the topic quotes a commit message. A topic rests on lines of files: give each quote its path.')
+			// A note goes stale when its topic's lines change at HEAD, and a commit message or a session never changes, so
+			// a topic quotes files only.
+			if (draft.quotes.some((quote) => 'session' in quote || quote.path === null)) {
+				problems.push(
+					'the topic quotes a commit message or a saved session. A topic rests on lines of files: give each quote its path.',
+				)
 			}
+			counted('the topic', draft.quotes, true)
+			const verdicts = await Promise.all(gitQuotes(draft.quotes).map((quote) => verifyGitQuote(repo, quote, signal)))
 			const topic: Topic = {
 				kind: 'topic',
 				name: text('name', draft.name, MAX.name),
-				quotes: await quotes('the topic', draft.quotes),
+				quotes: verdicts.flatMap((verdict, index): VerifiedGitQuote[] => {
+					if (verdict.kind === 'verified') return [verdict.quote]
+					problems.push(`the topic, quote ${index + 1}: ${verdict.problem}`)
+					return []
+				}),
 			}
 			const id = entryId(topic, replaces)
 			const same = record.current.find(

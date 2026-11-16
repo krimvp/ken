@@ -5,6 +5,7 @@
 import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import type { Repository } from '../repo/index.ts'
+import type { Transcripts } from '../transcripts/index.ts'
 import { checkEntry, type EntryDraft } from './check-entry.ts'
 import { contentId, type Entry, entryId, type Kind, type RecordEntry } from './entry.ts'
 
@@ -38,8 +39,11 @@ export type RecordStore = {
 	): Promise<{ kind: 'appended'; entries: { entry: RecordEntry; written: boolean }[] } | Refusal>
 }
 
-export function fileRecordStore(root: string, repo: Repository): RecordStore {
+// sessions is where the gate checks a quote of a saved session. A store that never takes one, such as one that only
+// reads or ken decide's, has none.
+export function fileRecordStore(root: string, repo: Repository, sessions: Transcripts | null = null): RecordStore {
 	const directory = path.join(root, '.ken', 'record')
+	const sources = { repo, sessions }
 
 	async function read(): Promise<RecordRead> {
 		const entries: RecordEntry[] = []
@@ -63,7 +67,7 @@ export function fileRecordStore(root: string, repo: Repository): RecordStore {
 
 	async function check(draft: EntryDraft, pending: RecordEntry[] = [], signal?: AbortSignal) {
 		const known = [...(await read()).entries, ...pending]
-		const checked = await checkEntry(repo, { known, current: currentOf(known) }, draft, signal)
+		const checked = await checkEntry(sources, { known, current: currentOf(known) }, draft, signal)
 		if (checked.kind === 'refused') return checked
 		return { kind: 'ok', entry: stored(checked.entry, checked.replaces) } as const
 	}
@@ -73,7 +77,7 @@ export function fileRecordStore(root: string, repo: Repository): RecordStore {
 		const entries: { entry: RecordEntry; written: boolean }[] = []
 		const problems: string[] = []
 		for (const [index, draft] of drafts.entries()) {
-			const checked = await checkEntry(repo, { known, current: currentOf(known) }, draft, signal)
+			const checked = await checkEntry(sources, { known, current: currentOf(known) }, draft, signal)
 			if (checked.kind === 'refused') {
 				problems.push(...checked.problems.map((problem) => `${draft.kind} ${index + 1}: ${problem}`))
 				continue

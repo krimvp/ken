@@ -9,7 +9,7 @@ import {
 	type TooLarge,
 	type Unrelated,
 } from '../repo/index.ts'
-import type { VerifiedQuote } from './quote-check.ts'
+import type { VerifiedGitQuote } from './quote-check.ts'
 
 export type ChangedHunk = { path: string; oldPath: string; hunk: Hunk }
 
@@ -24,7 +24,7 @@ export type Coverage =
 export async function checkCoverage(
 	repo: Repository,
 	scope: { base: string; head: string },
-	quotes: VerifiedQuote[],
+	quotes: VerifiedGitQuote[],
 	signal?: AbortSignal,
 ): Promise<Coverage> {
 	const resolved = await resolveRange(repo, scope, signal)

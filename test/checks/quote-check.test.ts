@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { checkQuote, type Quote } from '../../src/checks/index.ts'
+import { checkQuote, type GitQuote } from '../../src/checks/index.ts'
 import { gitRepository } from '../../src/repo/index.ts'
 import { buildRepository } from '../fixtures/build-repository.ts'
 
@@ -36,7 +36,7 @@ const { root, hashes } = buildRepository([
 const repo = gitRepository(root)
 const [start = '', later = ''] = hashes
 
-const cases: { name: string; quote: Quote; expected: unknown }[] = [
+const cases: { name: string; quote: GitQuote; expected: unknown }[] = [
 	{
 		name: 'a true quote is found at its lines, and keeps the text as it stands in the file',
 		quote: {

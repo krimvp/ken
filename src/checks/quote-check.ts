@@ -11,10 +11,11 @@ import {
 	type TooLarge,
 } from '../repo/index.ts'
 
-// path is null for a quote of the commit's message rather than of a file. Its lines count from the subject, line 1.
-export type Quote = { path: string | null; commit: string; text: string; line?: number }
+// A quote of something git holds. path is null for a quote of the commit's message rather than of a file. Its lines
+// count from the subject, line 1.
+export type GitQuote = { path: string | null; commit: string; text: string; line?: number }
 
-export type VerifiedQuote = {
+export type VerifiedGitQuote = {
 	path: string | null
 	commit: CommitHash
 	startLine: number
@@ -24,7 +25,7 @@ export type VerifiedQuote = {
 
 // alsoAt holds the first line of every other place the same text appears, so a caller can say which one it meant.
 export type QuoteCheck =
-	| { kind: 'verified'; quote: VerifiedQuote; alsoAt: number[] }
+	| { kind: 'verified'; quote: VerifiedGitQuote; alsoAt: number[] }
 	| { kind: 'not-found'; path: string | null; commit: CommitHash; closest: { line: number; text: string }[] }
 	| { kind: 'empty' }
 	| Refused
@@ -34,7 +35,7 @@ export type QuoteCheck =
 
 const MAX_CLOSEST = 3
 
-export async function checkQuote(repo: Repository, quote: Quote, signal?: AbortSignal): Promise<QuoteCheck> {
+export async function checkQuote(repo: Repository, quote: GitQuote, signal?: AbortSignal): Promise<QuoteCheck> {
 	if (!/[\p{L}\p{N}]/u.test(quote.text)) return { kind: 'empty' }
 	const path = quote.path === null ? null : parsePath(quote.path)
 	if (path !== null && path.kind !== 'ok') return path

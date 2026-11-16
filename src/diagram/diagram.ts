@@ -1,7 +1,7 @@
 // A diagram is checked data, never diagram syntax written by a model. The model sends boxes and arrows, ken checks
 // every quote they rest on with checkQuote, and ken writes the Mermaid text itself. So a diagram always draws, and it
 // cannot show a call, a write or a link that the quoted code does not show.
-import type { Label, Quote, VerifiedQuote } from '../checks/index.ts'
+import type { Label, Quote, VerifiedGitQuote } from '../checks/index.ts'
 
 export const DIAGRAM_KINDS = ['component', 'sequence', 'entity-relationship'] as const
 export type DiagramKind = (typeof DIAGRAM_KINDS)[number]
@@ -13,8 +13,8 @@ export type Cardinality = (typeof CARDINALITIES)[number]
 // ken numbers the elements of a diagram in one run: its boxes, participants or entities first, then its arrows,
 // messages or relations, each in the order the model sent them. The terminal and the page list them by number.
 // A node may carry quotes that show where it is defined. An edge is a claim and carries at least one.
-type Node = { number: number; name: string; quotes: VerifiedQuote[] }
-type Edge = { number: number; from: string; to: string; text: string; label: Label; quotes: VerifiedQuote[] }
+type Node = { number: number; name: string; quotes: VerifiedGitQuote[] }
+type Edge = { number: number; from: string; to: string; text: string; label: Label; quotes: VerifiedGitQuote[] }
 
 export type Box = Node & { group: string | null }
 export type Arrow = Edge

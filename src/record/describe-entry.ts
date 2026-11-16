@@ -116,15 +116,23 @@ export async function describeEntry(
 function decisionMark(decision: Decision): string {
 	const by = decision.logged?.by
 	if (decision.logged) return by ? `recorded, logged by ${by}` : 'recorded, logged with ken decide'
-	return decision.label === 'recorded' ? 'recorded from a commit message' : decision.label
+	if (decision.label === 'recorded') return 'recorded from a commit message'
+	return decision.label === 'from-the-session' ? 'from the session' : decision.label
 }
 
 function quoted(quote: VerifiedQuote): string[] {
 	const span =
 		quote.startLine === quote.endLine ? `line ${quote.startLine}` : `lines ${quote.startLine}-${quote.endLine}`
 	const rows = quote.text.split('\n').map((text, offset) => `${String(quote.startLine + offset).padStart(6)}\t${text}`)
-	const source = quote.path === null ? `the message of ${quote.commit}` : `${quote.path} at ${quote.commit}`
-	return [`  quote ${source}, ${span}:`, ...rows]
+	return [`  quote ${sourceOf(quote)}, ${span}:`, ...rows]
+}
+
+function sourceOf(quote: VerifiedQuote): string {
+	if ('session' in quote) {
+		const who = quote.by === 'user' ? 'the user' : 'the agent'
+		return `session ${quote.session}, message ${quote.message} by ${who} at ${quote.at}`
+	}
+	return quote.path === null ? `the message of ${quote.commit}` : `${quote.path} at ${quote.commit}`
 }
 
 function short(commit: string): string {

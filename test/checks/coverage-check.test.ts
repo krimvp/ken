@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { checkCoverage, checkQuote, type Quote, type VerifiedQuote } from '../../src/checks/index.ts'
+import { checkCoverage, checkQuote, type GitQuote, type VerifiedGitQuote } from '../../src/checks/index.ts'
 import { gitRepository } from '../../src/repo/index.ts'
 import { buildRepository } from '../fixtures/build-repository.ts'
 
@@ -41,7 +41,7 @@ const { root } = buildRepository([
 ])
 const repo = gitRepository(root)
 
-async function verified(quote: Quote): Promise<VerifiedQuote> {
+async function verified(quote: GitQuote): Promise<VerifiedGitQuote> {
 	const result = await checkQuote(repo, quote)
 	return result.kind === 'verified' ? result.quote : assert.fail(`fixture quote not verified: ${result.kind}`)
 }

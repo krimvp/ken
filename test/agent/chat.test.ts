@@ -41,6 +41,7 @@ async function ask(script: Turn[], directory = path.join(root, 'src')) {
 	const started = await startChat({
 		directory,
 		model: { model: 'scripted', baseUrl: model.baseUrl, apiKeyEnv: KEY_ENV },
+		env: {},
 	})
 	if (started.kind !== 'ok') throw new Error(started.message)
 	const events: ChatEvent[] = []

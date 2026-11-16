@@ -24,6 +24,7 @@ async function results(calls: Turn[]): Promise<string[]> {
 	const started = await startChat({
 		directory: root,
 		model: { model: 'scripted', baseUrl: model.baseUrl, apiKeyEnv: KEY_ENV },
+		env: {},
 	})
 	if (started.kind !== 'ok') throw new Error(started.message)
 	for await (const _event of started.chat.ask('What was the last pull request?')) {

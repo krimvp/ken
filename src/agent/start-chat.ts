@@ -3,6 +3,7 @@ import type { Tool } from 'aigent/plugin'
 import type { UnderstandingMap } from '../map/index.ts'
 import { fileRecordStore } from '../record/index.ts'
 import { findRoot, gitRepository } from '../repo/index.ts'
+import { projectSessions } from '../transcripts/index.ts'
 import { type AnswerRound, answerTool, MAX_REJECTIONS } from './answer/answer-tool.ts'
 import type { ChatEvent } from './chat-event.ts'
 import type { ModelConfig } from './model-config.ts'
@@ -12,6 +13,7 @@ import { describeCall } from './tools/describe-call.ts'
 import { diffTool } from './tools/diff-tool.ts'
 import { explorationTools } from './tools/exploration-tools.ts'
 import { recordIndex, recordTool } from './tools/record-tool.ts'
+import { sessionTools } from './tools/session-tools.ts'
 
 export type Chat = {
 	root: string
@@ -31,9 +33,11 @@ const TURNS_LEFT_NOTICE = 6
 const MAX_TOOL_RESULT_CHARS = 64_000
 
 // map is the reader's understanding map. A chat run by a script, such as "ken ask --json", has no reader and no map.
+// env decides which saved sessions the agent may read (see projectSessions) and which values secretHider hides.
 export async function startChat(options: {
 	directory: string
 	model: ModelConfig
+	env: Record<string, string | undefined>
 	map?: UnderstandingMap
 }): Promise<{ kind: 'ok'; chat: Chat } | { kind: 'no-repository'; message: string }> {
 	const found = await findRoot(options.directory)
@@ -41,7 +45,8 @@ export async function startChat(options: {
 		return { kind: 'no-repository', message: `${options.directory} is not inside a git repository.` }
 	}
 	const repo = gitRepository(found.root)
-	const store = fileRecordStore(found.root, repo)
+	const sessions = projectSessions(found.root, options.env)
+	const store = fileRecordStore(found.root, repo, sessions)
 	let round: AnswerRound = { rejections: 0, answer: null, emit: () => {} }
 	let turnsEnded = 0
 	const withTurnsLeft = (tool: Tool): Tool => ({
@@ -61,12 +66,13 @@ export async function startChat(options: {
 		plugins: [
 			{
 				name: PLUGIN,
-				description: "Reads the project's files and git history, and checks answers against them.",
+				description: "Reads the project's files, git history and saved sessions, and checks answers against them.",
 				tools: [
 					...explorationTools(repo),
 					diffTool(repo),
 					recordTool(store, repo),
-					answerTool(repo, store, options.map ?? null, () => round),
+					...sessionTools(sessions),
+					answerTool({ repo, sessions }, store, options.map ?? null, () => round),
 				].map(withTurnsLeft),
 			},
 		],

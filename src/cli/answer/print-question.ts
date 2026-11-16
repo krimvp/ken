@@ -75,6 +75,17 @@ export function formatAnswer(answer: Answer, recorded: RecordEntry[], paint: Pai
 	if (answer.risks?.length)
 		lines.push(paint('bold', `Risks (${answer.risks.length}):`), ...claims(answer.risks, paint), '')
 	lines.push(paint('bold', `Statements (${answer.statements.length}):`), ...claims(answer.statements, paint))
+	const fromSessions = [
+		...[...answer.statements, ...(answer.risks ?? [])].flatMap((claim) => claim.quotes),
+		...decisions.flatMap((d) => [...(d.reason?.quotes ?? []), ...d.quotes]),
+	].filter((quote) => 'session' in quote).length
+	if (fromSessions > 0) {
+		lines.push(
+			'',
+			paint('bold', `Quotes from saved sessions: ${fromSessions}.`),
+			'  ken found these lines in the saved session. It did not check that they give the true reason.',
+		)
+	}
 	if (answer.change) {
 		const { commits, covered, uncovered, binary } = answer.change
 		lines.push('', paint('bold', `Commits in scope, from git (${commits.length}):`))

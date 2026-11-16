@@ -1,7 +1,9 @@
 // The four kinds of entry in the project record, as the plan names them: a piece of work, a decision, a topic and a
-// note. An entry holds only checked facts. Its quotes passed checkQuote, and its commits and authors come from git.
+// note. An entry holds only checked facts. Its quotes passed verifyQuote, and its commits and authors come from git.
+// A quote of a saved session is kept as ken checked it: the session's id, the message's number, who wrote it and when,
+// and the quoted lines, which passed secretHider. No other text of the session reaches the record.
 import { createHash } from 'node:crypto'
-import type { Label, VerifiedQuote } from '../checks/index.ts'
+import type { Label, VerifiedGitQuote, VerifiedQuote } from '../checks/index.ts'
 import type { Diagram } from '../diagram/index.ts'
 import type { CommitHash, Range } from '../repo/index.ts'
 
@@ -39,11 +41,12 @@ export type Work = {
 export type Logged = { by: string | null; head: CommitHash | null }
 
 // reason is why the option was chosen, with the lines it rests on, kept apart from quotes, which show what was chosen.
-// It is null in a decision written before ken asked for one. ken sets the label, never the writer. A decision is
-// "recorded" when it was written down as it was made: it carries logged, or its reason quotes a commit message (see
-// decisionLabel). Otherwise it is "inferred". A decision says why, which is never a relation found by searching, so it
-// is never "found-by-search". Only a logged decision has logged, so a decision written before ken decide reads as before.
-// topic names the topic the decision belongs to, as the record names it, or is null.
+// It is null in a decision written before ken asked for one. ken sets the label, never the writer (see decisionLabel).
+// A decision is "recorded" when it was written down as it was made: it carries logged, or its reason quotes a commit
+// message. It is "from-the-session" when its reason quotes a saved session instead, and "inferred" otherwise. A
+// decision says why, which is never a relation found by searching, so it is never "found-by-search". Only a logged
+// decision has logged, so a decision written before ken decide reads as before. topic names the topic the decision
+// belongs to, as the record names it, or is null.
 export type Decision = {
 	kind: 'decision'
 	question: string
@@ -59,7 +62,8 @@ export type Decision = {
 	topic: string | null
 }
 
-export type Topic = { kind: 'topic'; name: string; quotes: VerifiedQuote[] }
+// A topic rests on lines of files, so a change to them shows: see noteFreshness.
+export type Topic = { kind: 'topic'; name: string; quotes: VerifiedGitQuote[] }
 
 // codeHash is a hash over the topic's quoted lines when the note was written. See noteFreshness.
 export type Note = { kind: 'note'; topic: EntryId; text: string; codeHash: string }

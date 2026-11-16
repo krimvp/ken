@@ -20,17 +20,27 @@ export function formatDiagram(diagram: Diagram, paint: Paint): string[] {
 	return lines
 }
 
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
 export function formatQuote(quote: Quote, paint: Paint): string[] {
 	const span =
 		quote.startLine === quote.endLine ? `line ${quote.startLine}` : `lines ${quote.startLine}-${quote.endLine}`
-	const source =
-		quote.path === null
-			? `commit message of ${quote.commit.slice(0, 7)}`
-			: `${quote.path} @ ${quote.commit.slice(0, 7)}`
 	return [
-		paint('dim', `   ${source}, ${span}`),
+		paint('dim', `   ${quoteSource(quote)}, ${span}`),
 		...quote.text
 			.split('\n')
 			.map((text, offset) => `   ${paint('dim', String(quote.startLine + offset).padStart(5))}  ${text}`),
 	]
+}
+
+// A quote of a session names no file and no commit: it says when the session ran and who wrote the lines.
+export function quoteSource(quote: Quote): string {
+	if ('session' in quote) {
+		const at = new Date(quote.at)
+		const day = `${at.getUTCDate()} ${MONTHS[at.getUTCMonth()]} ${quote.at.slice(11, 16)} UTC`
+		return `from the session of ${day}, ${quote.by === 'user' ? 'what you asked' : 'what the agent said'}`
+	}
+	return quote.path === null
+		? `commit message of ${quote.commit.slice(0, 7)}`
+		: `${quote.path} @ ${quote.commit.slice(0, 7)}`
 }
