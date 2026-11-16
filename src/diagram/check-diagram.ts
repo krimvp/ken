@@ -1,6 +1,8 @@
 // The gate in front of the reader for diagrams. A writer hands in drafts, and this turns them into diagrams or says what
-// to fix: each diagram is small, its lists fit its kind, every edge joins two of its nodes, every label is allowed, and
-// every quote passes checkQuote. One problem refuses all the diagrams, the same way one bad quote refuses an answer.
+// to fix: each diagram is small, its lists fit its kind, it has at least two edges, every edge joins two of its nodes
+// and every node has an edge, every label is allowed, and every quote passes checkQuote. One problem refuses all the
+// diagrams, the same way one bad quote refuses an answer. Only new answers pass through here: ken reads a stored
+// diagram as it was accepted.
 import { checkLabel, checkQuote, explainQuote, type Label, type Quote, type VerifiedQuote } from '../checks/index.ts'
 import type { Repository } from '../repo/index.ts'
 import type { Arrow, Diagram, DiagramDraft, DiagramKind } from './diagram.ts'
@@ -139,8 +141,22 @@ async function checkOne(
 			`${where} has ${nodeCount} ${lists.nodes}; keep it to ${DIAGRAM_BOUNDS.nodes}, the ones the question needs.`,
 		)
 	}
-	if (edgeCount === 0) {
-		problems.push(`${where} needs at least one ${lists.edge}: a diagram shows how its ${lists.nodes} connect.`)
+	if (edgeCount < 2) {
+		problems.push(
+			`${where} has ${edgeCount} ${edgeCount === 1 ? lists.edge : lists.edges}; send at least 2. A diagram must show how several ${lists.nodes} connect. If one ${lists.edge} says it all, write a statement and send no diagram.`,
+		)
+	}
+	const ends = new Set(
+		draft[lists.edges].flatMap((each: { from: string; to: string }) =>
+			[each.from, each.to].map((name) => name.trim().toLowerCase()),
+		),
+	)
+	for (const [index, each] of draft[lists.nodes].entries()) {
+		if (!ends.has(each.name.trim().toLowerCase())) {
+			problems.push(
+				`${where}, ${lists.node} ${index + 1} ("${each.name.trim()}"): no ${lists.edge} starts or ends at it. Draw the ${lists.edge} that joins it, or leave the ${lists.node} out.`,
+			)
+		}
 	}
 	if (edgeCount > DIAGRAM_BOUNDS.edges) {
 		problems.push(

@@ -44,7 +44,10 @@ const ANSWER: Turn = {
 				title: 'What retry does between attempts',
 				label: 'inferred',
 				boxes: [{ name: 'retry', quotes: [RETRY_LINE] }, { name: 'sleep' }],
-				arrows: [{ from: 'retry', to: 'sleep', text: 'calls', quotes: [SLEEP] }],
+				arrows: [
+					{ from: 'retry', to: 'sleep', text: 'calls', quotes: [SLEEP] },
+					{ from: 'sleep', to: 'retry', text: 'returns to', quotes: [SLEEP] },
+				],
 			},
 		],
 		decisions: [
@@ -136,6 +139,7 @@ test('a question streams its steps and a checked answer with its diagram drawn, 
 			[1, 'retry'],
 			[2, 'sleep'],
 			[3, 'retry calls sleep'],
+			[4, 'sleep returns to retry'],
 		],
 	)
 	const saved = lines.at(-1).view
@@ -185,12 +189,17 @@ test('a question streams its steps and a checked answer with its diagram drawn, 
 	)
 })
 
-test('a question saved before ken kept the HEAD still opens with no HEAD of its own, and an answer saved before risks opens with none looked for', async () => {
+test('a question saved before ken kept the HEAD still opens with no HEAD of its own, and an answer saved before risks and before the diagram rules opens as it was', async () => {
 	const home = tempFolder('ken-home-')
 	const old = { id: 'old-1', question: 'What changed?', askedAt: '2026-11-01T10:00:00.000Z', steps: [], usage: null }
-	// An answered question as ken wrote it at f3e1e61, before answers carried risks.
-	const statement = { text: 'The loop sleeps.', label: 'inferred', quotes: [{ ...SLEEP, startLine: 4, endLine: 4 }] }
-	const answer = { summary: 'Retries wait.', statements: [statement], diagrams: [], change: null }
+	// An answered question as ken wrote it at f3e1e61, before answers carried risks. Its diagram has one arrow and a box
+	// no arrow joins, which the diagram check refuses in a new answer.
+	const quotes = [{ ...SLEEP, startLine: 4, endLine: 4 }]
+	const statement = { text: 'The loop sleeps.', label: 'inferred', quotes }
+	const boxes = ['retry', 'sleep', 'clock'].map((name, at) => ({ number: at + 1, name, group: null, quotes: [] }))
+	const arrow = { number: 4, from: 'retry', to: 'sleep', text: 'calls', label: 'inferred', quotes }
+	const diagram = { kind: 'component', title: 'Retry', label: 'inferred', boxes, arrows: [arrow] }
+	const answer = { summary: 'Retries wait.', statements: [statement], diagrams: [diagram], change: null }
 	const answered = { ...old, id: 'old-2', head, outcome: 'answered', answer, recorded: [], note: '' }
 	mkdirSync(path.join(home, 'projects', base), { recursive: true })
 	writeFileSync(
@@ -205,6 +214,9 @@ test('a question saved before ken kept the HEAD still opens with no HEAD of its 
 	assert.deepEqual([view.entry.question, view.entry.head, view.head], ['What changed?', null, headNow])
 	const reopened = await json(server, '/api/questions/old-2')
 	assert.deepEqual([reopened.entry.answer.statements, reopened.entry.answer.risks], [[statement], null])
+	const [drawn] = reopened.entry.answer.diagrams
+	assert.match(drawn.mermaid, /^flowchart LR\n.*n3\["3\. clock"\].*"4\. calls"/s, 'the old diagram still draws')
+	assert.equal(drawn.elements.length, 4)
 })
 
 test('a second question about the same commits shows the decision the first one recorded', async () => {

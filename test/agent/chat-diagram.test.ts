@@ -40,7 +40,10 @@ function answer(call: typeof CALL): Turn {
 						{ name: 'app', quotes: [RUN] },
 						{ name: 'store', quotes: [SAVE] },
 					],
-					arrows: [{ from: 'app', to: 'store', text: 'calls', quotes: [call] }],
+					arrows: [
+						{ from: 'app', to: 'store', text: 'calls', quotes: [call] },
+						{ from: 'store', to: 'app', text: 'returns to', quotes: [SAVE] },
+					],
 				},
 			],
 		},
@@ -81,6 +84,7 @@ test('a diagram arrow with a false quote rejects the answer and names the arrow;
 			[1, 3],
 			[2, 1],
 			[3, 4],
+			[4, 1],
 		],
 	)
 

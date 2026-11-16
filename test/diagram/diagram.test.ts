@@ -30,31 +30,47 @@ async function refusal(draft: DiagramDraft): Promise<string> {
 	return checked.kind === 'refused' ? checked.problems.join('\n') : assert.fail('the diagram was accepted')
 }
 
-test('a diagram within the rules is accepted and numbered; one over the bounds, with an unknown box, without a quote or with a later label is refused with the reason', async () => {
-	const accepted = await checkDiagrams(repo, [component(['app', 'store'], [{ from: 'APP', to: 'store' }])])
+const BOTH_WAYS = [
+	{ from: 'APP', to: 'store' },
+	{ from: 'store', to: 'app' },
+]
+
+test('a diagram within the rules is accepted and numbered; one over the bounds, with fewer than two arrows, with a box no arrow joins, with an unknown box, without a quote or with a later label is refused with the reason', async () => {
+	const accepted = await checkDiagrams(repo, [component(['app', 'store'], BOTH_WAYS)])
 	assert.ok(accepted.kind === 'ok', JSON.stringify(accepted))
 	const [diagram] = accepted.diagrams
 	assert.ok(diagram?.kind === 'component')
 	assert.deepEqual(
 		[...diagram.boxes, ...diagram.arrows].map((element) => element.number),
-		[1, 2, 3],
+		[1, 2, 3, 4],
 	)
 	assert.deepEqual(diagram.arrows[0]?.from, 'app', 'an arrow names the box as the box spells it')
 	assert.deepEqual(diagram.arrows[0]?.quotes[0]?.startLine, 3)
 
+	assert.match(await refusal(component(['app', 'store'], [{ from: 'app', to: 'store' }])), /1 arrow; send at least 2/)
+	assert.match(
+		await refusal(component(['app', 'store', 'cache'], BOTH_WAYS)),
+		/box 3 \("cache"\): no arrow starts or ends at it/,
+	)
 	const seven = ['a', 'b', 'c', 'd', 'e', 'f', 'g']
 	assert.match(await refusal(component(seven, [{ from: 'a', to: 'b' }])), /7 boxes; keep it to 6/)
 	const nineArrows = Array.from({ length: 9 }, () => ({ from: 'app', to: 'store' }))
 	assert.match(await refusal(component(['app', 'store'], nineArrows)), /9 arrows; keep it to 8/)
-	assert.match(await refusal(component(['app', 'store'], [{ from: 'app', to: 'disk' }])), /arrow 1 .*"disk"/)
 	assert.match(
-		await refusal(component(['app', 'store'], [{ from: 'app', to: 'store', quotes: [] }])),
+		await refusal(component(['app', 'store'], [...BOTH_WAYS, { from: 'app', to: 'disk' }])),
+		/arrow 3 .*"disk"/,
+	)
+	assert.match(
+		await refusal(component(['app', 'store'], [{ from: 'app', to: 'store', quotes: [] }, ...BOTH_WAYS])),
 		/arrow 1 .*quote/,
 	)
-	const recorded = component(['app', 'store'], [{ from: 'app', to: 'store' }])
+	const recorded = component(['app', 'store'], BOTH_WAYS)
 	const [arrow] = recorded.arrows
 	assert.ok(arrow)
-	assert.match(await refusal({ ...recorded, arrows: [{ ...arrow, label: 'recorded' }] }), /arrow 1 .*"recorded"/)
+	assert.match(
+		await refusal({ ...recorded, arrows: [{ ...arrow, label: 'recorded' }, ...recorded.arrows] }),
+		/arrow 1 .*"recorded"/,
+	)
 })
 
 // Names a model could send to break Mermaid: quotes and brackets end a label, a semicolon or a line break ends a

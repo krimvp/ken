@@ -41,7 +41,10 @@ test('ken ask --json prints the checked answer, what it recorded and the closing
 						title: 'What total uses',
 						label: 'found-by-search',
 						boxes: [{ name: 'total' }, { name: 'sum' }],
-						arrows: [{ from: 'total', to: 'sum', text: 'calls', quotes: [SUM] }],
+						arrows: [
+							{ from: 'total', to: 'sum', text: 'calls', quotes: [SUM] },
+							{ from: 'sum', to: 'total', text: 'returns to', quotes: [SUM] },
+						],
 					},
 				],
 				decisions: [
