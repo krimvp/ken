@@ -19,8 +19,9 @@ export type Chat = {
 }
 
 const PLUGIN = 'ken'
-// A pull request of seventeen files, read past its diff, needs more than 40 turns. A turn costs only when it is used.
-const MAX_TURNS = 60
+// Answers about pull requests of up to seventeen files took 8 to 13 turns, and the notice below makes the model answer
+// before the limit, so more turns would only let a question that goes astray cost more.
+const MAX_TURNS = 40
 // Room for the answer, three rejected tries and the closing note. A model that ran out of turns while reading sent
 // nothing, so it is told to answer with what it has.
 const TURNS_LEFT_NOTICE = 6
