@@ -119,7 +119,7 @@ test('a question streams its steps and a checked answer with its diagram drawn, 
 
 	assert.deepEqual(
 		lines.map((line) => line.kind).filter((kind) => kind !== 'text'),
-		['tool', 'tool', 'accepted', 'usage', 'done', 'saved'],
+		['asked', 'tool', 'tool', 'accepted', 'usage', 'done', 'saved'],
 	)
 	assert.match(lines.find((line) => line.kind === 'tool').step, /^Read `src\/retry\.ts`, lines 1 to 3$/)
 	const accepted = lines.find((line) => line.kind === 'accepted')

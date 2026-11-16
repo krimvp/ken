@@ -4,6 +4,7 @@
 import { checkStrip, checksHtml } from './checks.js'
 import { diagramHtml, elementKey } from './diagram.js'
 import { count, decisionQuotes, esc, LABELS, label, list, prose, quoteRows, short } from './format.js'
+import { foldedTopics, knownHtml, mapBarHtml } from './map.js'
 
 const UNDO = { easy: 'Easy to undo.', 'some-work': 'Some work to undo.', hard: 'Hard to undo.' }
 
@@ -40,29 +41,44 @@ function manyCommits(q) {
 	return new Set(itemsOf(q).flatMap(({ item }) => item.quotes.map((quote) => quote.commit))).size > 1
 }
 
-export function answerHtml(q, ui) {
+// Each entry with the key the page knows it by, which keeps its place in the answer when entries of a topic the reader
+// knows are folded away.
+function shownOf(entries, prefix, hidden) {
+	return entries.map((item, i) => ({ item, key: `${prefix}${i}` })).filter(({ item }) => !hidden.has(item.topic))
+}
+
+export function answerHtml(q, ui, running) {
 	const a = q.answer
-	const quotes = a.statements.reduce((n, s) => n + s.quotes.length, 0)
+	const hidden = foldedTopics(q, ui)
+	const statements = shownOf(a.statements, 's', hidden)
+	const quotes = statements.reduce((n, { item }) => n + item.quotes.length, 0)
 	const allOpen = ui.wide
 		? ui.panel.kind === 'all'
 		: itemsOf(q).every(({ key, item }) => item.quotes.every((_, j) => ui.openQuotes.has(`${key}-q${j}`)))
 	const rows = { ui, commits: manyCommits(q) }
-	const marked = markedLabels(a.statements)
+	const marked = markedLabels(statements.map(({ item }) => item))
+	const named = new Set([...a.statements, ...(a.risks ?? []), ...decisionsOf(q)].map((each) => each.topic))
+	const statementsList =
+		statements.length === 0
+			? ''
+			: `<div class="list-head">
+			<h3>${count(statements.length, 'statement', 'statements')}, ${count(quotes, 'quote', 'quotes')}</h3>
+			<button class="link small" data-act="all-quotes" data-key="all-quotes">${allOpen ? 'Close all quotes' : 'Open all quotes'}</button>
+			<p class="list-note">${labelLine(statements.map(({ item }) => item))}</p>
+		</div>
+		<ol>${statements.map(({ item, key }, i) => claimHtml(item, key, i, rows, marked)).join('')}</ol>`
 	return `
 		<p class="caption">The agent's summary. Not checked.</p>
 		<p class="summary">${folded(a.summary, ui.summaryOpen, ui, 'summary', 'Show the rest of the summary')}</p>
 		${needsHtml(q)}
+		${knownHtml(q, ui, named)}
 		<a class="strip narrow-only" href="#checks-inline" title="See what ken checked">${checkStrip(q)}</a>
 		${a.diagrams.map((diagram, i) => diagramHtml(diagram, i, rows)).join('')}
-		${decisionsHtml(decisionsOf(q), rows)}
-		${risksHtml(a.risks, a.change !== null, rows)}
-		<div class="list-head">
-			<h3>${count(a.statements.length, 'statement', 'statements')}, ${count(quotes, 'quote', 'quotes')}</h3>
-			<button class="link small" data-act="all-quotes" data-key="all-quotes">${allOpen ? 'Close all quotes' : 'Open all quotes'}</button>
-			<p class="list-note">${labelLine(a.statements)}</p>
-		</div>
-		<ol>${a.statements.map((s, i) => claimHtml(s, `s${i}`, i, rows, marked)).join('')}</ol>
+		${decisionsHtml(shownOf(decisionsOf(q), 'd', hidden), rows)}
+		${risksHtml(a.risks, a.risks && shownOf(a.risks, 'r', hidden), a.change !== null, rows)}
+		${statementsList}
 		${noteHtml(q, ui)}
+		${mapBarHtml(q, ui, running)}
 		<section class="checks-inline narrow-only" id="checks-inline" aria-label="What ken checked">${ui.wide ? '' : checksHtml(q, ui)}</section>`
 }
 
@@ -105,26 +121,29 @@ function claimHtml(claim, key, i, rows, marked) {
 
 // The risks follow the decisions, built like the statements and set apart from them. An answer about a change always
 // says something here, even that the agent found none. An answer about a change with no word on risks (null) was saved
-// before ken asked for them.
-function risksHtml(risks, aboutChange, rows) {
-	if (risks === null) {
+// before ken asked for them. shown leaves out the risks of a topic the reader knows.
+function risksHtml(all, shown, aboutChange, rows) {
+	if (all === null) {
 		return aboutChange ? '<p class="caption">This answer was written before ken asked for risks.</p>' : ''
 	}
-	if (risks.length === 0) {
+	if (all.length === 0) {
 		return `<div class="list-head"><h3>The agent found no risks</h3><p class="list-note">The agent says it looked for what could go wrong and found nothing to watch.</p></div>`
 	}
+	if (shown.length === 0) return ''
+	const risks = shown.map(({ item }) => item)
 	return `<section class="risks" aria-labelledby="risks-head">
 		<div class="list-head">
 			<h3 id="risks-head">${risks.length === 1 ? 'A risk to watch' : `${risks.length} risks to watch`}</h3>
 			<p class="list-note">A risk is something the agent thinks could go wrong. ken checked the quotes, not the sentences. ${labelLine(risks)}</p>
 		</div>
-		<ol>${risks.map((r, i) => claimHtml(r, `r${i}`, i, rows, markedLabels(risks))).join('')}</ol>
+		<ol>${shown.map(({ item, key }, i) => claimHtml(item, key, i, rows, markedLabels(risks))).join('')}</ol>
 	</section>`
 }
 
 // Each decision folds to its question and the option the code took. The row opens the decision in place.
-function decisionsHtml(decisions, rows) {
-	if (decisions.length === 0) return ''
+function decisionsHtml(shown, rows) {
+	if (shown.length === 0) return ''
+	const decisions = shown.map(({ item }) => item)
 	const calls = decisions.filter((d) => d.needsOwner).length
 	const head = decisions.length === 1 ? 'A decision in this change' : `${decisions.length} decisions in this change`
 	const needs =
@@ -143,7 +162,7 @@ function decisionsHtml(decisions, rows) {
 			<h3 id="decisions-head">${one}${head}${needs}</h3>
 			${one ? '' : `<p class="list-note">${labelLine(decisions)}</p>`}
 		</div>
-		<ul>${decisions.map((d, i) => decisionHtml(d, `d${i}`, rows, marked)).join('')}</ul>
+		<ul>${shown.map(({ item, key }) => decisionHtml(item, key, rows, marked)).join('')}</ul>
 	</section>`
 }
 

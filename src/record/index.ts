@@ -19,4 +19,4 @@ export type {
 } from './entry.ts'
 export { UNDO } from './entry.ts'
 export { fileRecordStore, type RecordRead, type RecordStore } from './file-record-store.ts'
-export { type Freshness, noteFreshness, type TopicCode, topicCode } from './note-freshness.ts'
+export { codeHash, type Freshness, noteFreshness, type TopicCode, topicCode } from './note-freshness.ts'

@@ -76,8 +76,30 @@ test('"I know this" marks a topic understood at its code now; an unrelated edit 
 	const [retry] = (await map.read(NOW)).states
 	assert.deepEqual(retry?.kind === 'changed' && retry.changed, [{ path: 'src/retry.ts', startLine: 3, endLine: 4 }])
 
+	const current = (await record.read()).current.find((entry) => entry.kind === 'topic' && entry.name === 'retry logic')
+	await withTopics(record, [
+		{
+			...RETRY_TOPIC,
+			replaces: current?.id,
+			quotes: [
+				{ path: 'src/retry.ts', commit: 'HEAD', text: 'export function retry(times: number) {' },
+				{ path: 'src/retry.ts', commit: 'HEAD', text: '\t\tattempt()\n\t\tsleep(200)' },
+			],
+		},
+	])
+	const rewritten = (await map.read(NOW)).states.find((state) => state.topic === 'retry logic')
+	assert.deepEqual(
+		rewritten?.kind === 'changed' && rewritten.changed,
+		[{ path: 'src/retry.ts', startLine: 3, endLine: 4 }],
+		'once the record holds a newer version of the topic, the changed lines are still those the reader knew',
+	)
+
 	const later = new Date(NOW.getTime() + 31 * 86_400_000)
-	assert.equal((await map.read(later)).states[0]?.kind, 'long-ago', 'a month on, the reader gets a reminder first')
+	assert.deepEqual(
+		kinds((await map.read(later)).states)['retry logic'],
+		'long-ago',
+		'a month on, the reader gets a reminder first',
+	)
 })
 
 test('a line a person changed by hand counts, a line that does not parse is skipped and named, and the newest line for a topic wins', async () => {

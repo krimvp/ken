@@ -3,7 +3,7 @@
 // it, and the newest line for a topic wins. A line that does not parse is skipped and named, never fatal.
 import { appendFile, mkdir, readFile } from 'node:fs/promises'
 import path from 'node:path'
-import { type RecordStore, sameName, type Topic, topicCode } from '../record/index.ts'
+import { codeHash, type RecordEntry, type RecordStore, sameName, type Topic, topicCode } from '../record/index.ts'
 import type { Repository } from '../repo/index.ts'
 import { lineFor, type MapSignal } from './learn.ts'
 import { type MapEntry, mapLine, parseMapLine } from './map-entry.ts'
@@ -43,20 +43,36 @@ export async function openMap(
 		return { entries, problems }
 	}
 
-	async function topics(): Promise<Topic[]> {
-		return (await record.read()).current.flatMap((entry) => (entry.kind === 'topic' ? [entry] : []))
+	// The current topics, and every version of each, since a map line may hash a version the record has replaced.
+	type Topics = { current: Topic[]; versions: Topic[] }
+	async function topics(): Promise<Topics> {
+		const read = await record.read()
+		const only = (entries: RecordEntry[]) => entries.flatMap((entry) => (entry.kind === 'topic' ? [entry] : []))
+		return { current: only(read.current), versions: only(read.entries) }
 	}
 
-	async function stateNow(topic: Topic, entries: MapEntry[], now: Date, abort?: AbortSignal): Promise<TopicState> {
+	async function stateNow(
+		topic: Topic,
+		{ versions }: Topics,
+		entries: MapEntry[],
+		now: Date,
+		abort?: AbortSignal,
+	): Promise<TopicState> {
 		const entry = entries.findLast((each) => sameName(each.topic, topic.name))
-		return stateOf(topic, entry, await topicCode(repo, topic, abort), now)
+		const code = await topicCode(repo, topic, abort)
+		const knew =
+			entry && code.hash !== entry.hash
+				? versions.find((version) => sameName(version.name, topic.name) && codeHash(version.quotes) === entry.hash)
+				: undefined
+		const knewGone = knew ? (await topicCode(repo, knew, abort)).gone : []
+		return stateOf(topic, entry, code, now, knewGone)
 	}
 
 	async function read(now: Date, abort?: AbortSignal): Promise<MapRead> {
 		const [{ entries, problems }, known] = await Promise.all([lines(), topics()])
-		const states = await Promise.all(known.map((topic) => stateNow(topic, entries, now, abort)))
+		const states = await Promise.all(known.current.map((topic) => stateNow(topic, known, entries, now, abort)))
 		for (const entry of entries) {
-			if (!known.some((topic) => sameName(topic.name, entry.topic))) {
+			if (!known.current.some((topic) => sameName(topic.name, entry.topic))) {
 				problems.push(`The map names "${entry.topic}", which is not a topic in the project record, so ken skips it.`)
 			}
 		}
@@ -65,14 +81,14 @@ export async function openMap(
 
 	async function learn(mapSignal: MapSignal, names: string[], now: Date, abort?: AbortSignal) {
 		const [{ entries }, known] = await Promise.all([lines(), topics()])
-		const chosen = known.filter((topic) => names.some((name) => sameName(name, topic.name)))
+		const chosen = known.current.filter((topic) => names.some((name) => sameName(name, topic.name)))
 		const added: MapEntry[] = []
 		for (const topic of chosen) {
-			const line = lineFor(mapSignal, await stateNow(topic, entries, now, abort), now)
+			const line = lineFor(mapSignal, await stateNow(topic, known, entries, now, abort), now)
 			if (line) added.push(line)
 		}
 		if (added.length > 0) await append(added)
-		return await Promise.all(chosen.map((topic) => stateNow(topic, [...entries, ...added], now, abort)))
+		return await Promise.all(chosen.map((topic) => stateNow(topic, known, [...entries, ...added], now, abort)))
 	}
 
 	async function append(entries: MapEntry[]) {

@@ -23,13 +23,22 @@ export type TopicState = { topic: string; hash: string } & (
 const UNDERSTOOD: Evidence[] = ['said', 'wrote']
 const DAY_MS = 86_400_000
 
-export function stateOf(topic: Topic, entry: MapEntry | undefined, code: TopicCode, now: Date): TopicState {
+// knewGone holds the quotes of the topic as the reader knew it that are gone at HEAD, when the record has been given a
+// newer version of the topic since.
+export function stateOf(
+	topic: Topic,
+	entry: MapEntry | undefined,
+	code: TopicCode,
+	now: Date,
+	knewGone: Topic['quotes'] = [],
+): TopicState {
 	const known = { topic: topic.name, hash: code.hash }
 	if (entry === undefined) return { kind: 'never-met', ...known }
 	if (!UNDERSTOOD.includes(entry.evidence)) return { kind: 'met', ...known, entry }
-	// A quote that is gone names its own lines. When every quote is still there and the hash differs anyway, the topic
-	// itself was written again with other lines, so all of them count as changed.
-	const lines = code.hash === entry.hash ? [] : code.gone.length > 0 ? code.gone : topic.quotes
+	// The changed lines are the quotes the reader knew that are gone, then the topic's own quotes that are gone. When
+	// ken cannot tell which lines the reader knew, all of the topic's lines count as changed.
+	const lines =
+		code.hash === entry.hash ? [] : ([knewGone, code.gone, topic.quotes].find((list) => list.length > 0) ?? [])
 	const changed = lines.flatMap(({ path, startLine, endLine }) => (path === null ? [] : [{ path, startLine, endLine }]))
 	if (now.getTime() - Date.parse(entry.date) > LONG_AGO_DAYS * DAY_MS) {
 		return { kind: 'long-ago', ...known, entry, changed }

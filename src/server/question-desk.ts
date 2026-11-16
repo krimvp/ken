@@ -31,10 +31,12 @@ export type QuestionView = { entry: HistoryEntry; recorded: RecordEntry[]; head:
 
 type Accepted = Extract<ChatEvent, { kind: 'accepted' }>
 
-// What the page receives while a question runs: each chat event, then the saved entry as the last line. An accepted
+// What the page receives while a question runs: the question as ken asks it, which for a lens ken wrote itself, each
+// chat event, then the saved entry as the last line. An accepted
 // answer's diagrams carry their drawings, its recorded entries are the ones it stands on, and it carries its topics'
 // states as a view does.
 export type QuestionLine =
+	| { kind: 'asked'; question: string }
 	| Exclude<ChatEvent, Accepted>
 	| (Accepted & { topics: TopicState[] })
 	| { kind: 'saved'; view: QuestionView }
@@ -58,6 +60,7 @@ export function questionDesk(history: History, record: RecordStore, repo: Reposi
 		running = { stop, done: new Promise((resolve) => (finish = resolve)) }
 		try {
 			const asked = { id: randomUUID(), question, askedAt: new Date().toISOString(), head: await headNow() }
+			send({ kind: 'asked', question })
 			const events: ChatEvent[] = []
 			for await (const event of chat.ask(question, stop)) {
 				events.push(event)
