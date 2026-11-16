@@ -2,9 +2,9 @@
 
 ken explains a software project to the developer who owns it. It tells you what changed, why it changed, and how a part of the code works now, and each claim in its answer quotes lines you can check. It is built for projects where AI agents write most of the code.
 
-![Risk 1 of 3 in an answer, marked Quotes code outside the change: readers of every answer about a change can now get a long risk list, with the heavy risks buried among minor ones, because the terminal prints every risk it gets and cuts none. Under it are two folded quotes: line 84 of src/cli/answer/print-question.ts at commit 5d4efe5, and lines 25 to 26 of src/agent/answer/answer-tool.ts at af5ce77.](site/images/ken-risk-with-quotes-wide.png)
+![An answer on ken's local page to "What did the last commit do, and why? Name the decisions it made and any risk I should know about." Under the summary and one decision labelled Recorded, risk 1 is marked Quotes code outside the change: every fetchUser call where all 3 tries fail now waits about 1.4 s before it throws, up from 0.6 s, because retry still sleeps 800 ms after the last try. Its first quote is open and shows line 8 of src/user.ts at a32ffb8, where fetchUser calls retry.](site/images/ken-risk-with-quotes-wide.png)
 
-Screenshot of ken's own page. The model was Claude Opus, through ken's local endpoint. It shows the first of three risks in ken's answer to "What did the last commit do, and why?" about this repository at commit 5d4efe5, the commit that removed the cap on risks.
+Screenshot of ken's local page, answering a question about a commit in a small made-up project. The model was Claude Opus.
 
 ## Status
 
@@ -19,28 +19,47 @@ What runs today:
 - The project record lives in `.ken/record/` in your repository, as JSON Lines files that ken only adds to. You commit it, so a collaborator and their agents can read it. ken never commits, and never writes to your project besides `.ken/`. Your question history and your understanding map live in `~/.ken/projects/<first commit>/` on your machine.
 - The understanding map keeps what you said you know, topic by topic. A topic you know whose quoted code has not changed shortens to one line. When the code changed, the answer starts with what changed. "Waiting on you" lists the decisions that need your call and the topics that changed since you understood them, with who changed them. You answer a decision with "Keep what was chosen" or "I want it changed". ken saves your answer and note, and changes no code. "Decisions" lists every decision in the record, and a later decision on the same question replaces the older one.
 - Live mode runs beside your coding agent and writes short notes as the work moves, on each commit and on uncommitted work that has gone quiet. ken finds each note's quotes. It does not check the note's words. For uncommitted work it keeps snapshots in its own store under `~/.ken/` and never writes to the project, so such a note is a draft on your machine. Live mode is off until you turn it on, and it shows what it spends.
-- ken reads the sessions Claude Code saves. Before any session text reaches the model, the page, your history or the record, ken hides what looks like a credential. This is best effort: a secret written in plain words, or a short one, gets through. The record keeps only the quoted lines of a session, so commit `.ken/` only if you are happy to share them. Set `KEN_SESSIONS=off` to stop ken reading sessions.
-- ken works with any OpenAI-compatible endpoint, and the code and session text it reads go to that provider. It has been run on glm-5.3 and kimi-k3.1-pro through Ollama Cloud, and on Claude Opus through the Claude Code command with ken's local adapter, `npm run claude-endpoint`. gpt-oss:120b, as served on Ollama Cloud in November 2026, could not follow the quoting rules.
+- ken reads the sessions Claude Code saves. As it reads a session, before that text reaches the model, the page, your history or the record, ken hides what looks like a credential. It hides nothing in your code or git history, which the model reads as it is. This is best effort: a secret written in plain words, or a short one, gets through. The record keeps only the quoted lines of a session, so commit `.ken/` only if you are happy to share them. Set `KEN_SESSIONS=off` to stop ken reading sessions.
+- ken works with an OpenAI-compatible endpoint, and the code and session text it reads go to that provider. It has been run on glm-5.3 and kimi-k3.1-pro through Ollama Cloud, and on Claude Opus through the Claude Code command with ken's local adapter, `npm run claude-endpoint`. gpt-oss:120b, as served on Ollama Cloud in November 2026, could not follow the quoting rules.
 
 Not built: readers for other coding tools' sessions, anything for teams, and a parser or index of the code.
 
 ### How ken did in its test
 
-ken's plan sets a rule for its test: against a plain chat, ken must win at least one of three counts and lose none. The counts are finding more, trust without the diff, and finding it again. Finding more means the answer names a decision or a risk the other answer missed. Trust without the diff means the quotes let you trust the answer without opening the diff. Finding it again means you can find the answer the next day.
+ken's plan sets a rule for its test: against a plain chat, ken must win at least one of three counts and lose none. The counts are finding more, checking without the diff, and finding it again. Finding more means the answer names a decision or a risk the other answer missed. Checking without the diff means each claim points at lines you can look up. The plan calls this trusting the answer without opening the diff. Finding it again means you can find the answer the next day.
 
-For real merged pull requests of another project by the same owner, ken and a plain chat with a coding agent on Claude Opus got the same question: "What did pull request #N do, and why was it done that way? Name the decisions it made and any risk I should know about." A second AI agent, fresh each time, scored each round against the code. The owner has not scored any of it.
+Each round put the same question about real merged pull requests of another project by the same owner to ken and to a plain chat with a coding agent on Claude Opus: "What did pull request #N do, and why was it done that way? Name the decisions it made and any risk I should know about." ken ran on glm-5.3 or on Claude Opus. Rounds 1 and 2 used three pull requests, and ken was tuned on these three. Round 3 added two more. Rounds 4, 5 and 6 each added three new ones that ken had never seen. One AI judge, a fresh one each time, scored each round against the code. ken's author has not scored any of it.
 
-ken won trust without the diff and finding it again in every round, on both models. Finding more went like this:
+ken scored on two counts a plain chat cannot score on at all, in every round and on both models: checking without the diff, because the plain chat quotes nothing ken can look up, and finding it again, because the plain chat keeps nothing. So each pass of the rule rests on those two counts, and whether ken passes turns on finding more alone.
 
-- Rounds 1 to 3 ran ken on glm-5.3, then on Claude Opus, against the plain chat on Claude Opus. Rounds 1 and 2 used three pull requests, and ken was tuned on these three. Round 3 added two more. ken lost finding more in every round.
-- Round 4 added the "Used elsewhere" list and the second look at risks. With Claude Opus on both sides, ken passed on the three tuned pull requests for the first time, with a tie on finding more. It failed on the two others, and lost finding more on one of them. On three pull requests it had never seen, it passed narrowly, with a tie. With ken on glm-5.3, those three failed.
-- Round 5 made the second look read the code each risk points at and ask what happens when two decisions touch the same thing. It also put the risks in order and added ken's marks on risks. With Claude Opus on both sides, three more pull requests ken had never seen passed. Finding more was a tie on two and a narrow win for ken on one, and the judge said a count of finds gives a tie, or ken by one. The three tuned ones passed. The two others failed narrowly on finding more, and so did the three that had passed narrowly in round 4. With ken on glm-5.3, the three newest passed, with a tie.
+| Round | ken's model | Pull requests | Finding more | Passes the rule |
+| ----- | ----------- | ------------- | ------------ | --------------- |
+| 1 | glm-5.3 | 3 tuned | lost | no |
+| 2 | glm-5.3 | 3 tuned | narrow loss | no |
+| 3 | glm-5.3 | 3 tuned | lost | no |
+| 3 | glm-5.3 | 2 more | lost | no |
+| 3 | Claude Opus | 3 tuned | lost | no |
+| 3 | Claude Opus | 2 more | tie | yes |
+| 4 | Claude Opus | 3 tuned | tie | yes |
+| 4 | Claude Opus | 2 more | lost | no |
+| 4 | Claude Opus | 3 new | tie | yes |
+| 4 | glm-5.3 | same 3 | lost | no |
+| 5 | Claude Opus | 3 tuned | tie | yes |
+| 5 | Claude Opus | 2 more | narrow loss | no |
+| 5 | Claude Opus | round 4's 3 | lost | no |
+| 5 | Claude Opus | 3 new | narrow win | yes |
+| 5 | glm-5.3 | same 3 | tie | yes |
+| 6 | Claude Opus | 3 new | tie | yes, only just |
 
-So ken does not find more than a plain chat. On finding more it is about level: sometimes a tie, sometimes a narrow loss, once a narrow win. The same three pull requests passed in one round and failed in the next, so one answer per pull request is a noisy measure, and a pass is not proof. ken's answers cost more. One took two to four minutes on Claude Opus and four to eight on glm-5.3, against one to three in the plain chat, and the second look takes about half of ken's input tokens. ken's answers are longer, and the plain chat reads faster. In round 5, one of ken's risks was false and carried the mark now named "Quotes code outside the change". ken checks where the quote is, not whether the risk is true. Every pull request came from one repository, and one AI judge scored each round.
+So ken does not find more than a plain chat. On finding more it is about level: sometimes a tie, sometimes a narrow loss, once a narrow win. The same three pull requests passed in round 4 and failed in round 5, so one answer per pull request is a noisy measure, and a pass is not proof. ken's answers are longer and slower: two to four minutes on Claude Opus and four to eight on glm-5.3, against one to three in the plain chat. In round 5, one of ken's risks was false and carried the mark now named "Quotes code outside the change". ken checks where the quote is, not whether the risk is true. Every pull request came from one repository.
 
-A last check ran on the version now on main, commit 43013aa, with Claude Opus on both sides, on three more pull requests ken had never seen: #107, #93 and #92. One fresh AI judge scored it, and the owner has not. ken passed the rule only just. It won trust without the diff and finding it again, and finding more was a tie on weight: the plain chat narrowly ahead on #107, a tie leaning to the plain chat on #93, and ken narrowly ahead on #92. Counting the true finds that only one side had gives about 6 for ken and 7 for the plain chat, so in the judge's words a judge who only counted would reach a tie or a narrow plain win, never a ken win. ken surfaced nothing serious that the plain chat missed, and the plain chat alone named the heaviest risk on #93. Each ken answer took about three minutes and about half a million input tokens. The second look took 52% of those tokens and added four risks, and one of the four was a true find the plain chat lacked. The judge called the risk marks honest but weak. "Quotes code outside the change" also sat on one entry that was not a risk.
+What changed between rounds:
 
-The verdicts are in [docs/checkpoint/](docs/checkpoint/): `round-1.md` to `round-3-same-model.md` for rounds 1 to 3, `round-4.md`, `round-4-unseen.md` and `round-4-unseen-glm.md` for round 4, `round-5.md`, `round-5-second-three.md`, `round-5-unseen.md` and `round-5-unseen-glm.md` for round 5, and `round-5-confirm.md` for the last check.
+- Round 4 added the "Used elsewhere" list and the second look at risks.
+- Round 5 made the second look read the code each risk points at and ask what happens when two decisions touch the same thing. It also put the risks in order and added ken's marks on risks. In round 5 the judge said a count of finds on the three new pull requests gives a tie, or ken by one.
+- The sixth round ran on the version on main at commit 43013aa, on #107, #93 and #92, after the closing fixes. Finding more was a tie on weight: the plain chat narrowly ahead on #107, a tie leaning to the plain chat on #93, and ken narrowly ahead on #92. Counting the true finds that only one side had gives about 6 for ken and 7 for the plain chat, so in the judge's words a judge who only counted would reach a tie or a narrow plain win, never a ken win. ken surfaced nothing serious that the plain chat missed, and the plain chat alone named the heaviest risk on #93. Each ken answer took about three minutes and about half a million input tokens. The second look took 52% of those tokens and added four risks, and one of the four was a true find the plain chat lacked. The judge called the risk marks honest but weak. "Quotes code outside the change" also sat on one entry that was not a risk.
+
+The verdicts are in [docs/checkpoint/](docs/checkpoint/): `round-1.md` to `round-3-same-model.md` for rounds 1 to 3, `round-4.md`, `round-4-unseen.md` and `round-4-unseen-glm.md` for round 4, `round-5.md`, `round-5-second-three.md`, `round-5-unseen.md` and `round-5-unseen-glm.md` for round 5, and `round-5-confirm.md` for the sixth round.
 
 How ken works today:
 
@@ -68,9 +87,9 @@ flowchart LR
 
 The public page in `site/` draws the same parts and arrows.
 
-![An earlier note in the Live view, headed Uncommitted work, 07:17, and marked Committed since, in a32ffb8. It says retry's wait now doubles after each failed try. Under it are a risk labelled Inferred with a quote of lines 13 to 16 of src/retry.ts, a decision labelled From the session, and a statement labelled Inferred with a quote of line 1 of src/retry.ts.](site/images/ken-live-note-wide.png)
+![A note in the Live view, headed Uncommitted work, 07:17, and marked Committed since, in a32ffb8. It says retry's wait now doubles after each failed try. Under it are a risk labelled Inferred with a quote of lines 13 to 16 of src/retry.ts, a decision labelled From the session, and a statement labelled Inferred with a quote of line 1 of src/retry.ts.](site/images/ken-live-note-wide.png)
 
-Screenshot of an earlier note in ken's Live view for a small made-up project.
+Screenshot of a note in ken's Live view for a small made-up project.
 
 ## Run it
 
