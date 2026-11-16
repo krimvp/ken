@@ -1,6 +1,8 @@
 // The answered question in the thread: the agent's summary, one line that counts what needs the reader, the diagrams,
 // the decisions, the risks and the statements with their quote rows, and the agent's closing note. The agent wrote the
-// words; ken checked only that each quote is in its file.
+// words; ken checked only that each quote is in its file. An answer about a change opens on what a tired owner needs
+// first, as a chat would: the story, the serious risks and the decisions that need their call. The rest folds behind
+// one line each, with its count, and opens in place.
 import { checkStrip, checksHtml } from './checks.js'
 import { diagramHtml, elementKey } from './diagram.js'
 import {
@@ -36,22 +38,39 @@ export function decisionsOf(q) {
 	return [...q.recorded.filter((entry) => entry.kind === 'decision'), ...(q.draft ?? [])]
 }
 
+// The risks with the keys the page knows them by, the serious first, each numbered as the page shows it. The weight is
+// the model's. An answer saved before ken asked for it has none, so its risks stay in one list, in their order.
+export function risksOf(q) {
+	const risks = (q.answer.risks ?? []).map((item, i) => ({ item, key: `r${i}` }))
+	const weighed = risks.some(({ item }) => item.weight !== undefined)
+	const serious = weighed ? risks.filter(({ item }) => item.weight === 'serious') : risks
+	const minor = weighed ? risks.filter(({ item }) => item.weight !== 'serious') : []
+	const n = (list, from) => list.map((each, i) => ({ ...each, n: from + i + 1 }))
+	return { weighed, serious: n(serious, 0), minor: n(minor, serious.length) }
+}
+
 // Every item that carries quotes, in the order the page shows them, by the key the page uses for it: "g0n3" for
 // element 3 of the first diagram, "d0" for a decision, "r0" for a risk, "s3" for a statement.
 export function itemsOf(q) {
+	const decisions = decisionsOf(q).map((d, i) => ({
+		key: `d${i}`,
+		kind: 'decision',
+		item: { ...d, quotes: decisionQuotes(d) },
+		n: i + 1,
+	}))
+	const { serious, minor } = risksOf(q)
+	const risks = (list) => list.map((each) => ({ ...each, kind: 'risk' }))
+	const calls = decisions.filter(({ item }) => item.needsOwner)
+	const others = decisions.filter(({ item }) => !item.needsOwner)
 	return [
 		...q.answer.diagrams.flatMap((diagram, i) =>
 			diagram.elements
 				.filter((element) => element.quotes.length > 0)
 				.map((element) => ({ key: elementKey(i, element.number), kind: 'element', item: element, diagram })),
 		),
-		...decisionsOf(q).map((d, i) => ({
-			key: `d${i}`,
-			kind: 'decision',
-			item: { ...d, quotes: decisionQuotes(d) },
-			n: i + 1,
-		})),
-		...(q.answer.risks ?? []).map((r, i) => ({ key: `r${i}`, kind: 'risk', item: r, n: i + 1 })),
+		...(q.answer.change
+			? [...risks(serious), ...calls, ...others, ...risks(minor)]
+			: [...decisions, ...risks([...serious, ...minor])]),
 		...q.answer.statements.map((s, i) => ({ key: `s${i}`, kind: 'statement', item: s, n: i + 1 })),
 	]
 }
@@ -78,7 +97,10 @@ export function answerHtml(q, ui, running) {
 		? ui.panel.kind === 'all'
 		: itemsOf(q).every(({ key, item }) => item.quotes.every((_, j) => ui.openQuotes.has(`${key}-q${j}`)))
 	const rows = { ui, commits: manyCommits(q), head: q.head, copies: copiesOf(q), change: a.change }
-	const risks = a.risks ? shownOf(a.risks, 'r', hidden) : []
+	const known = ({ item }) => !hidden.has(item.topic)
+	const groups = risksOf(q)
+	const [serious, minor] = [groups.serious.filter(known), groups.minor.filter(known)]
+	const risks = [...serious, ...minor]
 	const claims = [...statements, ...risks].map(({ item }) => item)
 	const marked = markedLabels(claims)
 	const named = new Set([...a.statements, ...(a.risks ?? []), ...decisionsOf(q)].map((each) => each.topic))
@@ -91,19 +113,122 @@ export function answerHtml(q, ui, running) {
 			<p class="list-note">${a.change ? `${sentence(counted)}. ` : ''}${labelLine(statements.map(({ item }) => item))}</p>
 		</div>
 		<ol>${statements.map(({ item, key }, i) => claimHtml(item, key, i, rows, marked)).join('')}</ol>`
+	const decisions = shownOf(decisionsOf(q), 'd', hidden)
+	const body = a.change
+		? changeBody({
+				ui,
+				rows,
+				marked,
+				decisions,
+				serious,
+				minor,
+				groups,
+				statements,
+				statementsList,
+				claims,
+				all: a.risks,
+			})
+		: `${decisionsHtml(decisions, rows)}
+		${risksHtml(a.risks, risks, false, rows, marked, statements.length === 0 ? labelLine(claims) : '')}
+		${statementsList}`
+	const summary = a.change
+		? prose(a.summary)
+		: folded(a.summary, ui.summaryOpen, ui, 'summary', 'Show the rest of the summary')
 	return `
 		<p class="caption">The summary from ken's model. Not checked.</p>
-		<p class="summary">${folded(a.summary, ui.summaryOpen, ui, 'summary', 'Show the rest of the summary')}</p>
+		<p class="summary">${summary}</p>
 		${needsHtml(q)}
+		${leftOutHtml(a)}
 		${knownHtml(q, ui, named, isMoved(q))}
 		<a class="strip narrow-only" href="#checks-inline" title="See what ken checked">${checkStrip(q)}</a>
 		${a.diagrams.map((diagram, i) => diagramHtml(diagram, i, rows)).join('')}
-		${decisionsHtml(shownOf(decisionsOf(q), 'd', hidden), rows)}
-		${risksHtml(a.risks, risks, a.change !== null, rows, marked, statements.length === 0 ? labelLine(claims) : '')}
-		${statementsList}
+		${body}
 		${noteHtml(q, ui)}
 		${mapBarHtml(q, ui, running)}
 		<section class="checks-inline narrow-only" id="checks-inline" aria-label="What ken checked">${ui.wide ? '' : checksHtml(q, ui)}</section>`
+}
+
+// An answer about a change: the serious risks and the decisions that need the reader's call are open. The other
+// decisions, the minor risks and what the change did each fold behind one line with its count.
+function changeBody({ ui, rows, marked, decisions, serious, minor, groups, statements, statementsList, claims, all }) {
+	const calls = decisions.filter(({ item }) => item.needsOwner)
+	const others = decisions.filter(({ item }) => !item.needsOwner)
+	const labels = labelLine(claims)
+	const risks = groups.weighed
+		? seriousHtml(serious, minor.length, rows, marked, labels)
+		: risksHtml(all, serious, true, rows, marked, labels)
+	const otherHead =
+		calls.length === 0
+			? count(others.length, 'decision in this change', 'decisions in this change')
+			: count(others.length, 'other decision', 'other decisions')
+	const folds = [
+		others.length === 0 ? '' : foldHtml('decisions', otherHead, ui, decisionsHtml(others, rows, false)),
+		minor.length === 0
+			? ''
+			: foldHtml('minor', count(minor.length, 'minor risk', 'minor risks'), ui, minorHtml(minor, rows, marked)),
+		statements.length === 0
+			? ''
+			: foldHtml(
+					'statements',
+					`What the change did (${count(statements.length, 'statement', 'statements')})`,
+					ui,
+					statementsList,
+				),
+	].join('')
+	return `${risks}${decisionsHtml(calls, rows, true)}${folds ? `<div class="folds">${folds}</div>` : ''}`
+}
+
+// One folded group: a line with its count that opens the group in place.
+function foldHtml(group, head, ui, body) {
+	const open = ui.openGroups.has(group)
+	return `<section class="fold" id="fold-${group}">
+		<button class="fold-head" data-act="group" data-group="${group}" data-key="fold-${group}" aria-expanded="${open}">${head}</button>
+		${open ? `<div class="fold-body">${body}</div>` : ''}
+	</section>`
+}
+
+// The serious risks, numbered first. When the model weighed none serious, the box says so, and the minor ones wait in
+// their fold.
+function seriousHtml(serious, minor, rows, marked, labels) {
+	const note = `A risk is something ken's model thinks could go wrong. ken's model weighs each one: serious when someone is hurt in normal use, minor otherwise. ${RISK_MARKS.means}${labels ? ` ${labels}` : ''}`
+	if (serious.length === 0 && minor === 0) {
+		return `<div class="list-head"><h3>ken's model found no risks</h3><p class="list-note">ken's model says it looked for what could go wrong and found nothing to watch.</p></div>`
+	}
+	const head =
+		serious.length === 0
+			? 'No serious risk'
+			: serious.length === 1
+				? 'A serious risk'
+				: `${serious.length} serious risks`
+	const list =
+		serious.length === 0
+			? `<p class="list-note">ken's model weighed none of its risks serious. The minor ones are below.</p>`
+			: `<ol>${serious.map(({ item, key, n }) => claimHtml(item, key, n - 1, rows, marked)).join('')}</ol>`
+	return `<section class="risks" aria-labelledby="risks-head">
+		<div class="list-head">
+			<h3 id="risks-head">${head}</h3>
+			<p class="list-note">${note}</p>
+		</div>
+		${list}
+	</section>`
+}
+
+function minorHtml(minor, rows, marked) {
+	return `<section class="risks minor" aria-label="Minor risks">
+		<p class="list-note">ken's model weighed these minor: they hurt no one in normal use. ${RISK_MARKS.means}</p>
+		<ol>${minor.map(({ item, key, n }) => claimHtml(item, key, n - 1, rows, marked)).join('')}</ol>
+	</section>`
+}
+
+// How many points of the model's draft it found no line to quote for. An answer not made from a draft has no count.
+function leftOutHtml(a) {
+	const n = a.leftOut ?? 0
+	if (n === 0) return ''
+	const said =
+		n === 1
+			? '1 point of the draft had no line to quote and was'
+			: `${n} points of the draft had no line to quote and were`
+	return `<p class="caption">${said} left out. The draft is in the steps.</p>`
 }
 
 // Whole sentences, so a cut never ends mid-word or hides half of a caveat.
@@ -121,14 +246,20 @@ function folded(text, open, ui, act, more) {
 // means no line.
 function needsHtml(q) {
 	const calls = decisionsOf(q).filter((d) => d.needsOwner).length
-	const risks = q.answer.risks?.length ?? 0
+	const { weighed, serious, minor } = risksOf(q)
 	const parts = []
 	if (calls > 0) {
 		parts.push(
 			`<a href="#decisions-head">${calls === 1 ? '1 decision needs your call' : `${calls} decisions need your call`}</a>`,
 		)
 	}
-	if (risks > 0) parts.push(`<a href="#risks-head">${count(risks, 'risk', 'risks')} to watch</a>`)
+	if (!weighed && serious.length > 0)
+		parts.push(`<a href="#risks-head">${count(serious.length, 'risk', 'risks')} to watch</a>`)
+	if (weighed && serious.length > 0) {
+		parts.push(`<a href="#risks-head">${count(serious.length, 'serious risk', 'serious risks')} to watch</a>`)
+	}
+	if (weighed && minor.length > 0)
+		parts.push(`<a href="#fold-minor">${count(minor.length, 'minor risk', 'minor risks')}</a>`)
 	// Fewer than half the changed blocks quoted means most of the change is not explained here, so it is said up front.
 	const change = q.answer.change
 	const total = change ? change.covered.length + change.uncovered.length : 0
@@ -181,23 +312,32 @@ function risksHtml(all, shown, aboutChange, rows, marked, labels) {
 	</section>`
 }
 
-// Each decision folds to its question and the option the code took. The row opens the decision in place.
-function decisionsHtml(shown, rows) {
+// Each decision folds to its question and the option the code took. The row opens the decision in place. An answer
+// about a change shows the decisions that need the reader's call under their own head (calls true), and the others in a
+// fold that has its own head (calls false).
+function decisionsHtml(shown, rows, calls = null) {
 	if (shown.length === 0) return ''
 	const decisions = shown.map(({ item }) => item)
-	const calls = decisions.filter((d) => d.needsOwner).length
-	const head = decisions.length === 1 ? 'A decision in this change' : `${decisions.length} decisions in this change`
-	const needs =
-		calls === 0
-			? ''
-			: decisions.length === 1
-				? ', and it needs your call'
-				: `, ${calls} ${calls === 1 ? 'needs' : 'need'} your call`
 	// Every decision carries its own label, so no missing mark has to mean one of them.
 	const all = new Set(decisions.map((d) => d.label))
+	const list = `<ul>${shown.map(({ item, key }) => decisionHtml(item, key, rows, all)).join('')}</ul>`
+	if (calls === false) return `<section class="decisions">${list}</section>`
+	const asks = decisions.filter((d) => d.needsOwner).length
+	const head =
+		calls === true
+			? decisions.length === 1
+				? 'A decision needs your call'
+				: `${decisions.length} decisions need your call`
+			: `${decisions.length === 1 ? 'A decision in this change' : `${decisions.length} decisions in this change`}${
+					asks === 0
+						? ''
+						: decisions.length === 1
+							? ', and it needs your call'
+							: `, ${asks} ${asks === 1 ? 'needs' : 'need'} your call`
+				}`
 	return `<section class="decisions" aria-labelledby="decisions-head">
-		<div class="list-head"><h3 id="decisions-head">${head}${needs}</h3></div>
-		<ul>${shown.map(({ item, key }) => decisionHtml(item, key, rows, all)).join('')}</ul>
+		<div class="list-head"><h3 id="decisions-head">${head}</h3></div>
+		${list}
 	</section>`
 }
 

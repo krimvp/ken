@@ -109,7 +109,7 @@ export function checksHtml(q, ui) {
 	const backLine =
 		back === 0
 			? ''
-			: `<p class="muted">ken rejected ${count(back, 'draft', 'drafts')} first, because a quote did not match.</p>`
+			: `<p class="muted">ken rejected ${count(back, 'answer', 'answers')} first, because a quote did not match.</p>`
 	return `<div class="panel-head"><h2>What ken checked</h2></div>
 		<p class="panel-limit">${limit(q)}</p>
 		<section class="check" id="check-quotes">

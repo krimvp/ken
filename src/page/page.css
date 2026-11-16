@@ -82,7 +82,7 @@ button {
 }
 
 /* A row fills its box, so its ring goes inside, where no neighbour or scroll edge can hide it. */
-:is(.q-row, .d-row, .row, .file summary):focus-visible {
+:is(.q-row, .d-row, .fold-head, .row, .file summary):focus-visible {
 	outline-offset: -3px;
 }
 
@@ -901,6 +901,60 @@ span.label-from-the-session {
 	color: var(--color-note);
 	font-family: var(--font-text);
 	font-size: var(--text-note);
+}
+
+/* The folded groups of an answer about a change: one line each, with its count, that opens the group in place. */
+.folds {
+	margin-top: var(--space-5);
+	border-top: 1px solid var(--color-border);
+}
+
+.fold {
+	border-bottom: 1px solid var(--color-border);
+}
+
+.fold-head {
+	display: flex;
+	align-items: baseline;
+	gap: var(--space-3);
+	width: 100%;
+	padding: var(--space-3) 0;
+	border: 0;
+	background: none;
+	color: var(--color-text);
+	font-size: var(--text-md);
+	font-weight: 650;
+	text-align: left;
+}
+
+.fold-head::before {
+	content: "";
+	flex: none;
+	border-width: 0.3em 0 0.3em 0.45em;
+	border-style: solid;
+	border-color: transparent transparent transparent var(--color-muted);
+}
+
+.fold-head[aria-expanded="true"]::before {
+	transform: rotate(90deg);
+}
+
+.fold-head:hover {
+	text-decoration: underline;
+	text-underline-offset: 0.18em;
+}
+
+.fold-body {
+	padding-bottom: var(--space-4);
+}
+
+.fold-body > .list-head:first-child,
+.fold-body > .risks:first-child {
+	margin-top: 0;
+}
+
+.risks.minor {
+	padding-top: var(--space-3);
 }
 
 /* Decisions: the question and the option taken, in at most two lines each. A row opens in place. */

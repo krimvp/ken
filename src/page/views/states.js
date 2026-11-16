@@ -40,7 +40,7 @@ export function stepsHtml(steps, live = false) {
 			if (step.kind === 'tool')
 				return `<li class="tool">${prose(i === first ? step.text.replace(RECORD, RECORD_SAID) : step.text)}</li>`
 			if (step.kind === 'rejected') {
-				return `<li class="sent-back"><strong>ken rejected draft ${step.attempt}:</strong><ul>${step.problems.map((p) => `<li>${prose(readerProblem(p))}</li>`).join('')}</ul></li>`
+				return `<li class="sent-back"><strong>ken rejected answer ${step.attempt}:</strong><ul>${step.problems.map((p) => `<li>${prose(readerProblem(p))}</li>`).join('')}</ul></li>`
 			}
 			const caret = live && i === steps.length - 1 ? '<span class="caret" aria-hidden="true"></span>' : ''
 			return `<li class="said">${prose(step.text.trim())}${caret}</li>`
@@ -65,7 +65,7 @@ export function workingHtml(q, ui, seconds) {
 
 const HOW_KEN_CHECKS = `<ol>
 		<li>ken looks in git for every line the answer quotes.</li>
-		<li>If a quote is not there, ken rejects the draft. ken's model gets three drafts.</li>
+		<li>If a quote is not there, ken rejects the answer. ken's model gets three tries.</li>
 		<li>The answer appears on the left. What ken checked appears here: the quotes, the changed code no quote covers, and the commits.</li>
 	</ol>`
 
@@ -79,7 +79,7 @@ export function endedPanelHtml() {
 
 const ORDINAL = ['first', 'second', 'third']
 
-// Drafts rejected for the same reasons fold into one item: "Second and third drafts".
+// Answers rejected for the same reasons fold into one item: "Second and third answers".
 function triesHtml(tries) {
 	const groups = []
 	for (const [i, step] of tries.entries()) {
@@ -91,7 +91,7 @@ function triesHtml(tries) {
 	return groups
 		.map(({ tries: which, said }) => {
 			const names = list(which.map((i) => ORDINAL[i] ?? `number ${i + 1}`))
-			const name = which.length === 3 ? 'all three drafts' : `${names} ${which.length === 1 ? 'draft' : 'drafts'}`
+			const name = which.length === 3 ? 'all three answers' : `${names} ${which.length === 1 ? 'answer' : 'answers'}`
 			return `<li><span class="try">${name[0].toUpperCase()}${name.slice(1)}</span><ul>${said.map((p) => `<li>${prose(p)}</li>`).join('')}</ul></li>`
 		})
 		.join('')
@@ -123,8 +123,8 @@ export function endedHtml(q) {
 	if (q.outcome === 'rejected') {
 		const tries = q.steps.filter((step) => step.kind === 'rejected')
 		return `<div class="notice" role="status">
-			<h3>No answer. ken rejected every draft.</h3>
-			<p>ken's model sent three drafts. In each, a quote was not in its file at the commit it names, so ken rejected it. ken shows an answer only when it finds every quote.</p>
+			<h3>No answer. ken rejected every answer.</h3>
+			<p>ken's model sent three answers. In each, a quote was not in its file at the commit it names, so ken rejected it. ken shows an answer only when it finds every quote.</p>
 			<ol class="tries">${triesHtml(tries)}</ol>
 			<p class="muted">A smaller question often works. Name one commit or one file.</p>
 			<p class="actions">${again}<button class="quiet-button" data-act="one-commit" data-key="one-commit">Ask what the last commit did</button></p>

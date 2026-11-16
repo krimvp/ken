@@ -36,7 +36,7 @@ function costHtml(entry) {
 		parts.push(`This note took ${duration(entry.usage.seconds)} and ${tokens.toLocaleString('en-US')} tokens.`)
 	}
 	const sent = entry.steps.filter((step) => step.kind === 'rejected').length
-	if (sent > 0) parts.push(`ken rejected ${count(sent, 'draft', 'drafts')} first, because a quote did not match.`)
+	if (sent > 0) parts.push(`ken rejected ${count(sent, 'answer', 'answers')} first, because a quote did not match.`)
 	return parts.length === 0 ? '' : `<p class="ln-cost">${parts.join(' ')}</p>`
 }
 

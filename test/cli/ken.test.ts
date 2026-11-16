@@ -127,6 +127,42 @@ test('ken ask --json prints the checked answer, what it recorded and the closing
 	assert.equal((await ken(['record', 'no-such-id', '--repo', root], NO_KEN_VARIABLES)).code, 1)
 })
 
+test('ken ask prints the serious risks before the minor ones whatever order the model sent them in, and says how many points of the draft it left out', async () => {
+	const risk = (text: string, weight: string) => ({ text, label: 'inferred', quotes: [SUM], weight })
+	const model = await scriptedModel([
+		DRAFT,
+		{
+			tool: 'ken__answer',
+			args: {
+				scope: { base, head },
+				summary: 'total returned 0 for every list. It now adds the items. Watch the reports that showed 0.',
+				statements: [{ text: 'total returns the sum of the items instead of 0.', label: 'inferred', quotes: [SUM] }],
+				risks: [
+					risk('A caller that passes text now gets a TypeError.', 'minor'),
+					risk('Every report that showed a total of 0 now shows a different number.', 'serious'),
+				],
+				left_out: ['a guess about who reads the reports'],
+			},
+		},
+		...nothingToRevise(2),
+		{ text: 'Nothing else.' },
+	])
+	const env = {
+		...NO_KEN_VARIABLES,
+		KEN_MODEL: 'scripted',
+		KEN_BASE_URL: model.baseUrl,
+		KEN_API_KEY_ENV: 'KEN_TEST_KEY',
+		KEN_TEST_KEY: 'scripted-model-key',
+	}
+	const { code, stdout, stderr } = await ken(['ask', 'What did the fix do?', '--repo', root], env)
+
+	assert.equal(code, 0, `${stderr}${stdout}`)
+	const serious = stdout.indexOf('Every report that showed a total of 0')
+	const minor = stdout.indexOf('A caller that passes text now gets a TypeError.')
+	assert.ok(serious > 0 && minor > serious, `the serious risk comes first: ${stdout}`)
+	assert.match(stdout, /1 point of the draft had no line to quote/)
+})
+
 test('ken refuses to start without a model, and says what to set', async () => {
 	const cases = [
 		{ env: NO_KEN_VARIABLES, names: ['KEN_MODEL', 'KEN_BASE_URL', 'KEN_API_KEY_ENV'] },

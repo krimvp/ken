@@ -32,6 +32,8 @@ const freshUi = () => ({
 	panel: CHECKS,
 	openQuotes: new Set(),
 	openDecisions: new Set(),
+	// The folded groups of an answer about a change that the reader opened: "decisions", "minor" or "statements".
+	openGroups: new Set(),
 	openParts: new Set(),
 	openElements: new Set(),
 	openFiles: new Set(),
@@ -306,7 +308,7 @@ function schedule() {
 
 function rowMeta(row) {
 	const ended = {
-		rejected: 'No answer: ken rejected every draft',
+		rejected: 'No answer: ken rejected every answer',
 		stopped: 'You stopped it',
 		error: "ken's model did not answer",
 		'no-answer': "ken's model sent no answer",
@@ -378,7 +380,7 @@ function runLine(q, ui) {
 	const parts = []
 	if (q.live) parts.push("ken's model is writing a closing note")
 	if (q.usage && q.steps.length > 0) parts.push(duration(q.usage.seconds))
-	if (back > 0) parts.push(`ken rejected ${count(back, 'draft', 'drafts')}`)
+	if (back > 0) parts.push(`ken rejected ${count(back, 'answer', 'answers')}`)
 
 	if (tools + back > 0) {
 		parts.push(
@@ -846,6 +848,7 @@ const actions = {
 		const allOpen = keys.every((key) => ui.openQuotes.has(key))
 		ui.openQuotes = allOpen ? new Set() : new Set(keys)
 		if (!allOpen) {
+			ui.openGroups = new Set(['decisions', 'minor', 'statements'])
 			for (const key of keys.filter((each) => each.startsWith('d'))) ui.openDecisions.add(key.split('-')[0])
 			for (const index of state.open.answer.diagrams.keys()) ui.openParts.add(index)
 		}
@@ -853,6 +856,10 @@ const actions = {
 	},
 	decision(el) {
 		toggle(uiNow().openDecisions, el.dataset.item)
+		render()
+	},
+	group(el) {
+		toggle(state.ui.openGroups, el.dataset.group)
 		render()
 	},
 	parts(el) {

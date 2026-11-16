@@ -66,30 +66,62 @@ export async function printQuestion(events: AsyncIterable<ChatEvent>, out: NodeJ
 	return answered
 }
 
-// The order of the page: the summary, the diagrams, the decisions, the risks, then the other statements. entries are
-// the record entries the answer stands on, or a draft's decisions, which the record does not hold.
+// The order of the page: the summary, the diagrams, the decisions, the risks, then the other statements. An answer about
+// a change whose risks the model weighed leads, as on the page, with the serious risks and the decisions that need the
+// reader's call; a terminal cannot fold, so the rest follows under one line each with its count. entries are the
+// record entries the answer stands on, or a draft's decisions, which the record does not hold.
 export function formatAnswer(answer: Answer, entries: Entry[], paint: Paint): string {
 	const lines = [paint('bold', answer.summary), '']
+	const leftOut = answer.leftOut ?? 0
+	if (leftOut > 0) {
+		const said =
+			leftOut === 1
+				? '1 point of the draft had no line to quote and was'
+				: `${leftOut} points of the draft had no line to quote and were`
+		lines.push(paint('dim', `${said} left out.`), '')
+	}
 	for (const diagram of answer.diagrams) lines.push(...formatDiagram(diagram, paint), '')
 	const decisions = entries.flatMap((entry) => (entry.kind === 'decision' ? [entry] : []))
-	if (decisions.length > 0) {
-		lines.push(paint('bold', `Decisions (${decisions.length}):`))
-		for (const [index, d] of decisions.entries()) {
-			lines.push(`${index + 1}. ${d.question} ${paint('cyan', `[${d.label}]`)}`, `   Chosen: ${d.chosen}`)
-			if (d.reason)
-				lines.push(`   Why: ${d.reason.text}`, ...d.reason.quotes.flatMap((quote) => formatQuote(quote, paint)))
+	const risks = answer.risks ?? []
+	const marks = risks.some((risk) => risk.checked !== undefined)
+		? [paint('dim', 'ken checks where the quote is, not whether the risk is true.')]
+		: []
+	const weighed = answer.change !== null && risks.some((risk) => risk.weight !== undefined)
+	if (weighed) {
+		const serious = risks.filter((risk) => risk.weight === 'serious')
+		const minor = risks.filter((risk) => risk.weight !== 'serious')
+		const calls = decisions.filter((d) => d.needsOwner)
+		const others = decisions.filter((d) => !d.needsOwner)
+		const weight = paint(
+			'dim',
+			"ken's model weighs each risk: serious when someone is hurt in normal use, minor otherwise.",
+		)
+		if (risks.length === 0) lines.push(paint('bold', "Risks: ken's model looked and found none."), '')
+		else
+			lines.push(
+				paint('bold', `Serious risks (${serious.length}):`),
+				weight,
+				...claims(serious, paint, 0),
+				...marks,
+				'',
+			)
+		if (calls.length > 0)
+			lines.push(paint('bold', `Decisions that need your call (${calls.length}):`), ...decisionLines(calls, paint), '')
+		if (others.length > 0) {
+			const head = calls.length === 0 ? 'Decisions' : 'Other decisions'
+			lines.push(paint('bold', `${head} (${others.length}):`), ...decisionLines(others, paint), '')
 		}
-		lines.push('')
-	}
-	if (answer.risks?.length === 0) lines.push(paint('bold', "Risks: ken's model looked and found none."), '')
-	if (answer.risks?.length) {
-		lines.push(paint('bold', `Risks (${answer.risks.length}):`), ...claims(answer.risks, paint))
-		if (answer.risks.some((risk) => risk.checked !== undefined))
-			lines.push(paint('dim', 'ken checks where the quote is, not whether the risk is true.'))
-		lines.push('')
+		if (minor.length > 0)
+			lines.push(paint('bold', `Minor risks (${minor.length}):`), ...claims(minor, paint, serious.length), '')
+	} else {
+		if (decisions.length > 0)
+			lines.push(paint('bold', `Decisions (${decisions.length}):`), ...decisionLines(decisions, paint), '')
+		if (answer.risks?.length === 0) lines.push(paint('bold', "Risks: ken's model looked and found none."), '')
+		if (risks.length > 0)
+			lines.push(paint('bold', `Risks (${risks.length}):`), ...claims(risks, paint, 0), ...marks, '')
 	}
 	const said = answer.change ? 'What the change did' : 'Statements'
-	lines.push(paint('bold', `${said} (${answer.statements.length}):`), ...claims(answer.statements, paint))
+	lines.push(paint('bold', `${said} (${answer.statements.length}):`), ...claims(answer.statements, paint, 0))
 	const fromSessions = [
 		...[...answer.statements, ...(answer.risks ?? [])].flatMap((claim) => claim.quotes),
 		...decisions.flatMap((d) => [...(d.reason?.quotes ?? []), ...d.quotes]),
@@ -167,9 +199,18 @@ function revisionLine({ risks, decisions, withdrawn }: Revision): string {
 // A risk carries ken's own mark of whether a quote lies outside the change; a statement, and an older risk, has none.
 const CHECKED = { true: 'Quotes code outside the change', false: 'Quotes only the changed lines' } as const
 
-function claims(list: Risk[], paint: Paint): string[] {
+function decisionLines(decisions: Extract<Entry, { kind: 'decision' }>[], paint: Paint): string[] {
+	return decisions.flatMap((d, index) => [
+		`${index + 1}. ${d.needsOwner ? `${paint('yellow', '[your call]')} ` : ''}${d.question} ${paint('cyan', `[${d.label}]`)}`,
+		`   Chosen: ${d.chosen}`,
+		...(d.reason ? [`   Why: ${d.reason.text}`, ...d.reason.quotes.flatMap((quote) => formatQuote(quote, paint))] : []),
+	])
+}
+
+// from is how many risks the list before this one numbered, so a risk has one number in the whole answer.
+function claims(list: Risk[], paint: Paint, from: number): string[] {
 	return list.flatMap((claim, index) => [
-		`${index + 1}. ${claim.text} ${paint('cyan', `[${claim.label}]`)}${claim.checked === undefined ? '' : ` ${paint('cyan', `[${CHECKED[`${claim.checked}`]}]`)}`}`,
+		`${from + index + 1}. ${claim.text} ${paint('cyan', `[${claim.label}]`)}${claim.checked === undefined ? '' : ` ${paint('cyan', `[${CHECKED[`${claim.checked}`]}]`)}`}`,
 		...claim.quotes.flatMap((quote) => formatQuote(quote, paint)),
 	])
 }
