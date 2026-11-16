@@ -109,11 +109,12 @@ async function askForJson(chat: Chat, question: string): Promise<number> {
 		tools: Extract<ChatEvent, { kind: 'tool' }>[]
 		rejected: Extract<ChatEvent, { kind: 'rejected' }>[]
 		usage: Extract<ChatEvent, { kind: 'usage' }> | null
-		text: string
+		note: string
 		error: string | null
-	} = { outcome: 'error', answer: null, recorded: [], tools: [], rejected: [], usage: null, text: '', error: null }
+	} = { outcome: 'error', answer: null, recorded: [], tools: [], rejected: [], usage: null, note: '', error: null }
 	for await (const event of chat.ask(question)) {
-		if (event.kind === 'text') result.text += event.delta
+		// The note is what the agent wrote after ken accepted its answer. What it wrote before belongs to its steps.
+		if (event.kind === 'text' && result.answer) result.note += event.delta
 		if (event.kind === 'tool') result.tools.push(event)
 		if (event.kind === 'rejected') result.rejected.push(event)
 		if (event.kind === 'accepted') {
@@ -124,6 +125,7 @@ async function askForJson(chat: Chat, question: string): Promise<number> {
 		if (event.kind === 'done') result.outcome = event.outcome
 		if (event.kind === 'error') result.error = event.message
 	}
+	result.note = result.note.trim()
 	process.stdout.write(`${JSON.stringify(result, null, 2)}\n`)
 	return result.outcome === 'answered' ? 0 : 1
 }

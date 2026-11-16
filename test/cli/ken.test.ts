@@ -24,9 +24,10 @@ function ken(args: string[], env: Record<string, string | undefined>) {
 
 const SUM = { path: 'app.py', commit: head, text: '    return sum(items)' }
 
-test('ken ask --json prints the checked answer and what it recorded, and ken record reads it back with no model', async () => {
+test('ken ask --json prints the checked answer, what it recorded and the closing note, and ken record reads it back with no model', async () => {
 	const model = await scriptedModel([
 		{
+			text: 'Let me read the diff.',
 			tool: 'ken__answer',
 			args: {
 				scope: { base, head },
@@ -69,6 +70,7 @@ test('ken ask --json prints the checked answer and what it recorded, and ken rec
 	assert.equal(code, 0, `${stderr}${stdout}`)
 	const result = JSON.parse(stdout)
 	assert.equal(result.outcome, 'answered')
+	assert.equal(result.note, 'Nothing was left out.', 'the note holds only what the agent wrote after the answer')
 	const verified = [{ path: 'app.py', commit: head, startLine: 2, endLine: 2, text: '    return sum(items)' }]
 	assert.deepEqual(result.answer.statements[0].quotes, verified)
 	assert.deepEqual(result.answer.risks, [

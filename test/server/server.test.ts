@@ -26,7 +26,11 @@ function tempFolder(name: string) {
 
 const SLEEP = { path: 'src/retry.ts', commit: head, text: '\t\tsleep(100)' }
 const RETRY_LINE = { path: 'src/retry.ts', commit: head, text: 'export function retry(times: number) {' }
-const READ: Turn = { tool: 'ken__read_file', args: { path: 'src/retry.ts', start: 1, end: 3 } }
+const READ: Turn = {
+	text: 'Let me read the file.',
+	tool: 'ken__read_file',
+	args: { path: 'src/retry.ts', start: 1, end: 3 },
+}
 const ANSWER: Turn = {
 	tool: 'ken__answer',
 	args: {
@@ -112,7 +116,7 @@ test('a question streams its steps and a checked answer with its diagram drawn, 
 		lines.map((line) => line.kind).filter((kind) => kind !== 'text'),
 		['tool', 'tool', 'accepted', 'usage', 'done', 'saved'],
 	)
-	assert.match(lines[0].step, /^Read `src\/retry\.ts`, lines 1 to 3$/)
+	assert.match(lines.find((line) => line.kind === 'tool').step, /^Read `src\/retry\.ts`, lines 1 to 3$/)
 	const accepted = lines.find((line) => line.kind === 'accepted')
 	assert.deepEqual(accepted.answer.statements[0].quotes, [{ ...SLEEP, startLine: 4, endLine: 4 }])
 	assert.deepEqual(
