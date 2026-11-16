@@ -308,7 +308,7 @@ function rowMeta(row) {
 	const ended = {
 		rejected: 'No answer: ken rejected every draft',
 		stopped: 'You stopped it',
-		error: 'The model did not answer',
+		error: "ken's model did not answer",
 		'no-answer': "ken's model sent no answer",
 		'out-of-turns': "ken's model ran out of turns",
 	}[row.outcome]
@@ -328,10 +328,12 @@ function rowHtml(row) {
 }
 
 // A lens's question is a line the reader asked and the list ken wrote under it. A question on a live note saved before
-// ken gave it a title line holds the whole prompt in its first line, so its title is that line's first sentence.
+// ken gave it a title line holds the whole prompt in its first line, "Go deeper on ken's live note about X at 06:40
+// UTC. ...", so its title is rewritten the way ken writes one now.
 function firstLine(question) {
 	const first = question.split('\n')[0]
-	return first.startsWith("Go deeper on ken's live note") ? first.split(/(?<=\.) /)[0] : first
+	const old = first.match(/^Go deeper on ken's live note about (.+?) at (\d\d:\d\d) UTC\./)
+	return old ? `Go deeper on the ${old[2]} UTC note about ${old[1]}` : first
 }
 
 // The header: the views, and the reader's questions in a menu. On a phone the views go into the menu too, beside the
@@ -427,7 +429,7 @@ function movedHtml(q) {
 			: ''
 	const changed = q.answer ? changedTopics(q) : []
 	const lines = changed.map(changedLine)
-	const head = changed.length > 0 ? '<strong>Out of date.</strong> ' : ''
+	const head = changed.length > 0 ? '<strong>Out of date.</strong> ' : '<strong>May be out of date.</strong> '
 	return `<p class="moved${changed.length > 0 ? ' stale' : ''}">${head}Asked when the project was at <code>${short(q.head)}</code>. It is at <code>${short(q.headNow)}</code> now, so the code may have changed since. ${lines.join(' ')}${again}</p>`
 }
 
@@ -753,14 +755,12 @@ async function followUpSaved(save, said) {
 const actions = {
 	map: () => (state.view === 'map' ? closeMap() : showMap()),
 	decisions: () => (state.view === 'decisions' ? closeDecisions() : showDecisions()),
-	'decisions-close': closeDecisions,
 	'dv-key'() {
 		state.decisionsKey = !state.decisionsKey
 		render()
 	},
 	'decision-show': (el) => showDecisions(el.dataset.id),
 	live: () => (state.view === 'live' ? closeLive() : showLive()),
-	'live-close': closeLive,
 	'live-on': () => liveAction('on'),
 	'live-off': () => liveAction('off'),
 	'live-pause': () => liveAction('pause'),
@@ -785,14 +785,12 @@ const actions = {
 		render()
 	},
 	'follow-up': () => (state.view === 'follow-up' ? closeFollowUp() : showFollowUp()),
-	'open-close': closeFollowUp,
 	'explain-topic': (el) => send({ lens: { kind: 'topic', topic: el.dataset.topic } }),
 	'know-topic': (el) =>
 		followUpSaved(
 			() => post('/api/map', { signal: 'know', topics: [el.dataset.topic] }),
 			`Saved. Your map says you know ${el.dataset.topic}, as the code is now.`,
 		),
-	'map-close': closeMap,
 	'map-topic-know': (el) =>
 		mapTopic('know', el.dataset.topic, `Saved. Your map says you know ${el.dataset.topic}, as the code is now.`),
 	'map-topic-forgot': (el) =>

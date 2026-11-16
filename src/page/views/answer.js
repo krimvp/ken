@@ -199,12 +199,19 @@ export function decisionHtml(d, key, rows, marked) {
 	const row = `<button class="d-row" data-act="decision" data-item="${key}" data-key="${key}-row" aria-expanded="${open}">
 		<span class="d-line">${call}${mark}<span class="d-q">${prose(d.question)}</span> <span class="d-chosen"><span class="d-field">Chosen</span> ${prose(d.chosen)}</span></span></button>`
 	if (!open) return `<li class="decision" id="item-${key}">${row}</li>`
+	const answerIt = d.needsOwner && !d.answer && !rows.waiting ? `<p class="small">${answerItLink(key)}</p>` : ''
 	return `<li class="decision open" id="item-${key}">${row}
 		<div class="d-card">
 			${factsHtml(d)}
+			${answerIt}
 			${quoteRows(decisionQuotes(d), key, rows)}
 		</div>
 	</li>`
+}
+
+// A decision that needs the reader's call is answered in "Waiting on you"; this opens it.
+export function answerItLink(key) {
+	return `<button class="link" data-act="follow-up" data-key="answer-it-${esc(key)}">Answer it in Waiting on you</button>`
 }
 
 // A decision's facts under what was chosen, the same in an answer, in "Waiting on you" and in Decisions: why, the

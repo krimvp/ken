@@ -152,8 +152,14 @@ export function quoteTags(quotes, { head = null, copies = NONE, change = null })
 	})
 }
 
+const TAG_MEANS = {
+	now: 'now: this file as it is now, at the newest commit or in your uncommitted work',
+	before: 'before: an older version of this file',
+	after: 'after: this file just after the change; a later commit may have changed it again',
+}
+
 export function tagHtml(tag) {
-	return tag ? `<span class="q-then">${tag}</span>` : ''
+	return tag ? `<span class="q-then" title="${TAG_MEANS[tag]}">${tag}</span>` : ''
 }
 
 // At rest a quote is one row: the file, the lines, and the first quoted line, with the commit when the answer quotes
@@ -167,8 +173,7 @@ export function quoteRows(quotes, key, { ui, commits, head = null, copies = NONE
 			const id = `${key}-q${j}`
 			const chosen = ui.wide && ui.panel.kind === 'quote' && ui.panel.key === key && ui.panel.quote === j
 			const open = !ui.wide && ui.openQuotes.has(id)
-			// A session quote's row names the session and the line within its message, so its first line has no room.
-			const first = isSession(quote) ? '' : (quote.text.split('\n').find((line) => line.trim() !== '') ?? '')
+			const first = quote.text.split('\n').find((line) => line.trim() !== '') ?? ''
 			const at =
 				commits && !isSession(quote) && quote.path !== null
 					? `<span class="q-commit">${copies.has(quote.commit) ? "in ken's copy" : `at <code>${short(quote.commit)}</code>`}</span>`

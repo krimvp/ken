@@ -12,11 +12,11 @@ export function openCount(open) {
 function decisionItem(d, i, ui) {
 	const key = `o${i}`
 	return `<li class="o-decision">
-		<ul class="o-card">${decisionHtml(d, key, { ui, commits: true }, new Set(['recorded', 'inferred']))}</ul>
+		<ul class="o-card">${decisionHtml(d, key, { ui, commits: true, waiting: true }, new Set(['recorded', 'inferred']))}</ul>
 		<form class="decide-form" data-id="${esc(d.id)}" autocomplete="off">
-			<label for="note-${key}">Your note: why, and what to change if you want it changed</label>
+			<label for="note-${key}">Your note: why you keep it, or what you want instead</label>
 			<textarea id="note-${key}" name="note" rows="2" maxlength="1200" required></textarea>
-			<p class="small muted">This records that you made the call, with your note. It changes no code, and the decision stays as it was written.</p>
+			<p class="small muted">ken saves your answer and note. No code changes. "I want it changed" does nothing more by itself: you or your coding agent act on your note.</p>
 			<div class="decide-buttons">
 				<button class="primary" type="submit" name="outcome" value="keep" formnovalidate>Keep what was chosen</button>
 				<button class="primary" type="submit" name="outcome" value="change">I want it changed</button>
@@ -46,7 +46,7 @@ function topicItem({ state, commits }, canAsk) {
 		<p class="t-head"><span class="t-name">${topic}</span> <span class="t-state">You understood it ${onDay(state.entry.date)}</span></p>
 		<p class="t-lines">Changed since: ${linesText(state.changed)}</p>
 		${commitsHtml(commits)}
-		<div class="map-buttons">${explain}<button class="quiet-button" data-act="know-topic" data-topic="${topic}" data-key="know-${topic}">I know this change</button></div>
+		<div class="map-buttons"><button class="quiet-button" data-act="know-topic" data-topic="${topic}" data-key="know-${topic}">I know this change</button>${explain}</div>
 	</li>`
 }
 
@@ -82,6 +82,5 @@ export function openViewHtml(open, ui, canAsk, said, decided) {
 		<p class="lead">What waits on you in this project: decisions that need your call, and topics whose code changed since you understood them.</p>
 		${said ? `<p class="map-said" role="status">${esc(said)}</p>` : ''}
 		${empty}${decisionList}${topicList}
-		<p class="actions"><button class="quiet-button" data-act="open-close" data-key="open-close">Back</button></p>
 	</section>`
 }

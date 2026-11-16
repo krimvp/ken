@@ -18,14 +18,14 @@ export function emptyHtml(project, canAsk) {
 
 export function emptyAfterHtml(lenses) {
 	return `<section class="welcome-after">
-		<h2>You could start with</h2>
-		<ul class="starts">${EXAMPLES.map((q) => `<li><button data-act="example" data-key="ex-${esc(q)}">${esc(q)}</button></li>`).join('')}</ul>
-		<h2>Or let ken write the question</h2>
-		${lenses}
 		<div class="limit">
 			<p>ken checks that every quoted line is in git, at the commit the answer names.</p>
 			<p class="muted">It cannot check that a sentence about the code is true. The quote is there so you can judge.</p>
 		</div>
+		<h2>You could start with</h2>
+		<ul class="starts">${EXAMPLES.map((q) => `<li><button data-act="example" data-key="ex-${esc(q)}">${esc(q)}</button></li>`).join('')}</ul>
+		<h2>Or let ken write the question</h2>
+		${lenses}
 	</section>`
 }
 
@@ -104,11 +104,9 @@ const STATUS = [
 ]
 
 // Asking again after a refused key or a wrong address fails the same way until the setting is fixed and ken open restarts.
-function retryCost(error) {
+function failsAgain(error) {
 	const status = error.match(/^(\d{3})\b/)?.[1]
-	return status && /^(40[134])$/.test(status)
-		? 'One model run. It fails the same way until you fix the setting and restart ken open.'
-		: 'One model run.'
+	return status !== undefined && /^(40[134])$/.test(status)
 }
 
 // A model error in words first. The service's own message follows it as it came.
@@ -134,12 +132,19 @@ export function endedHtml(q) {
 	}
 	if (q.outcome === 'error') {
 		return `<div class="notice" role="alert">
-			<h3>The model did not answer</h3>
+			<h3>ken's model did not answer</h3>
 			<p>${modelProblem(q.error)}</p>
 			<p class="muted">What came back:</p>
 			<pre>${esc(q.error)}</pre>
 			<p class="muted">If it names the key, the address or the model, fix that setting and restart <code>ken open</code>.</p>
-			<p class="actions">${withCost(button, retryCost(q.error))}</p>
+			<p class="actions">${
+				failsAgain(q.error)
+					? withCost(
+							'<button class="quiet-button" data-act="again" data-key="again">Ask again</button>',
+							'One model run. It fails the same way until you fix the setting and restart <code>ken open</code>.',
+						)
+					: again
+			}</p>
 		</div>`
 	}
 	if (q.outcome === 'unasked') {
@@ -182,7 +187,7 @@ export function noModelHtml(model, hasHistory, heading) {
 			: `<li>Set these:
 				<dl class="settings">${model.missing.map((s) => `<div><dt><code>${esc(s.name)}</code></dt><dd>${esc(s.means)}. Or give <code class="nowrap">${esc(s.flag)}</code>.</dd></div>`).join('')}</dl></li>
 				<li>Start it again. For example:
-				<pre class="command">${[...model.example.split(' ').map((part) => `${part} \\`), 'npm run ken -- open'].map((line) => `<span>${esc(line).replace('=', '=<wbr>')}</span>`).join('')}</pre></li>`
+				<pre class="command">${[...model.example.split(' ').map((part) => `${part} \\`), 'npm run ken -- open'].map((line) => `<span>${esc(line)}</span>`).join('')}</pre></li>`
 	return `<div class="notice" role="alert" id="no-model">
 		${heading ? '<h3>ken has no model to ask</h3>' : ''}
 		<p>ken sends your project's code to the model you choose, so it has no default model.</p>

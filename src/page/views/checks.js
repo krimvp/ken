@@ -99,7 +99,7 @@ export function checksHtml(q, ui) {
 	const messageLine =
 		fromMessages === 0
 			? ''
-			: `<p class="muted small">${fromMessages === quotes.length ? 'All' : fromMessages} of the git quotes ${fromMessages === 1 ? 'is' : 'are'} from commit messages.</p>`
+			: `<p class="muted small">${fromMessages === quotes.length ? 'All' : fromMessages} of the git quotes ${fromMessages === 1 ? 'is from a commit message' : 'are from commit messages'}.</p>`
 	const sessionLine =
 		fromSessions === 0
 			? ''

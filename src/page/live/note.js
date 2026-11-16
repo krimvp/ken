@@ -73,7 +73,7 @@ export function noteHtml(view, key, ui, canAsk, tags) {
 	const more =
 		statements === 0 && !entry.usage
 			? ''
-			: `<button class="link small" data-act="note-more" data-id="${esc(entry.id)}" data-key="more-${key}" aria-expanded="${open}">${open ? 'Hide' : statements === 0 ? 'What it cost' : statements === 1 ? 'Show the statement' : `Show the ${statements} statements`}</button>`
+			: `<button class="link small" data-act="note-more" data-id="${esc(entry.id)}" data-key="more-${key}" aria-expanded="${open}">${open ? 'Hide' : statements === 0 ? 'What it cost' : statements === 1 ? 'Show what this note rests on' : `Show the ${statements} statements`}</button>`
 	const rest = open
 		? `${statements > 0 ? `<ol class="ln-list">${claimItems(a.statements, `${key}s`, rows)}</ol>` : ''}${costHtml(entry)}`
 		: ''

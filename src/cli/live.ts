@@ -73,7 +73,9 @@ function formatNow(now: NowBlock, paint: Paint): string {
 		lines.push(...now.ask.text.split('\n').map((line) => `    ${line}`))
 	} else {
 		lines.push(
-			now.ask.kind === 'off' ? '  ken reads no saved sessions (KEN_SESSIONS is off).' : '  No saved session yet.',
+			now.ask.kind === 'off'
+				? '  ken reads no saved sessions (KEN_SESSIONS is off).'
+				: '  ken finds no saved session of your coding agent for this folder.',
 		)
 	}
 	return lines.join('\n')

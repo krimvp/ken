@@ -22,7 +22,7 @@ const DEPTH = {
 const EVIDENCE = {
 	asked: 'You asked about it',
 	read: 'You said an answer was too much',
-	said: 'You said "I know this"',
+	said: 'You said you know this',
 	wrote: 'You wrote it by hand',
 	forgot: 'You said you do not know it any more',
 }
@@ -62,7 +62,7 @@ export function knownHtml(q, ui, named, moved) {
 		if (t.kind === 'unchanged' && named.has(t.topic)) {
 			const open = ui.unfolded.has(t.topic)
 			return [
-				`<p class="known">You said you know ${esc(t.topic)}, and the lines quoted here have not changed since ${sinceDay(t.entry.date)}, so its entries are folded. <button class="link" data-act="unfold" data-topic="${esc(t.topic)}" data-key="unfold-${esc(t.topic)}" aria-expanded="${open}">${open ? 'Fold them again' : 'Show them anyway'}</button></p>`,
+				`<p class="known">You know ${esc(t.topic)} and the lines quoted here are the same as ${sinceDay(t.entry.date)}, so they are folded. <button class="link" data-act="unfold" data-topic="${esc(t.topic)}" data-key="unfold-${esc(t.topic)}" aria-expanded="${open}">${open ? 'Fold them again' : 'Show them anyway'}</button></p>`,
 			]
 		}
 		if ((t.kind === 'changed' || t.kind === 'long-ago') && t.changed.length > 0) {
@@ -98,7 +98,7 @@ export function mapBarHtml(q, ui, running) {
 		<p class="small">Tell ken how well you know ${named}:</p>
 		<ul class="map-buttons">
 			<li><button class="quiet-button" data-act="map-know" data-key="map-know">I know this</button><span>Later answers show it as one line.</span></li>
-			<li><button class="quiet-button" data-act="map-too-much" data-key="map-too-much">Too much</button><span>The next answer on it is shorter.</span></li>
+			<li><button class="quiet-button" data-act="map-too-much" data-key="map-too-much">Too much detail</button><span>The next answer on it is shorter.</span></li>
 			<li>${deeper}<span>The next answer on it goes into more detail. One model run.</span></li>
 		</ul>
 		${said}
@@ -124,11 +124,12 @@ function topicHtml(t, canAsk) {
 	const button = (act, text) =>
 		`<button class="quiet-button" data-act="${act}" data-topic="${topic}" data-key="${act}-${topic}">${text}</button>`
 	const understood = t.kind === 'unchanged' || t.kind === 'changed' || t.kind === 'long-ago'
+	// The button that runs ken's model comes last, so its cost ends the row.
 	const buttons = [
-		...(changed && canAsk ? [withCost(button('explain-topic', 'Explain what changed'))] : []),
 		...(changed ? [button('map-topic-know', 'I know this change')] : []),
 		...(understood ? [button('map-topic-forgot', 'I do not know this any more')] : []),
 		...(understood ? [] : [button('map-topic-know', 'I know this')]),
+		...(changed && canAsk ? [withCost(button('explain-topic', 'Explain what changed'))] : []),
 	]
 	return `<li class="t-row t-${t.kind}">
 		<p class="t-head"><span class="t-name">${topic}</span> <span class="t-state">${STATE[t.kind]}</span></p>
@@ -156,8 +157,7 @@ export function mapViewHtml(map, canAsk, said) {
 		${met.length === 0 ? '<p class="t-empty">You have not met any topic yet. Ask how a part of the project works, then press "I know this" under the answer.</p>' : `<ul class="t-list">${met.map((t) => topicHtml(t, canAsk)).join('')}</ul>`}
 		${unmet.length === 0 ? '' : `<p class="t-unmet"><strong>Not met yet:</strong> ${list(unmet.map((t) => esc(t.topic)))}.</p>`}
 		${problems}
-		<p class="map-foot small muted">The map is a plain file on this computer, outside the project: <code>${esc(map.file)}</code>. Each button adds a line to it, and you can add one by hand: ken reads the newest line for each topic. Run <code>ken map</code> in a terminal to see each topic's hash and an example line.</p>
-		<p class="actions"><button class="quiet-button" data-act="map-close" data-key="map-close">Back</button></p>
+		<p class="map-foot small muted">The map is a plain file on this computer, outside the project: <code>${esc(map.file)}</code>. Each button adds a line to it, and you can add one by hand: ken reads the newest line for each topic. Run <code>ken map</code> in a terminal to see each topic's id and an example line.</p>
 	</section>`
 }
 
@@ -179,7 +179,7 @@ export function lensHtml(where, pick) {
 	)
 	const off = pick.running ? ' disabled' : ''
 	const catchUp = pick.changed
-		? `<button class="quiet-button" data-act="catch-up" data-key="catch-up-${where}"${off}>What changed in the topics I know?</button>`
+		? `<div class="catch-up"><p class="lens-label">Topics you know</p><button class="quiet-button" data-act="catch-up" data-key="catch-up-${where}"${off}>What changed in the topics I know?</button></div>`
 		: ''
 	return `<div class="lenses lenses-${where}">
 		${catchUp}

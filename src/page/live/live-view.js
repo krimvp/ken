@@ -2,7 +2,7 @@
 // leads; how ken paces notes opens from that line. On a phone one line of what ken sees now comes before the note. Under
 // the note, what ken sees now in full, read from git and the saved session with no model, then every older note folded
 // to one line, so twenty notes stay calm.
-import { at, esc, prose, short, when, withCost } from '../views/format.js'
+import { at, count, esc, prose, short, when, withCost } from '../views/format.js'
 import { noteHeadHtml, noteHtml } from './note.js'
 
 // The look of each status, here and in the header: on, paused, off, or writing a note.
@@ -33,7 +33,7 @@ function statusText(live) {
 
 function controlsHtml(live) {
 	if (live.status === 'off') {
-		return '<button class="primary" data-act="live-on" data-key="live-on">Turn live on</button>'
+		return '<button class="primary" data-act="live-on" data-key="live-on">Turn Live on</button>'
 	}
 	const paused = live.status === 'paused'
 	const toggle = paused
@@ -47,7 +47,8 @@ function controlsHtml(live) {
 // While paused ken writes no note, so the line leaves out how it paces them.
 function paceHtml({ status, pace, spent, since }, open) {
 	const tokens = (spent.inputTokens + spent.outputTokens).toLocaleString('en-US')
-	const notes = `${spent.notes} ${spent.notes === 1 ? 'note' : 'notes'}`
+	// Each note is one model run, the unit the rest of the page counts in.
+	const notes = `${count(spent.notes, 'note', 'notes')}, ${count(spent.notes, 'model run', 'model runs')}`
 	const spend = since ? `Since you turned Live on ${at(since)}: ${notes}, ${tokens} tokens. ` : ''
 	if (status === 'paused') return spend ? `<p class="live-pace">${spend}</p>` : ''
 	const toggle = `<button class="link small" data-act="pace" data-key="pace" aria-expanded="${open}">${open ? 'Hide how ken paces notes' : 'How ken paces notes'}</button>`
@@ -63,7 +64,7 @@ function nowLineHtml(now) {
 	const branch = now.branch ? `on <code>${esc(now.branch)}</code>` : 'HEAD is not on a branch'
 	const files = total === 0 ? 'nothing uncommitted' : `${total} ${total === 1 ? 'file' : 'files'} uncommitted`
 	const more = total === 0 ? 'See the last commits' : 'See the files'
-	return `<p class="now-line narrow-only">Now: ${branch}, ${files}. <a href="#now-head">${more}</a></p>`
+	return `<p class="now-line narrow-only">Now: ${branch}, ${files}. <a class="link" href="#now-head">${more}</a></p>`
 }
 
 function fileHtml(file) {
@@ -84,7 +85,8 @@ function fileHtml(file) {
 
 function askHtml(ask, hidden) {
 	if (ask.kind === 'off') return '<p class="now-ask">ken reads no saved sessions: KEN_SESSIONS is off.</p>'
-	if (ask.kind === 'none') return '<p class="now-ask">No saved session of your coding agent yet.</p>'
+	if (ask.kind === 'none')
+		return '<p class="now-ask">ken finds no saved session of your coding agent for this folder.</p>'
 	const toggle = `<button class="link small" data-act="ask-hide" data-key="ask-hide" aria-expanded="${!hidden}">${hidden ? 'Show it' : 'Hide it'}</button>`
 	if (hidden) return `<p class="now-ask">Your last request to Claude Code is hidden. ${toggle}</p>`
 	return `<div class="now-ask">
@@ -167,6 +169,5 @@ export function liveViewHtml(live, ui, unfolded, canAsk, problem, { seen, hideAs
 		${nowHtml(live.now, hideAsk)}
 		${folded.length > 0 ? `<h2 class="ln-count">Earlier notes</h2><ol class="live-notes folded">${folded.join('')}</ol>` : ''}
 		${live.notes.length > 0 ? '<p class="live-foot">Notes stay in your history on this machine. A note on commits also adds its decisions to the project record; a note on uncommitted work adds nothing.</p>' : ''}
-		<p class="actions"><button class="quiet-button" data-act="live-close" data-key="live-close">Back</button></p>
 	</section>`
 }
