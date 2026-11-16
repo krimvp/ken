@@ -45,7 +45,8 @@ export async function laterCommits(repo: Repository, change: Change, signal?: Ab
 }
 
 // The steps follow the checkpoint's verdicts: the plain chat found the risks that need the code outside the change, two
-// parts of the change read together, or a reason checked against the code, and it ordered its risks by weight.
+// parts of the change read together, a behaviour no test covers or a thing outside the repository, and it ordered its
+// risks by who hits them and when.
 export function riskPassQuestion(held: Held, later: Later[]): string {
 	const { answer, decisions } = held
 	const risks = answer.risks ?? []
@@ -59,7 +60,7 @@ export function riskPassQuestion(held: Held, later: Later[]): string {
 		'1. Each risk below: read the place it points at. That is the code outside the change that uses what changed, or, for what the change left undone, the later commits below. Then rewrite the risk with a quote of that place, withdraw it because the code shows it does not happen, or keep it as it is. ken marks a risk "Quotes code outside the change" only when one of its quotes, at the head commit, holds no line the change touched, and "Quotes only the changed lines" otherwise. A dependency\'s code is not in git, so ken cannot read it.',
 		'2. Each pair of decisions that touch the same file, function, record, id or signal, such as one that writes or keeps a thing and one that deletes or skips it: what happens when both apply?',
 		'3. Each early return, refusal, delete or catch in the changed lines: what no longer happens after it, and who relied on it?',
-		'4. Each reason your answer quotes from a commit message or a comment: does the code do what it says? Where it does not, that is a risk.',
+		'4. Which new behaviour has no test? And what does the change lean on outside the repository, such as a setting, a service or the way a dependency behaves?',
 		'5. Each name below that no quote follows: read where it is used. Does the change still fit there? And each fix: what does it leave undone?',
 		'',
 		decisions.length === 0 ? 'Your answer names no decisions.' : 'The decisions in your answer:',
@@ -82,11 +83,11 @@ export function riskPassQuestion(held: Held, later: Later[]): string {
 					),
 				]),
 		'',
-		'Before you call revise_answer, write what you found in steps 2 and 3, one short line each: the two decisions or the line, and what happens. These lines are not part of the answer.',
+		'Before you call revise_answer, write what you found in steps 2, 3 and 4, one short line each: the two decisions, the line or the behaviour, and what happens. These lines are not part of the answer.',
 		'Then call revise_answer once:',
-		'- risks: each new risk, and each risk above that you rewrite, with replaces set to its number. A risk is one or two sentences: what can happen, to whom, and when. Quote the place it rests on.',
+		'- risks: each new risk, and each risk above that you rewrite, with replaces set to its number. A risk is one or two sentences: what can happen, who hits it (a host, an operator, a reader of results, a later developer) and when (always, on resume, only for runs made before this change, only under load). A risk that begins with "if" must be settled by reading the code that decides it, or say plainly that it was not settled. Quote the place it rests on.',
 		'- withdraw: each risk above that the code shows does not happen, with what the code shows instead.',
-		`- order: the numbers of all the risks the answer keeps, the heaviest first: what can hurt the owner most, soonest. A risk above keeps its number; the risks you send are ${risks.length + 1}, ${risks.length + 2} and on, in the order you send them. A minor or speculative risk goes last, or withdraw it.`,
+		`- order: the numbers of all the risks the answer keeps, the heaviest first, by who hits each and when. A risk above keeps its number; the risks you send are ${risks.length + 1}, ${risks.length + 2} and on, in the order you send them. A minor or speculative risk goes last, or withdraw it.`,
 		'- decisions: a decision your answer missed, with its quotes.',
 	].join('\n')
 }
