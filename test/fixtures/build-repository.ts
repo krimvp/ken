@@ -5,12 +5,14 @@ import path from 'node:path'
 import { after } from 'node:test'
 
 // null deletes the file. A file left out keeps its content from the parent commit. parent is the index of an earlier
-// commit to build on, which starts a second line of history; by default a commit builds on the one before it.
+// commit to build on, which starts a second line of history; by default a commit builds on the one before it. merge is
+// the index of an earlier commit to merge in, which makes this commit a merge with that one as its second parent.
 export type FixtureCommit = {
 	message: string
 	files: Record<string, string | Uint8Array | null>
 	author?: { name: string; email: string }
 	parent?: number
+	merge?: number
 	body?: string
 }
 
@@ -27,14 +29,16 @@ export function buildRepository(commits: FixtureCommit[]): { root: string; hashe
 		execFileSync('git', ['-c', 'commit.gpgsign=false', ...args], {
 			cwd: root,
 			encoding: 'utf8',
+			stdio: ['ignore', 'pipe', 'pipe'],
 			env: { ...process.env, ...env },
 		}).trim()
 
 	git(['init', '--quiet', '--initial-branch=main'])
 	git(['config', 'user.email', OWNER.email])
 	const hashes: string[] = []
-	for (const [day, { message, files, author = OWNER, parent, body }] of commits.entries()) {
+	for (const [day, { message, files, author = OWNER, parent, merge, body }] of commits.entries()) {
 		if (parent !== undefined) git(['checkout', '--quiet', '--detach', hashes[parent] ?? ''])
+		if (merge !== undefined) git(['merge', '--quiet', '--no-ff', '--no-commit', hashes[merge] ?? ''])
 		for (const [file, content] of Object.entries(files)) {
 			const full = path.join(root, file)
 			if (content === null) {

@@ -7,9 +7,11 @@ export type RepoPath = string & { readonly __brand: 'RepoPath' }
 
 export type Range = { base: CommitHash; head: CommitHash }
 
-// coAuthors holds the value of each Co-authored-by trailer, such as "Claude <noreply@anthropic.com>".
+// coAuthors holds the value of each Co-authored-by trailer, such as "Claude <noreply@anthropic.com>". A merge has two or
+// more parents; the first is the line it was merged into.
 export type Commit = {
 	hash: string
+	parents: string[]
 	author: string
 	email: string
 	date: string
@@ -61,6 +63,9 @@ export interface Repository {
 	// The email of the person who runs ken in this repository, from git config. Null when none is set.
 	userEmail(signal?: AbortSignal): Promise<string | null>
 	log(range: Range, signal?: AbortSignal): Promise<{ kind: 'ok'; commits: Commit[] } | TooLarge>
+	// The newest commits on head's main line, newest first: head, its first parent, that one's first parent, and so on.
+	// A merge's paths are the ones it changed against its first parent, so they are the paths of the change it brought.
+	mainLine(head: CommitHash, limit: number, signal?: AbortSignal): Promise<{ kind: 'ok'; commits: Commit[] } | TooLarge>
 	diff(range: Range, signal?: AbortSignal): Promise<{ kind: 'ok'; files: FileDiff[] } | TooLarge>
 	blame(
 		commit: CommitHash,

@@ -3,6 +3,7 @@
 // every result is short text with a size limit.
 import type { Tool, ToolResult } from 'aigent/plugin'
 import {
+	type Commit,
 	type CommitHash,
 	type NoCommit,
 	parsePath,
@@ -18,6 +19,8 @@ const MAX_READ_LINES = 400
 const MAX_PATHS = 400
 const MAX_MATCHES = 100
 const MAX_COMMITS = 100
+const MAX_MAIN_LINE = 20
+const MAX_LOGGED_PATHS = 20
 const MAX_BLAME_LINES = 200
 const MAX_LINE_CHARS = 300
 
@@ -136,17 +139,30 @@ export function explorationTools(repo: Repository): Tool[] {
 		},
 		{
 			name: 'log',
-			description: `List the commits in base..head, the ones head has and base does not, newest first, with author, date and the files each changed. Gives at most ${MAX_COMMITS} commits.`,
-			parameters: { type: 'object', properties: RANGE, required: ['base', 'head'], additionalProperties: false },
+			description: `List commits newest first, with author, date and files. Without base: the newest ${MAX_MAIN_LINE} commits on head's main line, where each merge gives the range of the change it brought in. One call finds a pull request, a merge or the last few commits. With base: the commits in base..head, the ones head has and base does not, each with the files it changed, at most ${MAX_COMMITS}.`,
+			parameters: {
+				type: 'object',
+				properties: {
+					base: { ...RANGE.base, description: `${RANGE.base.description}. Leave it out to list the main line.` },
+					head: { ...RANGE.head, description: `${RANGE.head.description}. Default HEAD.` },
+				},
+				additionalProperties: false,
+			},
 			async execute(args, ctx) {
 				const read = readArgs(args, 'log')
-				const range = await rangeAt(repo, read.text('base'), read.text('head'), ctx.signal)
+				const base = read.optionalText('base')
+				const head = read.optionalText('head') ?? 'HEAD'
+				if (base === undefined) return await mainLineAt(repo, head, ctx.signal)
+				const range = await rangeAt(repo, base, head, ctx.signal)
 				if (range.kind !== 'ok') return range.result
 				const logged = await repo.log(range, ctx.signal)
 				if (logged.kind === 'too-large') return refuse('The range is too large. Ask for a shorter one.')
 				const shown = logged.commits.slice(0, MAX_COMMITS).map((commit) => {
-					const files = commit.paths.length === 1 ? '1 file' : `${commit.paths.length} files`
-					return `${short(commit.hash)} ${commit.date.slice(0, 10)} ${commit.author}: ${commit.subject} (${files})`
+					if (commit.paths.length === 0) return commitLine(commit)
+					const paths = commit.paths.slice(0, MAX_LOGGED_PATHS).join(', ')
+					const more =
+						commit.paths.length > MAX_LOGGED_PATHS ? ` and ${commit.paths.length - MAX_LOGGED_PATHS} more` : ''
+					return `${commitLine(commit)}\n  ${paths}${more}`
 				})
 				const more = logged.commits.length > shown.length ? `\nShowing the newest ${shown.length}.` : ''
 				return reply(
@@ -189,6 +205,34 @@ export function explorationTools(repo: Repository): Tool[] {
 }
 
 type Refusal = { kind: 'refused'; result: ToolResult }
+
+async function mainLineAt(repo: Repository, ref: string, signal: AbortSignal): Promise<ToolResult> {
+	const head = await commitAt(repo, ref, signal)
+	if (head.kind !== 'ok') return head.result
+	// One more than it shows, to know whether there are older commits.
+	const logged = await repo.mainLine(head.commit, MAX_MAIN_LINE + 1, signal)
+	if (logged.kind === 'too-large') return refuse('The main line is too large to list. Ask for a range with base.')
+	const shown = logged.commits.slice(0, MAX_MAIN_LINE)
+	const rows = shown.map((commit) => {
+		const files = commit.paths.length === 1 ? '1 file' : `${commit.paths.length} files`
+		const [first] = commit.parents
+		const merged =
+			commit.parents.length > 1 && first ? `; merged the change ${short(first)}..${short(commit.hash)}` : ''
+		return `${commitLine(commit)} (${files}${merged})`
+	})
+	const oldest = shown.at(-1)
+	const older =
+		oldest && logged.commits.length > shown.length
+			? `\nFor older commits, call log with head ${short(oldest.hash)}^1.`
+			: ''
+	return reply(
+		`The newest ${shown.length} commits on the main line of ${short(head.commit)}, newest first:\n${rows.join('\n')}${older}`,
+	)
+}
+
+function commitLine(commit: Commit): string {
+	return `${short(commit.hash)} ${commit.date.slice(0, 10)} ${commit.author}: ${commit.subject}`
+}
 
 export async function commitAt(
 	repo: Repository,

@@ -85,6 +85,7 @@ test('a false quote is rejected with its reasons sent to the model, and a true q
 			commits: [
 				{
 					hash: head,
+					parents: [base],
 					author: OWNER.name,
 					email: OWNER.email,
 					date: '2026-01-02T00:00:00.000Z',
@@ -161,6 +162,8 @@ test('a ref or path that starts with "-" or leaves the repository is refused and
 		{ tool: 'ken__search', args: { pattern: 'secret', commit: option } },
 		{ tool: 'ken__search', args: { pattern: 'secret', under: '../' } },
 		{ tool: 'ken__log', args: { base: option, head: 'HEAD' } },
+		{ tool: 'ken__log', args: { head: option } },
+		{ tool: 'ken__log', args: { base: option } },
 		{ tool: 'ken__diff', args: { base: 'HEAD~1', head: option } },
 		{ tool: 'ken__diff', args: { base: 'HEAD~1', head: 'HEAD', path: '-R' } },
 		{ tool: 'ken__blame', args: { path: outside, start: 1, end: 1 } },

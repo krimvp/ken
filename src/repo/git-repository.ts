@@ -8,7 +8,7 @@ const OUTSIDE_RECORD = ['--', '.', ':(exclude).ken']
 
 const HASH = /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/
 const LOG_FORMAT =
-	'--format=%x1e%H%x00%an%x00%ae%x00%at%x00%s%x00%(trailers:key=Co-authored-by,valueonly,separator=%x1f)'
+	'--format=%x1e%H%x00%P%x00%an%x00%ae%x00%at%x00%s%x00%(trailers:key=Co-authored-by,valueonly,separator=%x1f)'
 
 export function gitRepository(root: string): Repository {
 	const git = (args: string[], signal?: AbortSignal) => runGit(root, args, signal)
@@ -93,6 +93,25 @@ export function gitRepository(root: string): Repository {
 			return { kind: 'ok', commits: parseLog(run.stdout) }
 		},
 
+		async mainLine(head, limit, signal) {
+			const args = [
+				'log',
+				'-z',
+				'--name-only',
+				'--no-renames',
+				'--first-parent',
+				'--diff-merges=first-parent',
+				'--no-color',
+				`--max-count=${limit}`,
+				LOG_FORMAT,
+				head,
+			]
+			const run = await git([...args, ...OUTSIDE_RECORD], signal)
+			if (run.kind === 'too-large') return tooLarge
+			if (run.kind === 'failed') throw new Error(`git log failed on a resolved commit: ${run.stderr}`)
+			return { kind: 'ok', commits: parseLog(run.stdout) }
+		},
+
 		async diff({ base, head }, signal) {
 			const common = ['-M', '--no-color', '--no-ext-diff', '--no-textconv', base, head, ...OUTSIDE_RECORD]
 			const [numstat, patch] = await Promise.all([
@@ -136,7 +155,8 @@ function parseLog(stdout: string): Commit[] {
 		.split('\x1e')
 		.filter((record) => record !== '')
 		.map((record) => {
-			const [hash = '', author = '', email = '', time = '', subject = '', trailers = '', ...rest] = record.split('\0')
+			const [hash = '', parents = '', author = '', email = '', time = '', subject = '', trailers = '', ...rest] =
+				record.split('\0')
 			// git puts a newline between a commit's header and its list of paths.
 			const paths = rest
 				.join('\0')
@@ -147,7 +167,8 @@ function parseLog(stdout: string): Commit[] {
 				.split('\x1f')
 				.map((value) => value.trim())
 				.filter((value) => value !== '')
-			return { hash, author, email, date: isoDate(time), subject, coAuthors, paths }
+			const parentList = parents.split(' ').filter((parent) => parent !== '')
+			return { hash, parents: parentList, author, email, date: isoDate(time), subject, coAuthors, paths }
 		})
 }
 

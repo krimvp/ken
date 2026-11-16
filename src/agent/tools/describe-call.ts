@@ -14,7 +14,12 @@ const SENTENCES: Record<string, (args: Said) => string> = {
 	read_file: (args) => `Read ${code(args.text('path'))}${lines(args)}${at(args)}`,
 	list_files: (args) => `Listed the files${under(args)}${at(args)}`,
 	search: (args) => `Searched for ${code(args.text('pattern'))}${under(args)}${at(args)}`,
-	log: (args) => `Listed the commits from ${code(ref(args.text('base')))} to ${code(ref(args.text('head')))}`,
+	log: (args) => {
+		const base = args.text('base')
+		const head = args.text('head')
+		if (base !== undefined) return `Listed the commits from ${code(ref(base))} to ${code(ref(head ?? 'HEAD'))}`
+		return head === undefined ? 'Listed the latest commits' : `Listed the latest commits up to ${code(ref(head))}`
+	},
 	blame: (args) => `Looked up who last changed ${code(args.text('path'))}${lines(args)}${at(args)}`,
 	diff: (args) => {
 		const range = `from ${code(ref(args.text('base')))} to ${code(ref(args.text('head')))}`

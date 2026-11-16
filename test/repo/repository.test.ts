@@ -67,6 +67,7 @@ test('log lists who changed what and when, and leaves out commits and paths in .
 		commits: [
 			{
 				hash: hashes[3],
+				parents: [hashes[2]],
 				author: OWNER.name,
 				email: OWNER.email,
 				date: '2026-01-04T00:00:00.000Z',
@@ -76,6 +77,7 @@ test('log lists who changed what and when, and leaves out commits and paths in .
 			},
 			{
 				hash: hashes[1],
+				parents: [hashes[0]],
 				author: COLLABORATOR.name,
 				email: COLLABORATOR.email,
 				date: '2026-01-02T00:00:00.000Z',
