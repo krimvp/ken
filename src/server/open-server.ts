@@ -14,6 +14,7 @@ import { type MapSignal, openMap } from '../map/index.ts'
 import { MERMAID_FILE, PAGE_FOLDER } from '../page/index.ts'
 import { fileRecordStore } from '../record/index.ts'
 import { findRoot, gitRepository } from '../repo/index.ts'
+import { decisionRows } from './decision-list.ts'
 import { refusal } from './guard-request.ts'
 import { type PageFile, readPageFiles } from './page-files.ts'
 import { fieldOf, type QuestionLine, questionDesk } from './question-desk.ts'
@@ -78,6 +79,7 @@ export async function openServer(options: {
 			return sendJson(response, 200, { project: shown, model: state })
 		}
 		if (where === 'GET /api/questions') return sendJson(response, 200, { questions: await desk.rows() })
+		if (where === 'GET /api/decisions') return sendJson(response, 200, { decisions: decisionRows(await record.read()) })
 		if (where === 'GET /api/map') return sendJson(response, 200, { file: map.file, ...(await map.read(new Date())) })
 		if (where === 'POST /api/map') {
 			const body = await readJson(request)

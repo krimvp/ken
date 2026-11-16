@@ -3,7 +3,19 @@
 // words; ken checked only that each quote is in its file.
 import { checkStrip, checksHtml } from './checks.js'
 import { diagramHtml, elementKey } from './diagram.js'
-import { count, decisionQuotes, esc, LABELS, label, list, prose, quoteRows, short } from './format.js'
+import {
+	count,
+	decisionQuotes,
+	esc,
+	isSession,
+	LABELS,
+	label,
+	list,
+	prose,
+	quoteRows,
+	quoteSource,
+	short,
+} from './format.js'
 import { foldedTopics, knownHtml, mapBarHtml } from './map.js'
 
 const UNDO = { easy: 'Easy to undo.', 'some-work': 'Some work to undo.', hard: 'Hard to undo.' }
@@ -36,9 +48,10 @@ export function itemsOf(q) {
 	]
 }
 
-// When the quotes of one answer come from more than one commit, each quote row names its commit.
+// When the quotes of one answer come from more than one commit, each quote row of git names its commit.
 function manyCommits(q) {
-	return new Set(itemsOf(q).flatMap(({ item }) => item.quotes.map((quote) => quote.commit))).size > 1
+	const commits = itemsOf(q).flatMap(({ item }) => item.quotes.filter((quote) => !isSession(quote)))
+	return new Set(commits.map((quote) => quote.commit)).size > 1
 }
 
 // Each entry with the key the page knows it by, which keeps its place in the answer when entries of a topic the reader
@@ -193,19 +206,36 @@ function decisionHtml(d, key, { ui, commits }, marked) {
 	</li>`
 }
 
-// Where a recorded decision's reason is quoted from: the commit messages its reason quotes.
+// Where a decision's reason comes from, by its label: who logged it with ken decide, the commit messages its reason
+// quotes, or the saved session it quotes.
 function fromHtml(d) {
-	if (d.label !== 'recorded') return ''
-	const messages = [...new Set(d.reason.quotes.filter((q) => q.path === null).map((q) => short(q.commit)))]
-	const named = list(messages.map((hash) => `<code>${hash}</code>`))
-	return `<span class="why">Quoted from the commit message of ${named}.</span>`
+	return d.reason || d.logged ? `<span class="why">${sourceLine(d)}</span>` : ''
+}
+
+export function sourceLine(d) {
+	if (d.logged) {
+		const by = d.logged.by ? ` by ${esc(d.logged.by)}` : ''
+		const head = d.logged.head ? `, while HEAD was <code>${short(d.logged.head)}</code>` : ', before the first commit'
+		return `Logged with <code>ken decide</code>${by}${head}.`
+	}
+	const quotes = d.reason?.quotes ?? []
+	if (d.label === 'recorded') {
+		const messages = [...new Set(quotes.filter((q) => !isSession(q) && q.path === null).map((q) => short(q.commit)))]
+		return `Quoted from the commit message of ${list(messages.map((hash) => `<code>${hash}</code>`))}.`
+	}
+	if (d.label === 'from-the-session') {
+		const sessions = [...new Set(quotes.filter(isSession).map((quote) => quoteSource(quote).replace('From', 'from')))]
+		return `Quoted ${list(sessions)}.`
+	}
+	return ''
 }
 
 // What each label means, said of one statement and of several.
 const MEANS = {
-	recorded: [
-		'its reason is quoted from a commit message written when the work was done',
-		'their reasons are quoted from commit messages written when the work was done',
+	recorded: ['it was written down when the work was done', 'they were written down when the work was done'],
+	'from-the-session': [
+		'it was read afterwards from a saved session, and quoted',
+		'they were read afterwards from saved sessions, and quoted',
 	],
 	inferred: [
 		'the agent worked it out from the code and the diff',

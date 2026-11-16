@@ -650,8 +650,8 @@ a.strip {
 }
 
 /* Labels. A dashed outline and a hollow dot: the agent's own reading, not something written down at the time. Recorded
-   is solid and filled: written down when the work was done. A span, because Mermaid names its own label groups "label"
-   inside every drawing. */
+   is solid and filled: written down when the work was done. From the session sits between them, solid with a hollow
+   dot: quoted, but read afterwards. A span, because Mermaid names its own label groups "label" inside every drawing. */
 span.label {
 	display: inline-flex;
 	align-items: center;
@@ -675,7 +675,8 @@ span.label::before {
 	border-radius: 50%;
 }
 
-span.label-recorded {
+span.label-recorded,
+span.label-from-the-session {
 	border-style: solid;
 }
 
@@ -694,6 +695,7 @@ span.label-recorded {
 }
 
 .st-text .label,
+.dv-head .label,
 .diagram-title .label,
 .list-head h3 .label {
 	margin-right: var(--space-2);
@@ -1628,19 +1630,64 @@ span.label-recorded {
 	opacity: 1;
 }
 
-.map-view {
+.map-view,
+.decisions-view {
 	padding: var(--space-7) 0 var(--space-6);
 }
 
-.map-view h1 {
+.map-view h1,
+.decisions-view h1 {
 	font-size: 2rem;
 	font-weight: 650;
 	line-height: var(--leading-tight);
 }
 
-.map-view .lead {
+.map-view .lead,
+.decisions-view .lead {
 	margin-top: var(--space-3);
 	max-width: var(--measure);
+}
+
+.decisions-view .label-key {
+	max-width: var(--measure);
+	margin-top: var(--space-4);
+}
+
+.dv-list {
+	margin-top: var(--space-5);
+	border-top: 1px solid var(--color-border);
+}
+
+.dv-row {
+	display: grid;
+	gap: var(--space-1);
+	max-width: var(--measure);
+	padding: var(--space-4) 0;
+	border-bottom: 1px solid var(--color-border);
+	overflow-wrap: anywhere;
+}
+
+.dv-head {
+	line-height: 1.6;
+}
+
+.dv-q {
+	font-weight: 650;
+}
+
+.dv-meta {
+	color: var(--color-note);
+	font-size: var(--text-note);
+}
+
+.dv-quotes summary {
+	cursor: pointer;
+	color: var(--color-accent);
+	font-size: var(--text-note);
+}
+
+.dv-quotes[open] summary {
+	margin-bottom: var(--space-2);
 }
 
 .t-list {
@@ -1690,11 +1737,13 @@ span.label-recorded {
 }
 
 @media (max-width: 1099px) {
-	.map-view {
+	.map-view,
+	.decisions-view {
 		padding-top: var(--space-5);
 	}
 
-	.map-view h1 {
+	.map-view h1,
+	.decisions-view h1 {
 		font-size: 1.625rem;
 	}
 

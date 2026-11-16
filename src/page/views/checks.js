@@ -7,6 +7,7 @@ import {
 	decisionQuotes,
 	esc,
 	gitDay,
+	isSession,
 	LABELS,
 	label,
 	lineSpan,
@@ -34,7 +35,8 @@ function quotesOf(q) {
 function limit(q) {
 	const what =
 		q.answer.diagrams.length > 0 ? 'the sentences, the summary or the arrows' : 'the sentences or the summary'
-	return `ken checks that each quote is in its file, or in its commit's message, at its commit. It does not check ${what}.`
+	const where = quotesOf(q).some(isSession) ? ', or in its saved session' : ''
+	return `ken checks that each quote is in its file, or in its commit's message, at its commit${where}. It does not check ${what}.`
 }
 
 function decisionsOf(q) {
@@ -66,20 +68,27 @@ export function checkStrip(q) {
 }
 
 export function checksHtml(q, ui) {
-	const quotes = quotesOf(q)
+	const all = quotesOf(q)
+	const quotes = all.filter((quote) => !isSession(quote))
 	const commits = [...new Set(quotes.map((quote) => short(quote.commit)))]
 	const at = commits.length === 1 ? `at <code>${commits[0]}</code>` : `across ${commits.length} commits`
-	const all =
+	const match =
 		quotes.length === 1
 			? 'The quote matches'
 			: quotes.length === 2
 				? 'Both quotes match'
 				: `All ${quotes.length} quotes match`
+	const gitLine = quotes.length === 0 ? '' : `<p>${match} git, ${at}.</p>`
 	const fromMessages = quotes.filter((quote) => quote.path === null).length
 	const messageLine =
 		fromMessages === 0
 			? ''
 			: `<p class="muted small">${fromMessages === quotes.length ? 'All' : fromMessages} of them ${fromMessages === 1 ? 'is' : 'are'} from commit messages.</p>`
+	const fromSessions = all.length - quotes.length
+	const sessionLine =
+		fromSessions === 0
+			? ''
+			: `<p>${count(fromSessions, 'quote is', 'quotes are')} from a saved session of the coding agent. ken found the lines in the saved session. It did not check that they give the true reason.</p>`
 	const back = sentBack(q)
 	const backLine =
 		back === 0
@@ -89,12 +98,13 @@ export function checksHtml(q, ui) {
 		<p class="panel-limit">${limit(q)}</p>
 		<section class="check" id="check-quotes">
 			<h3>Quotes</h3>
-			<p>${all} git, ${at}.</p>
+			${gitLine}
 			${whereQuotes(q)}
 			${messageLine}
+			${sessionLine}
 			${backLine}
 			<p><button class="link small" data-act="key" data-key="key" aria-expanded="${ui.keyOpen}">${ui.keyOpen ? 'Hide what the labels mean' : 'What the labels mean'}</button></p>
-			${ui.keyOpen ? labelKey() : ''}
+			${ui.keyOpen ? labelKey(labelsOf(q)) : ''}
 		</section>
 		${coverageSection(q, ui)}
 		${commitsSection(q)}`
@@ -114,8 +124,16 @@ function whereQuotes(q) {
 	return `<p class="muted small">${list(places.map(([n, where]) => `${n} in ${where}`))}.</p>`
 }
 
-function labelKey() {
-	return `<dl class="label-key">${Object.keys(LABELS)
+// The labels this answer uses, in the order of LABELS.
+function labelsOf(q) {
+	const items = [...elementsOf(q), ...q.answer.diagrams, ...q.answer.statements, ...(q.answer.risks ?? [])]
+	const used = new Set([...items, ...decisionsOf(q)].map((item) => item.label))
+	return Object.keys(LABELS).filter((name) => used.has(name))
+}
+
+// Each label in use, with one plain line of what it means.
+export function labelKey(names) {
+	return `<dl class="label-key">${names
 		.map((name) => `<div><dt>${label(name)}</dt><dd>${esc(LABELS[name].means)}</dd></div>`)
 		.join('')}</dl>`
 }
@@ -266,7 +284,7 @@ function textOf({ kind, item }) {
 }
 
 function quoteHtml(quote, j, chosen) {
-	const source = quote.path === null ? quoteSource(quote) : `<code>${esc(quote.path)}</code>`
+	const source = isSession(quote) || quote.path === null ? quoteSource(quote) : `<code>${esc(quote.path)}</code>`
 	const where = `${source}, ${lineSpan(quote.startLine, quote.endLine)}. `
 	return `<div class="q${chosen ? ' chosen' : ''}" id="panel-q${j}">${quoteBody(quote, where)}</div>`
 }

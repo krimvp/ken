@@ -4,6 +4,7 @@
 import { fillDrawings } from './draw-diagrams.js'
 import { answerHtml, itemsOf } from './views/answer.js'
 import { allQuotesHtml, checksHtml, quoteCardHtml } from './views/checks.js'
+import { decisionsViewHtml } from './views/decisions.js'
 import { elementKey } from './views/diagram.js'
 import { count, duration, esc, folderHtml, prose, short, when } from './views/format.js'
 import { lensHtml, mapViewHtml } from './views/map.js'
@@ -53,9 +54,10 @@ const state = {
 	running: null,
 	menuOpen: false,
 	problem: null,
-	// "map" shows the reader's understanding map in place of the question.
+	// "map" shows the reader's understanding map in place of the question, and "decisions" the record's decisions.
 	view: 'question',
 	map: null,
+	decisions: null,
 	ui: freshUi(),
 }
 
@@ -263,7 +265,8 @@ function firstLine(question) {
 
 function menuHtml() {
 	const n = state.rows.length
-	const map = `<button class="link" data-act="map" data-key="map"${state.view === 'map' ? ' aria-current="page"' : ''}>Your map</button>`
+	const current = (view) => (state.view === view ? ' aria-current="page"' : '')
+	const map = `<button class="link" data-act="decisions" data-key="decisions"${current('decisions')}>Decisions</button><button class="link" data-act="map" data-key="map"${current('map')}>Your map</button>`
 	if (n === 0) return map
 	const button = `${map}<button class="link" data-act="menu" data-key="menu" aria-expanded="${state.menuOpen}">Your questions (${n})</button>`
 	if (!state.menuOpen) return button
@@ -325,6 +328,7 @@ function movedHtml(q) {
 
 function threadHtml() {
 	if (state.view === 'map') return mapViewHtml(state.map)
+	if (state.view === 'decisions') return decisionsViewHtml(state.decisions)
 	const q = state.open
 	if (state.problem && !q)
 		return `<div class="notice" role="alert"><h3>ken did not answer</h3><p>${esc(state.problem)}</p></div>`
@@ -335,7 +339,7 @@ function threadHtml() {
 function panelHtml() {
 	const q = state.open
 	const ui = state.ui
-	if (!q || !ui.wide || state.view === 'map') return ''
+	if (!q || !ui.wide || state.view !== 'question') return ''
 	if (!q.answer) return q.live ? workingPanelHtml() : endedPanelHtml()
 	if (ui.panel.kind === 'quote') return quoteCardHtml(q, ui, itemsOf(q))
 	if (ui.panel.kind === 'all') return allQuotesHtml(q, itemsOf(q))
@@ -350,8 +354,8 @@ function render() {
 	const page = $('#page')
 	const panel = $('#panel')
 	const scroll = panel.scrollTop
-	page.classList.toggle('first-visit', !q && state.view !== 'map')
-	page.classList.toggle('single', !q || state.view === 'map')
+	page.classList.toggle('first-visit', !q && state.view === 'question')
+	page.classList.toggle('single', !q || state.view !== 'question')
 	$('#project').innerHTML = state.project ? `reads ${folderHtml(state.project)}` : ''
 	$('#menu').innerHTML = menuHtml()
 	const across = [...document.querySelectorAll('.drawing')].map((box) => box.scrollLeft)
@@ -366,14 +370,14 @@ function render() {
 	if (unseen.length > 0) schedule()
 	for (const [i, box] of document.querySelectorAll('.drawing').entries()) box.scrollLeft = across[i] ?? 0
 	const canAsk = state.model?.kind === 'ok'
-	$('#ask').hidden = !canAsk || state.view === 'map'
+	$('#ask').hidden = !canAsk || state.view !== 'question'
 	$('#send').disabled = state.running !== null
 	// The area box is drawn again with the rest, so what the reader typed in it is carried over.
 	const typed = [...document.querySelectorAll('.area-form input')].find((input) => input.value !== '')?.value ?? ''
 	$('#after').innerHTML =
 		state.model?.kind === 'unset'
 			? noModelHtml(state.model, state.rows.length > 0, q !== null)
-			: state.view === 'map'
+			: state.view !== 'question'
 				? ''
 				: q
 					? lensHtml('ask')
@@ -477,8 +481,31 @@ function closeMap() {
 	$('[data-key="map"]')?.focus({ preventScroll: true })
 }
 
+async function showDecisions() {
+	state.view = 'decisions'
+	state.menuOpen = false
+	state.decisions = null
+	render()
+	try {
+		state.decisions = (await getJson('/api/decisions')).decisions
+	} catch (error) {
+		state.problem = error.message
+		state.decisions = []
+	}
+	render()
+	window.scrollTo({ top: 0 })
+}
+
+function closeDecisions() {
+	state.view = 'question'
+	render()
+	$('[data-key="decisions"]')?.focus({ preventScroll: true })
+}
+
 const actions = {
 	map: () => (state.view === 'map' ? closeMap() : showMap()),
+	decisions: () => (state.view === 'decisions' ? closeDecisions() : showDecisions()),
+	'decisions-close': closeDecisions,
 	'map-close': closeMap,
 	'map-know': () => postMap('know'),
 	'map-too-much': () => postMap('too-much'),
@@ -606,6 +633,7 @@ document.addEventListener('keydown', (event) => {
 		return
 	}
 	if (state.view === 'map') return closeMap()
+	if (state.view === 'decisions') return closeDecisions()
 	if (closePanel()) return
 	if (ui.coverageOpen || ui.stepsOpen || ui.keyOpen || ui.openQuotes.size > 0 || ui.openDecisions.size > 0) {
 		ui.coverageOpen = ui.stepsOpen = ui.keyOpen = false

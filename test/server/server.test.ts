@@ -5,6 +5,8 @@ import { request as httpRequest } from 'node:http'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { after, test } from 'node:test'
+import { fileRecordStore } from '../../src/record/index.ts'
+import { gitRepository } from '../../src/repo/index.ts'
 import { type KenServer, openServer } from '../../src/server/index.ts'
 import { buildRepository } from '../fixtures/build-repository.ts'
 import { asked, claudeProjects, writeSession } from '../fixtures/claude-sessions.ts'
@@ -17,6 +19,7 @@ const { root, hashes } = buildRepository([
 ])
 const [base = '', head = ''] = hashes
 const KEY_ENV = 'KEN_TEST_SERVER_KEY'
+const KEN = path.join(import.meta.dirname, '../../src/cli/main.ts')
 process.env[KEY_ENV] = 'scripted-model-key'
 
 function tempFolder(name: string) {
@@ -377,6 +380,36 @@ function questionPrompt(request: { messages: { role: string; content: unknown }[
 	const message = request?.messages.findLast((each) => each.role === 'user')
 	return typeof message?.content === 'string' ? message.content : JSON.stringify(message?.content)
 }
+
+test('a decision logged with ken decide shows in the decisions view as recorded, with who logged it, and joins the piece of work whose commits came after it', async () => {
+	const built = buildRepository([
+		{ message: 'feat: start', files: { 'src/retry.ts': `${RETRY}\t}\n}\n` } },
+		{ message: 'feat: wait between attempts', files: { 'src/retry.ts': `${RETRY}\t\tsleep(100)\n\t}\n}\n` } },
+	])
+	const [first = '', last = ''] = built.hashes
+	const git = (...args: string[]) => execFileSync('git', args, { cwd: built.root, stdio: 'ignore' })
+	git('checkout', '--quiet', '--detach', first)
+	const decide = ['decide', '--question', 'How long does a retry wait?', '--chosen', 'A fixed 100 ms']
+	const why = ['--reason', 'The queue drains within a second.', '--undo', 'easy', '--by', 'claude-code']
+	execFileSync('node', [KEN, ...decide, ...why, '--repo', built.root], { stdio: 'ignore' })
+	git('checkout', '--quiet', 'main')
+	const server = await open(tempFolder('ken-home-'), null, built.root)
+
+	const [logged, ...others] = (await json(server, '/api/decisions')).decisions
+	assert.deepEqual(others, [])
+	assert.deepEqual(
+		[logged.decision.question, logged.decision.label, logged.decision.logged, logged.work],
+		['How long does a retry wait?', 'recorded', { by: 'claude-code', head: first }, null],
+	)
+	const store = fileRecordStore(built.root, gitRepository(built.root))
+	const statement = { text: 'Retry sleeps.', label: 'inferred' as const, quotes: [{ ...SLEEP, commit: last }] }
+	const work = { kind: 'work' as const, title: 'Retry waits', summary: 'Retry waits.', statements: [statement] }
+	const added = await store.append([{ ...work, range: { base: first, head: last } }])
+	assert.equal(added.kind, 'appended', JSON.stringify(added))
+	const [joined] = (await json(server, '/api/decisions')).decisions
+	const id = added.kind === 'appended' ? added.entries[0]?.entry.id : null
+	assert.deepEqual(joined.work, { id, title: 'Retry waits' })
+})
 
 test('what looks like a secret in a saved session reaches the model, the history and the record hidden, in each form ken hides, and the lines around it stay as they were', async () => {
 	const built = buildRepository([

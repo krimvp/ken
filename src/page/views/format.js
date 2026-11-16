@@ -70,9 +70,18 @@ export function codeLines(lines, numbers, kinds = []) {
 		.join('')
 }
 
-// A quote with no path is from the message of its commit, so it names the commit and no file.
+// A quote of a session names when the session ran and who wrote the lines, and no file or commit. A quote with no path
+// is from the message of its commit, so it names the commit and no file.
 export function quoteSource(quote) {
+	if (isSession(quote)) {
+		const who = quote.by === 'user' ? 'what you asked' : 'what the agent said'
+		return `From the session of ${gitDay(quote.at)} UTC, ${who}`
+	}
 	return quote.path === null ? `Commit message of <code>${short(quote.commit)}</code>` : esc(quote.path)
+}
+
+export function isSession(quote) {
+	return 'session' in quote
 }
 
 // A decision's quotes in the order the page shows them: those of its reason, then those that show what was chosen. A
@@ -85,7 +94,7 @@ export function decisionQuotes(decision) {
 export function quoteBody(quote, where = '', named = false) {
 	const lines = quote.text.split('\n')
 	const numbers = lines.map((_, k) => quote.startLine + k)
-	const at = quote.path === null ? '' : `At commit <code>${short(quote.commit)}</code>`
+	const at = isSession(quote) || quote.path === null ? '' : `At commit <code>${short(quote.commit)}</code>`
 	const source = named || where + at === '' ? '' : `<p class="q-source">${where}${at}</p>`
 	return `${source}<pre class="code"><code>${codeLines(lines, numbers)}</code></pre>`
 }
@@ -101,7 +110,9 @@ export function quoteRows(quotes, key, { ui, commits }) {
 			const open = !ui.wide && ui.openQuotes.has(id)
 			const first = quote.text.split('\n').find((line) => line.trim() !== '') ?? ''
 			const at =
-				commits && quote.path !== null ? `<span class="q-commit">at <code>${short(quote.commit)}</code></span>` : ''
+				commits && !isSession(quote) && quote.path !== null
+					? `<span class="q-commit">at <code>${short(quote.commit)}</code></span>`
+					: ''
 			return `<li class="q${chosen ? ' chosen' : ''}">
 				<button class="q-row" data-act="quote" data-item="${key}" data-quote="${j}" data-key="${id}" aria-expanded="${ui.wide ? chosen : open}"${ui.wide ? ' aria-controls="panel"' : ''}>
 					<span class="q-path">${quoteSource(quote)}</span><span class="q-lines"><span class="nowrap">${lineSpan(quote.startLine, quote.endLine)}</span>${at}</span><span class="q-first">${esc(first.trim())}</span>
@@ -115,7 +126,13 @@ export function quoteRows(quotes, key, { ui, commits }) {
 export const LABELS = {
 	recorded: {
 		name: 'Recorded',
-		means: 'The reason is quoted from a commit message written when the work was done.',
+		means:
+			'Written down when the work was done: logged with ken decide as the decision was made, or quoted from a commit message.',
+	},
+	'from-the-session': {
+		name: 'From the session',
+		means:
+			'Read afterwards from a saved session of the coding agent, and quoted. ken found the lines there. It did not check that they give the true reason.',
 	},
 	inferred: {
 		name: 'Inferred',
