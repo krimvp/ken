@@ -176,7 +176,7 @@ test('ken ask prints the risks in the order the answer gives them, whatever thei
 	assert.match(stdout, /1 point of the draft had no line to quote/)
 })
 
-test('ken ask prints the risks the second look withdrew as one count, each with the line that rules it out', async () => {
+test('ken ask prints the risks the second look withdrew as one count, each with the line that rules it out, and the search ken made for what an entry says is missing', async () => {
 	const risk = (text: string) => ({ text, label: 'inferred', quotes: [SUM], weight: 'minor' })
 	const model = await scriptedModel([
 		DRAFT,
@@ -185,7 +185,14 @@ test('ken ask prints the risks the second look withdrew as one count, each with 
 			args: {
 				scope: { base, head },
 				summary: 'total returned 0 for every list. It now adds the items.',
-				statements: [{ text: 'total returns the sum of the items instead of 0.', label: 'inferred', quotes: [SUM] }],
+				statements: [
+					{
+						text: 'No test covers total.',
+						label: 'inferred',
+						quotes: [SUM],
+						absent: { text: 'test_total' },
+					},
+				],
 				risks: [risk('An empty list now fails.'), risk('A caller that passes text now gets a TypeError.')],
 			},
 		},
@@ -215,6 +222,7 @@ test('ken ask prints the risks the second look withdrew as one count, each with 
 		stdout,
 	)
 	assert.match(stdout, /Risks, heaviest first \(1\):/, 'the withdrawn risk is not among the risks')
+	assert.match(stdout, /No test covers total\.[^\n]*\n {3}ken searched for `test_total` at \w{7} and found nothing\./)
 })
 
 test('ken refuses to start without a model, and says what to set', async () => {

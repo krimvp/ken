@@ -9,7 +9,7 @@ import { decisionLabel, type Label, type Quote, type QuoteSources } from '../../
 import { CARDINALITIES, DIAGRAM_BOUNDS, DIAGRAM_KINDS, type DiagramDraft } from '../../diagram/index.ts'
 import type { UnderstandingMap } from '../../map/index.ts'
 import { type RecordEntry, type RecordStore, sameName, UNDO } from '../../record/index.ts'
-import { type Repository, resolveRange } from '../../repo/index.ts'
+import { type CommitHash, type Repository, resolveRange } from '../../repo/index.ts'
 import type { ChatEvent, Revision } from '../chat-event.ts'
 import { hunkHeader } from '../tools/diff-tool.ts'
 import { readArgs, refuse, reply } from '../tools/tool-edge.ts'
@@ -234,10 +234,12 @@ async function settle(
 	return { kind: 'accepted', answer, decisions: check.decisions, recorded, args: read.args }
 }
 
-// The risk pass's additions on their own, numbered as the agent sent them, through the same checks as an answer.
+// The risk pass's additions on their own, numbered as the agent sent them, through the same checks as an answer, with
+// any absence searched at the change's head.
 export async function checkAdditions(
 	sources: QuoteSources,
 	raw: { risks: JsonObject[]; decisions: JsonObject[] },
+	head: CommitHash,
 	signal: AbortSignal,
 ): Promise<{ kind: 'ok' } | { kind: 'rejected' | 'form'; problems: string[] }> {
 	const problems: string[] = []
@@ -246,7 +248,7 @@ export async function checkAdditions(
 	const decisions = raw.decisions.map((each) => decisionOf(each, quote))
 	if (problems.length > 0) return { kind: 'form', problems }
 	const draft = { summary: '', scope: null, statements: [], risks, decisions, diagrams: [] }
-	const check = await checkAnswer(sources, draft, signal)
+	const check = await checkAnswer(sources, draft, signal, head)
 	return check.kind === 'rejected' ? check : { kind: 'ok' }
 }
 
@@ -354,7 +356,14 @@ function decisionOf(raw: JsonObject, quoteOf: ReadQuote) {
 		needsOwner: decision.flag('needs_owner'),
 		quotes: listOf(raw.quotes).map(quoteOf),
 		...topicOf(decision.optionalText('topic')),
+		...absentOf(raw.absent),
 	}
+}
+
+function absentOf(raw: JsonValue | undefined): { absent?: { text: string; under: string | null } } {
+	if (raw === undefined) return {}
+	const absent = readArgs(objectOf(raw), 'answer absent')
+	return { absent: { text: absent.text('text'), under: absent.optionalText('under') ?? null } }
 }
 
 function topicOf(topic: string | undefined): { topic?: string } {
@@ -370,6 +379,7 @@ function claimOf(raw: JsonObject, what: string, quoteOf: ReadQuote) {
 		quotes: listOf(raw.quotes).map(quoteOf),
 		...topicOf(claim.optionalText('topic')),
 		...(weight === undefined ? {} : { weight }),
+		...absentOf(raw.absent),
 	}
 }
 
@@ -515,6 +525,21 @@ const QUOTE_SCHEMA = {
 } as const
 export const QUOTE = withoutDescriptions(QUOTE_SCHEMA)
 
+const ABSENT_SCHEMA = {
+	type: 'object',
+	description:
+		'Only for an entry that says something is missing, never called or not tested: the text that would be there if it were not. ken searches the head commit for it and rejects the answer if it is there.',
+	properties: {
+		text: {
+			type: 'string',
+			description: 'A name or a short phrase on one line, 3 to 80 characters, such as the function a test would call',
+		},
+		under: { type: 'string', description: 'Search only the paths that start with this, such as "test/"' },
+	},
+	required: ['text'],
+	additionalProperties: false,
+} as const
+
 const TOPIC_NAME = {
 	type: 'string',
 	description:
@@ -532,6 +557,7 @@ export const CLAIM_SCHEMA = {
 		},
 		quotes: { type: 'array', minItems: 1, items: QUOTE_SCHEMA },
 		topic: TOPIC_NAME,
+		absent: ABSENT_SCHEMA,
 	},
 	required: ['text', 'label', 'quotes'],
 	additionalProperties: false,
@@ -592,6 +618,7 @@ export const DECISION_SCHEMA = {
 				'true when the owner should look at it: a choice a commit message leaves to the owner, a guess about intent, a risk, or a choice with a cost',
 		},
 		quotes: { type: 'array', minItems: 1, description: 'The lines that show what was chosen', items: QUOTE },
+		absent: ABSENT_SCHEMA,
 	},
 	required: ['question', 'chosen', 'reason', 'reason_quotes', 'rejected', 'undo', 'needs_owner', 'quotes'],
 	additionalProperties: false,

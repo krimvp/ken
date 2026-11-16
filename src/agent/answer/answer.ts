@@ -1,7 +1,7 @@
 // What ken tells its reader, as checked data. Every statement and every risk carries a label from the plan and at
 // least one quote that passed checkQuote, and so does every arrow, message and relation in its diagrams. An answer
 // about a change also carries the change facts, which ken reads from git and the model never supplies.
-import type { ChangedHunk, Followed, MessageCount, VerifiedQuote } from '../../checks/index.ts'
+import type { Absence, ChangedHunk, Followed, MessageCount, VerifiedQuote } from '../../checks/index.ts'
 import type { Diagram } from '../../diagram/index.ts'
 import type { Statement } from '../../record/index.ts'
 import type { Commit, CommitHash } from '../../repo/index.ts'
@@ -21,8 +21,9 @@ export type Change = {
 }
 
 // A statement or a risk. topic names the topic it belongs to, as the project record names it, so the page can fold what
-// this reader already knows. A claim that belongs to no topic has none.
-export type Claim = Statement & { topic?: string }
+// this reader already knows. A claim that belongs to no topic has none. absent is ken's search for the text a claim says
+// is missing, which found nothing; only a claim that says so has it.
+export type Claim = Statement & { topic?: string; absent?: Absence }
 
 // checked is ken's own mark on a risk of an answer about a change, set from git by quotesOutsideChange: true when a
 // quote lies wholly outside the change. A risk saved before ken set it, or one in an answer about no change, has none.

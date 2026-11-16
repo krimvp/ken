@@ -109,7 +109,7 @@ export function riskPassQuestion(held: Held, later: LaterCommits): string {
 		`1. Each risk below: find the code that would make it false, and read it: a check that stops the case, a caller that never passes the value. Withdraw the risk when that code shows it does not happen; that is a normal result. A withdrawal quotes the line that makes the risk false, the code at ${head} or a line of a later commit's message below, and ken refuses a withdrawal with no such quote. "This is not new behaviour" and "this costs little" are not reasons to withdraw: such a risk stays, weighed minor. A later commit below that fixed the risk shows it was real: keep it, and say it was fixed since, in which commit. A risk that begins with "if" ends settled: rewrite it without the "if" and quote the line that settles it, or withdraw it. It may stay unsettled only when the code that decides it is not in git, such as a dependency's, and then it says so. Otherwise rewrite the risk with a quote of the place it rests on, or keep it as it is. ken marks a risk "Quotes code outside the change" only when one of its quotes, at the head commit, holds no line the change touched, and "Quotes only the changed lines" otherwise. A dependency's code is not in git, so ken cannot read it.`,
 		'2. Each pair of decisions that touch the same file, function, record, id or signal, such as one that writes or keeps a thing and one that deletes or skips it: what happens when both apply?',
 		'3. Each early return, refusal, delete or catch in the changed lines: what no longer happens after it, and who relied on it?',
-		'4. Which new behaviour has no test? And what does the change lean on outside the repository, such as a setting, a service or the way a dependency behaves?',
+		'4. Which new behaviour has no test? And what does the change lean on outside the repository, such as a setting, a service or the way a dependency behaves? A risk that says something is missing, never called, or not tested carries absent, the text whose absence proves it; without absent, it must not make the claim.',
 		'5. Each name below that no quote follows: read where it is used. Does the change still fit there?',
 		"6. Each later fix below: what did this change leave open that the fix closed? Send it as a risk as of this change: quote the line of the fixing commit's message that says what was wrong, and say it has been fixed since, in which commit.",
 		'',
@@ -184,7 +184,7 @@ export function reviseTool(gate: Gate, round: () => AnswerRound): Tool {
 				return sentBack([...form, ...sourceProblems, ...proofForm])
 			}
 			const risks = sent.map(({ risk }) => risk)
-			const added = await checkAdditions(gate.sources, { risks, decisions }, ctx.signal)
+			const added = await checkAdditions(gate.sources, { risks, decisions }, head, ctx.signal)
 			if (added.kind === 'form') return sentBack(added.problems)
 			if (added.kind === 'rejected') return rejected(current, held, added.problems)
 			const proved = await checkProof(gate.sources, withdrawn, ctx.signal)

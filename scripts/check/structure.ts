@@ -16,7 +16,7 @@ export const MODULES: Record<string, Module> = {
 		packages: [],
 	},
 	checks: {
-		job: 'Checks an answer: its quotes exist in git or in a saved session, its labels are allowed, it covers every changed hunk, and it follows the names the change touched to where else they are used.',
+		job: 'Checks an answer: its quotes exist in git or in a saved session, its labels are allowed, it covers every changed hunk, it follows the names the change touched to where else they are used, and what an entry says is missing is not there.',
 		imports: ['repo', 'transcripts'],
 		packages: [],
 	},

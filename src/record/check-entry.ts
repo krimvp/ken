@@ -3,6 +3,7 @@
 // authors are read from git and never taken from the writer, and every id an entry names is in the record. ken sets
 // every decision's label: the writer has no say.
 import {
+	checkAbsent,
 	decisionLabel,
 	gitQuotes,
 	type Label,
@@ -59,6 +60,8 @@ export type EntryDraft =
 			logged?: { by: string | null }
 			topic?: string | undefined
 			answer?: { at: string; note: string | null; outcome: Outcome }
+			// The text the decision says is missing, searched again at the commit it was searched at.
+			absent?: { text: string; under: string | null; commit: string }
 	  } & Replaces)
 	| ({ kind: 'topic'; name: string; quotes: Quote[] } & Replaces)
 	| ({ kind: 'note'; topic: string; text: string } & Replaces)
@@ -178,6 +181,8 @@ export async function checkEntry(
 							by: draft.logged.by === null ? null : text('by', draft.logged.by, MAX.name),
 							head: await headNow(repo, signal),
 						}
+			const absent = draft.absent && (await searched(repo, draft.absent, signal))
+			if (absent?.kind === 'refused') problems.push(`the decision: ${absent.problem}`)
 			const undo = UNDO.find((known) => known === draft.undo)
 			const given = draft.undo.trim() === '' ? '' : `, not "${draft.undo}"`
 			if (undo === undefined) problems.push(`say how easy it is to undo: easy, some-work or hard${given}.`)
@@ -207,6 +212,7 @@ export async function checkEntry(
 							outcome: draft.answer.outcome,
 						}
 					: null,
+				...(absent?.kind === 'absent' && { absent: absent.absence }),
 			} satisfies Decision
 			break
 		}
@@ -256,6 +262,17 @@ export async function checkEntry(
 			return draft satisfies never
 	}
 	return problems.length > 0 ? { kind: 'refused', problems } : { kind: 'ok', entry, replaces }
+}
+
+async function searched(
+	repo: Repository,
+	absent: { text: string; under: string | null; commit: string },
+	signal?: AbortSignal,
+) {
+	const commit = await repo.resolve(absent.commit, signal)
+	if (commit.kind !== 'ok')
+		return { kind: 'refused', problem: `absent names "${absent.commit}", which is not a commit.` } as const
+	return await checkAbsent(repo, commit.commit, absent, signal)
 }
 
 async function headNow(repo: Repository, signal?: AbortSignal): Promise<CommitHash | null> {

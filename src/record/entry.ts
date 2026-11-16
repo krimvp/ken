@@ -3,7 +3,7 @@
 // A quote of a saved session is kept as ken checked it: the session's id, the message's number, who wrote it and when,
 // and the quoted lines, which passed secretHider. No other text of the session reaches the record.
 import { createHash } from 'node:crypto'
-import type { Label, VerifiedGitQuote, VerifiedQuote } from '../checks/index.ts'
+import type { Absence, Label, VerifiedGitQuote, VerifiedQuote } from '../checks/index.ts'
 import type { Diagram } from '../diagram/index.ts'
 import type { CommitHash, Range } from '../repo/index.ts'
 
@@ -48,7 +48,8 @@ export type Logged = { by: string | null; head: CommitHash | null }
 // decision has logged, so a decision written before ken decide reads as before. topic names the topic the decision
 // belongs to, as the record names it, or is null. answer is the owner's "I have decided" on a decision that needed
 // them: when, their note, and whether they keep what was chosen or want it changed. An answer saved before ken asked
-// which has no outcome. ken writes it as a new entry that replaces the old one with the same content.
+// which has no outcome. ken writes it as a new entry that replaces the old one with the same content. absent is ken's
+// search for the text the decision says is missing, which found nothing; only a decision that says so has it.
 export type Decision = {
 	kind: 'decision'
 	question: string
@@ -63,6 +64,7 @@ export type Decision = {
 	work: EntryId | null
 	topic: string | null
 	answer: { at: string; note: string | null; outcome: Outcome | null } | null
+	absent?: Absence
 }
 
 export const OUTCOMES = ['keep', 'change'] as const

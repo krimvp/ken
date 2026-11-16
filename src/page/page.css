@@ -1069,6 +1069,14 @@ span.label-from-the-session {
 	margin-top: var(--space-1);
 }
 
+/* ken's own search for what an entry says is missing: a quiet line under the entry, in the note style. */
+.searched {
+	margin: var(--space-1) 0 0;
+	color: var(--color-note);
+	font-size: var(--text-note);
+	line-height: 1.5;
+}
+
 .facts .why {
 	display: block;
 	color: var(--color-note);

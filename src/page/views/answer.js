@@ -291,9 +291,18 @@ function claimHtml(claim, key, i, rows, marked) {
 		<span class="st-n">${i + 1}</span>
 		<div>
 			<p class="st-text">${marked.has(claim.label) ? label(claim.label) : ''}${checkedHtml(claim)}${weightHtml(claim)}${prose(claim.text)}</p>
+			${searchedHtml(claim.absent)}
 			${quoteRows(claim.quotes, key, rows)}
 		</div>
 	</li>`
+}
+
+// ken's own search for the text an entry says is missing, which found nothing. An entry that says nothing is missing
+// has none.
+function searchedHtml(absent) {
+	if (!absent) return ''
+	const under = absent.under === null ? '' : ` under <code>${esc(absent.under)}</code>`
+	return `<p class="searched">ken searched for <code>${esc(absent.text)}</code>${under} at <code>${short(absent.commit)}</code> and found nothing.</p>`
 }
 
 // ken's own mark on a risk, from git, in the label styles: solid when a quote lies outside the change, dashed when not.
@@ -391,7 +400,7 @@ export function factsHtml(d) {
 		.map((r) => `<dd>${prose(r.option)}<span class="why">Why not: ${prose(r.reason)}</span></dd>`)
 		.join('')
 	return `<dl class="facts">
-		${d.reason ? `<div><dt>Why</dt><dd>${prose(d.reason.text)}${fromHtml(d)}</dd></div>` : ''}
+		${d.reason ? `<div><dt>Why</dt><dd>${prose(d.reason.text)}${fromHtml(d)}${searchedHtml(d.absent)}</dd></div>` : ''}
 		${others ? `<div><dt>Other options</dt>${others}</div>` : ''}
 		<div><dt>Reversing it later</dt><dd>${UNDO[d.undo] ?? esc(d.undo)}</dd></div>
 	</dl>`

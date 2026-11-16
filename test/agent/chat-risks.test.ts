@@ -87,6 +87,25 @@ test('a risk with a false quote rejects the answer and names the risk; with a tr
 	assert.ok(read.includes(`risk 1 [inferred]: ${RISK.text}`) && read.includes(CALL.text), `read_record: ${read}`)
 })
 
+test("a risk that says a name is missing is rejected when ken finds the name, with the place, and accepted with ken's search when it does not", async () => {
+	const missing = (text: string) => ({
+		...RISK,
+		text: 'Nothing else in src waits on the limit.',
+		absent: { text, under: 'src/' },
+	})
+	const { events } = await ask([
+		DRAFT,
+		answer({ risks: [missing('fetchWithin')] }),
+		answer({ risks: [missing('retryLater')] }),
+		{ text: '' },
+	])
+
+	assert.deepEqual(outcomes(events), ['rejected', 'accepted'])
+	const rejected = events.find((event) => event.kind === 'rejected')
+	assert.match(rejected?.kind === 'rejected' ? (rejected.problems[0] ?? '') : '', /^Risk 1: .*src\/load\.ts:2/)
+	assert.deepEqual(accepted(events).answer.risks?.[0]?.absent, { text: 'retryLater', under: 'src/', commit: head })
+})
+
 test('an answer about a change that says nothing about risks, or has a long summary, comes back without using an attempt; an answer about the code as it is may leave risks out', async () => {
 	const silent = answer({})
 	const wordy = answer({ risks: [], summary: `The timeout is shorter. ${'It drops by 400 ms. '.repeat(36)}` })

@@ -2,6 +2,8 @@
 // carries a label its quotes allow, and every diagram passes checkDiagrams. One bad quote rejects the whole answer.
 // Only then does ken read the change facts from git.
 import {
+	type Absence,
+	checkAbsent,
 	checkCoverage,
 	checkLabel,
 	countMessages,
@@ -17,12 +19,13 @@ import {
 } from '../../checks/index.ts'
 import { checkDiagrams, type DiagramDraft, diagramElements } from '../../diagram/index.ts'
 import type { Undo } from '../../record/index.ts'
-import { type Repository, resolveRange } from '../../repo/index.ts'
+import { type CommitHash, type Repository, resolveRange } from '../../repo/index.ts'
 import { scopeProblem } from '../tools/exploration-tools.ts'
 import type { Answer, Change, Risk, Weight } from './answer.ts'
 
-// Only a risk has a weight.
-type ClaimDraft = { text: string; label: string; quotes: Quote[]; topic?: string; weight?: Weight }
+// Only a risk has a weight. absent is the text the entry says is missing, and the path prefix to search under.
+type Sought = { text: string; under: string | null }
+type ClaimDraft = { text: string; label: string; quotes: Quote[]; topic?: string; weight?: Weight; absent?: Sought }
 
 type DecisionFields = { question: string; chosen: string; rejected: { option: string; reason: string }[] }
 export type DecisionDraft = DecisionFields & {
@@ -31,11 +34,13 @@ export type DecisionDraft = DecisionFields & {
 	needsOwner: boolean
 	quotes: Quote[]
 	topic?: string
+	absent?: Sought
 }
 // A decision whose quotes passed. The project record checks its words and sets its label when it stores it.
-export type CheckedDecision = Omit<DecisionDraft, 'reason' | 'quotes'> & {
+export type CheckedDecision = Omit<DecisionDraft, 'reason' | 'quotes' | 'absent'> & {
 	reason: { text: string; quotes: VerifiedQuote[] }
 	quotes: VerifiedQuote[]
+	absent?: Absence
 }
 
 export type AnswerDraft = {
@@ -52,25 +57,37 @@ export type AnswerCheck =
 	| { kind: 'accepted'; answer: Omit<Answer, 'topics'>; decisions: CheckedDecision[] }
 	| { kind: 'rejected'; problems: string[] }
 
+// searchAt is the commit an absence is searched at when the draft has no scope: the risk pass checks its additions on
+// their own, at the change's head. Without either, HEAD.
 export async function checkAnswer(
 	sources: QuoteSources,
 	draft: AnswerDraft,
 	signal: AbortSignal,
+	searchAt: CommitHash | null = null,
 ): Promise<AnswerCheck> {
 	const { repo } = sources
 	const scope = draft.scope && (await resolveScope(repo, draft.scope, signal))
 	if (scope?.kind === 'refused') return { kind: 'rejected', problems: [`Scope: ${scope.problem}`] }
 	const problems: string[] = []
 	const verify = (where: string, quotes: Quote[]) => verifyQuotes(sources, where, quotes, problems, signal)
+	const headNow = async () => {
+		const resolved = await repo.resolve('HEAD', signal)
+		if (resolved.kind !== 'ok') throw new Error('an answer is checked in a repository with no HEAD commit')
+		return resolved.commit
+	}
+	const at = scope?.head ?? searchAt ?? (await headNow())
+	const search = (where: string, sought: Sought | undefined) => searchAbsent(repo, at, where, sought, problems, signal)
 
-	const statements = await checkClaims(sources, 'Statement', draft.statements, problems, signal)
-	const risks = draft.risks && (await checkClaims(sources, 'Risk', draft.risks, problems, signal))
+	const statements = await checkClaims(sources, 'Statement', draft.statements, problems, search, signal)
+	const risks = draft.risks && (await checkClaims(sources, 'Risk', draft.risks, problems, search, signal))
 	const decisions: CheckedDecision[] = []
 	for (const [index, decision] of draft.decisions.entries()) {
 		const where = `Decision ${index + 1}`
 		const quotes = await verify(where, decision.quotes)
 		const reasonQuotes = await verify(`${where}, its reason`, decision.reason.quotes)
-		decisions.push({ ...decision, reason: { text: decision.reason.text, quotes: reasonQuotes }, quotes })
+		const { absent: sought, ...rest } = decision
+		const absent = await search(where, sought)
+		decisions.push({ ...rest, reason: { text: decision.reason.text, quotes: reasonQuotes }, quotes, ...absent })
 	}
 	const checked = await checkDiagrams(repo, draft.diagrams, signal)
 	if (checked.kind === 'refused') problems.push(...checked.problems)
@@ -96,11 +113,14 @@ export async function checkAnswer(
 	return { kind: 'accepted', answer: { ...answer, risks: marked ?? null, change: change.change }, decisions }
 }
 
+type Search = (where: string, sought: Sought | undefined) => Promise<{ absent?: Absence }>
+
 async function checkClaims(
 	sources: QuoteSources,
 	what: 'Statement' | 'Risk',
 	drafts: ClaimDraft[],
 	problems: string[],
+	search: Search,
 	signal: AbortSignal,
 ): Promise<Risk[]> {
 	const claims: Risk[] = []
@@ -109,11 +129,29 @@ async function checkClaims(
 		const label = checkLabel(claim.label, claim.quotes)
 		if (label.kind === 'refused') problems.push(`${where}: ${label.problem}`)
 		const quotes = await verifyQuotes(sources, where, claim.quotes, problems, signal)
+		const absent = await search(where, claim.absent)
 		const topic = claim.topic === undefined ? {} : { topic: claim.topic }
 		const weight = claim.weight === undefined ? {} : { weight: claim.weight }
-		if (label.kind === 'ok') claims.push({ text: claim.text, label: label.label, quotes, ...topic, ...weight })
+		if (label.kind === 'ok') {
+			claims.push({ text: claim.text, label: label.label, quotes, ...topic, ...weight, ...absent })
+		}
 	}
 	return claims
+}
+
+async function searchAbsent(
+	repo: Repository,
+	at: CommitHash,
+	where: string,
+	sought: Sought | undefined,
+	problems: string[],
+	signal: AbortSignal,
+): Promise<{ absent?: Absence }> {
+	if (sought === undefined) return {}
+	const checked = await checkAbsent(repo, at, sought, signal)
+	if (checked.kind === 'absent') return { absent: checked.absence }
+	problems.push(`${where}: ${checked.problem}`)
+	return {}
 }
 
 async function verifyQuotes(

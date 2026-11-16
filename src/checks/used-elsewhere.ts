@@ -2,7 +2,7 @@
 // changed lines find the names the change defines, alters or removes, or sets as a key, such as a setting, in any
 // language and with no parser, and a whole-word search at the head commit finds the other lines that hold each name. It
 // is a search, so it can miss a use and can find a different thing with the same name: ken says so wherever it shows
-// the list.
+// the list. The same search at the head commit checks an entry that says a thing is missing (see checkAbsent).
 import { type CommitHash, type FileDiff, parsePath, type Range, type Repository, type TooLarge } from '../repo/index.ts'
 import type { VerifiedGitQuote } from './quote-check.ts'
 
@@ -307,4 +307,57 @@ async function sitesOf(
 	const rank = (site: Site) =>
 		(key && !reads.test(site.text) ? 3 : 0) + (DOC_FILE.test(site.path) ? 2 : TEST_PATH.test(site.path) ? 1 : 0)
 	return sites.sort((a, b) => rank(a) - rank(b)).map(({ path, line, text }) => ({ path, line, text }))
+}
+
+// An entry that says something is missing, never called or not tested names the text that would be there if it were
+// not, and ken searches the head commit for it, as a fixed string that is a whole word at each end that is a word
+// character. A judge found two such claims false that one search would have caught. under is a path prefix.
+export type Absence = { text: string; under: string | null; commit: CommitHash }
+export type AbsenceCheck = { kind: 'absent'; absence: Absence } | { kind: 'refused'; problem: string }
+
+const ABSENT_CHARS = { least: 3, most: 80 }
+const MAX_PLACES = 3
+
+export async function checkAbsent(
+	repo: Repository,
+	commit: CommitHash,
+	sought: { text: string; under: string | null },
+	signal?: AbortSignal,
+): Promise<AbsenceCheck> {
+	const text = sought.text.trim()
+	const at = commit.slice(0, 7)
+	if (text.includes('\n') || text.length < ABSENT_CHARS.least || text.length > ABSENT_CHARS.most) {
+		return {
+			kind: 'refused',
+			problem: `absent holds ${JSON.stringify(text.slice(0, 40))}. Give one line of ${ABSENT_CHARS.least} to ${ABSENT_CHARS.most} characters: the name or phrase that would be there if the claim were false.`,
+		}
+	}
+	const under = sought.under === null ? null : sought.under.replace(/^\.?\/+/, '')
+	const within = (path: string) => under === null || path.startsWith(under)
+	if (under !== null) {
+		const listed = await repo.listFiles(commit, signal)
+		if (listed.kind === 'ok' && !listed.paths.some(within)) {
+			return { kind: 'refused', problem: `absent searches under "${under}", but no path at ${at} starts with it.` }
+		}
+	}
+	const word = /[A-Za-z0-9_$]/
+	const escaped = text.replace(/[.[\]{}()*+?^$|\\]/g, '\\$&')
+	const pattern = `${word.test(text[0] ?? '') ? '(^|[^A-Za-z0-9_$])' : ''}${escaped}${word.test(text.at(-1) ?? '') ? '([^A-Za-z0-9_$]|$)' : ''}`
+	const found = await repo.search(commit, pattern, signal)
+	if (found.kind === 'bad-pattern') throw new Error(`an escaped absence pattern did not compile: ${found.message}`)
+	const where = under === null ? '' : ` under ${under}`
+	if (found.kind === 'too-large') {
+		return {
+			kind: 'refused',
+			problem: `it says "${text}" is not there, but ken found it on too many lines${where} at ${at} to list.`,
+		}
+	}
+	const places = found.matches.filter((match) => within(match.path))
+	if (places.length === 0) return { kind: 'absent', absence: { text, under, commit } }
+	const shown = places.slice(0, MAX_PLACES).map((place) => `${place.path}:${place.line}`)
+	const more = places.length > shown.length ? ` and ${places.length - shown.length} more` : ''
+	return {
+		kind: 'refused',
+		problem: `it says "${text}" is not there, but ken found it${where} at ${at}: ${shown.join(', ')}${more}. Read those lines, then leave the claim out or name text that is truly missing.`,
+	}
 }

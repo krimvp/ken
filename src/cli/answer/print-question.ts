@@ -217,13 +217,26 @@ function decisionLines(decisions: Extract<Entry, { kind: 'decision' }>[], paint:
 		`${index + 1}. ${d.needsOwner ? `${paint('yellow', '[your call]')} ` : ''}${d.question} ${paint('cyan', `[${d.label}]`)}`,
 		`   Chosen: ${d.chosen}`,
 		...(d.reason ? [`   Why: ${d.reason.text}`, ...d.reason.quotes.flatMap((quote) => formatQuote(quote, paint))] : []),
+		...searchedLine(d.absent, paint),
 	])
+}
+
+type Absence = NonNullable<Answer['statements'][number]['absent']>
+
+// ken's own search for what an entry says is missing. An entry that says nothing is missing has none.
+function searchedLine(absent: Absence | undefined, paint: Paint): string[] {
+	if (absent === undefined) return []
+	const under = absent.under === null ? '' : ` under \`${absent.under}\``
+	return [
+		paint('dim', `   ken searched for \`${absent.text}\`${under} at ${absent.commit.slice(0, 7)} and found nothing.`),
+	]
 }
 
 // A risk shows ken's mark and, beside it, the model's weight, when it has them.
 function claims(list: Risk[], paint: Paint): string[] {
 	return list.flatMap((claim, index) => [
 		`${index + 1}. ${claim.text} ${paint('cyan', `[${claim.label}]`)}${claim.checked === undefined ? '' : ` ${paint('cyan', `[${CHECKED[`${claim.checked}`]}]`)}`}${claim.weight === undefined ? '' : ` ${paint('cyan', `[${claim.weight}, by ken's model]`)}`}`,
+		...searchedLine(claim.absent, paint),
 		...claim.quotes.flatMap((quote) => formatQuote(quote, paint)),
 	])
 }
