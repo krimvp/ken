@@ -6,6 +6,7 @@ import { gitRepository } from '../../src/repo/index.ts'
 import { buildRepository } from '../fixtures/build-repository.ts'
 import {
 	type ChatRequest,
+	DRAFT,
 	nothingToRevise,
 	scriptedModel,
 	type Turn,
@@ -26,9 +27,19 @@ process.env[KEY_ENV] = 'scripted-model-key'
 const LIMIT = { path: 'src/limits.ts', commit: head, text: 'export const TIMEOUT_MS = 100' }
 const CALL = { path: 'src/load.ts', commit: head, text: '\treturn await fetchWithin(TIMEOUT_MS * 2)' }
 const STATEMENT = { text: 'The timeout drops from 500 ms to 100 ms.', label: 'inferred', quotes: [LIMIT] }
-const FIRST_RISK = { text: 'Every request now fails five times sooner.', label: 'inferred', quotes: [LIMIT] }
-const SECOND_RISK = { text: 'A slow network now times out.', label: 'inferred', quotes: [LIMIT] }
-const CALLER_RISK = { text: 'load still waits 200 ms, twice the new limit.', label: 'inferred', quotes: [CALL] }
+const FIRST_RISK = {
+	text: 'Every request now fails five times sooner.',
+	label: 'inferred',
+	quotes: [LIMIT],
+	weight: 'minor',
+}
+const SECOND_RISK = { text: 'A slow network now times out.', label: 'inferred', quotes: [LIMIT], weight: 'serious' }
+const CALLER_RISK = {
+	text: 'load still waits 200 ms, twice the new limit.',
+	label: 'inferred',
+	quotes: [CALL],
+	weight: 'serious',
+}
 
 function answer(args: Record<string, unknown>): Turn {
 	return {
@@ -69,6 +80,7 @@ test('log and diff over a change end with the names used elsewhere, once per que
 	const { events, requests } = await ask([
 		{ tool: 'ken__diff', args: { base, head } },
 		{ tool: 'ken__log', args: { base, head } },
+		DRAFT,
 		// No work title, so the record keeps nothing that would spare the next test's change its risk pass.
 		answer({ scope: { base, head }, risks: [] }),
 		...nothingToRevise(0),
@@ -90,10 +102,53 @@ test('log and diff over a change end with the names used elsewhere, once per que
 	})
 })
 
+test('a question about a change gets its draft first: an answer sent before the draft goes back without using an attempt, ken asks for the answer once the draft ends the turn, and the answer counts the points of the draft it left out', async () => {
+	const { events, requests } = await ask([
+		answer({ scope: { base, head }, risks: [] }),
+		DRAFT,
+		answer({ scope: { base, head }, risks: [], left_out: ['the README line', 'a guess about callers'] }),
+		...nothingToRevise(0),
+		{ text: 'I left out the tests.' },
+	])
+
+	assert.match(toolResults(requests[1])[0] ?? '', /did not use one of your attempts[\s\S]*draft/)
+	assert.deepEqual(userTexts(requests[1]).length, 1, 'the answer went back within the first turn')
+	assert.deepEqual(userTexts(requests[2]).length, 2, 'once the draft ends the turn, ken asks for the answer')
+	assert.equal(
+		events.some((event) => event.kind === 'rejected'),
+		false,
+	)
+	assert.equal(accepted(events).answer.leftOut, 2)
+	const usage = events.find((each) => each.kind === 'usage')
+	assert.deepEqual(
+		usage?.kind === 'usage' && usage.fromDraft && [usage.fromDraft.inputTokens, usage.fromDraft.outputTokens],
+		[2 * USAGE_PER_REPLY.prompt_tokens, 2 * USAGE_PER_REPLY.completion_tokens],
+		'turning the draft into the answer took the answer and the end of its turn',
+	)
+})
+
+test('a question not about a change, and a live note about one, get no draft step, no risk pass and no list of names used elsewhere', async () => {
+	// Each script has one turn more than it needs, which only a risk pass would use.
+	const spare: Turn = { text: 'A risk pass would get this.' }
+	const now = await ask([answer({}), { text: 'Nothing left out.' }, spare])
+	assert.equal(accepted(now.events).revision, null)
+	assert.equal(now.requests.length, 2, 'the answer and the closing note, nothing more')
+
+	const note = await ask(
+		[{ tool: 'ken__diff', args: { base, head } }, answer({ scope: { base, head }, risks: [] }), { text: '.' }, spare],
+		'note',
+	)
+	assert.equal(accepted(note.events).revision, null, 'the note is answered in its first turn')
+	assert.equal(note.requests.length, 3)
+	assert.ok(!(toolResults(note.requests[1])[0] ?? '').includes('src/load.ts:2'), 'a note reads the diff alone')
+	assert.equal(userTexts(note.requests.at(-1)).length, 1)
+})
+
 test('an answer about a change is held for one risk pass: the agent gets its risks and the names no quote follows, an added risk with a false quote is refused, and the final risks come in the order the revise call gave, with the withdrawn one gone, in the answer, the record and the cost', async () => {
 	const falseRisk = { ...CALLER_RISK, quotes: [{ ...CALL, text: '    return await fetchWithin(TIMEOUT_MS * 2)' }] }
 	const withdraw = [{ risk: 1, reason: 'Only requests slower than 100 ms fail.' }]
 	const { events, requests } = await ask([
+		DRAFT,
 		answer({ ...ABOUT_THE_CHANGE, risks: [FIRST_RISK, SECOND_RISK] }),
 		{ text: '' },
 		{ tool: 'ken__revise_answer', args: { risks: [falseRisk], order: [3, 1, 2] } },
@@ -101,13 +156,13 @@ test('an answer about a change is held for one risk pass: the agent gets its ris
 		{ text: 'I left out the tests.' },
 	])
 
-	const [question, pass, ...more] = userTexts(requests.at(-1))
+	const [question, , pass, ...more] = userTexts(requests.at(-1))
 	assert.ok(question?.includes('What did the last commit do?'))
 	assert.equal(more.length, 0, 'ken asks the risk questions once')
 	for (const fact of [FIRST_RISK.text, SECOND_RISK.text, 'TIMEOUT_MS', 'src/load.ts:2']) {
 		assert.ok(pass?.includes(fact), `the risk questions name ${fact}: ${pass}`)
 	}
-	assert.match(toolResults(requests[3]).at(-1) ?? '', /attempt 1 of 2[\s\S]*Risk 1, quote 1: .*src\/load\.ts/)
+	assert.match(toolResults(requests[4]).at(-1) ?? '', /attempt 1 of 2[\s\S]*Risk 1, quote 1: .*src\/load\.ts/)
 	const event = accepted(events)
 	const verified = (risk: typeof FIRST_RISK, line: number) => ({
 		...risk,
@@ -122,8 +177,12 @@ test('an answer about a change is held for one risk pass: the agent gets its ris
 	})
 	assert.deepEqual(event.answer.change?.usedElsewhere, { followed: ['TIMEOUT_MS'], notFollowed: [] })
 	const work = (await fileRecordStore(root, gitRepository(root)).read()).current.find((entry) => entry.kind === 'work')
-	const stored = event.answer.risks?.map(({ checked: _, ...risk }) => risk)
-	assert.deepEqual(work?.kind === 'work' && work.risks, stored, 'the record keeps the merged risks, without the mark')
+	const stored = event.answer.risks?.map(({ checked: _, weight: __, ...risk }) => risk)
+	assert.deepEqual(
+		work?.kind === 'work' && work.risks,
+		stored,
+		'the record keeps the merged risks, without the mark and the weight',
+	)
 	const usage = events.find((each) => each.kind === 'usage')
 	const replies = (n: number) => ({
 		input: n * USAGE_PER_REPLY.prompt_tokens,
@@ -136,7 +195,7 @@ test('an answer about a change is held for one risk pass: the agent gets its ris
 			usage.riskPass?.inputTokens,
 			usage.riskPass?.outputTokens,
 		],
-		[replies(5).input, replies(5).output, replies(3).input, replies(3).output],
+		[replies(6).input, replies(6).output, replies(3).input, replies(3).output],
 		'the risk pass took the last three replies, and the total counts them too',
 	)
 })
@@ -145,6 +204,7 @@ test('an answer with eight risks is accepted, and they reach the reader in the o
 	const eight = Array.from({ length: 8 }, (_, n) => ({ ...CALLER_RISK, text: `load waits too long, case ${n + 1}.` }))
 	const order = [8, 7, 6, 5, 4, 3, 2, 1]
 	const { events } = await ask([
+		DRAFT,
 		answer({ scope: { base, head }, risks: eight }),
 		{ text: '' },
 		{ tool: 'ken__revise_answer', args: { order } },
@@ -156,20 +216,4 @@ test('an answer with eight risks is accepted, and they reach the reader in the o
 		risks,
 		order.map((number) => `load waits too long, case ${number}.`),
 	)
-})
-
-test('a question not about a change, and a live note about one, get no risk pass and no list of names used elsewhere', async () => {
-	// Each script has one turn more than it needs, which only a risk pass would use.
-	const spare: Turn = { text: 'A risk pass would get this.' }
-	const now = await ask([answer({}), { text: 'Nothing left out.' }, spare])
-	assert.equal(accepted(now.events).revision, null)
-	assert.equal(now.requests.length, 2, 'the answer and the closing note, nothing more')
-
-	const note = await ask(
-		[{ tool: 'ken__diff', args: { base, head } }, answer({ scope: { base, head }, risks: [] }), { text: '.' }, spare],
-		'note',
-	)
-	assert.equal(note.requests.length, 3)
-	assert.ok(!(toolResults(note.requests[1])[0] ?? '').includes('src/load.ts:2'), 'a note reads the diff alone')
-	assert.equal(userTexts(note.requests.at(-1)).length, 1)
 })

@@ -1,18 +1,19 @@
 // The one way an answer reaches the reader. The model sends it here, checkAnswer decides, and the result tells the
 // model what to fix. A question allows MAX_REJECTIONS rejected answers, so a model that cannot quote stops there
 // instead of trying forever. A problem of form, which the model fixes without reading code again, comes back first and
-// does not use an attempt. An answer about a change that the reader asked for is held once it passes, for the risk
-// pass (see risk-pass.ts); accept writes and shows an answer, the held one or the one the risk pass revised.
+// does not use an attempt. An answer about a change that the reader asked for is made from the model's draft (see
+// from-draft.ts), so one sent before it goes back, and it is held once it passes, for the risk pass (see
+// risk-pass.ts); accept writes and shows an answer, the held one or the one the risk pass revised.
 import type { JsonObject, JsonValue, Tool } from 'aigent/plugin'
 import { decisionLabel, type Label, type Quote, type QuoteSources } from '../../checks/index.ts'
 import { CARDINALITIES, DIAGRAM_BOUNDS, DIAGRAM_KINDS, type DiagramDraft } from '../../diagram/index.ts'
 import type { UnderstandingMap } from '../../map/index.ts'
 import { type RecordEntry, type RecordStore, sameName, UNDO } from '../../record/index.ts'
-import type { Repository } from '../../repo/index.ts'
+import { type Repository, resolveRange } from '../../repo/index.ts'
 import type { ChatEvent, Revision } from '../chat-event.ts'
 import { hunkHeader } from '../tools/diff-tool.ts'
 import { readArgs, refuse, reply } from '../tools/tool-edge.ts'
-import type { Answer, Claim } from './answer.ts'
+import { type Answer, type Claim, WEIGHTS } from './answer.ts'
 import { type AnswerDraft, type CheckedDecision, checkAnswer } from './check-answer.ts'
 import { allowJsonText, readJsonText } from './json-text.ts'
 import { type RecordArgs, type Recorded, recordAnswer } from './record-answer.ts'
@@ -22,18 +23,23 @@ const MAX_LISTED_HUNKS = 40
 const MAX_LISTED_MESSAGES = 40
 // Two short sentences. A longer summary pushes the checked part of the answer off the reader's first screen.
 export const MAX_SUMMARY_CHARS = 280
+// The story that leads an answer about a change: three to five short sentences.
+export const MAX_STORY_CHARS = 700
 
 // What one question has seen of the answer tool. The session makes a new one for each question. asked is false for a
 // note ken wrote by itself in live mode: the reader did not ask it, so it tells their map nothing, and it gets neither
-// the list of names used elsewhere nor the risk pass, which a note's own rules leave out. held is the answer that
-// passed every check while ken runs the risk pass, with the arguments it came in and the revisions the pass had refused.
+// the list of names used elsewhere, nor the draft, nor the risk pass, which a note's own rules leave out. held is the
+// answer that passed every check while ken runs the risk pass, with the arguments it came in and the revisions the
+// pass had refused. step is the step of the question the model is in (see STEPS in start-chat.ts).
 export type AnswerRound = {
 	rejections: number
 	answer: Answer | null
 	asked: boolean
 	held: Held | null
+	step: Step
 	emit: (event: ChatEvent) => void
 }
+export type Step = 'draft' | 'answer' | 'risks'
 export type Held = { args: JsonObject; answer: Answer; decisions: CheckedDecision[]; rejections: number }
 
 // What the answer tool checks against and writes to. map is the reader's understanding map: an accepted answer marks
@@ -64,6 +70,11 @@ export function answerTool(gate: Gate, round: () => AnswerRound): Tool {
 			const form = formProblems(args)
 			if (form.length > 0) return sentBack(form)
 			const holds = current.asked && args.scope !== undefined
+			if (holds && current.step === 'draft' && !(await explained(gate, args, ctx.signal))) {
+				return sentBack([
+					'ken takes an answer about a change only once you have written your draft. Write the draft now, as plain text for the owner, and end your turn. ken then asks you for the answer.',
+				])
+			}
 			const settled = await settle(gate, args, ctx.signal, !holds)
 			if (settled.kind === 'form') return sentBack(settled.problems)
 			if (settled.kind === 'accepted') {
@@ -132,9 +143,13 @@ export function sentBack(problems: string[]) {
 function formProblems(args: JsonObject): string[] {
 	const problems: string[] = []
 	const summary = typeof args.summary === 'string' ? args.summary.trim() : ''
-	if (summary.length > MAX_SUMMARY_CHARS) {
+	const [most, said] =
+		args.scope === undefined
+			? [MAX_SUMMARY_CHARS, 'one or two short sentences that restate the answer']
+			: [MAX_STORY_CHARS, 'the story in three to five short sentences']
+	if (summary.length > most) {
 		problems.push(
-			`The summary has ${summary.length} characters. Keep it to ${MAX_SUMMARY_CHARS}: one or two short sentences that restate the answer. Put the detail in statements, decisions and risks.`,
+			`The summary has ${summary.length} characters. Keep it to ${most}: ${said}. Put the detail in statements, decisions and risks.`,
 		)
 	}
 	if (args.scope !== undefined && args.risks === undefined) {
@@ -143,6 +158,20 @@ function formProblems(args: JsonObject): string[] {
 		)
 	}
 	return problems
+}
+
+// The record already holds a piece of work for the answer's range, so the answer is sent again from the record and
+// needs no draft.
+async function explained(gate: Gate, raw: JsonObject, signal: AbortSignal): Promise<boolean> {
+	const read = readJsonText(ANSWER_SCHEMA, raw)
+	if (read.kind === 'refused' || read.args.scope === undefined) return false
+	const scope = readArgs(objectOf(read.args.scope), 'answer scope')
+	const range = await resolveRange(gate.sources.repo, { base: scope.text('base'), head: scope.text('head') }, signal)
+	if (range.kind !== 'ok') return false
+	const { base, head } = range.range
+	return (await gate.store.read()).current.some(
+		(entry) => entry.kind === 'work' && entry.range.base === base && entry.range.head === head,
+	)
 }
 
 // args comes back as ken read it, with any list sent as JSON text parsed, so the risk pass can add to it.
@@ -189,11 +218,13 @@ async function settle(
 	const claims = <T extends Claim>(list: T[]) =>
 		list.map((claim) => (claim.topic === undefined ? claim : { ...claim, topic: canonical(claim.topic) }))
 	const topics = [...new Set([...args.topics.map((topic) => topic.name), ...named].map(canonical))]
+	const leftOut = read.args.left_out
 	const answer: Answer = {
 		...check.answer,
 		statements: claims(check.answer.statements),
 		risks: check.answer.risks && claims(check.answer.risks),
 		topics,
+		...(Array.isArray(leftOut) ? { leftOut: leftOut.length } : {}),
 	}
 	return { kind: 'accepted', answer, decisions: check.decisions, recorded, args: read.args }
 }
@@ -327,11 +358,13 @@ function topicOf(topic: string | undefined): { topic?: string } {
 
 function claimOf(raw: JsonObject, what: string, quoteOf: ReadQuote) {
 	const claim = readArgs(raw, what)
+	const weight = WEIGHTS.find((known) => known === claim.optionalText('weight'))
 	return {
 		text: claim.text('text'),
 		label: claim.text('label'),
 		quotes: listOf(raw.quotes).map(quoteOf),
 		...topicOf(claim.optionalText('topic')),
+		...(weight === undefined ? {} : { weight }),
 	}
 }
 
@@ -497,6 +530,20 @@ export const CLAIM_SCHEMA = {
 	},
 	required: ['text', 'label', 'quotes'],
 	additionalProperties: false,
+} as const
+
+const CLAIM = withoutDescriptions(CLAIM_SCHEMA)
+export const RISK_SCHEMA = {
+	...CLAIM,
+	properties: {
+		...CLAIM.properties,
+		weight: {
+			type: 'string',
+			enum: WEIGHTS,
+			description: '"serious" when someone is hurt in normal use, "minor" otherwise',
+		},
+	},
+	required: [...CLAIM.required, 'weight'],
 } as const
 
 export const DECISION_SCHEMA = {
@@ -701,7 +748,7 @@ const ANSWER_SCHEMA = {
 		},
 		summary: {
 			type: 'string',
-			description: `One or two short sentences, at most ${MAX_SUMMARY_CHARS} characters, that restate the answer from the top. Nothing in it that is not in a statement, a decision or a risk.`,
+			description: `One or two short sentences, at most ${MAX_SUMMARY_CHARS} characters, that restate the answer from the top. For an answer about a change, the story of the change in three to five short sentences, at most ${MAX_STORY_CHARS} characters.`,
 		},
 		statements: {
 			type: 'array',
@@ -713,7 +760,13 @@ const ANSWER_SCHEMA = {
 			type: 'array',
 			description:
 				'Required when the answer has a scope. Each thing that could go wrong or that the owner should watch after the change, one per item, with the lines it starts from: often a caller or another user of a changed value outside the diff. An empty list says you looked and found none.',
-			items: withoutDescriptions(CLAIM_SCHEMA),
+			items: RISK_SCHEMA,
+		},
+		left_out: {
+			type: 'array',
+			description:
+				'For an answer made from your draft: each point of the draft that you found no line to quote for and left out, in a few words. An empty list when every point has its lines.',
+			items: { type: 'string' },
 		},
 	},
 	required: ['summary', 'statements'],

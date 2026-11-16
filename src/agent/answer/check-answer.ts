@@ -19,9 +19,10 @@ import { checkDiagrams, type DiagramDraft, diagramElements } from '../../diagram
 import type { Undo } from '../../record/index.ts'
 import { type Repository, resolveRange } from '../../repo/index.ts'
 import { scopeProblem } from '../tools/exploration-tools.ts'
-import type { Answer, Change, Claim } from './answer.ts'
+import type { Answer, Change, Risk, Weight } from './answer.ts'
 
-type ClaimDraft = { text: string; label: string; quotes: Quote[]; topic?: string }
+// Only a risk has a weight.
+type ClaimDraft = { text: string; label: string; quotes: Quote[]; topic?: string; weight?: Weight }
 
 type DecisionFields = { question: string; chosen: string; rejected: { option: string; reason: string }[] }
 export type DecisionDraft = DecisionFields & {
@@ -101,15 +102,16 @@ async function checkClaims(
 	drafts: ClaimDraft[],
 	problems: string[],
 	signal: AbortSignal,
-): Promise<Claim[]> {
-	const claims: Claim[] = []
+): Promise<Risk[]> {
+	const claims: Risk[] = []
 	for (const [index, claim] of drafts.entries()) {
 		const where = `${what} ${index + 1}`
 		const label = checkLabel(claim.label, claim.quotes)
 		if (label.kind === 'refused') problems.push(`${where}: ${label.problem}`)
 		const quotes = await verifyQuotes(sources, where, claim.quotes, problems, signal)
 		const topic = claim.topic === undefined ? {} : { topic: claim.topic }
-		if (label.kind === 'ok') claims.push({ text: claim.text, label: label.label, quotes, ...topic })
+		const weight = claim.weight === undefined ? {} : { weight: claim.weight }
+		if (label.kind === 'ok') claims.push({ text: claim.text, label: label.label, quotes, ...topic, ...weight })
 	}
 	return claims
 }

@@ -13,6 +13,10 @@ export type ChatRequest = { messages: { role: string; content: unknown }[] }
 // Each reply reports this usage, so a test can check the sum over a question.
 export const USAGE_PER_REPLY = { prompt_tokens: 100, completion_tokens: 10 }
 
+// What a model writes first for a question about a change: its draft as text, which ends the turn. ken then asks it to
+// turn the draft into the answer.
+export const DRAFT = { text: 'Before, retries did not wait. Now they do.' } satisfies Turn
+
 // What a model sends after ken holds its answer about a change, when the risk pass finds nothing to change: it ends the
 // question's turn, then calls revise_answer with only the order of the answer's risks, as they were. The closing note
 // comes after. A script that stops after the answer leaves the risk pass no reply, so the pass fails and the answer ken

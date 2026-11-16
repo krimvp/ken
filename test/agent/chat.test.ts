@@ -4,7 +4,14 @@ import path from 'node:path'
 import { after, test } from 'node:test'
 import { type ChatEvent, startChat } from '../../src/agent/index.ts'
 import { buildRepository, OWNER } from '../fixtures/build-repository.ts'
-import { nothingToRevise, scriptedModel, type Turn, toolResults, USAGE_PER_REPLY } from '../fixtures/scripted-model.ts'
+import {
+	DRAFT,
+	nothingToRevise,
+	scriptedModel,
+	type Turn,
+	toolResults,
+	USAGE_PER_REPLY,
+} from '../fixtures/scripted-model.ts'
 
 const RETRY = 'export function retry(times: number) {\n\tfor (let i = 0; i < times; i++) {\n\t\tattempt()\n'
 const { root, hashes } = buildRepository([
@@ -52,6 +59,7 @@ async function ask(script: Turn[], directory = path.join(root, 'src')) {
 
 test('a false quote is rejected with its reasons sent to the model, and a true quote then gets a checked answer', async () => {
 	const { events, requests } = await ask([
+		DRAFT,
 		answer(FALSE_QUOTE),
 		answer(TRUE_QUOTE),
 		...nothingToRevise(0),
@@ -62,15 +70,19 @@ test('a false quote is rejected with its reasons sent to the model, and a true q
 		events.filter((event) => event.kind !== 'text').map((event) => event.kind),
 		['tool', 'rejected', 'tool', 'tool', 'accepted', 'usage', 'done'],
 	)
-	assert.equal(events.map((event) => (event.kind === 'text' ? event.delta : '')).join(''), 'I left out the README.')
-	const toModel = toolResults(requests[1])[0] ?? ''
+	assert.equal(
+		events.map((event) => (event.kind === 'text' ? event.delta : '')).join(''),
+		`${DRAFT.text}I left out the README.`,
+		'the model writes its draft and its closing note, and never the answer',
+	)
+	const toModel = toolResults(requests[2])[0] ?? ''
 	assert.ok(toModel.includes('src/retry.ts'), `the model is told which quote failed: ${toModel}`)
 	assert.ok(toModel.includes(JSON.stringify('\t\tsleep(100)')), `the model is shown the line with its tabs: ${toModel}`)
 	assert.deepEqual(events.at(-1), { kind: 'done', outcome: 'answered' })
 	const usage = events.find((event) => event.kind === 'usage')
 	assert.deepEqual(
 		[usage?.kind === 'usage' && usage.inputTokens, usage?.kind === 'usage' && usage.outputTokens],
-		[5 * USAGE_PER_REPLY.prompt_tokens, 5 * USAGE_PER_REPLY.completion_tokens],
+		[6 * USAGE_PER_REPLY.prompt_tokens, 6 * USAGE_PER_REPLY.completion_tokens],
 	)
 
 	const accepted = events.find((event) => event.kind === 'accepted')
@@ -124,6 +136,7 @@ test('a false quote is rejected with its reasons sent to the model, and a true q
 
 test('a model that keeps sending false quotes ends with no checked answer after three rejections', async () => {
 	const { events, requests } = await ask([
+		DRAFT,
 		answer(FALSE_QUOTE),
 		answer({ ...FALSE_QUOTE, text: 'sleep(1000)' }),
 		answer({ ...FALSE_QUOTE, path: 'src/missing.ts' }),
@@ -139,11 +152,12 @@ test('a model that keeps sending false quotes ends with no checked answer after 
 		false,
 	)
 	assert.deepEqual(events.at(-1), { kind: 'done', outcome: 'rejected' })
-	assert.equal(requests.length, 3, 'the model is not asked again after the last rejection')
+	assert.equal(requests.length, 4, 'the model is not asked again after the last rejection')
 })
 
 test('a label this slice does not allow is refused, and an allowed one is kept', async () => {
 	const { events } = await ask([
+		DRAFT,
 		answer(TRUE_QUOTE, 'recorded'),
 		answer(TRUE_QUOTE, 'found-by-search'),
 		{ text: 'Done.' },
@@ -198,6 +212,7 @@ test('an answer about a branch that is behind main covers only the hunks the bra
 	const [start = '', branchTip = '', mainTip = ''] = branch.hashes
 	const { events } = await ask(
 		[
+			DRAFT,
 			{
 				tool: 'ken__answer',
 				args: {

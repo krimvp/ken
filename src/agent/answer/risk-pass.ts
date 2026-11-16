@@ -12,12 +12,12 @@ import type { Change } from './answer.ts'
 import {
 	type AnswerRound,
 	accept,
-	CLAIM_SCHEMA,
 	checkAdditions,
 	DECISION_SCHEMA,
 	type Gate,
 	type Held,
 	optionalList,
+	RISK_SCHEMA,
 	sentBack,
 	withoutDescriptions,
 } from './answer-tool.ts'
@@ -46,7 +46,8 @@ export async function laterCommits(repo: Repository, change: Change, signal?: Ab
 
 // The steps follow the checkpoint's verdicts: the plain chat found the risks that need the code outside the change, two
 // parts of the change read together, a behaviour no test covers or a thing outside the repository, and it ordered its
-// risks by who hits them and when.
+// risks by who hits them and when. The first step tries to prove each risk false, because a judge found a false risk
+// and an unsettled one that one line of code settled, and the pass had never withdrawn a risk.
 export function riskPassQuestion(held: Held, later: Later[]): string {
 	const { answer, decisions } = held
 	const risks = answer.risks ?? []
@@ -57,7 +58,7 @@ export function riskPassQuestion(held: Held, later: Later[]): string {
 	const shown = later.slice(0, MAX_LATER)
 	return [
 		`ken checked your answer, and the reader has not seen it yet. Now check it against the code at the head commit ${head}, with the same tools. Take these steps in order:`,
-		'1. Each risk below: read the place it points at. That is the code outside the change that uses what changed, or, for what the change left undone, the later commits below. Then rewrite the risk with a quote of that place, withdraw it because the code shows it does not happen, or keep it as it is. ken marks a risk "Quotes code outside the change" only when one of its quotes, at the head commit, holds no line the change touched, and "Quotes only the changed lines" otherwise. A dependency\'s code is not in git, so ken cannot read it.',
+		'1. Each risk below: find the code that would make it false, and read it: a check that stops the case, a caller that never passes the value, a later commit below that fixed it. Withdraw the risk when that code shows it does not happen; that is a normal result. A risk that begins with "if" ends settled: rewrite it without the "if" and quote the line that settles it, or withdraw it. It may stay unsettled only when the code that decides it is not in git, such as a dependency\'s, and then it says so. Otherwise rewrite the risk with a quote of the place it rests on, or keep it as it is. ken marks a risk "Quotes code outside the change" only when one of its quotes, at the head commit, holds no line the change touched, and "Quotes only the changed lines" otherwise. A dependency\'s code is not in git, so ken cannot read it.',
 		'2. Each pair of decisions that touch the same file, function, record, id or signal, such as one that writes or keeps a thing and one that deletes or skips it: what happens when both apply?',
 		'3. Each early return, refusal, delete or catch in the changed lines: what no longer happens after it, and who relied on it?',
 		'4. Which new behaviour has no test? And what does the change lean on outside the repository, such as a setting, a service or the way a dependency behaves?',
@@ -67,7 +68,9 @@ export function riskPassQuestion(held: Held, later: Later[]): string {
 		...decisions.map((d, at) => `${at + 1}. ${d.question} Chosen: ${d.chosen} Why: ${d.reason.text}`),
 		'',
 		risks.length === 0 ? 'Your answer names no risks.' : 'The risks in your answer:',
-		...risks.map((risk, at) => `${at + 1}. (${mark(risk.checked)}) ${risk.text}`),
+		...risks.map(
+			(risk, at) => `${at + 1}. (${risk.weight ? `${risk.weight}, ` : ''}${mark(risk.checked)}) ${risk.text}`,
+		),
 		'',
 		...(notFollowed.length === 0
 			? ['Every name ken found used elsewhere has a quote of your answer at one of its places.']
@@ -85,7 +88,7 @@ export function riskPassQuestion(held: Held, later: Later[]): string {
 		'',
 		'Before you call revise_answer, write what you found in steps 2, 3 and 4, one short line each: the two decisions, the line or the behaviour, and what happens. These lines are not part of the answer.',
 		'Then call revise_answer once:',
-		'- risks: each new risk, and each risk above that you rewrite, with replaces set to its number. A risk is one or two sentences: what can happen, who hits it (a host, an operator, a reader of results, a later developer) and when (always, on resume, only for runs made before this change, only under load). A risk that begins with "if" must be settled by reading the code that decides it, or say plainly that it was not settled. Quote the place it rests on.',
+		'- risks: each new risk, and each risk above that you rewrite, with replaces set to its number. A risk is one or two sentences: what can happen, who hits it (a host, an operator, a reader of results, a later developer) and when (always, on resume, only for runs made before this change, only under load). Quote the place it rests on, and give it its weight: "serious" when someone is hurt in normal use, "minor" otherwise.',
 		'- withdraw: each risk above that the code shows does not happen, with what the code shows instead.',
 		`- order: the numbers of all the risks the answer keeps, the heaviest first, by who hits each and when. A risk above keeps its number; the risks you send are ${risks.length + 1}, ${risks.length + 2} and on, in the order you send them. A minor or speculative risk goes last, or withdraw it.`,
 		'- decisions: a decision your answer missed, with its quotes.',
@@ -207,7 +210,7 @@ function rejected(current: AnswerRound, held: Held, problems: string[]) {
 	return refuse([head, ...problems.map((problem) => `- ${problem}`), tail].join('\n'))
 }
 
-const CLAIM = withoutDescriptions(CLAIM_SCHEMA)
+const RISK = withoutDescriptions(RISK_SCHEMA)
 const REVISE_SCHEMA = {
 	type: 'object',
 	properties: {
@@ -215,9 +218,9 @@ const REVISE_SCHEMA = {
 			type: 'array',
 			description: 'New risks, and risks of your answer rewritten, each with its quotes',
 			items: {
-				...CLAIM,
+				...RISK,
 				properties: {
-					...CLAIM.properties,
+					...RISK.properties,
 					replaces: { type: 'integer', minimum: 1, description: 'The number of the risk above that this one rewrites' },
 				},
 			},

@@ -168,6 +168,7 @@ test('ken ask --json on a repository ends in an accepted answer when claude answ
 	const [base = '', head = ''] = hashes
 	const quote = { path: 'app.py', commit: head, text: '    return sum(items)' }
 	fakeClaude([
+		cliResult({ text: 'Before, total returned 0. Now it adds the items.', tool_calls: [] }),
 		cliResult({
 			text: 'The diff is one line.',
 			tool_calls: [
@@ -206,5 +207,5 @@ test('ken ask --json on a repository ends in an accepted answer when claude answ
 	assert.deepEqual(result.rejected, [])
 	assert.deepEqual(result.answer.statements[0].quotes, [{ ...quote, startLine: 2, endLine: 2 }])
 	assert.equal(result.note, 'Nothing was left out.')
-	assert.deepEqual([result.usage.inputTokens, result.usage.outputTokens], [4000, 120], 'four runs of claude, summed')
+	assert.deepEqual([result.usage.inputTokens, result.usage.outputTokens], [5000, 150], 'five runs of claude, summed')
 })

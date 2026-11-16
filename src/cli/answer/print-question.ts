@@ -1,5 +1,5 @@
 import { styleText } from 'node:util'
-import type { Answer, ChatEvent, Revision, Risk } from '../../agent/index.ts'
+import type { Answer, ChatEvent, Cost, Revision, Risk } from '../../agent/index.ts'
 import { when } from '../../follow-up/index.ts'
 import { type Entry, entryLine } from '../../record/index.ts'
 import { formatDiagram, formatQuote } from './print-diagram.ts'
@@ -37,11 +37,13 @@ export async function printQuestion(events: AsyncIterable<ChatEvent>, out: NodeJ
 				}
 				break
 			case 'usage': {
-				const { riskPass } = event
-				const pass = riskPass
-					? `, of which the second look at risks took ${riskPass.inputTokens} in, ${riskPass.outputTokens} out, ${riskPass.seconds} s`
-					: ''
-				line(paint('dim', `\n${event.inputTokens} tokens in, ${event.outputTokens} out, ${event.seconds} s${pass}`))
+				const steps: [string, Cost | null][] = [
+					['turning the draft into the answer', event.fromDraft],
+					['the second look at risks', event.riskPass],
+				]
+				const parts = steps.flatMap(([name, cost]) => (cost ? [`${name} took ${costLine(cost)}`] : []))
+				const of = parts.length === 0 ? '' : `, of which ${parts.join(' and ')}`
+				line(paint('dim', `\n${costLine(event)}${of}`))
 				break
 			}
 			case 'done':
@@ -139,6 +141,10 @@ export function formatAnswer(answer: Answer, entries: Entry[], paint: Paint): st
 		}
 	}
 	return lines.join('\n')
+}
+
+function costLine(cost: Cost): string {
+	return `${cost.inputTokens} tokens in, ${cost.outputTokens} out, ${cost.seconds} s`
 }
 
 function revisionLine({ risks, decisions, withdrawn }: Revision): string {

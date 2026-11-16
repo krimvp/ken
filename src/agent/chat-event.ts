@@ -25,8 +25,9 @@ export type ChatEvent =
 	// decisions as ken checked and labelled them, for the reader's history alone.
 	// revision is null when there was no risk pass, or when nothing it sent passed and the first answer stands.
 	| { kind: 'accepted'; answer: Answer; recorded: RecordEntry[]; draft: Decision[] | null; revision: Revision | null }
-	// The whole question's cost. riskPass is the part the risk pass took, or null when the question had none.
-	| ({ kind: 'usage'; riskPass: Cost | null } & Cost)
+	// The whole question's cost. fromDraft is the part that turning the draft into the answer took, and riskPass the part
+	// the risk pass took, each null when the question had no such step.
+	| ({ kind: 'usage'; fromDraft: Cost | null; riskPass: Cost | null } & Cost)
 	| { kind: 'done'; outcome: Outcome }
 	| { kind: 'error'; message: string }
 

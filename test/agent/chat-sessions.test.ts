@@ -5,7 +5,7 @@ import { fileRecordStore } from '../../src/record/index.ts'
 import { gitRepository } from '../../src/repo/index.ts'
 import { buildRepository } from '../fixtures/build-repository.ts'
 import { answered, asked, claudeProjects, writeSession } from '../fixtures/claude-sessions.ts'
-import { scriptedModel, type Turn, toolResults } from '../fixtures/scripted-model.ts'
+import { DRAFT, scriptedModel, type Turn, toolResults } from '../fixtures/scripted-model.ts'
 
 // A change whose commit message gives no reason, and a made-up session in which the user gave one.
 const RETRY = 'export function retry(times: number) {\n\tfor (let i = 0; i < times; i++) {\n\t\tattempt()\n'
@@ -91,13 +91,14 @@ const VERIFIED = {
 test('a decision whose reason quotes a saved session is stored labelled from the session, with its quote, after a false quote of the session comes back with words to fix it', async () => {
 	const changed = { ...DECISION, reason_quotes: [{ session: SESSION, text: REASON.replace('100', '200') }] }
 	const { events, requests } = await ask([
+		DRAFT,
 		answer({ decisions: [changed] }),
 		answer({ decisions: [DECISION] }),
 		{ text: 'Done.' },
 	])
 
 	assert.deepEqual(outcomes(events), ['rejected', 'accepted'])
-	const fix = toolResults(requests[1])[0] ?? ''
+	const fix = toolResults(requests[2])[0] ?? ''
 	assert.ok(fix.includes(`not in any message of session ${SESSION}`), `the model is told which session: ${fix}`)
 	assert.match(fix, /as read_session shows them/, 'the model is told where to copy the lines from')
 	const stored = accepted(events).recorded.find((entry) => entry.kind === 'decision')
@@ -122,16 +123,17 @@ test('a statement may claim "from-the-session" only with a quote of a session, a
 		quotes,
 	})
 	const { events, requests } = await ask([
+		DRAFT,
 		answer({ statement: claim([both]) }),
 		answer({ statement: claim([SLEEP]) }),
 		answer({ statement: claim([said, SLEEP]) }),
 		{ text: 'Done.' },
 	])
 
-	assert.match(toolResults(requests[1])[0] ?? '', /did not use one of your attempts[\s\S]*names a session and a commit/)
+	assert.match(toolResults(requests[2])[0] ?? '', /did not use one of your attempts[\s\S]*names a session and a commit/)
 	assert.deepEqual(outcomes(events), ['rejected', 'accepted'])
 	assert.match(
-		toolResults(requests[2]).at(-1) ?? '',
+		toolResults(requests[3]).at(-1) ?? '',
 		/Statement 1: the label "from-the-session" .* none of its quotes is from one/,
 	)
 	const [statement] = accepted(events).answer.statements
@@ -158,6 +160,7 @@ test('with KEN_SESSIONS=off the session tools say so, no session text reaches th
 			{ tool: 'ken__list_sessions', args: {} },
 			{ tool: 'ken__read_session', args: { session: SESSION } },
 			{ tool: 'ken__search_sessions', args: { text: 'queue' } },
+			DRAFT,
 			answer({ decisions: [DECISION] }),
 			{ text: 'Done.' },
 		],

@@ -4,7 +4,7 @@ import { type ChatEvent, startChat } from '../../src/agent/index.ts'
 import { fileRecordStore } from '../../src/record/index.ts'
 import { gitRepository } from '../../src/repo/index.ts'
 import { buildRepository } from '../fixtures/build-repository.ts'
-import { scriptedModel, type Turn, toolResults } from '../fixtures/scripted-model.ts'
+import { DRAFT, scriptedModel, type Turn, toolResults } from '../fixtures/scripted-model.ts'
 
 const STORE = 'export function save(text: string) {\n\twriteFileSync(PATH, text)\n}\n'
 const { root, hashes } = buildRepository([
@@ -67,13 +67,13 @@ async function ask(script: Turn[]) {
 
 test('a diagram arrow with a false quote rejects the answer and names the arrow; with a true quote the diagram is numbered, stored with its piece of work, and read back after a restart', async () => {
 	// The file indents with a tab; the false quote uses four spaces, the miss real models make most.
-	const first = await ask([answer({ ...CALL, text: "    save('done')" }), answer(CALL), { text: 'Done.' }])
+	const first = await ask([DRAFT, answer({ ...CALL, text: "    save('done')" }), answer(CALL), { text: 'Done.' }])
 
 	assert.deepEqual(
 		first.events.filter((event) => event.kind === 'rejected' || event.kind === 'accepted').map((event) => event.kind),
 		['rejected', 'accepted'],
 	)
-	const toModel = toolResults(first.requests[1])[0] ?? ''
+	const toModel = toolResults(first.requests[2])[0] ?? ''
 	assert.match(toModel, /Diagram 1, arrow 1 \("calls" from app to store\), quote 1: .*src\/app\.ts/)
 	const accepted = first.events.find((event) => event.kind === 'accepted')
 	assert.ok(accepted?.kind === 'accepted')

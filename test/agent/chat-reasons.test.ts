@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { type ChatEvent, startChat } from '../../src/agent/index.ts'
 import { buildRepository } from '../fixtures/build-repository.ts'
-import { scriptedModel, type Turn, toolResults } from '../fixtures/scripted-model.ts'
+import { DRAFT, scriptedModel, type Turn, toolResults } from '../fixtures/scripted-model.ts'
 
 // A branch of two commits with bodies, merged in. The first commit's message gives the reason for its choice and
 // leaves another to the owner; the merge's message is the merging tool's.
@@ -78,6 +78,7 @@ test('a reason quoted from a commit message is checked like a file quote: half a
 	const half = { ...DECISION, reason_quotes: [{ commit: waits, text: 'keeps the retry simple.' }] }
 	const labelled = { ...DECISION, reason_quotes: [], label: 'recorded' }
 	const { events, requests } = await ask([
+		DRAFT,
 		answer([half]),
 		answer(JSON.stringify([labelled])),
 		answer([DECISION]),
@@ -85,10 +86,10 @@ test('a reason quoted from a commit message is checked like a file quote: half a
 	])
 
 	assert.deepEqual(outcomes(events), ['rejected', 'rejected', 'accepted'])
-	const fix = toolResults(requests[1])[0] ?? ''
+	const fix = toolResults(requests[2])[0] ?? ''
 	assert.ok(fix.includes(`the message of commit ${waits}`), `the model is told which message: ${fix}`)
 	assert.ok(fix.includes(JSON.stringify(REASON)), `the model is shown the whole line: ${fix}`)
-	assert.match(toolResults(requests[2]).at(-1) ?? '', /"label", which it does not take/)
+	assert.match(toolResults(requests[3]).at(-1) ?? '', /"label", which it does not take/)
 	const stored = accepted(events).recorded.find((entry) => entry.kind === 'decision')
 	assert.deepEqual(stored?.kind === 'decision' && [stored.label, stored.reason], [
 		'recorded',
@@ -98,12 +99,12 @@ test('a reason quoted from a commit message is checked like a file quote: half a
 
 test('an accepted answer counts every quote it shows: a decision covers the hunk it quotes, and the model is told which commit messages no quote cites, leaving out the merge', async () => {
 	const readme = { path: 'README.md', commit: merge, text: 'Waits.' }
-	const { events, requests } = await ask([answer([DECISION], readme), { text: 'I left out the README commit.' }])
+	const { events, requests } = await ask([DRAFT, answer([DECISION], readme), { text: 'I left out the README commit.' }])
 
 	const change = accepted(events).answer.change
 	assert.deepEqual(change?.uncovered, [], 'the sleep line is quoted only in the decision')
 	assert.deepEqual(change?.messages, { quoted: [waits], unquoted: [docs] })
-	const told = toolResults(requests[1])[0] ?? ''
+	const told = toolResults(requests[2])[0] ?? ''
 	assert.match(told, /cite 1 of 2 commit messages/)
 	assert.ok(told.includes(`- ${docs.slice(0, 7)} docs: say how long`), `the model is told which one: ${told}`)
 	assert.ok(!told.includes(merge.slice(0, 7)), `the merge is not listed: ${told}`)

@@ -4,7 +4,7 @@ import { type ChatEvent, startChat } from '../../src/agent/index.ts'
 import { fileRecordStore } from '../../src/record/index.ts'
 import { gitRepository } from '../../src/repo/index.ts'
 import { buildRepository } from '../fixtures/build-repository.ts'
-import { type ChatRequest, scriptedModel, type Turn, toolResults } from '../fixtures/scripted-model.ts'
+import { type ChatRequest, DRAFT, scriptedModel, type Turn, toolResults } from '../fixtures/scripted-model.ts'
 
 const RETRY = 'export function retry(times: number) {\n\tfor (let i = 0; i < times; i++) {\n\t\tattempt()\n'
 const { root, hashes } = buildRepository([
@@ -62,6 +62,7 @@ function firstPrompt(request: ChatRequest | undefined): string {
 
 test('an accepted answer stores its work, decision and topic, and the next question starts from them', async () => {
 	const first = await ask([
+		DRAFT,
 		answer({ work: { title: 'Retries wait' }, decisions: [DECISION], topics: [TOPIC] }),
 		{ text: 'Done.' },
 	])
@@ -100,6 +101,7 @@ test('a topic named like one in the record, in another case and spacing, is refu
 	const seeded = await store.append([{ kind: 'topic', name: TOPIC.name, quotes: TOPIC.quotes }])
 	const existing = seeded.kind === 'appended' ? seeded.entries[0]?.entry : undefined
 	const { events, requests } = await ask([
+		DRAFT,
 		answer({ topics: [{ ...TOPIC, name: '  Retry   Logic ' }] }),
 		answer({}),
 		{ text: 'Done.' },
@@ -109,7 +111,7 @@ test('a topic named like one in the record, in another case and spacing, is refu
 		events.filter((event) => event.kind === 'rejected' || event.kind === 'accepted').map((event) => event.kind),
 		['rejected', 'accepted'],
 	)
-	const toModel = toolResults(requests[1])[0] ?? ''
+	const toModel = toolResults(requests[2])[0] ?? ''
 	assert.ok(existing && toModel.includes(existing.id), `the model is told which topic to reuse: ${toModel}`)
 	const topics = (await store.read()).entries.filter((e) => e.kind === 'topic')
 	assert.equal(topics.length, 1)
@@ -119,6 +121,7 @@ test('decisions sent as JSON text are stored, raw tabs in its quotes included, a
 	const { undo, ...withoutUndo } = DECISION
 	const waits = { ...DECISION, question: 'Does a retry wait after the last attempt too?' }
 	const { events, requests } = await ask([
+		DRAFT,
 		answer({ decisions: JSON.stringify([withoutUndo]) }),
 		// The quote holds tab-indented code. A model that writes the tabs raw inside the JSON text makes it invalid JSON.
 		answer({ decisions: JSON.stringify([waits]).replaceAll('\\t', '\t') }),
@@ -129,7 +132,7 @@ test('decisions sent as JSON text are stored, raw tabs in its quotes included, a
 		events.filter((event) => event.kind === 'rejected' || event.kind === 'accepted').map((event) => event.kind),
 		['rejected', 'accepted'],
 	)
-	const toModel = toolResults(requests[1])[0] ?? ''
+	const toModel = toolResults(requests[2])[0] ?? ''
 	assert.ok(toModel.includes('decisions, item 1 needs "undo"'), `the model is told what is missing: ${toModel}`)
 	const stored = accepted(events).recorded.find((entry) => entry.kind === 'decision')
 	assert.deepEqual(stored?.kind === 'decision' && [stored.question, stored.undo], [waits.question, undo])

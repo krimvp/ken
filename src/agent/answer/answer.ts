@@ -26,13 +26,18 @@ export type Claim = Statement & { topic?: string }
 
 // checked is ken's own mark on a risk of an answer about a change, set from git by quotesOutsideChange: true when a
 // quote lies wholly outside the change. A risk saved before ken set it, or one in an answer about no change, has none.
-export type Risk = Claim & { checked?: boolean }
+// weight is the model's own: "serious" when someone is hurt in normal use, "minor" otherwise. ken does not judge it,
+// and a risk saved before ken asked for it has none.
+export const WEIGHTS = ['serious', 'minor'] as const
+export type Weight = (typeof WEIGHTS)[number]
+export type Risk = Claim & { checked?: boolean; weight?: Weight }
 
 // A risk has the shape of a statement: a claim about what could go wrong or what the owner should watch, with the
 // lines it starts from. topics names every topic the answer names: those it sends and those its claims and decisions
 // belong to. They are the topics the reader's three buttons act on. risks is null when the answer says nothing about risks, as for a question about how a part
 // works or an answer saved before ken asked for them; an empty list means the agent looked and found none. change is
-// null when the question was not about a range of commits.
+// null when the question was not about a range of commits. leftOut counts the points of the model's draft that it
+// found no line to quote for and left out; only an answer made from a draft has it.
 export type Answer = {
 	summary: string
 	statements: Claim[]
@@ -40,4 +45,5 @@ export type Answer = {
 	topics: string[]
 	diagrams: Diagram[]
 	change: Change | null
+	leftOut?: number
 }

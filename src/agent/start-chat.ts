@@ -5,7 +5,8 @@ import type { UnderstandingMap } from '../map/index.ts'
 import { fileRecordStore } from '../record/index.ts'
 import { findRoot, gitRepository } from '../repo/index.ts'
 import { projectSessions } from '../transcripts/index.ts'
-import { type AnswerRound, accept, answerTool, MAX_REJECTIONS } from './answer/answer-tool.ts'
+import { type AnswerRound, accept, answerTool, MAX_REJECTIONS, type Step } from './answer/answer-tool.ts'
+import { FROM_DRAFT } from './answer/from-draft.ts'
 import { laterCommits, MAX_PASS_REJECTIONS, reviseTool, riskPassQuestion } from './answer/risk-pass.ts'
 import type { ChatEvent, Cost } from './chat-event.ts'
 import type { ModelConfig } from './model-config.ts'
@@ -27,15 +28,30 @@ export type Chat = {
 }
 
 const PLUGIN = 'ken'
-// Answers about pull requests of up to seventeen files took 8 to 13 turns, and the notice below makes the model answer
-// before the limit, so more turns would only let a question that goes astray cost more.
-const MAX_TURNS = 40
-// Room for the answer, three rejected tries and the closing note. A model that ran out of turns while reading sent
-// nothing, so it is told to answer with what it has.
-const TURNS_LEFT_NOTICE = 6
-// The risk pass reads the places it is asked about and sends one revision, so it needs a few turns, not a question's.
-const RISK_PASS_TURNS = 10
-const RISK_PASS_NOTICE = 3
+// Each step of a question has its own turns, counted from 0, and a notice when few are left: a model that runs out of
+// turns while reading sends nothing, so it is told to finish with what it has. A question about a change takes all
+// three steps: the draft, the answer made from it, and the second look at its risks. Any other question, a live note and
+// a change the record already explains end in the first step with the answer. Answers about pull requests of up to
+// seventeen files took 8 to 13 turns, so more would only let a question that goes astray cost more. The answer step
+// has room to read again the lines it quotes, three rejected tries and the end of the turn; the second look reads the
+// places it is asked about and sends one revision.
+const STEPS: Record<Step, { turns: number; notice: number; say: string }> = {
+	draft: {
+		turns: 40,
+		notice: 6,
+		say: 'for this question. Finish now with what you have read: write your draft, or send the answer if the question is not about a change. Say what you did not get to read.',
+	},
+	answer: {
+		turns: 14,
+		notice: 5,
+		say: 'to send the answer. Send it now with the lines you have read, and leave out what you cannot quote.',
+	},
+	risks: {
+		turns: 10,
+		notice: 3,
+		say: 'for the questions about risks. Call revise_answer now with what you have read.',
+	},
+}
 // Above the diff tool's own limit, so a whole diff reaches the model uncut.
 const MAX_TOOL_RESULT_CHARS = 64_000
 
@@ -59,21 +75,17 @@ export async function startChat(options: {
 	const sessions = projectSessions(found.root, options.env)
 	// The record reads the project alone, so its gate refuses a quote of a snapshot whatever reaches it.
 	const store = fileRecordStore(found.root, project, sessions)
-	let round: AnswerRound = { rejections: 0, answer: null, asked: false, held: null, emit: () => {} }
+	let round: AnswerRound = { rejections: 0, answer: null, asked: false, held: null, step: 'draft', emit: () => {} }
 	let turnsEnded = 0
-	// Each question counts its turns from 0, and so does its risk pass.
-	let inPass = false
 	const withTurnsLeft = (tool: Tool): Tool => ({
 		...tool,
 		async execute(args, ctx) {
 			const result = await tool.execute(args, ctx)
+			const step = STEPS[round.step]
 			// This call's own turn has not ended yet, so it is not left.
-			const left = (inPass ? RISK_PASS_TURNS : MAX_TURNS) - turnsEnded - 1
-			if (left > (inPass ? RISK_PASS_NOTICE : TURNS_LEFT_NOTICE) || round.answer) return result
-			const turns = `${left} ${left === 1 ? 'turn' : 'turns'} left`
-			const notice = inPass
-				? `${turns} for the questions about risks. Call revise_answer now with what you have read.`
-				: `${turns} for this question. Send the answer now with what you have read. In your closing note, say what you did not get to read.`
+			const left = step.turns - turnsEnded - 1
+			if (left > step.notice || round.answer) return result
+			const notice = `${left} ${left === 1 ? 'turn' : 'turns'} left ${step.say}`
 			return { ...result, content: [...result.content, { type: 'text', text: notice }] }
 		},
 	})
@@ -82,7 +94,7 @@ export async function startChat(options: {
 	const shown = new Set<string>()
 	const elsewhere: Elsewhere = async (range, signal) => {
 		const key = `${range.base}..${range.head}`
-		if (!round.asked || inPass || shown.has(key)) return null
+		if (!round.asked || round.step === 'risks' || shown.has(key)) return null
 		shown.add(key)
 		const found = await usedElsewhere(repo, range, signal)
 		return found.kind === 'ok' ? elsewhereText(found.used) : null
@@ -107,7 +119,7 @@ export async function startChat(options: {
 		],
 		enabled: [PLUGIN],
 		toolMode: 'native',
-		maxTurns: MAX_TURNS,
+		maxTurns: STEPS.draft.turns,
 		maxToolResultChars: MAX_TOOL_RESULT_CHARS,
 		systemPrompt: SYSTEM_PROMPT,
 	})
@@ -119,15 +131,21 @@ export async function startChat(options: {
 			answer: null,
 			asked: as === 'question',
 			held: null,
+			step: 'draft',
 			emit: events.push,
 		}
 		round = current
 		turnsEnded = 0
-		inPass = false
 		shown.clear()
 		const stop = new AbortController()
-		// The risk pass has its own stop, so ending it at its turn limit does not end the checks that follow it.
-		const passStop = new AbortController()
+		// The later steps have their own stops, so ending one at its turn limit does not end the checks that follow it.
+		const stops: Record<Step, AbortController> = {
+			draft: stop,
+			answer: new AbortController(),
+			risks: new AbortController(),
+		}
+		// Set when ken stopped a step at its turn limit, which is running out of turns, not the reader stopping it.
+		let limited = false
 		const tokens = { input: 0, output: 0 }
 		const unsubscribe = session.subscribe((event) => {
 			if (event.type === 'text') events.push({ kind: 'text', delta: event.delta })
@@ -137,13 +155,17 @@ export async function startChat(options: {
 			}
 			// The answer tool has told the model it is out of attempts. Stopping here keeps a model that ignores that
 			// from spending more turns.
-			const spent = inPass
-				? (current.held?.rejections ?? 0) >= MAX_PASS_REJECTIONS
-				: current.rejections >= MAX_REJECTIONS
-			if (event.type === 'tool_end' && spent) (inPass ? passStop : stop).abort()
+			const spent =
+				current.step === 'risks'
+					? (current.held?.rejections ?? 0) >= MAX_PASS_REJECTIONS
+					: current.rejections >= MAX_REJECTIONS
+			if (event.type === 'tool_end' && spent) stops[current.step].abort()
 			if (event.type === 'turn_end') turnsEnded += 1
-			// aigent stops a question at MAX_TURNS; the risk pass has fewer, so ken stops it.
-			if (event.type === 'turn_end' && inPass && turnsEnded >= RISK_PASS_TURNS) passStop.abort()
+			// aigent stops the draft step at its turns; the later steps have fewer, so ken stops them.
+			if (event.type === 'turn_end' && current.step !== 'draft' && turnsEnded >= STEPS[current.step].turns) {
+				limited = true
+				stops[current.step].abort()
+			}
 			if (event.type === 'record' && event.record.kind === 'usage') {
 				tokens.input += event.record.input + event.record.cacheRead + event.record.cacheWrite
 				tokens.output += event.record.output
@@ -156,8 +178,20 @@ export async function startChat(options: {
 			await session
 				.prompt(text, { signal: signal ? AbortSignal.any([signal, own.signal]) : own.signal })
 				.catch((error: unknown): RunResult => ({ stop: 'error', message: String(error), turns: 0 }))
+		const step = async (next: Step, text: string): Promise<RunResult> => {
+			current.step = next
+			turnsEnded = 0
+			return await prompt(text, stops[next])
+		}
 		const run = (async () => {
 			let result = await prompt(`${index}${reader}\n\nThe question: ${question}`, stop)
+			const draft = { ...tokens, at: performance.now() }
+			// A turn that ends in text, with no answer, is the draft of an answer about a change.
+			const drafted = current.asked && result.stop === 'done' && result.text.trim() !== '' && !current.answer
+			if (drafted && !current.held && !signal?.aborted) {
+				result = await step('answer', FROM_DRAFT)
+			}
+			const fromDraft = drafted ? costSince(draft, tokens) : null
 			let riskPass: Cost | null = null
 			const { held } = current
 			if (held && !signal?.aborted) {
@@ -165,9 +199,7 @@ export async function startChat(options: {
 				if (result.stop !== 'error') {
 					const before = { ...tokens, at: performance.now() }
 					const later = held.answer.change ? await laterCommits(repo, held.answer.change, signal) : []
-					inPass = true
-					turnsEnded = 0
-					result = await prompt(riskPassQuestion(held, later), passStop)
+					result = await step('risks', riskPassQuestion(held, later))
 					riskPass = costSince(before, tokens)
 				}
 				if (!current.answer && !signal?.aborted) {
@@ -178,15 +210,22 @@ export async function startChat(options: {
 				}
 			}
 			const seconds = Math.round((performance.now() - started) / 100) / 10
-			events.push({ kind: 'usage', inputTokens: tokens.input, outputTokens: tokens.output, seconds, riskPass })
-			events.push(endOf(result, current))
+			events.push({
+				kind: 'usage',
+				inputTokens: tokens.input,
+				outputTokens: tokens.output,
+				seconds,
+				fromDraft,
+				riskPass,
+			})
+			events.push(endOf(result, current, limited))
 			events.close()
 		})()
 		try {
 			yield* events.drain()
 		} finally {
 			unsubscribe()
-			stop.abort()
+			for (const each of Object.values(stops)) each.abort()
 			await run
 		}
 	}
@@ -202,10 +241,11 @@ function costSince(
 	return { inputTokens: tokens.input - before.input, outputTokens: tokens.output - before.output, seconds }
 }
 
-function endOf(result: RunResult, round: AnswerRound): ChatEvent {
+function endOf(result: RunResult, round: AnswerRound, limited: boolean): ChatEvent {
 	if (round.answer) return { kind: 'done', outcome: 'answered' }
 	if (round.rejections >= MAX_REJECTIONS) return { kind: 'done', outcome: 'rejected' }
 	if (result.stop === 'error') return { kind: 'error', message: result.message }
+	if (limited) return { kind: 'done', outcome: 'out-of-turns' }
 	if (result.stop === 'aborted') return { kind: 'error', message: 'The question was stopped before it had an answer.' }
 	return { kind: 'done', outcome: result.stop === 'max_turns' ? 'out-of-turns' : 'no-answer' }
 }

@@ -8,7 +8,7 @@ import { openMap } from '../../src/map/index.ts'
 import { fileRecordStore } from '../../src/record/index.ts'
 import { gitRepository } from '../../src/repo/index.ts'
 import { buildRepository } from '../fixtures/build-repository.ts'
-import { nothingToRevise, scriptedModel } from '../fixtures/scripted-model.ts'
+import { DRAFT, nothingToRevise, scriptedModel } from '../fixtures/scripted-model.ts'
 
 const KEN = path.join(import.meta.dirname, '../../src/cli/main.ts')
 const { root, hashes } = buildRepository([
@@ -31,6 +31,7 @@ const SUM = { path: 'app.py', commit: head, text: '    return sum(items)' }
 
 test('ken ask --json prints the checked answer, what it recorded and the closing note, and ken record reads it back with no model', async () => {
 	const model = await scriptedModel([
+		DRAFT,
 		{
 			text: 'Let me read the diff.',
 			tool: 'ken__answer',
@@ -39,7 +40,14 @@ test('ken ask --json prints the checked answer, what it recorded and the closing
 				work: { title: 'Fix total' },
 				summary: 'total now adds the items.',
 				statements: [{ text: 'total returns the sum of the items instead of 0.', label: 'inferred', quotes: [SUM] }],
-				risks: [{ text: 'A caller that passes text now gets a TypeError.', label: 'inferred', quotes: [SUM] }],
+				risks: [
+					{
+						text: 'A caller that passes text now gets a TypeError.',
+						label: 'inferred',
+						quotes: [SUM],
+						weight: 'minor',
+					},
+				],
 				diagrams: [
 					{
 						kind: 'component',
@@ -85,7 +93,13 @@ test('ken ask --json prints the checked answer, what it recorded and the closing
 	const verified = [{ path: 'app.py', commit: head, startLine: 2, endLine: 2, text: '    return sum(items)' }]
 	assert.deepEqual(result.answer.statements[0].quotes, verified)
 	assert.deepEqual(result.answer.risks, [
-		{ text: 'A caller that passes text now gets a TypeError.', label: 'inferred', quotes: verified, checked: false },
+		{
+			text: 'A caller that passes text now gets a TypeError.',
+			label: 'inferred',
+			quotes: verified,
+			weight: 'minor',
+			checked: false,
+		},
 	])
 	assert.deepEqual(
 		result.answer.change.commits.map((commit: { subject: string }) => commit.subject),
