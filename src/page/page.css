@@ -908,6 +908,14 @@ span.label-from-the-session {
 	color: var(--color-note);
 }
 
+/* "Chosen" and "Why" as labels, not followed by a colon: a chosen option often starts with "No:" itself. */
+.d-field {
+	margin-right: var(--space-1);
+	color: var(--color-note);
+	font-size: var(--text-sm);
+	font-weight: 650;
+}
+
 .d-row:hover .d-q {
 	text-decoration: underline;
 	text-underline-offset: 0.18em;
@@ -2200,6 +2208,19 @@ q.subject {
 
 	.top-menu {
 		flex: none;
+	}
+
+	/* A folded note keeps its time and its "Committed since" mark on a phone. Only the gist is cut. */
+	.ln-line {
+		white-space: normal;
+	}
+
+	.ln-gist {
+		display: block;
+		overflow: hidden;
+		margin-left: 0;
+		white-space: nowrap;
+		text-overflow: ellipsis;
 	}
 }
 

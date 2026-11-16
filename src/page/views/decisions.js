@@ -24,8 +24,8 @@ function rowHtml({ decision: d, work }) {
 		: ''
 	return `<li class="dv-row" id="dv-${esc(d.id)}" tabindex="-1">
 		<p class="dv-head">${call}${label(d.label)} <span class="dv-q">${prose(d.question)}</span></p>
-		<p>Chosen: ${prose(d.chosen)}</p>
-		${d.reason ? `<p>Why: ${prose(d.reason.text)}</p>` : ''}
+		<p><span class="d-field">Chosen</span> ${prose(d.chosen)}</p>
+		${d.reason ? `<p><span class="d-field">Why</span> ${prose(d.reason.text)}</p>` : ''}
 		${answered}
 		<p class="dv-meta">${source ? `${source} ` : ''}${written}${belongs}</p>
 		${shown}

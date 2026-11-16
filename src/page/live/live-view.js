@@ -13,7 +13,7 @@ export function liveLook(status) {
 function statusText(live) {
 	switch (live.status) {
 		case 'off':
-			return '<strong>Off.</strong> Turn it on and ken writes a note each time a commit lands or the work goes quiet. Each note is a model call.'
+			return '<strong>Off.</strong> Turn it on and ken writes a note each time a commit lands or the work goes quiet. Each note is a model run.'
 		case 'paused':
 			return '<strong>Paused.</strong> ken still shows what changed, and writes no note until you resume.'
 		case 'snapshot':
@@ -39,13 +39,13 @@ function controlsHtml(live) {
 		? '<button class="primary" data-act="live-resume" data-key="live-resume">Resume</button>'
 		: '<button class="quiet-button" data-act="live-pause" data-key="live-pause">Pause notes</button>'
 	const busy = live.status === 'writing' || live.status === 'snapshot'
-	return `${toggle}<button class="quiet-button" data-act="live-note-now" data-key="live-note-now"${busy ? ' disabled' : ''}>Write a note now</button><button class="link small" data-act="live-off" data-key="live-off">Turn off</button>`
+	return `${toggle}<span class="ln-ask"><button class="quiet-button" data-act="live-note-now" data-key="live-note-now"${busy ? ' disabled' : ''}>Write a note now</button><span class="small muted">One model run.</span></span><button class="link small" data-act="live-off" data-key="live-off">Turn off</button>`
 }
 
 function paceHtml({ pace, spent, since }) {
 	const tokens = (spent.inputTokens + spent.outputTokens).toLocaleString('en-US')
 	const notes = `${spent.notes} ${spent.notes === 1 ? 'note' : 'notes'}`
-	return `<p class="live-pace">ken writes a note after each commit, and when you stop editing for ${pace.quietMs / 1000} seconds with at least ${pace.minLines} lines changed. At most 1 a minute and ${pace.perHour} an hour. Each note is a model call.${since ? ` Since ${when(since)}: ${notes}, ${tokens} tokens.` : ''}</p>`
+	return `<p class="live-pace">ken writes a note after each commit, and when the files go quiet for ${pace.quietMs / 1000} seconds with at least ${pace.minLines} lines changed. At most 1 a minute and ${pace.perHour} an hour. Each note is a model run.${since ? ` Since you turned Live on ${at(since)}: ${notes}, ${tokens} tokens.` : ''}</p>`
 }
 
 function fileHtml(file) {
@@ -89,7 +89,7 @@ function nowHtml(now, hideAsk) {
 		.join('')
 	return `<section class="now" aria-labelledby="now-head">
 		<h2 id="now-head">Now</h2>
-		<p class="now-from">Read from git and your agent's saved session on this machine. No model call.</p>
+		<p class="now-from">Read from git and your agent's saved session on this machine. No model run.</p>
 		${total > 0 ? `<p class="now-sub">${total} ${total === 1 ? 'file' : 'files'} with uncommitted changes</p>` : ''}
 		${files}
 		<p class="now-sub">${now.branch ? `On <code>${esc(now.branch)}</code>` : 'HEAD is not on a branch'}${commits ? ', last commits:' : ''}</p>
@@ -98,8 +98,9 @@ function nowHtml(now, hideAsk) {
 	</section>`
 }
 
-// A note about uncommitted work whose work a later note on commits took in: that note starts where its HEAD was.
-function committedIn(view, notes) {
+// A note about uncommitted work whose work a later note on commits took in: that note starts where its HEAD was. With no
+// such note, as for the newest, the Now block tells: HEAD moved on from its HEAD and nothing is left uncommitted.
+function committedIn(view, notes, now) {
 	const about = view.entry.about
 	if (about.kind !== 'uncommitted') return null
 	const later = notes.find(
@@ -108,7 +109,9 @@ function committedIn(view, notes) {
 			other.entry.about.kind === 'commits' &&
 			other.entry.about.base === about.head,
 	)
-	return later?.entry.about.head ?? null
+	if (later) return later.entry.about.head
+	const movedOn = now.commits.findIndex((c) => c.hash === about.head) > 0
+	return movedOn && now.files.length + now.moreFiles === 0 ? now.commits[0].hash : null
 }
 
 // seen is when the newest note was that the reader saw on their last visit, so the notes after it are marked new.
@@ -119,7 +122,7 @@ export function liveViewHtml(live, ui, unfolded, canAsk, problem, { seen, hideAs
 		return '<section class="map-view live-view"><h1>Live</h1><p class="muted">Reading the project.</p></section>'
 	const tagsOf = (view) => ({
 		isNew: seen !== null && view.entry.askedAt > seen,
-		committedIn: committedIn(view, live.notes),
+		committedIn: committedIn(view, live.notes, live.now),
 	})
 	const [newest, ...older] = live.notes
 	const folded = older.map((view, i) => {
@@ -144,7 +147,7 @@ export function liveViewHtml(live, ui, unfolded, canAsk, problem, { seen, hideAs
 		${newest ? noteHtml(newest, 'n0', ui, canAsk, tagsOf(newest)) : '<p class="t-empty">No notes yet. ken writes the first when a commit lands or the work goes quiet.</p>'}
 		${nowHtml(live.now, hideAsk)}
 		${folded.length > 0 ? `<h2 class="ln-count">Earlier notes</h2><ol class="live-notes folded">${folded.join('')}</ol>` : ''}
-		${live.notes.length > 0 ? '<p class="live-foot">The agent wrote each note; ken checked that each quote is in its file. Notes stay in your history on this machine. A note on commits also adds its decisions to the project record; a note on uncommitted work adds nothing.</p>' : ''}
+		${live.notes.length > 0 ? '<p class="live-foot">Notes stay in your history on this machine. A note on commits also adds its decisions to the project record; a note on uncommitted work adds nothing.</p>' : ''}
 		<p class="actions"><button class="quiet-button" data-act="live-close" data-key="live-close">Back</button></p>
 	</section>`
 }

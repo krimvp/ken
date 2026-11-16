@@ -3,6 +3,7 @@
 // The panel also shows the quotes the reader opened, one item at a time or all of them.
 import {
 	codeLines,
+	copiesOf,
 	count,
 	decisionQuotes,
 	esc,
@@ -70,17 +71,27 @@ export function checkStrip(q) {
 export function checksHtml(q, ui) {
 	const all = quotesOf(q)
 	const quotes = all.filter((quote) => !isSession(quote))
-	const commits = [...new Set(quotes.map((quote) => short(quote.commit)))]
+	const copies = copiesOf(q)
+	const inGit = quotes.filter((quote) => !copies.has(quote.commit))
+	const inCopy = quotes.length - inGit.length
+	const commits = [...new Set(inGit.map((quote) => short(quote.commit)))]
 	const at = commits.length === 1 ? `at <code>${commits[0]}</code>` : `across ${commits.length} commits`
 	const fromSessions = all.length - quotes.length
+	const places = [
+		[inGit.length, `in git ${at}`],
+		[inCopy, "in ken's copy of your uncommitted work"],
+		[fromSessions, 'in a saved session of the coding agent'],
+	].filter(([n]) => n > 0)
 	const match =
-		fromSessions > 0 && quotes.length > 0
-			? `All ${all.length} quotes were found: ${quotes.length} in git, ${at}, and ${fromSessions} in a saved session of the coding agent.`
-			: quotes.length === 1
-				? `The quote matches git, ${at}.`
-				: quotes.length === 2
-					? `Both quotes match git, ${at}.`
-					: `All ${quotes.length} quotes match git, ${at}.`
+		places.length > 1
+			? `All ${all.length} quotes were found: ${list(places.map(([n, where]) => `${n} ${where}`))}.`
+			: inGit.length === 0
+				? `${inCopy === 1 ? 'The quote is' : `All ${inCopy} quotes are`} in ken's copy of your uncommitted work.`
+				: inGit.length === 1
+					? `The quote matches git, ${at}.`
+					: inGit.length === 2
+						? `Both quotes match git, ${at}.`
+						: `All ${inGit.length} quotes match git, ${at}.`
 	const gitLine = quotes.length === 0 ? '' : `<p>${match}</p>`
 	const fromMessages = quotes.filter((quote) => quote.path === null).length
 	const messageLine =
@@ -136,7 +147,7 @@ function labelsOf(q) {
 // Each label in use, with one plain line of what it means.
 export function labelKey(names) {
 	return `<dl class="label-key">${names
-		.map((name) => `<div><dt>${label(name)}</dt><dd>${esc(LABELS[name].means)}</dd></div>`)
+		.map((name) => `<div><dt>${label(name)}</dt><dd>${prose(LABELS[name].means)}</dd></div>`)
 		.join('')}</dl>`
 }
 
@@ -156,7 +167,7 @@ function uncoveredFiles(change) {
 function coverageSection(q, ui) {
 	const change = q.answer.change
 	if (!change) {
-		return `<section class="check"><h3>Changed code</h3><p class="muted">Not checked. The answer names no range of commits, so ken has no changed blocks to hold its quotes against.</p></section>`
+		return `<section class="check"><h3>Changed code</h3><p class="muted">Not checked. This answer is not about a set of commits, so there is no changed code to compare.</p></section>`
 	}
 	const total = change.covered.length + change.uncovered.length
 	const uncovered = change.uncovered.length
@@ -170,17 +181,18 @@ function coverageSection(q, ui) {
 	const files = uncoveredFiles(change)
 	const named = files.slice(0, FILES_NAMED).map((file) => `<code>${esc(file.path)}</code>`)
 	const more = files.length > FILES_NAMED ? [count(files.length - FILES_NAMED, 'more file', 'more files')] : []
+	// The answer may quote these files elsewhere, so this names the blocks, not the files, as unquoted.
 	const where =
 		uncovered === 1
-			? `1 changed block has no quote: ${named[0]}`
-			: `${blocks(uncovered)} have no quote, in ${list([...named, ...more])}`
+			? `One changed block in ${named[0]} is not quoted.`
+			: `${blocks(uncovered)} are not quoted, in ${list([...named, ...more])}.`
 	const button = ui.coverageOpen
 		? ''
 		: `<p><button class="quiet-button" data-act="coverage" data-key="coverage" aria-expanded="false">Show the ${uncovered === 1 ? 'unquoted block' : `${uncovered} unquoted blocks`}</button></p>`
 	return `<section class="check" id="check-coverage">
 		<h3>Changed code</h3>
 		<p>${change.covered.length} of ${blocks(total)} quoted.</p>
-		<p class="muted">${where}. The answer quotes nothing from ${uncovered === 1 ? 'it' : 'them'}.</p>
+		<p class="muted">${where}</p>
 		${button}
 		${binary}
 		${ui.coverageOpen ? uncoveredHtml(change, files, ui) : ''}
@@ -225,17 +237,12 @@ function hunkHtml(hunk, change, path) {
 	return `<div class="hunk"><p class="hunk-head">${what}</p><pre class="code"><code>${codeLines(shown, numbers, kinds)}${more}</code></pre></div>`
 }
 
-// ken's copy of uncommitted work is a commit only in ken's own store, written as "ken" with no message (see the live
-// module). An answer that cites one is a draft, so only a draft can hold one.
-function isSnapshot(q, commit) {
-	return q.draft !== undefined && commit.email === 'ken@localhost'
-}
-
 function commitsSection(q) {
 	const change = q.answer.change
 	if (!change) return ''
-	const commits = change.commits.filter((commit) => !isSnapshot(q, commit))
-	const copies = change.commits.filter((commit) => isSnapshot(q, commit))
+	const copied = copiesOf(q)
+	const commits = change.commits.filter((commit) => !copied.has(commit.hash))
+	const copies = change.commits.filter((commit) => copied.has(commit.hash))
 	const copy =
 		copies.length === 0
 			? ''
@@ -301,14 +308,14 @@ function titleOf(q, { kind, item, n, diagram }) {
 }
 
 function textOf({ kind, item }) {
-	if (kind === 'decision') return `${prose(item.question)} Chosen: ${prose(item.chosen)}`
+	if (kind === 'decision') return `${prose(item.question)} <span class="d-field">Chosen</span> ${prose(item.chosen)}`
 	return prose(item.text)
 }
 
-function quoteHtml(quote, j, chosen) {
+function quoteHtml(quote, j, chosen, copies) {
 	const source = isSession(quote) || quote.path === null ? quoteSource(quote) : `<code>${esc(quote.path)}</code>`
 	const where = `${source}, ${lineSpan(quote.startLine, quote.endLine)}. `
-	return `<div class="q${chosen ? ' chosen' : ''}" id="panel-q${j}">${quoteBody(quote, where)}</div>`
+	return `<div class="q${chosen ? ' chosen' : ''}" id="panel-q${j}">${quoteBody(quote, where, false, copies)}</div>`
 }
 
 // The panel when the reader opened a quote: its quotes in full come first, then what the label means. The item's own
@@ -325,8 +332,8 @@ export function quoteCardHtml(q, ui, items) {
 				<button class="quiet-button" data-act="step" data-by="1" data-key="next"${at === items.length - 1 ? ' disabled' : ''}>Next</button>
 				<button class="quiet-button" data-act="close" data-key="close">Close</button>
 			</div></div>
-		${item.quotes.map((quote, j) => quoteHtml(quote, j, j === ui.panel.quote)).join('')}
-		${means === null ? '' : `<p class="label-means">${label(means)}<span>${esc(LABELS[means]?.means ?? '')}</span></p>`}`
+		${item.quotes.map((quote, j) => quoteHtml(quote, j, j === ui.panel.quote, copiesOf(q))).join('')}
+		${means === null ? '' : `<p class="label-means">${label(means)}<span>${prose(LABELS[means]?.means ?? '')}</span></p>`}`
 }
 
 // The panel when the reader opened all quotes: every item that carries quotes, in the order of the answer.
@@ -338,7 +345,7 @@ export function allQuotesHtml(q, items) {
 				(shown) => `<section class="all-item">
 					<h3>${titleOf(q, shown)}</h3>
 					<p class="card-text">${textOf(shown)}</p>
-					${shown.item.quotes.map((quote, j) => quoteHtml(quote, `${shown.key}-${j}`, false)).join('')}
+					${shown.item.quotes.map((quote, j) => quoteHtml(quote, `${shown.key}-${j}`, false, copiesOf(q))).join('')}
 				</section>`,
 			)
 			.join('')}`

@@ -39,7 +39,8 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 const pad = (n) => String(n).padStart(2, '0')
 
 // The page's one way to write a moment, in the reader's own time zone: "06:36" today, "16 Nov 06:36" on another day,
-// "16 Nov 2025 06:36" in another year. Git dates carry their offset, so they read the same way.
+// "16 Nov 2025 06:36" in another year. Git dates carry their offset, so they read the same way. The terminal's twin of
+// when and at is src/follow-up/when.ts: change both together.
 export function when(iso, now = new Date()) {
 	const at = new Date(iso)
 	const time = `${pad(at.getHours())}:${pad(at.getMinutes())}`
@@ -100,11 +101,27 @@ export function decisionQuotes(decision) {
 	return [...(decision.reason?.quotes ?? []), ...decision.quotes]
 }
 
-// The lines of a quote, under a line that names the commit ken found them at, unless its row names it already.
-export function quoteBody(quote, where = '', named = false) {
+const NONE = new Set()
+
+// ken's copy of uncommitted work is a commit only in ken's own store, written as "ken" with no message (see the live
+// module). An answer that cites one is a draft, so only a draft can hold one. These are the hashes of its copies.
+export function copiesOf(q) {
+	if (q.draft === undefined || !q.answer) return NONE
+	const commits = q.answer.change?.commits ?? []
+	return new Set(commits.filter((commit) => commit.email === 'ken@localhost').map((commit) => commit.hash))
+}
+
+// The lines of a quote, under a line that names the commit ken found them at, or ken's copy of uncommitted work,
+// unless its row names it already.
+export function quoteBody(quote, where = '', named = false, copies = NONE) {
 	const lines = quote.text.split('\n')
 	const numbers = lines.map((_, k) => quote.startLine + k)
-	const at = isSession(quote) || quote.path === null ? '' : `At commit <code>${short(quote.commit)}</code>`
+	const at =
+		isSession(quote) || quote.path === null
+			? ''
+			: copies.has(quote.commit)
+				? "In ken's copy of your uncommitted work"
+				: `At commit <code>${short(quote.commit)}</code>`
 	const source = named || where + at === '' ? '' : `<p class="q-source">${where}${at}</p>`
 	return `${source}<pre class="code"><code>${codeLines(lines, numbers)}</code></pre>`
 }
@@ -112,8 +129,10 @@ export function quoteBody(quote, where = '', named = false) {
 // At rest a quote is one row: the file, the lines, and the first quoted line, with the commit when the answer quotes
 // more than one. Opened, it shows all its lines: in place, or in the panel on a wide screen, where only the row whose
 // quote the panel shows reads as open. When an item quotes one file at two commits, the row at the HEAD the question
-// was asked at reads "now" and the other "before", so the two rows of a changed line tell apart.
-export function quoteRows(quotes, key, { ui, commits, head = null }) {
+// was asked at reads "now" and the other "before", so the two rows of a changed line tell apart. When the answer quotes
+// ken's copy of uncommitted work, that copy is "now": the work sits on top of HEAD.
+export function quoteRows(quotes, key, { ui, commits, head = null, copies = NONE }) {
+	const newest = copies.size > 0 ? copies : new Set([head])
 	const paths = quotes.filter((quote) => !isSession(quote) && quote.path !== null)
 	const twice = new Set(
 		paths
@@ -123,7 +142,9 @@ export function quoteRows(quotes, key, { ui, commits, head = null }) {
 	return `<ul class="quotes">${quotes
 		.map((quote, j) => {
 			const then =
-				twice.has(quote.path) && head ? `<span class="q-then">${quote.commit === head ? 'now' : 'before'}</span>` : ''
+				twice.has(quote.path) && head
+					? `<span class="q-then">${newest.has(quote.commit) ? 'now' : 'before'}</span>`
+					: ''
 			const id = `${key}-q${j}`
 			const chosen = ui.wide && ui.panel.kind === 'quote' && ui.panel.key === key && ui.panel.quote === j
 			const open = !ui.wide && ui.openQuotes.has(id)
@@ -131,13 +152,13 @@ export function quoteRows(quotes, key, { ui, commits, head = null }) {
 			const first = isSession(quote) ? '' : (quote.text.split('\n').find((line) => line.trim() !== '') ?? '')
 			const at =
 				commits && !isSession(quote) && quote.path !== null
-					? `<span class="q-commit">at <code>${short(quote.commit)}</code></span>`
+					? `<span class="q-commit">${copies.has(quote.commit) ? "in ken's copy" : `at <code>${short(quote.commit)}</code>`}</span>`
 					: ''
 			return `<li class="q${chosen ? ' chosen' : ''}">
 				<button class="q-row" data-act="quote" data-item="${key}" data-quote="${j}" data-key="${id}" aria-expanded="${ui.wide ? chosen : open}"${ui.wide ? ' aria-controls="panel"' : ''}>
 					<span class="q-path">${quoteSource(quote)}</span><span class="q-lines">${then}<span class="nowrap">${quoteLines(quote)}</span>${at}</span>${first ? `<span class="q-first">${esc(first.trim())}</span>` : ''}
 				</button>
-				${open ? quoteBody(quote, '', commits) : ''}
+				${open ? quoteBody(quote, '', commits, copies) : ''}
 			</li>`
 		})
 		.join('')}</ul>`
@@ -147,7 +168,7 @@ export const LABELS = {
 	recorded: {
 		name: 'Recorded',
 		means:
-			'Written down when the work was done: quoted from a commit message, or logged by your coding agent with ken decide as it worked. ken did not check the reason.',
+			'Written down when the work was done: quoted from a commit message, or logged by your coding agent with `ken decide` as it worked. ken did not check the reason.',
 	},
 	'from-the-session': {
 		name: 'From the session',

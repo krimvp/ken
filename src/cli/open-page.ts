@@ -30,7 +30,7 @@ export async function openPage(options: {
 		? `It asks ${server.model}.`
 		: 'No model is set, so the page shows earlier answers and says what to set before you can ask.'
 	const live = server.live
-		? ' Live mode is on: ken writes a note as the work changes, and each note is a model call.'
+		? ' Live mode is on: ken writes a note as the work changes, and each note is a model run.'
 		: ''
 	process.stdout.write(
 		`ken reads ${server.root}. ${asks}${live}\nOpen ${server.url} in your browser. Press Ctrl-C to stop.\n`,

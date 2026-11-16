@@ -3,7 +3,7 @@
 // file and the code at HEAD; the page only shows it.
 import { day, esc, list, WHO } from './format.js'
 
-// A map line holds a day and no time: "on 16 Nov", or "earlier today".
+// A map line holds a day and no time: "on 16 Nov", or "earlier today". Its twin is onDay in src/follow-up/when.ts.
 export function onDay(date) {
 	const said = day(date)
 	return said === 'today' ? 'earlier today' : `on ${said}`
@@ -72,7 +72,8 @@ export function knownHtml(q, ui, named, moved) {
 }
 
 const SAID = {
-	know: (names) => `Saved. Your map says you know ${names}, as the code is now. Later answers fold what you know.`,
+	know: (names) =>
+		`Saved. Your map says you know ${names}, as the code is now. Later answers show what you know as one line.`,
 	'too-much': (names) => `Saved. The next answer on ${names} will be shorter.`,
 }
 
@@ -88,9 +89,9 @@ export function mapBarHtml(q, ui, running) {
 	return `<section class="map-bar" aria-label="Your map">
 		<p class="small">Tell ken how well you know ${named}:</p>
 		<ul class="map-buttons">
-			<li><button class="quiet-button" data-act="map-know" data-key="map-know">I know this</button><span>Later answers fold it.</span></li>
+			<li><button class="quiet-button" data-act="map-know" data-key="map-know">I know this</button><span>Later answers show it as one line.</span></li>
 			<li><button class="quiet-button" data-act="map-too-much" data-key="map-too-much">Too much</button><span>The next answer on it is shorter.</span></li>
-			<li>${deeper}<span>ken asks the agent for one level more.</span></li>
+			<li>${deeper}<span>ken asks for more detail.</span></li>
 		</ul>
 		${said}
 	</section>`
