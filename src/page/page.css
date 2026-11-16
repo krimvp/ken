@@ -953,10 +953,6 @@ span.label-from-the-session {
 	margin-top: 0;
 }
 
-.risks.minor {
-	padding-top: var(--space-3);
-}
-
 /* Decisions: the question and the option taken, in at most two lines each. A row opens in place. */
 .decisions ul {
 	margin-top: 0;

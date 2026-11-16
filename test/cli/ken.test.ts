@@ -127,7 +127,7 @@ test('ken ask --json prints the checked answer, what it recorded and the closing
 	assert.equal((await ken(['record', 'no-such-id', '--repo', root], NO_KEN_VARIABLES)).code, 1)
 })
 
-test('ken ask prints the serious risks before the minor ones whatever order the model sent them in, and says how many points of the draft it left out', async () => {
+test('ken ask prints the risks in the order the answer gives them, whatever their weight, each with its weight, and says how many points of the draft it left out', async () => {
 	const risk = (text: string, weight: string) => ({ text, label: 'inferred', quotes: [SUM], weight })
 	const model = await scriptedModel([
 		DRAFT,
@@ -140,11 +140,13 @@ test('ken ask prints the serious risks before the minor ones whatever order the 
 				risks: [
 					risk('A caller that passes text now gets a TypeError.', 'minor'),
 					risk('Every report that showed a total of 0 now shows a different number.', 'serious'),
+					risk('A list of floats now gets a rounding error in its total.', 'minor'),
+					risk('An export that summed the items itself now counts them twice.', 'serious'),
 				],
 				left_out: ['a guess about who reads the reports'],
 			},
 		},
-		...nothingToRevise(2),
+		...nothingToRevise(4),
 		{ text: 'Nothing else.' },
 	])
 	const env = {
@@ -157,9 +159,20 @@ test('ken ask prints the serious risks before the minor ones whatever order the 
 	const { code, stdout, stderr } = await ken(['ask', 'What did the fix do?', '--repo', root], env)
 
 	assert.equal(code, 0, `${stderr}${stdout}`)
-	const serious = stdout.indexOf('Every report that showed a total of 0')
-	const minor = stdout.indexOf('A caller that passes text now gets a TypeError.')
-	assert.ok(serious > 0 && minor > serious, `the serious risk comes first: ${stdout}`)
+	const lines = stdout.split('\n')
+	const at = (start: string) => lines.findIndex((line) => line.includes(start))
+	const shown = ['A caller that passes', 'Every report that', 'A list of floats', 'An export that'].map(at)
+	assert.deepEqual(
+		[...shown].sort((a, b) => a - b),
+		shown,
+		`the risks come in the answer's order, the minor first one first: ${stdout}`,
+	)
+	assert.ok((shown[0] ?? -1) > 0, `the risks are printed: ${stdout}`)
+	assert.deepEqual(
+		shown.map((line) => /\[(serious|minor), by ken's model\]/.exec(lines[line] ?? '')?.[1]),
+		['minor', 'serious', 'minor', 'serious'],
+		'each risk carries the weight the model gave it',
+	)
 	assert.match(stdout, /1 point of the draft had no line to quote/)
 })
 

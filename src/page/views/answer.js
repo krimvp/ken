@@ -1,8 +1,8 @@
 // The answered question in the thread: the agent's summary, one line that counts what needs the reader, the diagrams,
 // the decisions, the risks and the statements with their quote rows, and the agent's closing note. The agent wrote the
 // words; ken checked only that each quote is in its file. An answer about a change opens on what a tired owner needs
-// first, as a chat would: the story, the serious risks and the decisions that need their call. The rest folds behind
-// one line each, with its count, and opens in place.
+// first, as a chat would: the story, the first risks, heaviest first, and the decisions that need their call. The rest
+// folds behind one line each, with its count, and opens in place.
 import { checkStrip, checksHtml } from './checks.js'
 import { diagramHtml, elementKey } from './diagram.js'
 import {
@@ -38,16 +38,16 @@ export function decisionsOf(q) {
 	return [...q.recorded.filter((entry) => entry.kind === 'decision'), ...(q.draft ?? [])]
 }
 
-// The risks with the keys the page knows them by, the serious first, each numbered as the page shows it. The weight is
-// the model's. An answer saved before ken asked for it has none, so its risks stay in one list, in their order.
+// The risks with the keys the page knows them by, in the answer's order, which the second look sets heaviest first, each
+// numbered as the page shows it. The weight on a risk is the model's. An answer saved before ken asked for it has none.
 export function risksOf(q) {
-	const risks = (q.answer.risks ?? []).map((item, i) => ({ item, key: `r${i}` }))
-	const weighed = risks.some(({ item }) => item.weight !== undefined)
-	const serious = weighed ? risks.filter(({ item }) => item.weight === 'serious') : risks
-	const minor = weighed ? risks.filter(({ item }) => item.weight !== 'serious') : []
-	const n = (list, from) => list.map((each, i) => ({ ...each, n: from + i + 1 }))
-	return { weighed, serious: n(serious, 0), minor: n(minor, serious.length) }
+	const risks = (q.answer.risks ?? []).map((item, i) => ({ item, key: `r${i}`, n: i + 1 }))
+	return { weighed: risks.some(({ item }) => item.weight !== undefined), risks }
 }
+
+// How many risks an answer about a change shows open. The rest wait in one fold, so the first view never depends on
+// the model's weight alone: a model can weigh every risk minor.
+const FIRST_RISKS = 3
 
 // Every item that carries quotes, in the order the page shows them, by the key the page uses for it: "g0n3" for
 // element 3 of the first diagram, "d0" for a decision, "r0" for a risk, "s3" for a statement.
@@ -58,8 +58,7 @@ export function itemsOf(q) {
 		item: { ...d, quotes: decisionQuotes(d) },
 		n: i + 1,
 	}))
-	const { serious, minor } = risksOf(q)
-	const risks = (list) => list.map((each) => ({ ...each, kind: 'risk' }))
+	const risks = risksOf(q).risks.map((each) => ({ ...each, kind: 'risk' }))
 	const calls = decisions.filter(({ item }) => item.needsOwner)
 	const others = decisions.filter(({ item }) => !item.needsOwner)
 	return [
@@ -68,9 +67,7 @@ export function itemsOf(q) {
 				.filter((element) => element.quotes.length > 0)
 				.map((element) => ({ key: elementKey(i, element.number), kind: 'element', item: element, diagram })),
 		),
-		...(q.answer.change
-			? [...risks(serious), ...calls, ...others, ...risks(minor)]
-			: [...decisions, ...risks([...serious, ...minor])]),
+		...(q.answer.change ? [...risks, ...calls, ...others] : [...decisions, ...risks]),
 		...q.answer.statements.map((s, i) => ({ key: `s${i}`, kind: 'statement', item: s, n: i + 1 })),
 	]
 }
@@ -98,9 +95,8 @@ export function answerHtml(q, ui, running) {
 		: itemsOf(q).every(({ key, item }) => item.quotes.every((_, j) => ui.openQuotes.has(`${key}-q${j}`)))
 	const rows = { ui, commits: manyCommits(q), head: q.head, copies: copiesOf(q), change: a.change }
 	const known = ({ item }) => !hidden.has(item.topic)
-	const groups = risksOf(q)
-	const [serious, minor] = [groups.serious.filter(known), groups.minor.filter(known)]
-	const risks = [...serious, ...minor]
+	const { weighed, risks: all } = risksOf(q)
+	const risks = all.filter(known)
 	const claims = [...statements, ...risks].map(({ item }) => item)
 	const marked = markedLabels(claims)
 	const named = new Set([...a.statements, ...(a.risks ?? []), ...decisionsOf(q)].map((each) => each.topic))
@@ -120,9 +116,8 @@ export function answerHtml(q, ui, running) {
 				rows,
 				marked,
 				decisions,
-				serious,
-				minor,
-				groups,
+				risks,
+				weighed,
 				statements,
 				statementsList,
 				claims,
@@ -148,24 +143,21 @@ export function answerHtml(q, ui, running) {
 		<section class="checks-inline narrow-only" id="checks-inline" aria-label="What ken checked">${ui.wide ? '' : checksHtml(q, ui)}</section>`
 }
 
-// An answer about a change: the serious risks and the decisions that need the reader's call are open. The other
-// decisions, the minor risks and what the change did each fold behind one line with its count.
-function changeBody({ ui, rows, marked, decisions, serious, minor, groups, statements, statementsList, claims, all }) {
+// An answer about a change: the first risks and the decisions that need the reader's call are open. The other
+// decisions and what the change did each fold behind one line with its count.
+function changeBody({ ui, rows, marked, decisions, risks, weighed, statements, statementsList, claims, all }) {
 	const calls = decisions.filter(({ item }) => item.needsOwner)
 	const others = decisions.filter(({ item }) => !item.needsOwner)
 	const labels = labelLine(claims)
-	const risks = groups.weighed
-		? seriousHtml(serious, minor.length, rows, marked, labels)
-		: risksHtml(all, serious, true, rows, marked, labels)
+	const risksPart = weighed
+		? weighedHtml(risks, ui, rows, marked, labels)
+		: risksHtml(all, risks, true, rows, marked, labels)
 	const otherHead =
 		calls.length === 0
 			? count(others.length, 'decision in this change', 'decisions in this change')
 			: count(others.length, 'other decision', 'other decisions')
 	const folds = [
 		others.length === 0 ? '' : foldHtml('decisions', otherHead, ui, decisionsHtml(others, rows, false)),
-		minor.length === 0
-			? ''
-			: foldHtml('minor', count(minor.length, 'minor risk', 'minor risks'), ui, minorHtml(minor, rows, marked)),
 		statements.length === 0
 			? ''
 			: foldHtml(
@@ -175,7 +167,7 @@ function changeBody({ ui, rows, marked, decisions, serious, minor, groups, state
 					statementsList,
 				),
 	].join('')
-	return `${risks}${decisionsHtml(calls, rows, true)}${folds ? `<div class="folds">${folds}</div>` : ''}`
+	return `${risksPart}${decisionsHtml(calls, rows, true)}${folds ? `<div class="folds">${folds}</div>` : ''}`
 }
 
 // One folded group: a line with its count that opens the group in place.
@@ -187,36 +179,26 @@ function foldHtml(group, head, ui, body) {
 	</section>`
 }
 
-// The serious risks, numbered first. When the model weighed none serious, the box says so, and the minor ones wait in
-// their fold.
-function seriousHtml(serious, minor, rows, marked, labels) {
-	const note = `A risk is something ken's model thinks could go wrong. ken's model weighs each one. Serious: someone who uses the code in the normal way loses work, gets a wrong result or a failure, or finds refused what worked before. Minor: it needs a rare case or costs little. ${RISK_MARKS.means}${labels ? ` ${labels}` : ''}`
-	if (serious.length === 0 && minor === 0) {
+// Risks the model weighed, in the answer's order: the first FIRST_RISKS open, each with its weight beside ken's mark,
+// and the rest in one fold under them.
+function weighedHtml(risks, ui, rows, marked, labels) {
+	if (risks.length === 0) {
 		return `<div class="list-head"><h3>ken's model found no risks</h3><p class="list-note">ken's model says it looked for what could go wrong and found nothing to watch.</p></div>`
 	}
-	const head =
-		serious.length === 0
-			? 'No serious risk'
-			: serious.length === 1
-				? 'A serious risk'
-				: `${serious.length} serious risks`
-	const list =
-		serious.length === 0
-			? `<p class="list-note">ken's model weighed none of its risks serious. The minor ones are below.</p>`
-			: `<ol>${serious.map(({ item, key, n }) => claimHtml(item, key, n - 1, rows, marked)).join('')}</ol>`
+	const note = `A risk is something ken's model thinks could go wrong. ken's model weighs each one. Serious: someone who uses the code in the normal way loses work, gets a wrong result or a failure, or finds refused what worked before. Minor: it needs a rare case or costs little. ${RISK_MARKS.means}${labels ? ` ${labels}` : ''}`
+	const list = (each) => each.map(({ item, key, n }) => claimHtml(item, key, n - 1, rows, marked)).join('')
+	const rest = risks.slice(FIRST_RISKS)
+	const more =
+		rest.length === 0
+			? ''
+			: foldHtml('risks', count(rest.length, 'more risk', 'more risks'), ui, `<ol>${list(rest)}</ol>`)
 	return `<section class="risks" aria-labelledby="risks-head">
 		<div class="list-head">
-			<h3 id="risks-head">${head}</h3>
+			<h3 id="risks-head">Risks, heaviest first (${risks.length})</h3>
 			<p class="list-note">${note}</p>
 		</div>
-		${list}
-	</section>`
-}
-
-function minorHtml(minor, rows, marked) {
-	return `<section class="risks minor" aria-label="Minor risks">
-		<p class="list-note">ken's model weighed these minor: each needs a rare case or costs little. ${RISK_MARKS.means}</p>
-		<ol>${minor.map(({ item, key, n }) => claimHtml(item, key, n - 1, rows, marked)).join('')}</ol>
+		<ol>${list(risks.slice(0, FIRST_RISKS))}</ol>
+		${more}
 	</section>`
 }
 
@@ -246,20 +228,20 @@ function folded(text, open, ui, act, more) {
 // means no line.
 function needsHtml(q) {
 	const calls = decisionsOf(q).filter((d) => d.needsOwner).length
-	const { weighed, serious, minor } = risksOf(q)
+	const { weighed, risks } = risksOf(q)
+	const serious = risks.filter(({ item }) => item.weight === 'serious').length
 	const parts = []
 	if (calls > 0) {
 		parts.push(
 			`<a href="#decisions-head">${calls === 1 ? '1 decision needs your call' : `${calls} decisions need your call`}</a>`,
 		)
 	}
-	if (!weighed && serious.length > 0)
-		parts.push(`<a href="#risks-head">${count(serious.length, 'risk', 'risks')} to watch</a>`)
-	if (weighed && serious.length > 0) {
-		parts.push(`<a href="#risks-head">${count(serious.length, 'serious risk', 'serious risks')} to watch</a>`)
+	if (!weighed && risks.length > 0)
+		parts.push(`<a href="#risks-head">${count(risks.length, 'risk', 'risks')} to watch</a>`)
+	if (weighed && risks.length > 0) {
+		const of = serious === 0 ? '' : `, ${serious} of them serious`
+		parts.push(`<a href="#risks-head">${count(risks.length, 'risk', 'risks')}${of}</a>`)
 	}
-	if (weighed && minor.length > 0)
-		parts.push(`<a href="#fold-minor">${count(minor.length, 'minor risk', 'minor risks')}</a>`)
 	// Fewer than half the changed blocks quoted means most of the change is not explained here, so it is said up front.
 	const change = q.answer.change
 	const total = change ? change.covered.length + change.uncovered.length : 0
@@ -276,7 +258,7 @@ function claimHtml(claim, key, i, rows, marked) {
 	return `<li class="st" id="item-${key}">
 		<span class="st-n">${i + 1}</span>
 		<div>
-			<p class="st-text">${marked.has(claim.label) ? label(claim.label) : ''}${checkedHtml(claim)}${prose(claim.text)}</p>
+			<p class="st-text">${marked.has(claim.label) ? label(claim.label) : ''}${checkedHtml(claim)}${weightHtml(claim)}${prose(claim.text)}</p>
 			${quoteRows(claim.quotes, key, rows)}
 		</div>
 	</li>`
@@ -288,6 +270,13 @@ function checkedHtml({ checked }) {
 	if (checked === undefined) return ''
 	const [style, name] = checked ? ['recorded', RISK_MARKS.outside] : ['inferred', RISK_MARKS.inside]
 	return `<span class="label label-${style}">${name}</span>`
+}
+
+// The model's weight on a risk, in the style of the label for what the model worked out itself. A statement, and a risk
+// saved before ken asked for the weight, has none.
+function weightHtml({ weight }) {
+	if (weight === undefined) return ''
+	return `<span class="label label-inferred" title="The weight ken's model gave this risk. ken does not judge it.">${weight === 'serious' ? 'Serious' : 'Minor'}</span>`
 }
 
 // The risks follow the decisions, built like the statements and set apart from them. An answer about a change always

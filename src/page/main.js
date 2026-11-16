@@ -32,7 +32,7 @@ const freshUi = () => ({
 	panel: CHECKS,
 	openQuotes: new Set(),
 	openDecisions: new Set(),
-	// The folded groups of an answer about a change that the reader opened: "decisions", "minor" or "statements".
+	// The folded groups of an answer about a change that the reader opened: "risks", "decisions" or "statements".
 	openGroups: new Set(),
 	openParts: new Set(),
 	openElements: new Set(),
@@ -848,7 +848,7 @@ const actions = {
 		const allOpen = keys.every((key) => ui.openQuotes.has(key))
 		ui.openQuotes = allOpen ? new Set() : new Set(keys)
 		if (!allOpen) {
-			ui.openGroups = new Set(['decisions', 'minor', 'statements'])
+			ui.openGroups = new Set(['risks', 'decisions', 'statements'])
 			for (const key of keys.filter((each) => each.startsWith('d'))) ui.openDecisions.add(key.split('-')[0])
 			for (const index of state.open.answer.diagrams.keys()) ui.openParts.add(index)
 		}
