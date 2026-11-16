@@ -98,6 +98,32 @@ The server listens only on 127.0.0.1 and answers only its own page. It runs one 
 
 After a session, commit the record in the project: `git add .ken && git commit -m "chore: update the ken record"`.
 
+### Run ken on Claude through Claude Code
+
+If you have no hosted model to hand, ken can use the Claude Code CLI on your machine. A small endpoint in `scripts/claude-endpoint/` speaks the chat-completions protocol to ken and answers each request by running `claude -p` once. It needs `claude` on the PATH and signed in. It needs no API key.
+
+1. In one terminal, start the endpoint. It listens on 127.0.0.1, port 4141 unless you give `--port`:
+
+   ```sh
+   npm run claude-endpoint
+   npm run claude-endpoint -- --port 4242
+   ```
+
+2. In another terminal, set these four variables, in the environment or in `.env`, and use ken as usual:
+
+   ```sh
+   KEN_MODEL=opus                          # passed to claude --model: an alias or a full model id
+   KEN_BASE_URL=http://127.0.0.1:4141/v1   # the endpoint
+   KEN_API_KEY_ENV=KEN_LOCAL_KEY           # ken needs a key variable of 8 characters or more
+   KEN_LOCAL_KEY=not-a-key                 # any text: the endpoint ignores it
+   ```
+
+No key leaves your machine on this path. What does leave it is everything ken sends the model: its instructions, the questions, and the code and history it reads. That goes to Anthropic through your Claude Code sign-in, and counts against your Claude plan.
+
+The CLI runs as a plain model, not as a coding agent: in an empty folder, with its built-in tools switched off, no settings or instruction files, no MCP servers, and no saved session. ken's tools are described in the prompt, and the model sends its tool calls back as structured output. The endpoint answers one request at a time and prints how long each `claude` run took.
+
+It is slower than a hosted endpoint. Each turn starts the CLI again, which costs about a second before the model starts, and resends the whole conversation. ken gets each turn whole, when the `claude` run ends.
+
 ## Develop
 
 You need Node 22.19 or later. Node runs the TypeScript files as they are, so there is no build step.
