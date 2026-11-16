@@ -87,7 +87,7 @@ export function answerTool(gate: Gate, round: () => AnswerRound): Tool {
 					return reply(confirmation(settled.answer, settled.decisions, recorded, next))
 				}
 				if (!holds) return reply(await shown(gate, current, settled, null, ctx.signal))
-				const accepted = await accept(gate, current, settled.args, null, ctx.signal)
+				const accepted = await accept(gate, current, settled.args, null, ctx.signal, 'not-run')
 				if (accepted.kind === 'accepted') return reply(accepted.reply)
 				return refuse(accepted.problems.join('\n'))
 			}
@@ -112,10 +112,11 @@ export async function accept(
 	args: JsonObject,
 	pass: Pass | null,
 	signal: AbortSignal,
+	secondLook?: Answer['secondLook'],
 ): Promise<{ kind: 'accepted'; reply: string } | { kind: 'rejected' | 'form'; problems: string[] }> {
 	const settled = await settle(gate, args, signal, true)
 	if (settled.kind !== 'accepted') return settled
-	return { kind: 'accepted', reply: await shown(gate, current, settled, pass, signal) }
+	return { kind: 'accepted', reply: await shown(gate, current, settled, pass, signal, secondLook) }
 }
 
 async function shown(
@@ -124,10 +125,15 @@ async function shown(
 	settled: Accepted,
 	pass: Pass | null,
 	signal: AbortSignal,
+	secondLook?: Answer['secondLook'],
 ): Promise<string> {
 	if (current.asked) await gate.map?.learn('asked', settled.answer.topics, new Date(), signal)
 	const withdrawn = pass?.withdrawn ?? []
-	const answer = withdrawn.length === 0 ? settled.answer : { ...settled.answer, withdrawn }
+	const answer = {
+		...settled.answer,
+		...(withdrawn.length === 0 ? {} : { withdrawn }),
+		...(secondLook ? { secondLook } : {}),
+	}
 	current.answer = answer
 	const { recorded } = settled
 	const draft = recorded.kind === 'draft' ? recorded.decisions : null

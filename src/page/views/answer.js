@@ -30,6 +30,12 @@ export function isMoved(q) {
 
 const UNDO = { easy: 'Easy', 'some-work': 'Some work', hard: 'Hard' }
 
+// Why an answer held for the second look shows as ken first checked it, in ken's words, not the model's.
+const SECOND_LOOK = {
+	unchanged: "ken's second look at the risks changed nothing, so this is the answer as ken first checked it.",
+	'not-run': "ken's second look at the risks did not run, so this is the answer as ken first checked it.",
+}
+
 // The summary and the closing note show whole sentences up to about three lines, wide or narrow; the rest opens on
 // request.
 const SHOWN_CHARS = { wide: 240, narrow: 150 }
@@ -147,6 +153,7 @@ export function answerHtml(q, ui, running) {
 		<p class="summary">${summary}</p>
 		${needsHtml(q)}
 		${leftOutHtml(a, ui)}
+		${a.secondLook ? `<p class="caption">${SECOND_LOOK[a.secondLook]}</p>` : ''}
 		${withdrawnHtml(a, ui, rows)}
 		${knownHtml(q, ui, named, isMoved(q))}
 		<a class="strip narrow-only" href="#checks-inline" title="See what ken checked">${checkStrip(q)}</a>

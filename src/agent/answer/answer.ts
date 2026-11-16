@@ -47,7 +47,8 @@ export type Withdrawn = { risk: Risk; reason: string; proof: VerifiedQuote[] }
 // null when the question was not about a range of commits. leftOut counts the points of the model's draft that it
 // found no line to quote for and left out, and leftOutPoints names them in the model's words, which ken does not
 // check; only an answer made from a draft has them, and one saved before ken kept the names has only the count.
-// withdrawn holds what the second look took out; only an answer it revised has it.
+// withdrawn holds what the second look took out; only an answer it revised has it. secondLook says why an answer that
+// was held for the second look shows as ken first checked it: the look sent no change that passed, or it did not run.
 export type Answer = {
 	summary: string
 	statements: Claim[]
@@ -58,4 +59,5 @@ export type Answer = {
 	leftOut?: number
 	leftOutPoints?: string[]
 	withdrawn?: Withdrawn[]
+	secondLook?: 'unchanged' | 'not-run'
 }

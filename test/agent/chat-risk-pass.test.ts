@@ -268,6 +268,7 @@ test('a withdrawal with no quote goes back without using an attempt, and the ris
 		[FIRST_RISK.text, SECOND_RISK.text],
 	)
 	assert.equal(shown.withdrawn, undefined)
+	assert.equal(shown.secondLook, 'unchanged', 'ken says the second look changed nothing')
 })
 
 test('an answer with eight risks is accepted, and they reach the reader in the order the risk pass gave', async () => {

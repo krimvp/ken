@@ -198,7 +198,8 @@ export async function startChat(options: {
 			const { held } = current
 			if (held && !signal?.aborted) {
 				// A model that failed after the answer was held would fail the pass too, so the held answer stands.
-				if (result.stop !== 'error') {
+				const ran = result.stop !== 'error'
+				if (ran) {
 					const before = { ...tokens, at: performance.now() }
 					const later = held.answer.change
 						? await laterCommits(repo, held.answer.change, signal)
@@ -207,7 +208,8 @@ export async function startChat(options: {
 					riskPass = costSince(before, tokens)
 				}
 				if (!current.answer && !signal?.aborted) {
-					const accepted = await accept(gate, current, held.args, null, signal ?? new AbortController().signal)
+					const stands = ran ? 'unchanged' : 'not-run'
+					const accepted = await accept(gate, current, held.args, null, signal ?? new AbortController().signal, stands)
 					if (accepted.kind !== 'accepted') {
 						current.emit({ kind: 'rejected', attempt: current.rejections + 1, problems: accepted.problems })
 					}

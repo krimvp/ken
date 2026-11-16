@@ -86,6 +86,7 @@ export function formatAnswer(answer: Answer, entries: Entry[], paint: Paint): st
 			lines.push(paint('dim', named), ...points.map((point) => paint('dim', `  - ${point}`)), '')
 		}
 	}
+	if (answer.secondLook) lines.push(paint('dim', SECOND_LOOK[answer.secondLook]), '')
 	const withdrawn = answer.withdrawn ?? []
 	if (withdrawn.length > 0) {
 		lines.push(paint('bold', `${withdrawnLine(withdrawn.length)}:`))
@@ -209,6 +210,13 @@ export function formatAnswer(answer: Answer, entries: Entry[], paint: Paint): st
 function costLine(cost: Cost): string {
 	return `${cost.inputTokens} tokens in, ${cost.outputTokens} out, ${cost.seconds} s`
 }
+
+// ken says why the answer is the one it first checked, in the page's words, so a model's remark about the second
+// look is never the only word on it.
+const SECOND_LOOK = {
+	unchanged: "ken's second look at the risks changed nothing, so this is the answer as ken first checked it.",
+	'not-run': "ken's second look at the risks did not run, so this is the answer as ken first checked it.",
+} as const
 
 // The same words as the page's line, so the reader meets one name for it.
 function withdrawnLine(n: number): string {
