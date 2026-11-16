@@ -1,13 +1,14 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { request as httpRequest } from 'node:http'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { after, test } from 'node:test'
 import { type KenServer, openServer } from '../../src/server/index.ts'
 import { buildRepository } from '../fixtures/build-repository.ts'
-import { scriptedModel, type Turn } from '../fixtures/scripted-model.ts'
+import { asked, claudeProjects, writeSession } from '../fixtures/claude-sessions.ts'
+import { scriptedModel, type Turn, toolResults } from '../fixtures/scripted-model.ts'
 
 const RETRY = 'export function retry(times: number) {\n\tfor (let i = 0; i < times; i++) {\n\t\tattempt()\n'
 const { root, hashes } = buildRepository([
@@ -65,11 +66,16 @@ const ANSWER: Turn = {
 	},
 }
 
-async function open(home: string, baseUrl: string | null, directory = root): Promise<KenServer> {
+async function open(
+	home: string,
+	baseUrl: string | null,
+	directory = root,
+	env: Record<string, string> = {},
+): Promise<KenServer> {
 	const model = baseUrl
 		? { KEN_MODEL: 'scripted', KEN_BASE_URL: baseUrl, KEN_API_KEY_ENV: KEY_ENV, [KEY_ENV]: process.env[KEY_ENV] }
 		: {}
-	const opened = await openServer({ directory, flags: {}, env: { KEN_HOME: home, ...model }, port: 0 })
+	const opened = await openServer({ directory, flags: {}, env: { KEN_HOME: home, ...model, ...env }, port: 0 })
 	if (opened.kind !== 'ok') throw new Error(opened.message)
 	after(() => opened.server.close())
 	return opened.server
@@ -371,3 +377,89 @@ function questionPrompt(request: { messages: { role: string; content: unknown }[
 	const message = request?.messages.findLast((each) => each.role === 'user')
 	return typeof message?.content === 'string' ? message.content : JSON.stringify(message?.content)
 }
+
+test('what looks like a secret in a saved session reaches the model, the history and the record hidden, in each form ken hides, and the lines around it stay as they were', async () => {
+	const built = buildRepository([
+		{ message: 'feat: start', files: { 'src/retry.ts': `${RETRY}\t}\n}\n` } },
+		{ message: 'feat: wait between attempts', files: { 'src/retry.ts': `${RETRY}\t\tsleep(100)\n\t}\n}\n` } },
+	])
+	const [first = '', last = ''] = built.hashes
+	const secrets = {
+		prefix: 'sk-ant-api03-Zx9Qw8Er7Ty6Ui5Op4AsDf',
+		bearer: '9f8e7d6c5b4a3210fedcba98',
+		assigned: 'Zx9Qw8Er7Ty6Ui5Op4As',
+		environment: 'correct-horse-battery',
+	}
+	const plain = ['Keep the retry wait fixed at 100 ms.', 'const key = process.env.API_KEY', 'WAIT_MS=100']
+	const projects = claudeProjects()
+	writeSession(projects, built.root, 'staging-session', [
+		asked(
+			built.root,
+			'2026-01-02T09:00:00.000Z',
+			[
+				plain[0],
+				`Test it on staging with the key ${secrets.prefix}.`,
+				`curl -H "Authorization: Bearer ${secrets.bearer}" https://staging.example.com/health`,
+				`DEPLOY_TOKEN=${secrets.assigned}`,
+				`The staging gateway answers to ${secrets.environment} today.`,
+				plain[1],
+				plain[2],
+			].join('\n'),
+		),
+	])
+	const hidden = [
+		'Test it on staging with the key [hidden by ken].',
+		'curl -H "Authorization: Bearer [hidden by ken]" https://staging.example.com/health',
+		'DEPLOY_TOKEN=[hidden by ken]',
+		'The staging gateway answers to [hidden by ken] today.',
+	].join('\n')
+	const session = (text: string) => ({ session: 'staging-session', text })
+	const model = await scriptedModel([
+		{ tool: 'ken__read_session', args: { session: 'staging-session' } },
+		{
+			tool: 'ken__answer',
+			args: {
+				work: { title: 'Retry waits' },
+				scope: { base: first, head: last },
+				summary: 'Retries wait 100 ms.',
+				statements: [{ text: 'The owner gave a staging setup.', label: 'from-the-session', quotes: [session(hidden)] }],
+				risks: [],
+				decisions: [
+					{
+						question: 'How long does a retry wait?',
+						chosen: 'A fixed 100 ms',
+						reason: 'The owner asked for a fixed wait.',
+						reason_quotes: [session(plain[0] ?? '')],
+						rejected: [],
+						undo: 'easy',
+						needs_owner: false,
+						quotes: [{ ...SLEEP, commit: last }],
+					},
+				],
+			},
+		},
+		{ text: 'Done.' },
+	])
+	const home = tempFolder('ken-home-')
+	const env = { KEN_CLAUDE_PROJECTS: projects, KEN_TEST_GATEWAY_SECRET: secrets.environment }
+	const server = await open(home, model.baseUrl, built.root, env)
+	const lines = await ask(server, 'Why does retry wait?')
+	assert.ok(
+		lines.some((line) => line.kind === 'accepted'),
+		JSON.stringify(lines),
+	)
+
+	const read = toolResults(model.requests[1])[0] ?? ''
+	for (const line of [...plain, ...hidden.split('\n')]) assert.ok(read.includes(line), `the model reads: ${line}`)
+	const history = readFileSync(path.join(home, 'projects', first, 'history.jsonl'), 'utf8')
+	const folder = path.join(built.root, '.ken', 'record')
+	const record = readdirSync(folder)
+		.map((name) => readFileSync(path.join(folder, name), 'utf8'))
+		.join('')
+	for (const [where, text] of Object.entries({ model: JSON.stringify(model.requests), history, record })) {
+		for (const [form, secret] of Object.entries(secrets)) {
+			assert.ok(!text.includes(secret), `the ${form} secret does not reach the ${where}`)
+		}
+		assert.ok(text.includes(JSON.stringify(hidden).slice(1, -1)), `the ${where} holds the hidden lines`)
+	}
+})
