@@ -1,7 +1,7 @@
 // The Live view. One status line with its controls and one quiet line for the pace and the spend come first, so the
 // newest note leads. Under it, what ken sees now, read from git and the saved session with no model, then every older
 // note folded to one line, so twenty notes stay calm.
-import { at, esc, prose, short, when } from '../views/format.js'
+import { at, esc, prose, short, when, withCost } from '../views/format.js'
 import { noteHeadHtml, noteHtml } from './note.js'
 
 // The look of each status, here and in the header: on, paused, off, or writing a note.
@@ -39,7 +39,8 @@ function controlsHtml(live) {
 		? '<button class="primary" data-act="live-resume" data-key="live-resume">Resume</button>'
 		: '<button class="quiet-button" data-act="live-pause" data-key="live-pause">Pause notes</button>'
 	const busy = live.status === 'writing' || live.status === 'snapshot'
-	return `${toggle}<span class="ln-ask"><button class="quiet-button" data-act="live-note-now" data-key="live-note-now"${busy ? ' disabled' : ''}>Write a note now</button><span class="small muted">One model run.</span></span><button class="link small" data-act="live-off" data-key="live-off">Turn off</button>`
+	const now = `<button class="quiet-button" data-act="live-note-now" data-key="live-note-now"${busy ? ' disabled' : ''}>Write a note now</button>`
+	return `${toggle}${withCost(now)}<button class="link small" data-act="live-off" data-key="live-off">Turn off</button>`
 }
 
 function paceHtml({ pace, spent, since }) {
@@ -89,7 +90,7 @@ function nowHtml(now, hideAsk) {
 		.join('')
 	return `<section class="now" aria-labelledby="now-head">
 		<h2 id="now-head">Now</h2>
-		<p class="now-from">Read from git and your agent's saved session on this machine. No model run.</p>
+		<p class="now-from">Read from git and your coding agent's saved session on this machine. No model run.</p>
 		${total > 0 ? `<p class="now-sub">${total} ${total === 1 ? 'file' : 'files'} with uncommitted changes</p>` : ''}
 		${files}
 		<p class="now-sub">${now.branch ? `On <code>${esc(now.branch)}</code>` : 'HEAD is not on a branch'}${commits ? ', last commits:' : ''}</p>

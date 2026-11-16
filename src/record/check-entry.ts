@@ -22,6 +22,7 @@ import {
 	entryId,
 	type Kind,
 	type Note,
+	type Outcome,
 	type RecordEntry,
 	type Topic,
 	UNDO,
@@ -57,7 +58,7 @@ export type EntryDraft =
 			// Only ken decide sends this. by is the name its caller gave, or null.
 			logged?: { by: string | null }
 			topic?: string | undefined
-			answer?: { at: string; note: string | null }
+			answer?: { at: string; note: string | null; outcome: Outcome }
 	  } & Replaces)
 	| ({ kind: 'topic'; name: string; quotes: Quote[] } & Replaces)
 	| ({ kind: 'note'; topic: string; text: string } & Replaces)
@@ -164,6 +165,9 @@ export async function checkEntry(
 				problems.push('the decision does not wait on the owner, so it takes no answer.')
 			}
 			if (draft.reason === null && !draft.answer) problems.push('the decision needs a reason: why this option.')
+			if (draft.answer?.outcome === 'change' && draft.answer.note === null) {
+				problems.push('an answer that wants the decision changed says in its note what to change.')
+			}
 			const reasonQuotes = await quotes('the reason', draft.reason?.quotes ?? [], false)
 			// An answer keeps the log of the decision it answers: who logged it and the commit checked out then are facts of
 			// that decision, and reading HEAD again now would move it.
@@ -200,6 +204,7 @@ export async function checkEntry(
 					? {
 							at: draft.answer.at,
 							note: draft.answer.note === null ? null : text("the owner's note", draft.answer.note, MAX.text),
+							outcome: draft.answer.outcome,
 						}
 					: null,
 			} satisfies Decision

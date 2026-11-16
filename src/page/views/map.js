@@ -172,5 +172,6 @@ export function lensHtml(where, pick) {
 			<span class="area-row"><select id="who-${where}" name="author">${option('', 'by everyone', pick.author)}${people.join('')}</select><select name="since" aria-label="When">${spans.map(([value, text]) => option(value, text, since)).join('')}</select><button class="quiet-button" type="submit"${off}>Explain</button></span>
 		</form>
 		${pick.author ? '<p class="small muted lens-note">For one person, ken lists only the topics you know that their commits touched.</p>' : ''}
+		<p class="small muted lens-note">Each of these is one run of ken's model.</p>
 	</div>`
 }

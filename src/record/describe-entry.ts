@@ -129,7 +129,7 @@ function quoted(quote: VerifiedQuote): string[] {
 
 function sourceOf(quote: VerifiedQuote): string {
 	if ('session' in quote) {
-		const who = quote.by === 'user' ? 'the user' : 'the agent'
+		const who = quote.by === 'user' ? 'the user' : 'your coding agent'
 		return `session ${quote.session}, message ${quote.message} by ${who} at ${quote.at}`
 	}
 	return quote.path === null ? `the message of ${quote.commit}` : `${quote.path} at ${quote.commit}`

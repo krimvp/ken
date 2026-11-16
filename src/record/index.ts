@@ -12,6 +12,7 @@ export type {
 	Kind,
 	Logged,
 	Note,
+	Outcome,
 	RecordEntry,
 	Statement,
 	Topic,
@@ -19,7 +20,7 @@ export type {
 	Who,
 	Work,
 } from './entry.ts'
-export { UNDO } from './entry.ts'
+export { OUTCOMES, UNDO } from './entry.ts'
 export { fileRecordStore, type RecordRead, type RecordStore } from './file-record-store.ts'
 export { codeHash, type Freshness, noteFreshness, type TopicCode, topicCode } from './note-freshness.ts'
 export { whoDidIt } from './who-did-it.ts'

@@ -1414,7 +1414,7 @@ span.label-from-the-session {
 		line-height: 1.55;
 	}
 
-	.composer-hint {
+	.composer-hint .keys {
 		display: none;
 	}
 
@@ -1813,8 +1813,10 @@ span.label-from-the-session {
 	resize: vertical;
 }
 
-.decide-form .quiet-button {
-	min-height: 2.75rem;
+.decide-buttons {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-2);
 }
 
 .o-commits {
@@ -2101,7 +2103,7 @@ q.subject {
 	gap: var(--space-2) var(--space-4);
 }
 
-.ln-ask {
+.with-cost {
 	display: inline-flex;
 	flex-wrap: wrap;
 	align-items: center;

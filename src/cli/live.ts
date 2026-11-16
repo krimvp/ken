@@ -69,7 +69,7 @@ function formatNow(now: NowBlock, paint: Paint): string {
 	if (now.commits.length > 0) lines.push('  Last commits:')
 	for (const commit of now.commits) lines.push(`    ${commit.hash.slice(0, 7)} ${commit.subject}`)
 	if (now.ask.kind === 'asked') {
-		lines.push(`  You last asked your agent ${at(now.ask.at)} (from the session):`)
+		lines.push(`  You last asked your coding agent ${at(now.ask.at)} (from the session):`)
 		lines.push(...now.ask.text.split('\n').map((line) => `    ${line}`))
 	} else {
 		lines.push(

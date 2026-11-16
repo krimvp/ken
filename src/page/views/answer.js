@@ -92,7 +92,7 @@ export function answerHtml(q, ui, running) {
 		</div>
 		<ol>${statements.map(({ item, key }, i) => claimHtml(item, key, i, rows, marked)).join('')}</ol>`
 	return `
-		<p class="caption">The agent's summary. Not checked.</p>
+		<p class="caption">The summary from ken's model. Not checked.</p>
 		<p class="summary">${folded(a.summary, ui.summaryOpen, ui, 'summary', 'Show the rest of the summary')}</p>
 		${needsHtml(q)}
 		${knownHtml(q, ui, named, isMoved(q))}
@@ -149,17 +149,17 @@ function claimHtml(claim, key, i, rows, marked) {
 function risksHtml(all, shown, aboutChange, rows, marked, labels) {
 	if (all === null) {
 		return aboutChange
-			? '<p class="caption">This answer is older than ken\'s risk list. Ask again to get risks.</p>'
+			? '<p class="caption">This answer was saved before ken listed risks. Ask again to see them.</p>'
 			: ''
 	}
 	if (all.length === 0) {
-		return `<div class="list-head"><h3>The agent found no risks</h3><p class="list-note">The agent says it looked for what could go wrong and found nothing to watch.</p></div>`
+		return `<div class="list-head"><h3>ken's model found no risks</h3><p class="list-note">ken's model says it looked for what could go wrong and found nothing to watch.</p></div>`
 	}
 	if (shown.length === 0) return ''
 	return `<section class="risks" aria-labelledby="risks-head">
 		<div class="list-head">
 			<h3 id="risks-head">${shown.length === 1 ? 'A risk to watch' : `${shown.length} risks to watch`}</h3>
-			<p class="list-note">A risk is something the agent thinks could go wrong.${labels ? ` ${labels}` : ''}</p>
+			<p class="list-note">A risk is something ken's model thinks could go wrong.${labels ? ` ${labels}` : ''}</p>
 		</div>
 		<ol>${shown.map(({ item, key }, i) => claimHtml(item, key, i, rows, marked)).join('')}</ol>
 	</section>`
@@ -228,7 +228,7 @@ export function sourceLine(d) {
 	}
 	if (d.label === 'from-the-session') {
 		const times = [...new Set(quotes.filter(isSession).map((quote) => when(quote.at)))]
-		return `Quoted from your agent's saved session of ${list(times)}.`
+		return `Quoted from your coding agent's saved session of ${list(times)}.`
 	}
 	return ''
 }
@@ -280,5 +280,5 @@ function noteHtml(q, ui) {
 	if (q.note === '') return ''
 	const caret = q.live ? '<span class="caret" aria-hidden="true"></span>' : ''
 	const text = q.live ? prose(q.note) : folded(q.note, ui.noteOpen, ui, 'note', 'Show the whole note')
-	return `<div class="note"><span class="who">The agent's closing note. Not checked.</span><p>${text}${caret}</p></div>`
+	return `<div class="note"><span class="who">The closing note from ken's model. Not checked.</span><p>${text}${caret}</p></div>`
 }

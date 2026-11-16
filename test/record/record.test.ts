@@ -279,6 +279,25 @@ test('a decision recorded from a commit message before ken decide still reads, a
 	assert.equal(entryLine(old), 'decision 49a3f4091409 "Who wrote the wait?" [recorded from a commit message]')
 })
 
+// Written by ken at 90b1c5c, when "I have decided" kept only when the owner answered and their note.
+const OLD_ANSWER_LINE = String.raw`{"id":"417c949dbea0","kind":"decision","question":"Should a quote still match when only its whitespace changed?","chosen":"No: checkQuote compares each line with its ends trimmed, so a change inside a line breaks the quote.","reason":{"text":"Exact lines keep a quote honest; ignoring inner whitespace could match code that reads differently.","quotes":[]},"rejected":[],"undo":"some-work","needsOwner":false,"label":"inferred","quotes":[{"path":"src/checks/quote-check.ts","commit":"3a40b50ffdc762942d534fbaf91563ee36fe57b2","startLine":55,"endLine":55,"text":"\t\tif (wanted.every((line, at) => trimmed[index + at] === line)) starts.push(index + 1)"}],"work":null,"topic":"quote check","answer":{"at":"2026-11-16T05:51:48.557Z","note":"Keep exact lines. Revisit if renames break quotes often."},"replaces":"e35aa14e50d5","at":"2026-11-16T05:51:48.577Z"}`
+
+test('an answer to a decision saved before ken asked whether the owner keeps the choice still reads, with its note and no outcome', async () => {
+	const store = emptyRecord()
+	mkdirSync(path.join(root, '.ken/record'), { recursive: true })
+	writeFileSync(path.join(root, '.ken/record/decisions.jsonl'), `${OLD_ANSWER_LINE}\n`)
+
+	const record = await store.read()
+	assert.deepEqual(record.problems, [])
+	const [old] = record.current
+	assert.ok(old?.kind === 'decision', JSON.stringify(record))
+	assert.deepEqual(old.answer, {
+		at: '2026-11-16T05:51:48.557Z',
+		note: 'Keep exact lines. Revisit if renames break quotes often.',
+		outcome: null,
+	})
+})
+
 test('a decision logged before its commits belongs to the piece of work whose range starts at or passes through the commit it was logged at, the smallest one first', async () => {
 	const words = ['one', 'two', 'three', 'four']
 	const built = buildRepository(words.map((word) => ({ message: `feat: ${word}`, files: { 'a.txt': `${word}\n` } })))

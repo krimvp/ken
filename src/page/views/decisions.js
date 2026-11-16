@@ -3,7 +3,7 @@
 // which belong to no answer, as well as those answers found.
 import { sourceLine } from './answer.js'
 import { labelKey } from './checks.js'
-import { at, count, esc, LABELS, label, prose, quoteBody, quoteSource } from './format.js'
+import { answeredHtml, at, count, esc, LABELS, label, prose, quoteBody, quoteSource } from './format.js'
 
 function rowHtml({ decision: d, work }) {
 	const call = d.needsOwner ? '<span class="your-call">Your call</span> ' : ''
@@ -19,9 +19,7 @@ function rowHtml({ decision: d, work }) {
 		? `Part of "${esc(work.title)}", a piece of work: the commits one answer explained.`
 		: 'Not part of a piece of work yet: no answer has explained the commits that came after it.'
 	const written = d.logged ? '' : `Written ${at(d.at)}. `
-	const answered = d.answer
-		? `<p class="dv-answer"><strong>You decided ${at(d.answer.at)}.</strong>${d.answer.note ? ` ${prose(d.answer.note)}` : ''}</p>`
-		: ''
+	const answered = d.answer ? `<p class="dv-answer">${answeredHtml(d.answer)}</p>` : ''
 	return `<li class="dv-row" id="dv-${esc(d.id)}" tabindex="-1">
 		<p class="dv-head">${call}${label(d.label)} <span class="dv-q">${prose(d.question)}</span></p>
 		<p><span class="d-field">Chosen</span> ${prose(d.chosen)}</p>

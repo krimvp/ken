@@ -7,7 +7,7 @@ import { answerHtml, isMoved, itemsOf } from './views/answer.js'
 import { allQuotesHtml, checksHtml, quoteCardHtml } from './views/checks.js'
 import { decisionsViewHtml } from './views/decisions.js'
 import { elementKey } from './views/diagram.js'
-import { count, duration, esc, folderHtml, prose, short, when } from './views/format.js'
+import { count, duration, esc, folderHtml, prose, short, when, withCost } from './views/format.js'
 import { changedTopics, lensHtml, linesText, mapViewHtml } from './views/map.js'
 import { openCount, openViewHtml } from './views/open.js'
 import {
@@ -64,7 +64,8 @@ const state = {
 	map: null,
 	decisions: null,
 	ui: freshUi(),
-	// What is open, with its own open decisions and quotes, and the line that says what the last button saved.
+	// What is open, with its own open decisions and quotes, the line that says what the last button saved, and the
+	// decisions the reader answered on this visit.
 	followUp: null,
 	followUi: freshUi(),
 	followSaid: '',
@@ -302,8 +303,8 @@ function rowMeta(row) {
 		rejected: 'No answer: the quotes did not match the code',
 		stopped: 'You stopped it',
 		error: 'The model did not answer',
-		'no-answer': 'The agent sent no answer',
-		'out-of-turns': 'The agent ran out of turns',
+		'no-answer': "ken's model sent no answer",
+		'out-of-turns': "ken's model ran out of turns",
 	}[row.outcome]
 	if (ended) return `${when(row.askedAt)} · ${ended}`
 	const parts = [count(row.statements, 'statement', 'statements')]
@@ -365,7 +366,7 @@ function runLine(q, ui) {
 	const tools = q.steps.filter((step) => step.kind === 'tool').length
 	const back = q.steps.filter((step) => step.kind === 'rejected').length
 	const parts = []
-	if (q.live) parts.push('The agent is writing a closing note')
+	if (q.live) parts.push("ken's model is writing a closing note")
 	if (q.usage && q.steps.length > 0) parts.push(duration(q.usage.seconds))
 	if (back > 0 && q.answer) parts.push(`ken rejected ${count(back, 'earlier draft', 'earlier drafts')}`)
 	else if (back > 0) parts.push(`${count(back, 'answer', 'answers')} sent back`)
@@ -412,7 +413,7 @@ function movedHtml(q) {
 	if (!isMoved(q)) return ''
 	const again =
 		state.model?.kind === 'ok' && !state.running
-			? ' <button class="link" data-act="again" data-key="moved-again">Ask again</button>'
+			? ` ${withCost('<button class="link" data-act="again" data-key="moved-again">Ask again</button>')}`
 			: ''
 	const changed = q.answer ? changedTopics(q) : []
 	const lines = changed.map((t) => `${esc(t.topic)} changed since you understood it: ${linesText(t.changed)}.`)
@@ -504,6 +505,9 @@ function render() {
 					: emptyAfterHtml(lensHtml('start', pick))
 	for (const input of document.querySelectorAll('.area-form input')) input.value = typed
 	$('#question').placeholder = ui.wide ? 'Ask what changed, why, or how a part works.' : 'Ask what changed, and why.'
+	$('#ask-cost').innerHTML = canAsk
+		? `A question is one run of ken's model, <code>${esc(state.model.name)}</code>. It usually takes about a minute, and the code ken reads goes to that model.`
+		: ''
 	panel.innerHTML = panelHtml()
 	panel.scrollTop = scroll
 	if (focused) document.querySelector(`[data-key="${CSS.escape(focused)}"]`)?.focus({ preventScroll: true })
@@ -917,11 +921,10 @@ document.addEventListener('submit', (event) => {
 	if (!form) return
 	event.preventDefault()
 	if (form.matches('.decide-form')) {
-		const body = { decision: form.dataset.id, note: form.elements.note.value }
-		const question = state.followUp.decisions.find((d) => d.id === form.dataset.id)?.question ?? ''
+		const body = { decision: form.dataset.id, note: form.elements.note.value, outcome: event.submitter?.value }
 		void followUpSaved(async () => {
 			const { decided } = await post('/api/decided', body)
-			state.followDecided = [{ id: decided.id, question }, ...state.followDecided]
+			state.followDecided = [decided, ...state.followDecided]
 		}, '')
 		return
 	}

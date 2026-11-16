@@ -47,7 +47,8 @@ export type Logged = { by: string | null; head: CommitHash | null }
 // decision says why, which is never a relation found by searching, so it is never "found-by-search". Only a logged
 // decision has logged, so a decision written before ken decide reads as before. topic names the topic the decision
 // belongs to, as the record names it, or is null. answer is the owner's "I have decided" on a decision that needed
-// them: when, and their note. ken writes it as a new entry that replaces the old one with the same content.
+// them: when, their note, and whether they keep what was chosen or want it changed. An answer saved before ken asked
+// which has no outcome. ken writes it as a new entry that replaces the old one with the same content.
 export type Decision = {
 	kind: 'decision'
 	question: string
@@ -61,8 +62,11 @@ export type Decision = {
 	quotes: VerifiedQuote[]
 	work: EntryId | null
 	topic: string | null
-	answer: { at: string; note: string | null } | null
+	answer: { at: string; note: string | null; outcome: Outcome | null } | null
 }
+
+export const OUTCOMES = ['keep', 'change'] as const
+export type Outcome = (typeof OUTCOMES)[number]
 
 // A topic rests on lines of files, so a change to them shows: see noteFreshness.
 export type Topic = { kind: 'topic'; name: string; quotes: VerifiedGitQuote[] }

@@ -62,6 +62,11 @@ export function day(date, now = new Date()) {
 	return `${d} ${MONTHS[month - 1]}${year === now.getFullYear() ? '' : ` ${year}`}`
 }
 
+// A button that runs ken's model, with what that costs beside it.
+export function withCost(button, cost = 'One model run.') {
+	return `<span class="with-cost">${button}<span class="small muted">${cost}</span></span>`
+}
+
 export function lineSpan(start, end) {
 	return start === end ? `line ${start}` : `lines ${start} to ${end}`
 }
@@ -85,7 +90,7 @@ export function codeLines(lines, numbers, kinds = []) {
 // is from the message of its commit, so it names the commit and no file.
 export function quoteSource(quote) {
 	if (isSession(quote)) {
-		const who = quote.by === 'user' ? 'what you asked' : 'what the agent said'
+		const who = quote.by === 'user' ? 'what you asked' : 'what your coding agent said'
 		return `Session ${when(quote.at)}, ${who}`
 	}
 	return quote.path === null ? `Commit message of <code>${short(quote.commit)}</code>` : esc(quote.path)
@@ -187,16 +192,16 @@ export const LABELS = {
 	'from-the-session': {
 		name: 'From the session',
 		means:
-			"The reason is quoted from your agent's saved session. ken found the lines there. It did not check that they give the true reason.",
+			"The reason is quoted from your coding agent's saved session. ken found the lines there. It did not check that they give the true reason.",
 	},
 	inferred: {
 		name: 'Inferred',
-		means: 'Worked out by the agent from the code or the diff. No commit message or session says so.',
+		means: "Worked out by ken's model from the code or the diff. No commit message or session says so.",
 	},
 	'found-by-search': {
 		name: 'Found by search',
 		means:
-			'A link between pieces of code, such as "this calls that", that the agent found by searching and did not prove.',
+			'A link between pieces of code, such as "this calls that", that ken\'s model found by searching and did not prove.',
 	},
 }
 
@@ -204,10 +209,18 @@ export function label(name) {
 	return `<span class="label label-${esc(name)}">${esc(LABELS[name]?.name ?? name)}</span>`
 }
 
+// The owner's answer to a decision, said back to them. An answer saved before ken asked for an outcome has none.
+const OUTCOME = { keep: 'You kept what was chosen', change: 'You asked for a change', null: 'You decided' }
+
+export function answeredHtml(answer) {
+	const note = answer.note ? ` Your note: ${prose(answer.note)}` : ''
+	return `<strong>${OUTCOME[answer.outcome ?? 'null']} ${at(answer.at)}.</strong>${note}`
+}
+
 // The record's "who did it" for a commit, said to the reader.
 export const WHO = {
 	owner: 'you',
-	'owner-agent': 'your agent',
+	'owner-agent': 'your coding agent',
 	collaborator: 'a collaborator',
 	unknown: 'git cannot tell who',
 }

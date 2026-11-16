@@ -3,6 +3,7 @@ import { MODEL_EXAMPLE, type ModelFlags } from '../agent/index.ts'
 import { authorsOf, decide, openItems, timeRange } from '../follow-up/index.ts'
 import type { MapSignal } from '../map/index.ts'
 import { MERMAID_FILE, PAGE_FOLDER } from '../page/index.ts'
+import { OUTCOMES } from '../record/index.ts'
 import { decisionRows } from './decision-list.ts'
 import { refusal } from './guard-request.ts'
 import { openProject } from './ken-project.ts'
@@ -98,13 +99,16 @@ export async function openServer(options: {
 		if (where === 'POST /api/decided') {
 			const body = await readJson(request)
 			if (body.kind !== 'ok') return sendJson(response, 400, { message: body.problem })
-			// Only the decision's id and the note are read: ken copies the rest from the record.
+			// Only the decision's id, the outcome and the note are read: ken copies the rest from the record.
 			const id = fieldOf(body.value, 'decision')
 			const note = fieldOf(body.value, 'note') ?? ''
-			if (typeof id !== 'string' || typeof note !== 'string') {
-				return sendJson(response, 400, { message: 'Send the id of the decision, and a note as text if you like.' })
+			const outcome = OUTCOMES.find((each) => each === fieldOf(body.value, 'outcome'))
+			if (typeof id !== 'string' || typeof note !== 'string' || outcome === undefined) {
+				return sendJson(response, 400, {
+					message: `Send the id of the decision, an outcome (${OUTCOMES.join(' or ')}), and a note as text.`,
+				})
 			}
-			const decided = await decide(record, { id, note, now: new Date() })
+			const decided = await decide(record, { id, note, outcome, now: new Date() })
 			if (decided.kind !== 'decided') return sendJson(response, 409, { message: decided.problem })
 			return sendJson(response, 200, { decided: decided.entry, open: await openNow() })
 		}
@@ -119,7 +123,7 @@ export async function openServer(options: {
 			if (asked.kind === 'refused') return sendJson(response, 400, { message: asked.problem })
 			if (asked.kind === 'empty') {
 				return sendJson(response, 422, {
-					message: 'There is nothing here for the agent to explain.',
+					message: "There is nothing here for ken's model to explain.",
 					question: asked.text,
 				})
 			}

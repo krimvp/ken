@@ -82,7 +82,7 @@ export function checksHtml(q, ui) {
 	const places = [
 		[inGit.length, `in git ${at}`],
 		[inCopy, "in ken's copy of your uncommitted work"],
-		[fromSessions, 'in a saved session of the coding agent'],
+		[fromSessions, 'in a saved session of your coding agent'],
 	].filter(([n]) => n > 0)
 	const match =
 		places.length > 1
@@ -103,7 +103,7 @@ export function checksHtml(q, ui) {
 	const sessionLine =
 		fromSessions === 0
 			? ''
-			: `<p>${quotes.length === 0 ? `${fromSessions === 1 ? 'The quote is' : `All ${fromSessions} quotes are`} from a saved session of the coding agent. ` : ''}ken found the lines in the saved session. It did not check that they give the true reason.</p>`
+			: `<p>${quotes.length === 0 ? `${fromSessions === 1 ? 'The quote is' : `All ${fromSessions} quotes are`} from a saved session of your coding agent. ` : ''}ken found the lines in the saved session. It did not check that they give the true reason.</p>`
 	const back = sentBack(q)
 	const backLine =
 		back === 0
@@ -263,7 +263,7 @@ function commitsSection(q) {
 	const marked = commits.length > 1
 	return `<section class="check" id="check-commits">
 		<h3>${commits.length === 1 ? 'The commit this answer covers' : `The ${commits.length} commits this answer covers`}</h3>
-		<p class="muted small">From git, not from the model.${by}</p>
+		<p class="muted small">From git, not from ken's model.${by}</p>
 		${messagesLine(change, own)}
 		<ol class="commits">${commits
 			.map(

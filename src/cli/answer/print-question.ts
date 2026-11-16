@@ -73,7 +73,7 @@ export function formatAnswer(answer: Answer, entries: Entry[], paint: Paint): st
 		}
 		lines.push('')
 	}
-	if (answer.risks?.length === 0) lines.push(paint('bold', 'Risks: the agent looked and found none.'), '')
+	if (answer.risks?.length === 0) lines.push(paint('bold', "Risks: ken's model looked and found none."), '')
 	if (answer.risks?.length)
 		lines.push(paint('bold', `Risks (${answer.risks.length}):`), ...claims(answer.risks, paint), '')
 	const said = answer.change ? 'What the change did' : 'Statements'
