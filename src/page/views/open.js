@@ -2,21 +2,11 @@
 // topics whose code changed since the reader understood them, with the commits that changed them and who made each. ken
 // works the list out from the record, the map and git; the page only shows it.
 import { decisionHtml } from './answer.js'
-import { esc, gitDay, list, prose, short, WHO } from './format.js'
-import { mapDay } from './map.js'
+import { esc, prose, short, WHO, when } from './format.js'
+import { linesText, onDay } from './map.js'
 
 export function openCount(open) {
 	return open ? open.decisions.length + open.topics.length : 0
-}
-
-function linesText(lines) {
-	return list(
-		lines.map(({ path, startLine, endLine }) =>
-			startLine === endLine
-				? `<code>${esc(path)}</code> line ${startLine}`
-				: `<code>${esc(path)}</code> lines ${startLine} to ${endLine}`,
-		),
-	)
 }
 
 function decisionItem(d, i, ui) {
@@ -24,8 +14,9 @@ function decisionItem(d, i, ui) {
 	return `<li class="o-decision">
 		<ul class="o-card">${decisionHtml(d, key, { ui, commits: true }, new Set(['recorded', 'inferred']))}</ul>
 		<form class="decide-form" data-id="${esc(d.id)}" autocomplete="off">
-			<label for="note-${key}">Your note, if you want to keep one</label>
+			<label for="note-${key}">Your note, if you want one: what you decided, and why</label>
 			<textarea id="note-${key}" name="note" rows="2" maxlength="1200"></textarea>
+			<p class="small muted">"I have decided" saves your answer to this call, with your note, in the project record. The decision stays as it was, beside your answer. Nothing is edited.</p>
 			<button class="quiet-button" type="submit">I have decided</button>
 		</form>
 	</li>`
@@ -36,7 +27,7 @@ function commitsHtml(commits) {
 	return `<ul class="o-commits">${commits
 		.map(
 			(c) =>
-				`<li><code>${short(c.hash)}</code> ${prose(c.subject)}<span class="o-by">${esc(c.author)}, ${WHO[c.by] ?? esc(c.by)}, on ${gitDay(c.date)}</span></li>`,
+				`<li><code>${short(c.hash)}</code> <q class="subject">${esc(c.subject)}</q><span class="o-by">${esc(c.author)}, ${WHO[c.by] ?? esc(c.by)}, ${when(c.date)}</span></li>`,
 		)
 		.join('')}</ul>`
 }
@@ -47,26 +38,34 @@ function topicItem({ state, commits }, canAsk) {
 		? `<button class="quiet-button" data-act="explain-topic" data-topic="${topic}" data-key="explain-${topic}">Explain what changed</button>`
 		: ''
 	return `<li class="t-row o-topic">
-		<p class="t-head"><span class="t-name">${topic}</span> <span class="t-state">You understood it on ${mapDay(state.entry.date)}</span></p>
+		<p class="t-head"><span class="t-name">${topic}</span> <span class="t-state">You understood it ${onDay(state.entry.date)}</span></p>
 		<p class="t-lines">Changed since: ${linesText(state.changed)}</p>
 		${commitsHtml(commits)}
-		<div class="map-buttons">${explain}<button class="quiet-button" data-act="know-topic" data-topic="${topic}" data-key="know-${topic}">I know this</button></div>
+		<div class="map-buttons">${explain}<button class="quiet-button" data-act="know-topic" data-topic="${topic}" data-key="know-${topic}">I know this change</button></div>
 	</li>`
 }
 
-export function openViewHtml(open, ui, canAsk, said) {
-	if (!open) return '<section class="map-view"><h1>Open</h1><p class="muted">Reading what is open.</p></section>'
+// decided holds the decisions the reader answered on this visit, so each leaves a line with a link to it.
+export function openViewHtml(open, ui, canAsk, said, decided) {
+	if (!open)
+		return '<section class="map-view"><h1>Waiting on you</h1><p class="muted">Reading what is open.</p></section>'
 	const { decisions, topics } = open
 	const empty =
-		decisions.length + topics.length === 0
+		decisions.length + topics.length + decided.length === 0
 			? '<p class="t-empty">Nothing is open. A decision that needs your call, or a topic whose code changed since you understood it, shows here.</p>'
 			: ''
+	const traces = decided
+		.map(
+			(d) =>
+				`<li class="o-decided"><p><strong>You decided:</strong> ${prose(d.question)}</p><p class="small">Saved. Your note and the decision are kept and cannot be edited. <button class="link" data-act="decision-show" data-id="${esc(d.id)}" data-key="show-${esc(d.id)}">See it in Decisions</button></p></li>`,
+		)
+		.join('')
 	const decisionList =
-		decisions.length === 0
+		decisions.length + decided.length === 0
 			? ''
-			: `<h2 class="o-head">Decisions that need your call (${decisions.length})</h2>
-			<p class="small muted">The agent wrote these and marked them as yours to decide. ken checked their quotes, not their sentences.</p>
-			<ul class="o-list">${decisions.map((d, i) => decisionItem(d, i, ui)).join('')}</ul>`
+			: `<h2 class="o-head">${decisions.length === 0 ? 'Decisions you answered' : `Decisions that need your call (${decisions.length})`}</h2>
+			${decisions.length === 0 ? '' : '<p class="small muted">The agent wrote these and marked them as yours to decide. ken checked their quotes, not their sentences.</p>'}
+			<ul class="o-list">${traces}${decisions.map((d, i) => decisionItem(d, i, ui)).join('')}</ul>`
 	const topicList =
 		topics.length === 0
 			? ''
@@ -74,7 +73,7 @@ export function openViewHtml(open, ui, canAsk, said) {
 			<p class="small muted">From git: the commits that touched each topic's files since you understood it, and who made them.</p>
 			<ul class="t-list">${topics.map((t) => topicItem(t, canAsk)).join('')}</ul>`
 	return `<section class="map-view open-view">
-		<h1>Open</h1>
+		<h1>Waiting on you</h1>
 		<p class="lead">What waits on you in this project: decisions that need your call, and topics whose code changed since you understood them.</p>
 		${said ? `<p class="map-said" role="status">${esc(said)}</p>` : ''}
 		${empty}${decisionList}${topicList}

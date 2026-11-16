@@ -4,6 +4,7 @@
 import { checkStrip, checksHtml } from './checks.js'
 import { diagramHtml, elementKey } from './diagram.js'
 import {
+	at,
 	count,
 	decisionQuotes,
 	esc,
@@ -13,12 +14,17 @@ import {
 	list,
 	prose,
 	quoteRows,
-	quoteSource,
 	short,
+	when,
 } from './format.js'
 import { foldedTopics, knownHtml, mapBarHtml } from './map.js'
 
-const UNDO = { easy: 'Easy to undo.', 'some-work': 'Some work to undo.', hard: 'Hard to undo.' }
+// The answer was asked at a HEAD the project has moved on from.
+export function isMoved(q) {
+	return Boolean(q.head && q.headNow && q.head !== q.headNow)
+}
+
+const UNDO = { easy: 'Easy', 'some-work': 'Some work', hard: 'Hard' }
 
 // The summary and the closing note show whole sentences up to about three lines, wide or narrow; the rest opens on
 // request.
@@ -70,8 +76,10 @@ export function answerHtml(q, ui, running) {
 	const allOpen = ui.wide
 		? ui.panel.kind === 'all'
 		: itemsOf(q).every(({ key, item }) => item.quotes.every((_, j) => ui.openQuotes.has(`${key}-q${j}`)))
-	const rows = { ui, commits: manyCommits(q) }
-	const marked = markedLabels(statements.map(({ item }) => item))
+	const rows = { ui, commits: manyCommits(q), head: q.head }
+	const risks = a.risks ? shownOf(a.risks, 'r', hidden) : []
+	const claims = [...statements, ...risks].map(({ item }) => item)
+	const marked = markedLabels(claims)
 	const named = new Set([...a.statements, ...(a.risks ?? []), ...decisionsOf(q)].map((each) => each.topic))
 	const statementsList =
 		statements.length === 0
@@ -86,11 +94,11 @@ export function answerHtml(q, ui, running) {
 		<p class="caption">The agent's summary. Not checked.</p>
 		<p class="summary">${folded(a.summary, ui.summaryOpen, ui, 'summary', 'Show the rest of the summary')}</p>
 		${needsHtml(q)}
-		${knownHtml(q, ui, named)}
+		${knownHtml(q, ui, named, isMoved(q))}
 		<a class="strip narrow-only" href="#checks-inline" title="See what ken checked">${checkStrip(q)}</a>
 		${a.diagrams.map((diagram, i) => diagramHtml(diagram, i, rows)).join('')}
 		${decisionsHtml(shownOf(decisionsOf(q), 'd', hidden), rows)}
-		${risksHtml(a.risks, a.risks && shownOf(a.risks, 'r', hidden), a.change !== null, rows)}
+		${risksHtml(a.risks, risks, a.change !== null, rows, marked, statements.length === 0 ? labelLine(claims) : '')}
 		${statementsList}
 		${noteHtml(q, ui)}
 		${mapBarHtml(q, ui, running)}
@@ -137,21 +145,22 @@ function claimHtml(claim, key, i, rows, marked) {
 // The risks follow the decisions, built like the statements and set apart from them. An answer about a change always
 // says something here, even that the agent found none. An answer about a change with no word on risks (null) was saved
 // before ken asked for them. shown leaves out the risks of a topic the reader knows.
-function risksHtml(all, shown, aboutChange, rows) {
+function risksHtml(all, shown, aboutChange, rows, marked, labels) {
 	if (all === null) {
-		return aboutChange ? '<p class="caption">This answer was written before ken asked for risks.</p>' : ''
+		return aboutChange
+			? '<p class="caption">This answer is older than ken\'s risk list. Ask again to get risks.</p>'
+			: ''
 	}
 	if (all.length === 0) {
 		return `<div class="list-head"><h3>The agent found no risks</h3><p class="list-note">The agent says it looked for what could go wrong and found nothing to watch.</p></div>`
 	}
 	if (shown.length === 0) return ''
-	const risks = shown.map(({ item }) => item)
 	return `<section class="risks" aria-labelledby="risks-head">
 		<div class="list-head">
-			<h3 id="risks-head">${risks.length === 1 ? 'A risk to watch' : `${risks.length} risks to watch`}</h3>
-			<p class="list-note">A risk is something the agent thinks could go wrong. ken checked the quotes, not the sentences. ${labelLine(risks)}</p>
+			<h3 id="risks-head">${shown.length === 1 ? 'A risk to watch' : `${shown.length} risks to watch`}</h3>
+			<p class="list-note">A risk is something the agent thinks could go wrong.${labels ? ` ${labels}` : ''}</p>
 		</div>
-		<ol>${shown.map(({ item, key }, i) => claimHtml(item, key, i, rows, markedLabels(risks))).join('')}</ol>
+		<ol>${shown.map(({ item, key }, i) => claimHtml(item, key, i, rows, marked)).join('')}</ol>
 	</section>`
 }
 
@@ -167,17 +176,11 @@ function decisionsHtml(shown, rows) {
 			: decisions.length === 1
 				? ', and it needs your call'
 				: `, ${calls} ${calls === 1 ? 'needs' : 'need'} your call`
-	// One label for all of them goes on the head, as on a diagram's title. Mixed labels are counted under it, and each
-	// decision that does not carry the most common one is marked.
-	const labels = labelCounts(decisions)
-	const one = labels.length === 1 ? label(labels[0][0]) : ''
-	const marked = markedLabels(decisions)
+	// Every decision carries its own label, so no missing mark has to mean one of them.
+	const all = new Set(decisions.map((d) => d.label))
 	return `<section class="decisions" aria-labelledby="decisions-head">
-		<div class="list-head">
-			<h3 id="decisions-head">${one}${head}${needs}</h3>
-			${one ? '' : `<p class="list-note">${labelLine(decisions)}</p>`}
-		</div>
-		<ul>${shown.map(({ item, key }) => decisionHtml(item, key, rows, marked)).join('')}</ul>
+		<div class="list-head"><h3 id="decisions-head">${head}${needs}</h3></div>
+		<ul>${shown.map(({ item, key }) => decisionHtml(item, key, rows, all)).join('')}</ul>
 	</section>`
 }
 
@@ -193,13 +196,11 @@ export function decisionHtml(d, key, { ui, commits }, marked) {
 		.join('')
 	return `<li class="decision open" id="item-${key}">${row}
 		<div class="d-card">
-			${d.needsOwner ? `<p class="d-call">You decide: ${prose(d.question)}</p>` : ''}
 			<dl class="facts">
-				<div><dt>Chosen</dt><dd>${prose(d.chosen)}</dd></div>
 				${d.reason ? `<div><dt>Why</dt><dd>${prose(d.reason.text)}${fromHtml(d)}</dd></div>` : ''}
 				${others ? `<div><dt>Other options</dt>${others}</div>` : ''}
+				<div><dt>Reversing it later</dt><dd>${UNDO[d.undo] ?? esc(d.undo)}</dd></div>
 			</dl>
-			<p class="d-undo">${UNDO[d.undo] ?? esc(d.undo)}</p>
 			${quoteRows(decisionQuotes(d), key, { ui, commits })}
 		</div>
 	</li>`
@@ -213,9 +214,11 @@ function fromHtml(d) {
 
 export function sourceLine(d) {
 	if (d.logged) {
-		const by = d.logged.by ? ` by ${esc(d.logged.by)}` : ''
-		const head = d.logged.head ? `, while HEAD was <code>${short(d.logged.head)}</code>` : ', before the first commit'
-		return `Logged with <code>ken decide</code>${by}${head}.`
+		const by = d.logged.by ? ` (${esc(d.logged.by)})` : ''
+		const head = d.logged.head ? `, at commit <code>${short(d.logged.head)}</code>` : ', before the first commit'
+		// An answered decision is a new entry, so its own time is when the owner answered, not when it was logged.
+		const time = d.answer ? '' : ` ${at(d.at)}`
+		return `Your coding agent${by} logged this${time}${head}. ken did not check the reason.`
 	}
 	const quotes = d.reason?.quotes ?? []
 	if (d.label === 'recorded') {
@@ -223,27 +226,18 @@ export function sourceLine(d) {
 		return `Quoted from the commit message of ${list(messages.map((hash) => `<code>${hash}</code>`))}.`
 	}
 	if (d.label === 'from-the-session') {
-		const sessions = [...new Set(quotes.filter(isSession).map((quote) => quoteSource(quote).replace('From', 'from')))]
-		return `Quoted ${list(sessions)}.`
+		const times = [...new Set(quotes.filter(isSession).map((quote) => when(quote.at)))]
+		return `Quoted from your agent's saved session of ${list(times)}.`
 	}
 	return ''
 }
 
 // What each label means, said of one statement and of several.
 const MEANS = {
-	recorded: ['it was written down when the work was done', 'they were written down when the work was done'],
-	'from-the-session': [
-		'it was read afterwards from a saved session, and quoted',
-		'they were read afterwards from saved sessions, and quoted',
-	],
-	inferred: [
-		'the agent worked it out from the code and the diff',
-		'the agent worked them out from the code and the diff',
-	],
-	'found-by-search': [
-		'the agent found the connection by searching and did not prove it',
-		'the agent found the connections by searching and did not prove them',
-	],
+	recorded: ['was written down when the work was done', 'were written down when the work was done'],
+	'from-the-session': ['is quoted from a saved session', 'are quoted from a saved session'],
+	inferred: ['is worked out from the code', 'are worked out from the code'],
+	'found-by-search': ['comes from a text search and is not traced', 'come from a text search and are not traced'],
 }
 
 function labelCounts(statements) {
@@ -265,20 +259,18 @@ function sentence(text) {
 	return text.charAt(0).toUpperCase() + text.slice(1)
 }
 
+// Said once per answer, over its statements and risks: what the most common label means, and the marked ones.
 export function labelLine(statements) {
 	const [common, ...marked] = labelCounts(statements)
 	if (!common) return ''
-	const name = (each) => LABELS[each]?.name ?? each
 	const means = ([each, n]) => MEANS[each]?.[n === 1 ? 0 : 1] ?? ''
 	if (marked.length === 0) {
 		const n = statements.length
-		const all = n === 1 ? 'It is' : n === 2 ? 'Both are' : `All ${n} are`
-		return `${all} ${name(common[0]).toLowerCase()}: ${means(common)}.`
+		const all = n === 1 ? 'It' : n === 2 ? 'Both' : `All ${n}`
+		return `${all} ${means(common)}.`
 	}
-	const rest = marked.map(
-		(each) => `${each[1]} ${each[1] === 1 ? 'is' : 'are'} marked ${name(each[0])}. ${sentence(means(each))}.`,
-	)
-	return [`${common[1]} ${name(common[0]).toLowerCase()}: ${means(common)}.`, ...rest].join(' ')
+	const rest = marked.map((each) => `${each[1]}, marked ${LABELS[each[0]]?.name ?? each[0]}, ${means(each)}.`)
+	return [`${common[1]} ${means(common)}.`, ...rest].join(' ')
 }
 
 // A note saved before ken kept only what the agent wrote after its answer can hold all its working text, so a long

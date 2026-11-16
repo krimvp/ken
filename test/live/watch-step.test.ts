@@ -132,6 +132,17 @@ test('pause holds every note until the owner resumes, and the note then covers w
 	assert.deepEqual(actions, [[100, { kind: 'note', about: { kind: 'commits', base: H1, head: H3 } }]])
 })
 
+test('while paused, "Write a note now" still writes one, and the pause holds the notes after it', () => {
+	const { actions } = drive([
+		[0, { kind: 'pause' }],
+		[5, landed(H2)],
+		[6, { kind: 'note-now' }],
+		[30, { kind: 'noted' }],
+		[200, clean(H3, { base: H2, commits: 1 })],
+	])
+	assert.deepEqual(actions, [[6, { kind: 'note', about: { kind: 'commits', base: H1, head: H2 } }]])
+})
+
 test('a note in progress holds the next, which comes when it ends', () => {
 	const gap = PACE.gapMs / SECOND
 	const { actions } = drive([

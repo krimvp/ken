@@ -1,48 +1,54 @@
-// One live note in the compact form of an answer: what it is about and when, the agent's summary, its few entries with
-// their quote rows, the label line, what it cost, and "Open as a question". The agent wrote the words; ken checked only
+// One live note. At a glance it shows what it is about, the agent's lead, its risks and its decisions; its statements
+// and what it cost open on request. Every older note folds to one line. The agent wrote the words; ken checked only
 // that each quote is in its file, at the commit or in its own snapshot of uncommitted work.
-import { decisionHtml, labelLine, markedLabels } from '../views/answer.js'
-import { count, esc, label, prose, quoteRows, short } from '../views/format.js'
+import { decisionHtml } from '../views/answer.js'
+import { count, esc, label, prose, quoteRows, short, when } from '../views/format.js'
 
-export function aboutHtml(about) {
-	if (about.kind === 'commits') {
-		return `Commits <code>${short(about.base)}</code> to <code>${short(about.head)}</code>`
-	}
-	return `Uncommitted work as it stood at ${clock(about.at)}`
+// What a note explains: "Commit 7c7d8f5" with its subject, or "Uncommitted work, 06:40". A note that failed has no
+// commits to name, so it names the range.
+export function aboutHtml(about, commits = []) {
+	if (about.kind === 'uncommitted') return `Uncommitted work, ${when(about.at)}`
+	const newest = commits.find((c) => c.hash === about.head) ?? commits[0]
+	const subject = newest ? ` <q class="subject">${esc(newest.subject)}</q>` : ''
+	if (commits.length === 1) return `Commit <code>${short(about.head)}</code>${subject}`
+	if (commits.length > 1) return `${commits.length} commits, up to <code>${short(about.head)}</code>${subject}`
+	return `Commits after <code>${short(about.base)}</code>, up to <code>${short(about.head)}</code>`
 }
 
-export function clock(iso) {
-	const at = new Date(iso)
-	return `${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`
+function commitsOf(entry) {
+	return entry.outcome === 'answered' ? (entry.answer.change?.commits ?? []) : []
+}
+
+// The head line of a note, used for a folded note too. tags holds "New" and "Committed since".
+export function noteHeadHtml(entry, tags) {
+	const time = entry.about.kind === 'commits' ? ` <span class="ln-time">· ${when(entry.askedAt)}</span>` : ''
+	const isNew = tags.isNew ? '<span class="ln-new">New</span> ' : ''
+	const committed = tags.committedIn
+		? ` <span class="ln-tag">Committed since, in <code>${short(tags.committedIn)}</code></span>`
+		: ''
+	return `${isNew}<span class="ln-about">${aboutHtml(entry.about, commitsOf(entry))}</span>${time}${committed}`
 }
 
 function costHtml(entry) {
 	const parts = []
 	if (entry.usage) {
 		const tokens = entry.usage.inputTokens + entry.usage.outputTokens
-		parts.push(`${entry.usage.seconds} s`, `${tokens.toLocaleString('en-US')} tokens`)
+		parts.push(`This note took ${entry.usage.seconds} seconds and ${tokens.toLocaleString('en-US')} tokens.`)
 	}
 	const sent = entry.steps.filter((step) => step.kind === 'rejected').length
-	if (entry.outcome === 'answered') {
-		parts.push(sent === 0 ? 'quotes passed first time' : `ken sent back ${count(sent, 'try', 'tries')} first`)
-	}
-	return parts.join(' · ')
+	if (sent > 0) parts.push(`ken sent ${count(sent, 'draft', 'drafts')} back first, because a quote did not match.`)
+	return parts.length === 0 ? '' : `<p class="ln-cost">${parts.join(' ')}</p>`
 }
 
-// The head line of a note, used for a folded note too.
-export function noteHeadHtml(entry) {
-	const draft = entry.about.kind === 'uncommitted' ? ' <span class="ln-draft">Draft, on this machine only</span>' : ''
-	return `<span class="ln-time">${clock(entry.askedAt)}</span> <span class="ln-about">${aboutHtml(entry.about)}</span>${draft}`
-}
-
+// Each item shows its own label: a note is read alone, with no line above it to say what an unmarked one means.
 function claimItems(claims, prefix, rows) {
-	const marked = markedLabels(claims)
+	const numbered = claims.length > 1
 	return claims
 		.map(
-			(claim, i) => `<li class="st" id="item-${prefix}${i}">
-			<span class="st-n">${i + 1}</span>
+			(claim, i) => `<li class="st${numbered ? '' : ' alone'}" id="item-${prefix}${i}">
+			${numbered ? `<span class="st-n">${i + 1}</span>` : ''}
 			<div>
-				<p class="st-text">${marked.has(claim.label) ? label(claim.label) : ''}${prose(claim.text)}</p>
+				<p class="st-text">${label(claim.label)}${prose(claim.text)}</p>
 				${quoteRows(claim.quotes, `${prefix}${i}`, rows)}
 			</div>
 		</li>`,
@@ -51,27 +57,35 @@ function claimItems(claims, prefix, rows) {
 }
 
 // key tells the entries of one note apart from another's, so opening a quote opens it in this note alone.
-export function noteHtml(view, key, ui, canAsk) {
+export function noteHtml(view, key, ui, canAsk, tags) {
 	const { entry, recorded } = view
 	if (entry.outcome !== 'answered') {
-		return `<article class="live-note failed"><p class="ln-head">${noteHeadHtml(entry)}</p>
+		return `<article class="live-note failed"><p class="ln-head">${noteHeadHtml(entry, tags)}</p>
 			<p class="muted small">ken could not write a checked note on this change. It shows nothing it did not check.</p></article>`
 	}
 	const a = entry.answer
 	const rows = { ui, commits: false }
 	const decisions = [...recorded.filter((stored) => stored.kind === 'decision'), ...(entry.draft ?? [])]
 	const risks = a.risks ?? []
-	const claims = [...a.statements, ...risks, ...decisions]
+	const open = ui.openNotes.has(entry.id)
+	const all = new Set(decisions.map((d) => d.label))
+	const statements = a.statements.length
+	const more =
+		statements === 0 && !entry.usage
+			? ''
+			: `<button class="link small" data-act="note-more" data-id="${esc(entry.id)}" data-key="more-${key}" aria-expanded="${open}">${open ? 'Hide' : statements === 0 ? 'What it cost' : statements === 1 ? 'Show the statement' : `Show the ${statements} statements`}</button>`
+	const rest = open
+		? `${statements > 0 ? `<ol class="ln-list">${claimItems(a.statements, `${key}s`, rows)}</ol>` : ''}${costHtml(entry)}`
+		: ''
 	const ask = canAsk
-		? `<button class="quiet-button" data-act="note-question" data-id="${esc(entry.id)}" data-key="ask-${key}">Open as a question</button>`
+		? `<span class="ln-ask"><button class="quiet-button" data-act="note-question" data-id="${esc(entry.id)}" data-key="ask-${key}">Open as a question</button><span class="small muted">One more model run.</span></span>`
 		: ''
 	return `<article class="live-note">
-		<p class="ln-head">${noteHeadHtml(entry)}</p>
+		<p class="ln-head">${noteHeadHtml(entry, tags)}</p>
 		<p class="summary">${prose(a.summary)}</p>
-		${a.statements.length > 0 ? `<ol class="ln-list">${claimItems(a.statements, `${key}s`, rows)}</ol>` : ''}
 		${risks.length > 0 ? `<h3 class="ln-sub">${risks.length === 1 ? 'A risk to watch' : `${risks.length} risks to watch`}</h3><ol class="ln-list">${claimItems(risks, `${key}r`, rows)}</ol>` : ''}
-		${decisions.length > 0 ? `<ul class="ln-decisions">${decisions.map((d, i) => decisionHtml(d, `${key}d${i}`, rows, markedLabels(decisions))).join('')}</ul>` : ''}
-		<p class="list-note">${labelLine(claims)} The agent wrote the words; ken checked that each quote is there.</p>
-		<p class="ln-foot"><span class="ln-cost">${costHtml(entry)}</span>${ask}</p>
+		${decisions.length > 0 ? `<ul class="ln-decisions">${decisions.map((d, i) => decisionHtml(d, `${key}d${i}`, rows, all)).join('')}</ul>` : ''}
+		${rest}
+		<p class="ln-foot">${more}${ask}</p>
 	</article>`
 }

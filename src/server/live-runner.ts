@@ -17,18 +17,20 @@ import {
 } from '../live/index.ts'
 import type { Repository } from '../repo/index.ts'
 import type { Transcripts } from '../transcripts/index.ts'
-import type { QuestionView, questionDesk } from './question-desk.ts'
+import type { QuestionView, questionDesk, Spent } from './question-desk.ts'
 
 // What the Live view and "ken live" show. status says what ken does now; about is what the note it writes explains.
-// said is ken's last word to the owner, such as "Nothing new since the last note", or null. spent counts the notes of
-// this run and what they cost.
+// said is ken's last word to the owner, such as "Nothing new since the last note", or null. since is when live mode was
+// last turned on, null before the first time; spent counts the notes in the history from then on and what they cost,
+// so it agrees with the notes the page shows.
 export type LiveView = {
 	status: 'off' | 'watching' | 'paused' | 'snapshot' | 'writing'
 	about: About | null
 	said: string | null
 	now: NowBlock
 	pace: typeof PACE
-	spent: { notes: number; inputTokens: number; outputTokens: number; seconds: number }
+	since: string | null
+	spent: Spent
 	notes: QuestionView[]
 }
 
@@ -56,7 +58,7 @@ export function liveRunner(deps: {
 	let stop = new AbortController()
 	let said: string | null = null
 	let leftOut = 0
-	let spent = { notes: 0, inputTokens: 0, outputTokens: 0, seconds: 0 }
+	let since: string | null = null
 	let asked: { stamp: string; ask: LastAsk } | null = null
 	const working = new Set<Promise<void>>()
 	const listeners = new Set<(event: { kind: 'writing'; about: About } | { kind: 'note'; view: QuestionView }) => void>()
@@ -84,8 +86,8 @@ export function liveRunner(deps: {
 				if (signal.aborted) return
 				if (taken?.kind !== 'taken') return apply({ kind: 'snapshot', taken: null })
 				leftOut = taken.leftOut
-				const since = state?.noted.snapshot ?? state?.noted.head ?? taken.head
-				const changed = await changedLines(withSnapshots, since, taken.commit, signal)
+				const from = state?.noted.snapshot ?? state?.noted.head ?? taken.head
+				const changed = await changedLines(withSnapshots, from, taken.commit, signal)
 				return apply({ kind: 'snapshot', taken: { snapshot: taken.commit, head: taken.head, changed } })
 			}
 			case 'note': {
@@ -101,13 +103,6 @@ export function liveRunner(deps: {
 					leftOut: action.about.kind === 'uncommitted' ? leftOut : 0,
 				}
 				const view = await desk.note(chat, action.about, noteQuestion(action.about, facts), signal)
-				const usage = view.entry.usage
-				spent = {
-					notes: spent.notes + 1,
-					inputTokens: spent.inputTokens + (usage?.inputTokens ?? 0),
-					outputTokens: spent.outputTokens + (usage?.outputTokens ?? 0),
-					seconds: spent.seconds + (usage?.seconds ?? 0),
-				}
 				if (view.entry.outcome !== 'answered') said = 'ken could not write a checked note on the last change.'
 				for (const listener of listeners) listener({ kind: 'note', view })
 				return apply({ kind: 'noted' })
@@ -119,7 +114,10 @@ export function liveRunner(deps: {
 
 	async function poll() {
 		const seen = await observe(project, state?.noted.head ?? null, stop.signal)
-		if (state === null) state = startWatch(seen, Date.now())
+		if (state === null) {
+			const [newest] = await desk.notes(1)
+			state = startWatch(seen, Date.now(), newest?.entry.about ?? null)
+		}
 		apply({ kind: 'observed', ...seen })
 	}
 
@@ -139,7 +137,7 @@ export function liveRunner(deps: {
 		stop = new AbortController()
 		state = null
 		said = null
-		spent = { notes: 0, inputTokens: 0, outputTokens: 0, seconds: 0 }
+		since = new Date().toISOString()
 		timer = setInterval(tick, PACE.pollMs)
 		await tick()
 	}
@@ -175,7 +173,8 @@ export function liveRunner(deps: {
 			said,
 			now: await nowBlock(project, asked.ask),
 			pace: PACE,
-			spent,
+			since,
+			spent: await desk.spentSince(since),
 			notes: await desk.notes(SHOWN_NOTES),
 		}
 	}
