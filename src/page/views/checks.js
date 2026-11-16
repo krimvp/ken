@@ -19,6 +19,7 @@ import {
 	RISK_MARKS,
 	short,
 	tagHtml,
+	WEIGHT_MEANS,
 	when,
 } from './format.js'
 
@@ -119,7 +120,7 @@ export function checksHtml(q, ui) {
 			${sessionLine}
 			${whereQuotes(q)}
 			${backLine}
-			<p><button class="link small" data-act="key" data-key="key" aria-expanded="${ui.keyOpen}">${ui.keyOpen ? 'Hide what the labels mean' : 'What the labels mean'}</button></p>
+			<p><button class="link small" data-act="key" data-key="key" aria-expanded="${ui.keyOpen}">${ui.keyOpen ? 'Hide what the labels and marks mean' : 'What the labels and marks mean'}</button></p>
 			${ui.keyOpen ? labelKey(labelsOf(q)) + marksKey(q) : ''}
 		</section>
 		${coverageSection(q, ui)}
@@ -177,19 +178,24 @@ export function labelKey(names) {
 		.join('')}</dl>`
 }
 
-// The marks ken sets on a risk, those this answer's risks carry.
+// The marks ken sets on a risk and the weights its model gives, those this answer's risks carry.
 function marksKey(q) {
 	const risks = q.answer.risks ?? []
 	const rows = [
 		risks.some((risk) => risk.checked === true)
-			? `<div><dt><span class="label label-recorded">${RISK_MARKS.outside}</span></dt><dd>A quote of the risk lies wholly outside the lines the change touched, at its last commit. ${RISK_MARKS.means}</dd></div>`
+			? `<div><dt><span class="label label-recorded">${RISK_MARKS.outside}</span></dt><dd>${RISK_MARKS.outsideMeans}</dd></div>`
 			: '',
 		risks.some((risk) => risk.checked === false)
-			? `<div><dt><span class="label label-inferred">${RISK_MARKS.inside}</span></dt><dd>Every quote of a file in the risk holds a line the change touched. A risk that quotes no file, only commit messages, has neither mark.</dd></div>`
+			? `<div><dt><span class="label label-inferred">${RISK_MARKS.inside}</span></dt><dd>${RISK_MARKS.insideMeans}</dd></div>`
 			: '',
 		risks.some((risk) => risk.fixedIn !== undefined)
-			? `<div><dt><span class="label label-recorded">Fixed since</span></dt><dd>The risk quotes the message of a commit made after the change, the one named, which says what was wrong. ken shows these risks after the open ones.</dd></div>`
+			? `<div><dt><span class="label label-recorded">Fixed since</span></dt><dd>${RISK_MARKS.fixedMeans}</dd></div>`
 			: '',
+		...['serious', 'minor'].map((weight) =>
+			risks.some((risk) => risk.weight === weight)
+				? `<div><dt><span class="label label-inferred">${weight === 'serious' ? 'Serious' : 'Minor'}</span></dt><dd>${esc(WEIGHT_MEANS[weight])}</dd></div>`
+				: '',
+		),
 	].join('')
 	return rows === '' ? '' : `<dl class="label-key marks">${rows}</dl>`
 }

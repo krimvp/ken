@@ -210,14 +210,25 @@ export const LABELS = {
 	},
 }
 
-// ken's own mark on a risk of an answer about a change, which it sets from git.
+// ken's own marks on a risk of an answer about a change, which it sets from git, and what each means. The label key
+// and each mark's tooltip say the meaning, so the note under the risks stays short.
 export const RISK_MARKS = {
 	outside: 'Quotes code outside the change',
+	outsideMeans:
+		'A quote of the risk lies wholly outside the lines the change touched, at its last commit. ken checks where the quote is, not whether the risk is true.',
 	inside: 'Quotes only the changed lines',
-	means: 'ken checks where the quote is, not whether the risk is true.',
+	insideMeans:
+		'Every quote of a file in the risk holds a line the change touched. A risk that quotes no file, only commit messages, has neither mark.',
 	fixed: 'Fixed since, in',
 	fixedMeans:
-		'Open risks come first. A risk marked Fixed since quotes the message of a later commit that fixed it, and comes last.',
+		'The risk quotes the message of a commit made after the change, the one named, which says what was wrong. ken shows these risks after the open ones.',
+}
+
+// The weight ken's model gives a risk, and what each means. ken does not judge it.
+export const WEIGHT_MEANS = {
+	serious:
+		"ken's model weighs it serious: someone who uses the code in the normal way loses work, gets a wrong result or a failure, or finds refused what worked before. ken does not judge the weight.",
+	minor: "ken's model weighs it minor: it needs a rare case or costs little. ken does not judge the weight.",
 }
 
 export function label(name) {

@@ -138,10 +138,16 @@ async function fixedSince(
 	return null
 }
 
+// A commit is later than the change when the project's HEAD reaches it and the change's head does not, the same commits
+// the second look lists. A fix that branched from inside the change and was merged after it counts.
 export async function isLater(repo: Repository, head: CommitHash, commit: CommitHash, signal: AbortSignal) {
-	if (commit === head) return false
-	const base = await repo.mergeBase(head, commit, signal)
-	return base.kind === 'ok' && base.commit === head
+	const now = await repo.resolve('HEAD', signal)
+	if (now.kind !== 'ok') return false
+	const reaches = async (from: CommitHash) => {
+		const base = await repo.mergeBase(commit, from, signal)
+		return base.kind === 'ok' && base.commit === commit
+	}
+	return (await reaches(now.commit)) && !(await reaches(head))
 }
 
 type Search = (where: string, sought: Sought | undefined) => Promise<{ absent?: Absence }>

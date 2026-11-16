@@ -18,6 +18,7 @@ import {
 	quoteRows,
 	RISK_MARKS,
 	short,
+	WEIGHT_MEANS,
 	when,
 } from './format.js'
 import { foldedTopics, knownHtml, mapBarHtml } from './map.js'
@@ -243,7 +244,7 @@ function weighedHtml(risks, ui, rows, marked, labels) {
 		return `<div class="list-head"><h3>ken's model found no risks</h3><p class="list-note">ken's model says it looked for what could go wrong and found nothing to watch.</p></div>`
 	}
 	const fixed = risks.filter(({ item }) => item.fixedIn !== undefined).length
-	const note = `A risk is something ken's model thinks could go wrong. ken's model weighs each one. Serious: someone who uses the code in the normal way loses work, gets a wrong result or a failure, or finds refused what worked before. Minor: it needs a rare case or costs little.${fixed > 0 ? ` ${RISK_MARKS.fixedMeans}` : ''} ${RISK_MARKS.means}${labels ? ` ${labels}` : ''}`
+	const note = riskNote(fixed, labels)
 	const list = (each) => each.map(({ item, key, n }) => claimHtml(item, key, n - 1, rows, marked)).join('')
 	const rest = risks.slice(FIRST_RISKS)
 	const fixedLater = rest.filter(({ item }) => item.fixedIn !== undefined).length
@@ -260,6 +261,13 @@ function weighedHtml(risks, ui, rows, marked, labels) {
 		<ol>${list(risks.slice(0, FIRST_RISKS))}</ol>
 		${more}
 	</section>`
+}
+
+// The note under the risks head, short enough to take in at a glance. What each mark and weight means is in its
+// tooltip and in the label key.
+function riskNote(fixed, labels) {
+	const open = fixed > 0 ? ' Open risks come first.' : ''
+	return `A risk is what ken's model thinks could go wrong, and ken does not check that it is true.${open}${labels ? ` ${labels}` : ''}`
 }
 
 // How many points of the model's draft it found no line to quote for, a fold that opens to the model's names for them.
@@ -367,21 +375,23 @@ function searchedHtml(absent) {
 // A statement, and a risk saved before ken set it, has none.
 function checkedHtml({ checked }) {
 	if (checked === undefined) return ''
-	const [style, name] = checked ? ['recorded', RISK_MARKS.outside] : ['inferred', RISK_MARKS.inside]
-	return `<span class="label label-${style}">${name}</span>`
+	const [style, name, means] = checked
+		? ['recorded', RISK_MARKS.outside, RISK_MARKS.outsideMeans]
+		: ['inferred', RISK_MARKS.inside, RISK_MARKS.insideMeans]
+	return `<span class="label label-${style}" title="${esc(means)}">${name}</span>`
 }
 
 // ken's mark on a risk that quotes the message of a commit made after the change: the project fixed it since.
 function fixedHtml({ fixedIn }) {
 	if (fixedIn === undefined) return ''
-	return `<span class="label label-recorded">${RISK_MARKS.fixed} <code>${short(fixedIn)}</code></span>`
+	return `<span class="label label-recorded" title="${esc(RISK_MARKS.fixedMeans)}">${RISK_MARKS.fixed} <code>${short(fixedIn)}</code></span>`
 }
 
 // The model's weight on a risk, in the style of the label for what the model worked out itself. A statement, and a risk
 // saved before ken asked for the weight, has none.
 function weightHtml({ weight }) {
 	if (weight === undefined) return ''
-	return `<span class="label label-inferred" title="The weight ken's model gave this risk. ken does not judge it.">${weight === 'serious' ? 'Serious' : 'Minor'}</span>`
+	return `<span class="label label-inferred" title="${esc(WEIGHT_MEANS[weight])}">${weight === 'serious' ? 'Serious' : 'Minor'}</span>`
 }
 
 // The risks follow the decisions, built like the statements and set apart from them. An answer about a change always
@@ -398,6 +408,7 @@ function risksHtml(all, shown, aboutChange, rows, marked, labels) {
 	}
 	if (shown.length === 0) return ''
 	const fixed = shown.filter(({ item }) => item.fixedIn !== undefined).length
+	const note = riskNote(fixed, labels)
 	const head =
 		fixed > 0
 			? `${count(shown.length, 'risk', 'risks')}, ${fixed} fixed since`
@@ -407,7 +418,7 @@ function risksHtml(all, shown, aboutChange, rows, marked, labels) {
 	return `<section class="risks" aria-labelledby="risks-head">
 		<div class="list-head">
 			<h3 id="risks-head">${head}</h3>
-			<p class="list-note">A risk is something ken's model thinks could go wrong.${fixed > 0 ? ` ${RISK_MARKS.fixedMeans}` : ''}${shown.some(({ item }) => item.checked !== undefined) ? ` ${RISK_MARKS.means}` : ''}${labels ? ` ${labels}` : ''}</p>
+			<p class="list-note">${note}</p>
 		</div>
 		<ol>${shown.map(({ item, key }, i) => claimHtml(item, key, i, rows, marked)).join('')}</ol>
 	</section>`

@@ -176,17 +176,21 @@ test('ken ask prints the risks in the order the answer gives them, whatever thei
 	assert.match(stdout, /1 point of the draft had no line to quote[^\n]*\n.*- a guess about who reads the reports/)
 })
 
-test('ken ask prints a risk that quotes a later commit after the open one, marked fixed since in that commit', async () => {
+// The fix branched from inside the change and was merged after it, so the change's head does not reach it.
+test('ken ask prints a risk that quotes a later commit after the open one, marked fixed since in that commit, even when the fix branched from inside the change', async () => {
 	const later = buildRepository([
 		{ message: 'feat: start', files: { 'app.py': 'def total(items):\n    return 0\n' } },
 		{ message: 'fix: add the items', files: { 'app.py': 'def total(items):\n    return sum(items)\n' } },
+		{ message: 'docs: say what total does', files: { 'README.md': 'total adds the items.\n' } },
 		{
 			message: 'fix: skip text in total',
 			body: 'A caller that passed text got a TypeError.',
-			files: { 'app.py': 'def total(items):\n    return sum(i for i in items if not isinstance(i, str))\n' },
+			files: { 'text.py': 'def numbers(items):\n    return [i for i in items if not isinstance(i, str)]\n' },
+			parent: 1,
 		},
+		{ message: 'Merge the text fix', files: {}, parent: 2, merge: 3 },
 	])
-	const [from = '', to = '', fix = ''] = later.hashes
+	const [from = '', , to = '', fix = ''] = later.hashes
 	const sum = { path: 'app.py', commit: to, text: '    return sum(items)' }
 	const fixed = {
 		text: 'A caller that passes text gets a TypeError.',
