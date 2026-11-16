@@ -124,12 +124,12 @@ The agent explores freely, but three things are never left to the model. None of
 
 A reader must be able to tell a recorded fact from a guess. Each statement carries one of these labels.
 
-| Label            | Meaning                                                                                                           |
-| ---------------- | ----------------------------------------------------------------------------------------------------------------- |
-| Recorded         | An agent or the owner logged the decision when it was made                                                        |
-| From the session | Read afterwards from a saved agent transcript, and quoted                                                         |
-| Inferred         | Reconstructed from the diff alone                                                                                 |
-| Found by search  | A relation between pieces of code, such as "this calls that", that the agent found by searching and did not prove |
+| Label            | Meaning                                                                                                                                                                                                                                 |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Recorded         | The reason was written down when the work was done: an agent or the owner logged the decision when it was made (slice 5), or the decision quotes its reason from a commit message. ken sets this label from the quote, never the model. |
+| From the session | Read afterwards from a saved agent transcript, and quoted                                                                                                                                                                               |
+| Inferred         | Reconstructed from the diff alone                                                                                                                                                                                                       |
+| Found by search  | A relation between pieces of code, such as "this calls that", that the agent found by searching and did not prove                                                                                                                       |
 
 Reasons generated after the fact are the weak point of this whole field. One source warns that decision records written from a finished codebase record what was decided and invent the why. The "inferred" label exists so the reader always sees when that risk applies.
 
