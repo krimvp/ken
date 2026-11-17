@@ -156,7 +156,11 @@ export function showTool(gate: Gate, round: () => Round): Tool {
 				}
 			}
 			const head = [
-				...(shown.length > 0 ? [`Shown: ${shown.join(', ')}.`] : []),
+				...(shown.length > 0
+					? [
+							`Shown: ${shown.join(', ')}. The reader sees them after the words you wrote with this call, so do not write those words again.`,
+						]
+					: []),
 				...(held.length > 0
 					? [`Held for a second look: ${held.join(', ')}. ken asks you about them when your reply ends.`]
 					: []),

@@ -169,9 +169,10 @@ function addEvent(q, event) {
 			q.reply ??= { items: [], change: null, topics: [] }
 			q.reply.items.push(event.item)
 			break
+		// The saved reply's change has the checks too, so the live one waits beside it, for the change card alone.
 		case 'change':
 			q.reply ??= { items: [], change: null, topics: [] }
-			q.reply.change ??= { base: event.base, head: event.head, commits: event.commits }
+			q.liveChange = { base: event.base, head: event.head, commits: event.commits }
 			break
 		case 'waiting':
 			q.steps.push({ kind: 'text', text: 'ken is finishing a note for Live. Your question starts when it ends.' })
@@ -810,7 +811,7 @@ function closeProject() {
 function loadChangeLooks() {
 	const looks = state.ui.changeLooks
 	for (const q of state.thread) {
-		const change = q.reply?.change
+		const change = q.reply?.change ?? q.liveChange
 		if (!change || looks.has(changeKey(change))) continue
 		const key = changeKey(change)
 		looks.set(key, null)
@@ -823,7 +824,8 @@ function loadChangeLooks() {
 
 // A part on a change card opens the Project view at that part, with the same change laid over it.
 async function openChangePart(t, index) {
-	const change = state.thread[t]?.reply?.change
+	const q = state.thread[t]
+	const change = q?.reply?.change ?? q?.liveChange
 	const box = change && state.ui.changeLooks.get(changeKey(change))?.boxes?.[index]
 	if (!box) return
 	state.view = 'project'

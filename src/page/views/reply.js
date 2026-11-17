@@ -132,7 +132,7 @@ export function replyHtml(q, t, ui, { running, inThread }) {
 		!inThread || cards.length === 0
 			? ''
 			: `<section class="checks-inline narrow-only" aria-label="What ken checked">${ui.wide ? '' : checksHtml(q, ui)}</section>`
-	const { change } = q.reply
+	const change = q.reply.change ?? q.liveChange
 	const card = inThread && change ? changeCardHtml(change, ui.changeLooks?.get(changeKey(change)) ?? null, t) : ''
 	return `${knownHtml(q, ui, named, isMoved(q))}
 		<div class="reply">${card}${parts.join('')}</div>
