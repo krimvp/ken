@@ -1,4 +1,4 @@
-import { type Chat, noteQuestion } from '../agent/index.ts'
+import { type Chat, firstWords, noteQuestion } from '../agent/index.ts'
 import {
 	type About,
 	type LastAsk,
@@ -38,10 +38,13 @@ export type LiveRunner = ReturnType<typeof liveRunner>
 
 const EARLIER_NOTES = 5
 const SHOWN_NOTES = 30
+// How much of an earlier note the next one is told, so it does not say the same again.
+const EARLIER_CHARS = 300
 
 // Live mode for one project: every PACE.pollMs it reads the project, feeds watchStep, and does what it says. project
 // reads the project's own git; withSnapshots also reads ken's store, to count the lines a snapshot changed. A note goes
-// through the desk, so it takes turns with the owner's questions.
+// through the desk, so it takes turns with the owner's questions. chat is live mode's own: a note written into the
+// reader's chat would sit in the thread they talk in, and "what about that?" could then mean a note they never read.
 export function liveRunner(deps: {
 	root: string
 	project: Repository
@@ -94,7 +97,9 @@ export function liveRunner(deps: {
 				said = null
 				for (const listener of listeners) listener({ kind: 'writing', about: action.about })
 				const earlier = (await desk.notes(EARLIER_NOTES)).flatMap(({ entry }) =>
-					entry.outcome === 'answered' ? [{ at: entry.askedAt.slice(11, 16), summary: entry.answer.summary }] : [],
+					entry.outcome === 'answered'
+						? [{ at: entry.askedAt.slice(11, 16), summary: firstWords(entry.reply.items, EARLIER_CHARS) }]
+						: [],
 				)
 				const session = sessions && (await sessions.latest())
 				const facts = {

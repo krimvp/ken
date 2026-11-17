@@ -1,16 +1,20 @@
+import { randomUUID } from 'node:crypto'
 import { createSession, type RunResult } from 'aigent'
 import type { Tool } from 'aigent/plugin'
-import { usedElsewhere } from '../checks/index.ts'
+import { followedNames, usedElsewhere } from '../checks/index.ts'
 import type { UnderstandingMap } from '../map/index.ts'
 import { fileRecordStore } from '../record/index.ts'
 import { findRoot, gitRepository } from '../repo/index.ts'
 import { projectSessions } from '../transcripts/index.ts'
-import { type AnswerRound, accept, answerTool, MAX_REJECTIONS, type Step } from './answer/answer-tool.ts'
-import { FROM_DRAFT } from './answer/from-draft.ts'
-import { laterCommits, laterText, MAX_PASS_REJECTIONS, reviseTool, riskPassQuestion } from './answer/risk-pass.ts'
 import type { ChatEvent, Cost } from './chat-event.ts'
 import type { ModelConfig } from './model-config.ts'
 import { readerIndex } from './reader-index.ts'
+import { quotesOf } from './reply/check-card.ts'
+import { fileTurn } from './reply/file-turn.ts'
+import { endReply } from './reply/record-reply.ts'
+import type { Item } from './reply/reply.ts'
+import { laterCommits, laterText, MAX_PASS_REJECTIONS, reviseTool, riskPassQuestion } from './reply/risk-pass.ts'
+import { freshRound, type Round, showTool } from './reply/show-tool.ts'
 import { SYSTEM_PROMPT } from './system-prompt.ts'
 import { describeCall } from './tools/describe-call.ts'
 import { diffTool } from './tools/diff-tool.ts'
@@ -21,6 +25,8 @@ import { sessionTools } from './tools/session-tools.ts'
 
 export type Chat = {
 	root: string
+	// This chat's thread. A new Chat is a new thread: its model remembers what was asked of this one alone.
+	thread: string
 	// One question at a time. Breaking out of the loop early stops the question. as 'note' is a note ken writes by
 	// itself in live mode, which tells the reader's map nothing.
 	ask(question: string, signal?: AbortSignal, as?: 'question' | 'note'): AsyncGenerator<ChatEvent>
@@ -29,27 +35,19 @@ export type Chat = {
 
 const PLUGIN = 'ken'
 // Each step of a question has its own turns, counted from 0, and a notice when few are left: a model that runs out of
-// turns while reading sends nothing, so it is told to finish with what it has. A question about a change takes all
-// three steps: the draft, the answer made from it, and the second look at its risks. Any other question, a live note and
-// a change the record already explains end in the first step with the answer. Answers about pull requests of up to
-// seventeen files took 8 to 13 turns, so more would only let a question that goes astray cost more. The answer step
-// has room to read again the lines it quotes, three rejected tries and the end of the turn; the second look reads the
-// places it is asked about and sends one revision.
-const STEPS: Record<Step, { turns: number; notice: number; say: string }> = {
-	draft: {
+// turns while reading says nothing, so it is told to reply with what it has. A question is one step. A reply that
+// sends the risks of a change gets a second, the second look at them. Answers about pull requests of up to seventeen
+// files took 8 to 13 turns, so more would only let a question that goes astray cost more.
+const STEPS: Record<Round['step'], { turns: number; notice: number; say: string }> = {
+	talk: {
 		turns: 40,
 		notice: 6,
-		say: 'for this question. Finish now with what you have read: write your draft, or send the answer if the question is not about a change. Say what you did not get to read.',
-	},
-	answer: {
-		turns: 14,
-		notice: 5,
-		say: 'to send the answer. Send it now with the lines you have read, and leave out what you cannot quote.',
+		say: 'for this question. Stop reading and reply now with what you have, and say what you did not get to read.',
 	},
 	risks: {
 		turns: 10,
 		notice: 3,
-		say: 'for the questions about risks. Call revise_answer now with what you have read.',
+		say: 'for the second look. Call revise_risks now with what you have read.',
 	},
 }
 // Above the diff tool's own limit, so a whole diff reaches the model uncut.
@@ -75,7 +73,7 @@ export async function startChat(options: {
 	const sessions = projectSessions(found.root, options.env)
 	// The record reads the project alone, so its gate refuses a quote of a snapshot whatever reaches it.
 	const store = fileRecordStore(found.root, project, sessions)
-	let round: AnswerRound = { rejections: 0, answer: null, asked: false, held: null, step: 'draft', emit: () => {} }
+	let round: Round = freshRound(false, () => {})
 	let turnsEnded = 0
 	const withTurnsLeft = (tool: Tool): Tool => ({
 		...tool,
@@ -84,13 +82,13 @@ export async function startChat(options: {
 			const step = STEPS[round.step]
 			// This call's own turn has not ended yet, so it is not left.
 			const left = step.turns - turnsEnded - 1
-			if (left > step.notice || round.answer) return result
+			if (left > step.notice) return result
 			const notice = `${left} ${left === 1 ? 'turn' : 'turns'} left ${step.say}`
 			return { ...result, content: [...result.content, { type: 'text', text: notice }] }
 		},
 	})
 	// A question reads the names used elsewhere and the later commits on the same files once per range, at the first log
-	// or diff of it. A note does without, and so does the risk pass, which has both in its question.
+	// or diff of it. A note does without, and so does the second look, which has both in its question.
 	const shown = new Set<string>()
 	const elsewhere: Elsewhere = async (range, signal) => {
 		const key = `${range.base}..${range.head}`
@@ -108,65 +106,58 @@ export async function startChat(options: {
 		plugins: [
 			{
 				name: PLUGIN,
-				description: "Reads the project's files, git history and saved sessions, and checks answers against them.",
+				description: "Reads the project's files, git history and saved sessions, and checks cards against them.",
 				tools: [
 					...explorationTools(repo, elsewhere),
 					diffTool(repo, elsewhere),
 					recordTool(store, repo),
 					...sessionTools(sessions),
-					answerTool(gate, () => round),
+					showTool(gate, () => round),
 					reviseTool(gate, () => round),
 				].map(withTurnsLeft),
 			},
 		],
 		enabled: [PLUGIN],
 		toolMode: 'native',
-		maxTurns: STEPS.draft.turns,
+		maxTurns: STEPS.talk.turns,
 		maxToolResultChars: MAX_TOOL_RESULT_CHARS,
 		systemPrompt: SYSTEM_PROMPT,
 	})
 
 	async function* ask(question: string, signal?: AbortSignal, as = 'question'): AsyncGenerator<ChatEvent> {
 		const events = eventQueue()
-		const current: AnswerRound = {
-			rejections: 0,
-			answer: null,
-			asked: as === 'question',
-			held: null,
-			step: 'draft',
-			emit: events.push,
-		}
+		const current = freshRound(as === 'question', events.push)
 		round = current
 		turnsEnded = 0
 		shown.clear()
-		const stop = new AbortController()
-		// The later steps have their own stops, so ending one at its turn limit does not end the checks that follow it.
-		const stops: Record<Step, AbortController> = {
-			draft: stop,
-			answer: new AbortController(),
-			risks: new AbortController(),
-		}
-		// Set when ken stopped a step at its turn limit, which is running out of turns, not the reader stopping it.
-		let limited = false
+		// The second look has its own stop, so ending it at its turn limit does not end the question.
+		const stops: Record<Round['step'], AbortController> = { talk: new AbortController(), risks: new AbortController() }
 		const tokens = { input: 0, output: 0 }
+		const file = (cards: Round['pending']) => {
+			for (const event of fileTurn({ text: '', calls: [] }, cards)) {
+				if (event.kind === 'item') current.items.push(event.item)
+				events.push(event)
+			}
+		}
 		const unsubscribe = session.subscribe((event) => {
 			if (event.type === 'text') events.push({ kind: 'text', delta: event.delta })
 			if (event.type === 'tool_start') {
 				const name = event.call.name.replace(`${PLUGIN}__`, '')
 				events.push({ kind: 'tool', name, step: describeCall(name, event.call.args) })
 			}
-			// The answer tool has told the model it is out of attempts. Stopping here keeps a model that ignores that
-			// from spending more turns.
-			const spent =
-				current.step === 'risks'
-					? (current.held?.rejections ?? 0) >= MAX_PASS_REJECTIONS
-					: current.rejections >= MAX_REJECTIONS
-			if (event.type === 'tool_end' && spent) stops[current.step].abort()
-			if (event.type === 'turn_end') turnsEnded += 1
-			// aigent stops the draft step at its turns; the later steps have fewer, so ken stops them.
-			if (event.type === 'turn_end' && current.step !== 'draft' && turnsEnded >= STEPS[current.step].turns) {
-				limited = true
-				stops[current.step].abort()
+			// revise_risks has told the model it is out of attempts. Stopping here keeps a model that ignores that from
+			// spending more turns.
+			if (event.type === 'tool_end' && current.step === 'risks' && current.passRejections >= MAX_PASS_REJECTIONS) {
+				stops.risks.abort()
+			}
+			if (event.type === 'turn_end') {
+				turnsEnded += 1
+				for (const filed of fileTurn(event.turn, current.pending.splice(0))) {
+					if (filed.kind === 'item') current.items.push(filed.item)
+					events.push(filed)
+				}
+				// aigent stops the first step at its turns; the second look has fewer, so ken stops it.
+				if (current.step === 'risks' && turnsEnded >= STEPS.risks.turns) stops.risks.abort()
 			}
 			if (event.type === 'record' && event.record.kind === 'usage') {
 				tokens.input += event.record.input + event.record.cacheRead + event.record.cacheWrite
@@ -180,51 +171,44 @@ export async function startChat(options: {
 			await session
 				.prompt(text, { signal: signal ? AbortSignal.any([signal, own.signal]) : own.signal })
 				.catch((error: unknown): RunResult => ({ stop: 'error', message: String(error), turns: 0 }))
-		const step = async (next: Step, text: string): Promise<RunResult> => {
-			current.step = next
-			turnsEnded = 0
-			return await prompt(text, stops[next])
-		}
 		const run = (async () => {
-			let result = await prompt(`${index}${reader}\n\nThe question: ${question}`, stop)
-			const draft = { ...tokens, at: performance.now() }
-			// A turn that ends in text, with no answer, is the draft of an answer about a change.
-			const drafted = current.asked && result.stop === 'done' && result.text.trim() !== '' && !current.answer
-			if (drafted && !current.held && !signal?.aborted) {
-				result = await step('answer', FROM_DRAFT)
+			const result = await prompt(`${index}${reader}\n\nThe question: ${question}`, stops.talk)
+			let secondLook: Cost | null = null
+			const { scope } = current
+			// A model that failed while it talked would fail the second look too, so the risks it sent stand.
+			if (scope && current.held.length > 0 && result.stop !== 'error' && !signal?.aborted) {
+				const before = { ...tokens, at: performance.now() }
+				const quotes = quotesOf([...current.items, ...current.held.map(riskItem)])
+				const used = await usedElsewhere(repo, scope.range, signal)
+				const followed = used.kind === 'ok' ? await followedNames(repo, used.used, quotes, signal) : null
+				const decisions = current.items.flatMap((item) =>
+					item.kind === 'card' && item.card.kind === 'decision' ? [item.card.decision] : [],
+				)
+				const held = {
+					head: scope.range.head,
+					risks: current.held,
+					decisions,
+					notFollowed: followed?.notFollowed ?? [],
+				}
+				const later = await laterCommits(repo, scope.range, signal)
+				current.step = 'risks'
+				turnsEnded = 0
+				await prompt(riskPassQuestion(held, later), stops.risks)
+				secondLook = costSince(before, tokens)
 			}
-			const fromDraft = drafted ? costSince(draft, tokens) : null
-			let riskPass: Cost | null = null
-			const { held } = current
-			if (held && !signal?.aborted) {
-				// A model that failed after the answer was held would fail the pass too, so the held answer stands.
-				const ran = result.stop !== 'error'
-				if (ran) {
-					const before = { ...tokens, at: performance.now() }
-					const later = held.answer.change
-						? await laterCommits(repo, held.answer.change, signal)
-						: { shown: [], total: 0 }
-					result = await step('risks', riskPassQuestion(held, later))
-					riskPass = costSince(before, tokens)
+			// Cards of a turn that never ended, and risks the second look did not settle, show as ken first checked them.
+			file([...current.pending.splice(0), ...current.held.splice(0).map((risk) => riskItem(risk).card)])
+			if (current.items.length > 0 && !signal?.aborted) {
+				const ended = await endReply(gate, current, signal ?? new AbortController().signal)
+				if (ended.problems.length > 0) {
+					const what = 'The project record'
+					events.push({ kind: 'step', step: { kind: 'sent-back', what, problems: ended.problems } })
 				}
-				if (!current.answer && !signal?.aborted) {
-					const stands = ran ? 'unchanged' : 'not-run'
-					const accepted = await accept(gate, current, held.args, null, signal ?? new AbortController().signal, stands)
-					if (accepted.kind !== 'accepted') {
-						current.emit({ kind: 'rejected', attempt: current.rejections + 1, problems: accepted.problems })
-					}
-				}
+				events.push({ kind: 'replied', reply: ended.reply, recorded: ended.recorded })
 			}
 			const seconds = Math.round((performance.now() - started) / 100) / 10
-			events.push({
-				kind: 'usage',
-				inputTokens: tokens.input,
-				outputTokens: tokens.output,
-				seconds,
-				fromDraft,
-				riskPass,
-			})
-			events.push(endOf(result, current, limited))
+			events.push({ kind: 'usage', inputTokens: tokens.input, outputTokens: tokens.output, seconds, secondLook })
+			events.push(endOf(result, current))
 			events.close()
 		})()
 		try {
@@ -236,7 +220,11 @@ export async function startChat(options: {
 		}
 	}
 
-	return { kind: 'ok', chat: { root: found.root, ask, close: () => session.close() } }
+	return { kind: 'ok', chat: { root: found.root, thread: randomUUID(), ask, close: () => session.close() } }
+}
+
+function riskItem(risk: Round['held'][number]): Extract<Item, { kind: 'card' }> {
+	return { kind: 'card', card: { kind: 'risk', risk } }
 }
 
 function costSince(
@@ -247,12 +235,10 @@ function costSince(
 	return { inputTokens: tokens.input - before.input, outputTokens: tokens.output - before.output, seconds }
 }
 
-function endOf(result: RunResult, round: AnswerRound, limited: boolean): ChatEvent {
-	if (round.answer) return { kind: 'done', outcome: 'answered' }
-	if (round.rejections >= MAX_REJECTIONS) return { kind: 'done', outcome: 'rejected' }
+function endOf(result: RunResult, round: Round): ChatEvent {
+	if (result.stop === 'aborted') return { kind: 'error', message: 'The question was stopped before it had a reply.' }
+	if (round.items.length > 0) return { kind: 'done', outcome: 'answered' }
 	if (result.stop === 'error') return { kind: 'error', message: result.message }
-	if (limited) return { kind: 'done', outcome: 'out-of-turns' }
-	if (result.stop === 'aborted') return { kind: 'error', message: 'The question was stopped before it had an answer.' }
 	return { kind: 'done', outcome: result.stop === 'max_turns' ? 'out-of-turns' : 'no-answer' }
 }
 

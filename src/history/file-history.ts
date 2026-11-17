@@ -4,8 +4,10 @@
 import { appendFile, mkdir, open, readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import path from 'node:path'
+import type { RecordStore } from '../record/index.ts'
 import type { Repository } from '../repo/index.ts'
 import type { HistoryEntry } from './history-entry.ts'
+import { parseLine } from './saved-line.ts'
 
 export type History = {
 	file: string
@@ -14,16 +16,16 @@ export type History = {
 	add(entry: HistoryEntry): Promise<void>
 }
 
-const OUTCOMES = new Set(['answered', 'rejected', 'no-answer', 'out-of-turns', 'stopped', 'error'])
-
 // KEN_HOME moves ken's own folder, for tests and for readers who keep their home elsewhere.
 export function kenHome(env: Record<string, string | undefined>): string {
 	return env.KEN_HOME || path.join(homedir(), '.ken')
 }
 
+// record holds the decisions that lines saved before ken replied in words name by id.
 export async function openHistory(
 	home: string,
 	repo: Repository,
+	record: RecordStore,
 	signal?: AbortSignal,
 ): Promise<{ kind: 'ok'; history: History } | { kind: 'no-commits' }> {
 	const first = await repo.firstCommit(signal)
@@ -32,8 +34,9 @@ export async function openHistory(
 
 	async function list(): Promise<HistoryEntry[]> {
 		const text = await readFile(file, 'utf8').catch(emptyWhenMissing)
+		const decisions = text === '' ? [] : (await record.read()).entries
 		return text.split('\n').flatMap((line) => {
-			const entry = parseLine(line)
+			const entry = parseLine(line, decisions)
 			return entry ? [entry] : []
 		})
 	}
@@ -49,58 +52,6 @@ export async function openHistory(
 	}
 
 	return { kind: 'ok', history: { file, list, add } }
-}
-
-// shortcut: checks only the fields the list of questions shows and trusts the rest of the line, because only add
-// writes this file. Check every field if people start to edit it by hand.
-function parseLine(line: string): HistoryEntry | null {
-	if (line.trim() === '') return null
-	let value: unknown
-	try {
-		value = JSON.parse(line)
-	} catch {
-		return null
-	}
-	if (!isObject(value)) return null
-	const { id, question, askedAt, outcome, steps } = value
-	const fine =
-		typeof id === 'string' &&
-		typeof question === 'string' &&
-		typeof askedAt === 'string' &&
-		typeof outcome === 'string' &&
-		OUTCOMES.has(outcome) &&
-		Array.isArray(steps)
-	if (!fine) return null
-	// An answer saved before answers carried diagrams has none, and an entry saved before ken kept the HEAD has none. One
-	// saved before answers carried risks never looked for them, so its risks are null, not an empty list. A change saved
-	// before ken counted the quoted commit messages has no count.
-	if (isObject(value.answer) && !Array.isArray(value.answer.diagrams)) value.answer.diagrams = []
-	if (isObject(value.answer) && value.answer.risks === undefined) value.answer.risks = null
-	// One saved before answers named their topics names none.
-	if (isObject(value.answer) && !Array.isArray(value.answer.topics)) value.answer.topics = []
-	if (isObject(value.answer) && isObject(value.answer.change) && value.answer.change.messages === undefined) {
-		value.answer.change.messages = null
-	}
-	// One saved before ken searched for the names a change touched has no list of them.
-	if (isObject(value.answer) && isObject(value.answer.change) && value.answer.change.usedElsewhere === undefined) {
-		value.answer.change.usedElsewhere = null
-	}
-	// A risk saved before ken left the mark off a risk that quotes no file carries "Quotes only the changed lines", which
-	// says nothing true of it, so it reads with no mark.
-	if (isObject(value.answer) && Array.isArray(value.answer.risks)) {
-		for (const risk of value.answer.risks) {
-			const quotes = isObject(risk) && Array.isArray(risk.quotes) ? risk.quotes : []
-			if (isObject(risk) && !quotes.some((quote) => isObject(quote) && typeof quote.path === 'string')) {
-				delete risk.checked
-			}
-		}
-	}
-	if (typeof value.head !== 'string') value.head = null
-	return value as HistoryEntry
-}
-
-function isObject(value: unknown): value is Record<string, unknown> {
-	return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 async function lastByte(file: string): Promise<string> {

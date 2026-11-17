@@ -1124,11 +1124,6 @@ ul.left-out {
 	line-height: 1.5;
 }
 
-.note {
-	margin-top: var(--space-5);
-	overflow-wrap: anywhere;
-}
-
 /* The panel */
 .panel-head {
 	display: flex;
@@ -2483,4 +2478,113 @@ q.subject {
 	.decide-form {
 		padding-left: 0;
 	}
+}
+
+/* The thread. One line at its top says once what plain text and a box mean, so no card needs a caption. */
+.legend {
+	margin-top: var(--space-5);
+	color: var(--color-note);
+	font-size: var(--text-note);
+}
+
+.turn + .turn {
+	border-top: 1px solid var(--color-border);
+}
+
+/* A reply: the model's words as plain text, and its cards boxed between them. */
+.reply {
+	margin-top: var(--space-4);
+}
+
+.words > * + * {
+	margin-top: var(--space-3);
+}
+
+.words,
+.card {
+	margin-top: var(--space-4);
+	overflow-wrap: anywhere;
+}
+
+.words {
+	max-width: var(--measure);
+	line-height: 1.6;
+}
+
+.words-list {
+	padding-left: var(--space-5);
+}
+
+.words-list > * + * {
+	margin-top: var(--space-1);
+}
+
+.card {
+	display: grid;
+	grid-template-columns: 1.5rem minmax(0, 1fr);
+	padding: var(--space-3) var(--space-4) var(--space-3) var(--space-3);
+	border: 1px solid var(--color-border);
+	border-left: 3px solid var(--color-add);
+	border-radius: var(--radius-md);
+	background: var(--color-card);
+	scroll-margin-top: var(--top);
+}
+
+.card-check {
+	color: var(--color-add);
+	font-weight: 700;
+	line-height: 1.6;
+}
+
+.card-body > :first-child {
+	margin-top: 0;
+}
+
+.card-text {
+	line-height: 1.6;
+}
+
+.card-kind {
+	margin-right: 0.35em;
+	color: var(--color-note);
+	font-size: var(--text-note);
+	font-weight: 650;
+}
+
+.card .diagram {
+	margin-top: 0;
+}
+
+/* Under a reply about a change: ask for its decisions or its risks. */
+.chips {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-2);
+	margin-top: var(--space-4);
+}
+
+.chip {
+	min-height: 2.75rem;
+	padding: var(--space-1) var(--space-4);
+	border: 1px solid var(--color-border);
+	border-radius: 999px;
+	background: var(--color-card);
+	color: var(--color-accent);
+	font: inherit;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.chip:hover:not(:disabled) {
+	border-color: var(--color-accent);
+}
+
+.chip:disabled {
+	color: var(--color-muted);
+	cursor: default;
+}
+
+.working {
+	margin-top: var(--space-4);
 }

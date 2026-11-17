@@ -3,7 +3,7 @@
 // the note, what ken sees now in full, read from git and the saved session with no model, then every older note folded
 // to one line, so twenty notes stay calm.
 import { at, count, esc, prose, short, when, withCost } from '../views/format.js'
-import { noteHeadHtml, noteHtml } from './note.js'
+import { gistOf, noteHeadHtml, noteHtml } from './note.js'
 
 // The look of each status, here and in the header: on, paused, off, or writing a note.
 export function liveLook(status) {
@@ -151,7 +151,7 @@ export function liveViewHtml(live, ui, unfolded, canAsk, problem, { seen, hideAs
 		if (unfolded.has(view.entry.id)) {
 			return `<li class="live-item">${noteHtml(view, `n${i + 1}`, ui, canAsk, tags)}<button class="link small ln-fold" data-act="note-unfold" data-id="${id}" data-key="unfold-${id}">Fold it</button></li>`
 		}
-		const gist = view.entry.outcome === 'answered' ? prose(view.entry.answer.summary) : 'No note.'
+		const gist = view.entry.outcome === 'answered' ? prose(gistOf(view.entry)) : 'No note.'
 		return `<li class="live-item"><button class="ln-folded" data-act="note-unfold" data-id="${id}" data-key="unfold-${id}" aria-expanded="false"><span class="ln-line">${noteHeadHtml(view.entry, tags)} <span class="ln-gist">${gist}</span></span></button></li>`
 	})
 	const look = liveLook(live.status)

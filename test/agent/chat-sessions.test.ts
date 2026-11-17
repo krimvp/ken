@@ -4,8 +4,9 @@ import { type ChatEvent, startChat } from '../../src/agent/index.ts'
 import { fileRecordStore } from '../../src/record/index.ts'
 import { gitRepository } from '../../src/repo/index.ts'
 import { buildRepository } from '../fixtures/build-repository.ts'
+import { cardsIn, replyIn, sentBackIn } from '../fixtures/chat-events.ts'
 import { answered, asked, claudeProjects, writeSession } from '../fixtures/claude-sessions.ts'
-import { DRAFT, scriptedModel, type Turn, toolResults } from '../fixtures/scripted-model.ts'
+import { scriptedModel, type Turn, toolResults } from '../fixtures/scripted-model.ts'
 
 // A change whose commit message gives no reason, and a made-up session in which the user gave one.
 const RETRY = 'export function retry(times: number) {\n\tfor (let i = 0; i < times; i++) {\n\t\tattempt()\n'
@@ -36,21 +37,12 @@ const DECISION = {
 	quotes: [SLEEP],
 }
 
-function answer(fields: { decisions?: unknown[]; statement?: unknown }): Turn {
-	const statement = fields.statement ?? {
-		text: 'The loop sleeps after each attempt.',
-		label: 'inferred',
-		quotes: [SLEEP],
-	}
+function show(fields: { decisions?: unknown[]; claim?: unknown }): Turn {
+	const claim = fields.claim ?? { text: 'The loop sleeps after each attempt.', label: 'inferred', quotes: [SLEEP] }
 	return {
-		tool: 'ken__answer',
-		args: {
-			scope: { base, head },
-			summary: 'Retries now wait 100 ms.',
-			statements: [statement],
-			risks: [],
-			decisions: fields.decisions ?? [],
-		},
+		tool: 'ken__show',
+		text: 'Retries now wait 100 ms.',
+		args: { scope: { base, head }, claims: [claim], decisions: fields.decisions ?? [] },
 	}
 }
 
@@ -68,13 +60,8 @@ async function ask(script: Turn[], env: Record<string, string> = {}) {
 	return { events, requests: model.requests }
 }
 
-function outcomes(events: ChatEvent[]) {
-	return events.filter((event) => event.kind === 'rejected' || event.kind === 'accepted').map((event) => event.kind)
-}
-
-function accepted(events: ChatEvent[]) {
-	const event = events.find((each) => each.kind === 'accepted')
-	return event?.kind === 'accepted' ? event : assert.fail(`no answer was accepted: ${JSON.stringify(events)}`)
+function sentBack(events: ChatEvent[]) {
+	return sentBackIn(events).map((step) => step.what)
 }
 
 const VERIFIED = {
@@ -91,17 +78,16 @@ const VERIFIED = {
 test('a decision whose reason quotes a saved session is stored labelled from the session, with its quote, after a false quote of the session comes back with words to fix it', async () => {
 	const changed = { ...DECISION, reason_quotes: [{ session: SESSION, text: REASON.replace('100', '200') }] }
 	const { events, requests } = await ask([
-		DRAFT,
-		answer({ decisions: [changed] }),
-		answer({ decisions: [DECISION] }),
-		{ text: 'Done.' },
+		show({ decisions: [changed] }),
+		show({ decisions: [DECISION] }),
+		{ text: '' },
 	])
 
-	assert.deepEqual(outcomes(events), ['rejected', 'accepted'])
-	const fix = toolResults(requests[2])[0] ?? ''
+	assert.deepEqual(sentBack(events), ['Decision 1'])
+	const fix = toolResults(requests[1])[0] ?? ''
 	assert.ok(fix.includes(`not in any message of session ${SESSION}`), `the model is told which session: ${fix}`)
 	assert.match(fix, /as read_session shows them/, 'the model is told where to copy the lines from')
-	const stored = accepted(events).recorded.find((entry) => entry.kind === 'decision')
+	const stored = replyIn(events).recorded.find((entry) => entry.kind === 'decision')
 	assert.deepEqual(stored?.kind === 'decision' && [stored.label, stored.reason?.quotes], [
 		'from-the-session',
 		[VERIFIED],
@@ -110,11 +96,11 @@ test('a decision whose reason quotes a saved session is stored labelled from the
 		(each) => each.id === stored?.id,
 	)
 	assert.deepEqual(onDisk?.kind === 'decision' && onDisk.reason?.quotes, [VERIFIED], 'the record keeps the quote')
-	const change = accepted(events).answer.change
+	const { change } = replyIn(events)
 	assert.deepEqual(change?.messages, { quoted: [], unquoted: [head] }, 'a session is no commit message')
 })
 
-test('a statement may claim "from-the-session" only with a quote of a session, and a quote that names a session and a commit goes back without using an attempt', async () => {
+test('a claim may be "from-the-session" only with a quote of a session, and a quote that names a session and a commit goes back before ken checks it', async () => {
 	const said = { session: SESSION, text: 'I will sleep 100 ms after each attempt.' }
 	const both = { ...said, commit: head }
 	const claim = (quotes: unknown[]) => ({
@@ -123,20 +109,20 @@ test('a statement may claim "from-the-session" only with a quote of a session, a
 		quotes,
 	})
 	const { events, requests } = await ask([
-		DRAFT,
-		answer({ statement: claim([both]) }),
-		answer({ statement: claim([SLEEP]) }),
-		answer({ statement: claim([said, SLEEP]) }),
-		{ text: 'Done.' },
+		show({ claim: claim([both]) }),
+		show({ claim: claim([SLEEP]) }),
+		show({ claim: claim([said, SLEEP]) }),
+		{ text: '' },
 	])
 
-	assert.match(toolResults(requests[2])[0] ?? '', /did not use one of your attempts[\s\S]*names a session and a commit/)
-	assert.deepEqual(outcomes(events), ['rejected', 'accepted'])
+	assert.match(toolResults(requests[1])[0] ?? '', /Claim 1 sent back[\s\S]*names a session and a commit/)
+	assert.deepEqual(sentBack(events), ['Claim 1', 'Claim 1'])
 	assert.match(
-		toolResults(requests[3]).at(-1) ?? '',
-		/Statement 1: the label "from-the-session" .* none of its quotes is from one/,
+		toolResults(requests[2]).at(-1) ?? '',
+		/Claim 1: the label "from-the-session" .* none of its quotes is from one/,
 	)
-	const [statement] = accepted(events).answer.statements
+	const [first] = cardsIn(events)
+	const statement = first?.kind === 'claim' ? first.claim : undefined
 	assert.deepEqual(
 		[statement?.label, statement?.quotes[0]],
 		[
@@ -160,9 +146,8 @@ test('with KEN_SESSIONS=off the session tools say so, no session text reaches th
 			{ tool: 'ken__list_sessions', args: {} },
 			{ tool: 'ken__read_session', args: { session: SESSION } },
 			{ tool: 'ken__search_sessions', args: { text: 'queue' } },
-			DRAFT,
-			answer({ decisions: [DECISION] }),
-			{ text: 'Done.' },
+			show({ decisions: [DECISION] }),
+			{ text: '' },
 		],
 		{ KEN_SESSIONS: 'off' },
 	)
@@ -170,7 +155,7 @@ test('with KEN_SESSIONS=off the session tools say so, no session text reaches th
 	const results = toolResults(requests.at(-1))
 	for (const result of results.slice(0, 3)) assert.match(result, /turned it off with KEN_SESSIONS=off/)
 	assert.match(results[3] ?? '', /ken reads no saved sessions here, so it cannot check a quote of session/)
-	assert.deepEqual(outcomes(events), ['rejected'])
+	assert.deepEqual(sentBack(events), ['Decision 1'])
 	const sent = JSON.stringify(requests.map((request) => toolResults(request)))
 	assert.ok(!sent.includes('queue drains') && !sent.includes('Make retry wait'), 'no session text reaches the model')
 })

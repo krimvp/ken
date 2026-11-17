@@ -17,7 +17,10 @@ test('ken live prints the Now block, then a note for a commit as it lands, and s
 	const home = mkdtempSync(path.join(tmpdir(), 'ken-home-'))
 	after(() => rmSync(home, { recursive: true, force: true }))
 	const args: Record<string, unknown> = {}
-	const model = await scriptedModel([{ tool: 'ken__answer', args }, { text: 'Done.' }])
+	const model = await scriptedModel([
+		{ tool: 'ken__show', text: 'Retries now wait 100 ms between attempts.', args },
+		{ text: '' },
+	])
 	const env = {
 		...process.env,
 		KEN_HOME: home,
@@ -46,21 +49,20 @@ test('ken live prints the Now block, then a note for a commit as it lands, and s
 	const head = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim()
 	Object.assign(args, {
 		scope: { base: first, head },
-		summary: 'Retries now wait 100 ms between attempts.',
-		statements: [
+		claims: [
 			{
 				text: 'Each attempt waits.',
 				label: 'inferred',
 				quotes: [{ path: 'src/retry.ts', commit: head, text: WAIT_LINE }],
 			},
 		],
-		risks: [],
 	})
 	await seen('Retries now wait 100 ms between attempts.')
 	ken.kill('SIGINT')
 
 	assert.equal(await exited, 0, out)
 	assert.ok(out.includes(`on the commits ${first.slice(0, 7)}..${head.slice(0, 7)}`), out)
-	assert.ok(out.includes('its quotes passed first time'), out)
+	assert.ok(out.includes('every card passed first time'), out)
+	assert.ok(out.includes('[checked] Each attempt waits.'), out)
 	assert.ok(out.includes('ken stopped. This run wrote 1 notes'), out)
 })

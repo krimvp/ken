@@ -13,17 +13,17 @@ export type ChatRequest = { messages: { role: string; content: unknown }[] }
 // Each reply reports this usage, so a test can check the sum over a question.
 export const USAGE_PER_REPLY = { prompt_tokens: 100, completion_tokens: 10 }
 
-// What a model writes first for a question about a change: its draft as text, which ends the turn. ken then asks it to
-// turn the draft into the answer.
-export const DRAFT = { text: 'Before, retries did not wait. Now they do.' } satisfies Turn
-
-// What a model sends after ken holds its answer about a change, when the risk pass finds nothing to change: it ends the
-// question's turn, then calls revise_answer with only the order of the answer's risks, as they were. The closing note
-// comes after. A script that stops after the answer leaves the risk pass no reply, so the pass fails and the answer ken
-// held stands, as it would for a model that failed there.
+// What a model sends when ken asks for a second look at the risks it held and it finds nothing to change: revise_risks
+// with only the order of those risks, as they were, then a turn with no call. A script that stops before this leaves
+// the second look no reply, so the risks ken held show as it first checked them.
 export function nothingToRevise(risks: number): Turn[] {
 	const order = Array.from({ length: risks }, (_, at) => at + 1)
-	return [{ text: '' }, { tool: 'ken__revise_answer', args: { order } }]
+	return [{ tool: 'ken__revise_risks', args: { order } }, { text: '' }]
+}
+
+// The model's words and the cards it shows in one turn, then the turn that ends its reply.
+export function reply(text: string, cards: Record<string, unknown>): Turn[] {
+	return [{ tool: 'ken__show', args: cards, text }, { text: '' }]
 }
 
 // A local OpenAI-compatible endpoint that streams the script, one turn per request, because aigent reaches a model

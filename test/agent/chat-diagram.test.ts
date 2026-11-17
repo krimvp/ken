@@ -4,7 +4,8 @@ import { type ChatEvent, startChat } from '../../src/agent/index.ts'
 import { fileRecordStore } from '../../src/record/index.ts'
 import { gitRepository } from '../../src/repo/index.ts'
 import { buildRepository } from '../fixtures/build-repository.ts'
-import { DRAFT, scriptedModel, type Turn, toolResults } from '../fixtures/scripted-model.ts'
+import { cardsIn, replyIn, sentBackIn } from '../fixtures/chat-events.ts'
+import { scriptedModel, type Turn, toolResults } from '../fixtures/scripted-model.ts'
 
 const STORE = 'export function save(text: string) {\n\twriteFileSync(PATH, text)\n}\n'
 const { root, hashes } = buildRepository([
@@ -22,30 +23,31 @@ const CALL = { path: 'src/app.ts', commit: head, text: "\tsave('done')" }
 const RUN = { path: 'src/app.ts', commit: head, text: 'export function run() {' }
 const SAVE = { path: 'src/store.ts', commit: head, text: 'export function save(text: string) {' }
 
-function answer(call: typeof CALL): Turn {
+function diagram(call: typeof CALL) {
 	return {
-		tool: 'ken__answer',
+		kind: 'component',
+		title: 'Who saves',
+		label: 'inferred',
+		boxes: [
+			{ name: 'app', quotes: [RUN] },
+			{ name: 'store', quotes: [SAVE] },
+		],
+		arrows: [
+			{ from: 'app', to: 'store', text: 'calls', quotes: [call] },
+			{ from: 'store', to: 'app', text: 'returns to', quotes: [SAVE] },
+		],
+	}
+}
+
+function show(call: typeof CALL): Turn {
+	return {
+		tool: 'ken__show',
+		text: 'run now saves its result through the store.',
 		args: {
 			scope: { base, head },
 			work: { title: 'run saves' },
-			summary: 'run now saves its result through the store.',
-			statements: [{ text: 'run calls save with "done".', label: 'inferred', quotes: [CALL] }],
-			risks: [],
-			diagrams: [
-				{
-					kind: 'component',
-					title: 'Who saves',
-					label: 'inferred',
-					boxes: [
-						{ name: 'app', quotes: [RUN] },
-						{ name: 'store', quotes: [SAVE] },
-					],
-					arrows: [
-						{ from: 'app', to: 'store', text: 'calls', quotes: [call] },
-						{ from: 'store', to: 'app', text: 'returns to', quotes: [SAVE] },
-					],
-				},
-			],
+			claims: [{ text: 'run calls save with "done".', label: 'inferred', quotes: [CALL] }],
+			diagrams: [diagram(call)],
 		},
 	}
 }
@@ -65,22 +67,14 @@ async function ask(script: Turn[]) {
 	return { events, requests: model.requests }
 }
 
-test('a diagram arrow with a false quote rejects the answer and names the arrow; with a true quote the diagram is numbered, stored with its piece of work, and read back after a restart', async () => {
-	// The file indents with a tab; the false quote uses four spaces, the miss real models make most.
-	const first = await ask([DRAFT, answer({ ...CALL, text: "    save('done')" }), answer(CALL), { text: 'Done.' }])
-
+test('a diagram with true quotes is numbered, stored with its piece of work and read back after a restart; one arrow with a false quote sends back that diagram alone while the words and the claim stand', async () => {
+	const first = await ask([show(CALL), { text: '' }])
+	const drawn = cardsIn(first.events).find((card) => card.kind === 'diagram')
+	assert.ok(drawn?.kind === 'diagram' && drawn.diagram.kind === 'component')
+	const { diagram: checked } = drawn
+	assert.ok(checked.kind === 'component')
 	assert.deepEqual(
-		first.events.filter((event) => event.kind === 'rejected' || event.kind === 'accepted').map((event) => event.kind),
-		['rejected', 'accepted'],
-	)
-	const toModel = toolResults(first.requests[2])[0] ?? ''
-	assert.match(toModel, /Diagram 1, arrow 1 \("calls" from app to store\), quote 1: .*src\/app\.ts/)
-	const accepted = first.events.find((event) => event.kind === 'accepted')
-	assert.ok(accepted?.kind === 'accepted')
-	const [diagram] = accepted.answer.diagrams
-	assert.ok(diagram?.kind === 'component')
-	assert.deepEqual(
-		[...diagram.boxes, ...diagram.arrows].map((element) => [element.number, element.quotes[0]?.startLine]),
+		[...checked.boxes, ...checked.arrows].map((element) => [element.number, element.quotes[0]?.startLine]),
 		[
 			[1, 3],
 			[2, 1],
@@ -89,11 +83,11 @@ test('a diagram arrow with a false quote rejects the answer and names the arrow;
 		],
 	)
 
-	const work = accepted.recorded.find((entry) => entry.kind === 'work')
+	const work = replyIn(first.events).recorded.find((entry) => entry.kind === 'work')
 	const onDisk = (await fileRecordStore(root, gitRepository(root)).read()).current.find(
 		(entry) => entry.id === work?.id,
 	)
-	assert.deepEqual(onDisk?.kind === 'work' && onDisk.diagrams, accepted.answer.diagrams)
+	assert.deepEqual(onDisk?.kind === 'work' && onDisk.diagrams, [checked])
 
 	const second = await ask([{ tool: 'ken__read_record', args: { id: work?.id } }, { text: 'Done.' }])
 	const read = toolResults(second.requests[1])[0] ?? ''
@@ -101,4 +95,18 @@ test('a diagram arrow with a false quote rejects the answer and names the arrow;
 		read.includes('3. From app to store: calls') && read.includes("\tsave('done')"),
 		`read_record shows the diagram: ${read}`,
 	)
+
+	// The file indents with a tab; the false quote uses four spaces, the miss real models make most.
+	const missed = await ask([show({ ...CALL, text: "    save('done')" }), { text: '' }])
+	assert.deepEqual(
+		cardsIn(missed.events).map((card) => card.kind),
+		['claim'],
+	)
+	assert.equal(replyIn(missed.events).items[0]?.kind, 'words')
+	assert.deepEqual(
+		sentBackIn(missed.events).map((step) => step.what),
+		['Diagram 1'],
+	)
+	const toModel = toolResults(missed.requests[1])[0] ?? ''
+	assert.match(toModel, /Diagram 1, arrow 1 \("calls" from app to store\), quote 1: .*src\/app\.ts/)
 })

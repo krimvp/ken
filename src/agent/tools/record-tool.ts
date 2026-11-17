@@ -1,5 +1,5 @@
 // How the model reads the project record: an index at the start of every question, and one tool to list, search or
-// read entries. The model never writes the record here; only an accepted answer does, through the answer tool.
+// read entries. The model never writes the record here; only a reply does, through the cards it shows.
 import type { Tool } from 'aigent/plugin'
 import { describeEntry, entryLine, type Kind, type RecordRead, type RecordStore } from '../../record/index.ts'
 import type { Repository } from '../../repo/index.ts'
@@ -12,7 +12,7 @@ const MAX_INDEXED = 150
 export function recordTool(store: RecordStore, repo: Repository): Tool {
 	return {
 		name: 'read_record',
-		description: `Read the project record: the pieces of work, decisions, topics and notes that earlier answers stored. Give id to read one entry in full, with its quotes; a topic also shows its note and whether the note is still fresh. Otherwise it lists the newest entry of each chain, at most ${MAX_LISTED}, filtered by kind and by words in the entry.`,
+		description: `Read the project record: the pieces of work, decisions, topics and notes that earlier replies stored. Give id to read one entry in full, with its quotes; a topic also shows its note and whether the note is still fresh. Otherwise it lists the newest entry of each chain, at most ${MAX_LISTED}, filtered by kind and by words in the entry.`,
 		parameters: {
 			type: 'object',
 			properties: {

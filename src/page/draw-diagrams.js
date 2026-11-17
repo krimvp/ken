@@ -1,5 +1,5 @@
-// Draws an answer's diagrams with Mermaid. ken's server wrote each Mermaid text from checked data, so the model never
-// writes diagram syntax. Mermaid loads from ken's own address, and only once an answer has a diagram. A drawing that
+// Draws the diagram cards with Mermaid. ken's server wrote each Mermaid text from checked data, so the model never
+// writes diagram syntax. Mermaid loads from ken's own address, and only once a reply has a diagram. A drawing that
 // fails leaves the numbered list under it, which says the same in words.
 
 const drawings = new Map()
@@ -278,7 +278,7 @@ export function markPart(root, index, number) {
 	;(label.closest('g.node, g.edgeLabel, g.relationshipLabel') ?? label.closest('g'))?.classList.add('is-open')
 }
 
-// Returns the numbers of the diagrams whose drawing is too wide for its box.
+// Returns the ids of the diagrams whose drawing is too wide for its box.
 export function fillDrawings(root, redraw) {
 	const tooWide = []
 	for (const box of root.querySelectorAll('[data-mermaid]')) {
@@ -308,7 +308,7 @@ export function fillDrawings(root, redraw) {
 			drawing.svg = box.innerHTML
 			drawing.backed = true
 		}
-		if (fit(box, drawing)) tooWide.push(Number(box.dataset.diagram))
+		if (fit(box, drawing)) tooWide.push(box.dataset.diagram)
 	}
 	return tooWide
 }

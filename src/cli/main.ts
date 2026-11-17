@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // The ken command. "ken chat" talks about a repository in the terminal. "ken ask" answers one question and exits, as
-// text or as JSON for scripts. Exit code 0 means a checked answer, 1 means none, 2 means ken could not start.
+// text or as JSON for scripts. Exit code 0 means a reply, 1 means none, 2 means ken could not start.
 // "ken record" shows the project record and "ken map" the reader's understanding map. "ken decide" logs a decision a
 // coding agent makes as it works, and "ken sessions" reads the sessions Claude Code saved for the project. None of
 // these needs a model. "ken open" serves the page on 127.0.0.1. The lenses print their list with no model, then ask
@@ -9,17 +9,17 @@
 import { createInterface } from 'node:readline/promises'
 import { parseArgs } from 'node:util'
 import {
-	type Answer,
 	type Chat,
 	type ChatEvent,
+	type Item,
 	type Outcome,
-	type Revision,
+	type Reply,
 	readModelConfig,
+	type Step,
 	startChat,
 } from '../agent/index.ts'
-import { withDrawings } from '../diagram/index.ts'
+import { drawn } from '../diagram/index.ts'
 import type { RecordEntry } from '../record/index.ts'
-import { printQuestion } from './answer/print-question.ts'
 import { decide } from './decide.ts'
 import { watchLive } from './live.ts'
 import { lensQuestion } from './map/lens-question.ts'
@@ -27,6 +27,7 @@ import { mapOf, printMap } from './map/print-map.ts'
 import { openPage } from './open-page.ts'
 import { printRecord } from './print-record.ts'
 import { printSessions } from './print-sessions.ts'
+import { LEGEND, printQuestion } from './reply/print-reply.ts'
 
 const USAGE = `Usage:
   ken chat [--repo <path>]
@@ -151,7 +152,7 @@ async function talk(chat: Chat): Promise<number> {
 	const lines = createInterface({ input: process.stdin, output: process.stdout, terminal })
 	let running: AbortController | undefined
 	lines.on('SIGINT', () => (running ? running.abort() : lines.close()))
-	process.stdout.write(`ken reads ${chat.root}. Ask a question. Press Ctrl-D to leave.\n`)
+	process.stdout.write(`ken reads ${chat.root}. Ask a question. Press Ctrl-D to leave.\n${LEGEND}\n`)
 	lines.setPrompt('> ')
 	lines.prompt()
 	for await (const line of lines) {
@@ -171,42 +172,31 @@ async function talk(chat: Chat): Promise<number> {
 async function askForJson(chat: Chat, question: string): Promise<number> {
 	const result: {
 		outcome: Outcome | 'error'
-		answer: Answer | null
+		reply: Reply | null
 		recorded: RecordEntry[]
-		revision: Revision | null
-		tools: Extract<ChatEvent, { kind: 'tool' }>[]
-		rejected: Extract<ChatEvent, { kind: 'rejected' }>[]
+		steps: Step[]
 		usage: Extract<ChatEvent, { kind: 'usage' }> | null
-		note: string
 		error: string | null
-	} = {
-		outcome: 'error',
-		answer: null,
-		recorded: [],
-		revision: null,
-		tools: [],
-		rejected: [],
-		usage: null,
-		note: '',
-		error: null,
-	}
+	} = { outcome: 'error', reply: null, recorded: [], steps: [], usage: null, error: null }
 	for await (const event of chat.ask(question)) {
-		// The note is what the agent wrote after ken accepted its answer. What it wrote before belongs to its steps.
-		if (event.kind === 'text' && result.answer) result.note += event.delta
-		if (event.kind === 'tool') result.tools.push(event)
-		if (event.kind === 'rejected') result.rejected.push(event)
-		if (event.kind === 'accepted') {
-			result.answer = withDrawings(event.answer)
+		if (event.kind === 'tool') result.steps.push({ kind: 'tool', text: event.step })
+		if (event.kind === 'step') result.steps.push(event.step)
+		if (event.kind === 'replied') {
+			result.reply = { ...event.reply, items: event.reply.items.map(drawnItem) }
 			result.recorded = event.recorded
-			result.revision = event.revision
 		}
 		if (event.kind === 'usage') result.usage = event
 		if (event.kind === 'done') result.outcome = event.outcome
 		if (event.kind === 'error') result.error = event.message
 	}
-	result.note = result.note.trim()
 	process.stdout.write(`${JSON.stringify(result, null, 2)}\n`)
 	return result.outcome === 'answered' ? 0 : 1
+}
+
+// A diagram card in the JSON carries its Mermaid text, as the page gets it.
+function drawnItem(item: Item): Item {
+	if (item.kind !== 'card' || item.card.kind !== 'diagram') return item
+	return { kind: 'card', card: { kind: 'diagram', diagram: drawn(item.card.diagram) } }
 }
 
 process.exitCode = await main(process.argv.slice(2))

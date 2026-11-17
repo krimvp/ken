@@ -1,9 +1,9 @@
-import type { Answer } from '../../agent/index.ts'
+import type { Claim } from '../../agent/index.ts'
 import { type Diagram, diagramElements } from '../../diagram/index.ts'
 import { at } from '../../follow-up/index.ts'
-import type { Paint } from './print-question.ts'
+import type { Paint } from './print-reply.ts'
 
-type Quote = Answer['statements'][number]['quotes'][number]
+type Quote = Claim['quotes'][number]
 
 // A diagram in the terminal: its title and label, then each element by number with the lines it rests on. The drawing
 // itself is for the page; ken ask --json carries its Mermaid text.

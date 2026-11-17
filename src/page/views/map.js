@@ -81,25 +81,23 @@ export function knownHtml(q, ui, named, moved) {
 
 const SAID = {
 	know: (names) =>
-		`Saved. Your map says you know ${names}, as the code is now. Later answers show what you know as one line.`,
-	'too-much': (names) => `Saved. The next answer on ${names} will be shorter.`,
+		`Saved. Your map says you know ${names}, as the code is now. Later replies show what you know as one line.`,
+	'too-much': (names) => `Saved. The next reply on ${names} will be shorter.`,
 }
 
-// The three buttons under an answer, which act on the topics it names. An answer that names none has no buttons.
-export function mapBarHtml(q, ui, running) {
-	const names = q.answer.topics ?? []
-	if (names.length === 0) {
-		return '<p class="map-bar muted small">This answer names no topic, so it does not change your map.</p>'
-	}
+// The three buttons under a reply, which act on the topics it names. t is the reply's turn in the thread.
+export function mapBarHtml(q, t, ui, running) {
+	const names = q.reply.topics ?? []
 	const named = list(names.map((name) => `<strong>${esc(name)}</strong>`))
-	const said = ui.mapSaid ? `<p class="map-said" role="status">${SAID[ui.mapSaid](list(names.map(esc)))}</p>` : ''
-	const deeper = `<button class="quiet-button" data-act="map-deeper" data-key="map-deeper"${running ? ' disabled' : ''}>Go deeper</button>`
+	const saved = ui.mapSaid?.turn === t ? ui.mapSaid.signal : null
+	const said = saved ? `<p class="map-said" role="status">${SAID[saved](list(names.map(esc)))}</p>` : ''
+	const deeper = `<button class="quiet-button" data-act="map-deeper" data-turn="${t}" data-key="map-deeper-${t}"${running ? ' disabled' : ''}>Go deeper</button>`
 	return `<section class="map-bar" aria-label="Your map">
 		<p class="small">Tell ken how well you know ${named}:</p>
 		<ul class="map-buttons">
-			<li><button class="quiet-button" data-act="map-know" data-key="map-know">I know this</button><span>Later answers show it as one line.</span></li>
-			<li><button class="quiet-button" data-act="map-too-much" data-key="map-too-much">Too much detail</button><span>The next answer on it is shorter.</span></li>
-			<li>${deeper}<span>The next answer on it goes into more detail. One model run.</span></li>
+			<li><button class="quiet-button" data-act="map-know" data-turn="${t}" data-key="map-know-${t}">I know this</button><span>Later replies show it as one line.</span></li>
+			<li><button class="quiet-button" data-act="map-too-much" data-turn="${t}" data-key="map-too-much-${t}">Too much detail</button><span>The next reply on it is shorter.</span></li>
+			<li>${deeper}<span>The next reply on it goes into more detail. One model run.</span></li>
 		</ul>
 		${said}
 	</section>`

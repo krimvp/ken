@@ -10,7 +10,7 @@ import { gitRepository } from '../../src/repo/index.ts'
 import { type KenServer, openServer } from '../../src/server/index.ts'
 import { buildRepository } from '../fixtures/build-repository.ts'
 import { asked, claudeProjects, writeSession } from '../fixtures/claude-sessions.ts'
-import { DRAFT, nothingToRevise, scriptedModel, type Turn, toolResults } from '../fixtures/scripted-model.ts'
+import { nothingToRevise, scriptedModel, type Turn, toolResults } from '../fixtures/scripted-model.ts'
 
 const RETRY = 'export function retry(times: number) {\n\tfor (let i = 0; i < times; i++) {\n\t\tattempt()\n'
 const HISTORY = [
@@ -36,12 +36,12 @@ const READ: Turn = {
 	tool: 'ken__read_file',
 	args: { path: 'src/retry.ts', start: 1, end: 3 },
 }
-const ANSWER: Turn = {
-	tool: 'ken__answer',
+const SHOW: Turn = {
+	tool: 'ken__show',
+	text: 'Each retry now waits before the next attempt.',
 	args: {
 		scope: { base, head },
-		summary: 'Each retry now waits before the next attempt.',
-		statements: [{ text: 'The loop sleeps after each attempt.', label: 'inferred', quotes: [SLEEP] }],
+		claims: [{ text: 'The loop sleeps after each attempt.', label: 'inferred', quotes: [SLEEP] }],
 		risks: [
 			{
 				text: 'A caller that needs an answer at once now waits 100 ms.',
@@ -127,26 +127,43 @@ async function ask(server: KenServer, question: string) {
 		.map((line) => JSON.parse(line))
 }
 
-test('a question streams its steps and a checked answer with its diagram drawn, and the history shows it again with no model, from a clone too', async () => {
+test('a question streams its steps, the words and the cards in order, a diagram with its drawing, and the history shows it again with no model, from a clone too', async () => {
 	const home = tempFolder('ken-home-')
-	const model = await scriptedModel([READ, DRAFT, ANSWER, ...nothingToRevise(1), { text: 'I left out the tests.' }])
+	const model = await scriptedModel([READ, SHOW, { text: '' }, ...nothingToRevise(1)])
 	const server = await open(home, model.baseUrl)
 
 	const lines = await ask(server, 'What did the last commit do?')
 
 	assert.deepEqual(
 		lines.map((line) => line.kind).filter((kind) => kind !== 'text'),
-		['asked', 'tool', 'tool', 'tool', 'accepted', 'usage', 'done', 'saved'],
+		[
+			'asked',
+			'tool',
+			'step',
+			'tool',
+			'item',
+			'item',
+			'item',
+			'item',
+			'tool',
+			'item',
+			'replied',
+			'usage',
+			'done',
+			'saved',
+		],
 	)
 	assert.match(lines.find((line) => line.kind === 'tool').step, /^Read `src\/retry\.ts`, lines 1 to 3$/)
-	const accepted = lines.find((line) => line.kind === 'accepted')
-	assert.deepEqual(accepted.answer.statements[0].quotes, [{ ...SLEEP, startLine: 4, endLine: 4 }])
+	assert.deepEqual(lines.find((line) => line.kind === 'step').step, { kind: 'text', text: 'Let me read the file.' })
+	const items = lines.filter((line) => line.kind === 'item').map((line) => line.item)
+	assert.deepEqual(items[0], { kind: 'words', text: 'Each retry now waits before the next attempt.' })
 	assert.deepEqual(
-		accepted.answer.risks[0].quotes,
-		[{ ...SLEEP, startLine: 4, endLine: 4 }],
-		'the risk arrives checked',
+		items.slice(1).map((item: { card: { kind: string } }) => item.card.kind),
+		['diagram', 'claim', 'decision', 'risk'],
+		'the risk comes after the second look',
 	)
-	const [diagram] = accepted.answer.diagrams
+	assert.deepEqual(items[2].card.claim.quotes, [{ ...SLEEP, startLine: 4, endLine: 4 }])
+	const { diagram } = items[1].card
 	assert.match(
 		diagram.mermaid,
 		/^flowchart LR\n.*"3\. calls"/s,
@@ -161,13 +178,11 @@ test('a question streams its steps and a checked answer with its diagram drawn, 
 			[4, 'From sleep to retry: returns'],
 		],
 	)
+	const replied = lines.find((line) => line.kind === 'replied')
+	assert.deepEqual(replied.reply.items, items, 'the reply as saved is what streamed')
 	const saved = lines.at(-1).view
 	assert.equal(saved.entry.outcome, 'answered')
-	assert.equal(saved.entry.note, 'I left out the tests.')
-	assert.deepEqual(
-		saved.recorded.map((entry: { kind: string }) => entry.kind),
-		['decision'],
-	)
+	assert.deepEqual(saved.entry.reply, replied.reply)
 	await server.close()
 	const status = execFileSync('git', ['status', '--porcelain', '--untracked-files=all'], {
 		cwd: root,
@@ -191,45 +206,59 @@ test('a question streams its steps and a checked answer with its diagram drawn, 
 			id: saved.entry.id,
 			question: 'What did the last commit do?',
 			askedAt: saved.entry.askedAt,
+			thread: saved.entry.thread,
 			outcome: 'answered',
-			statements: 1,
-			decisions: 1,
+			cards: 4,
 			calls: 1,
 			risks: 1,
 			hunks: { uncovered: 0, total: 1 },
 		},
 	])
 	const reopened = await json(later, `/api/questions/${saved.entry.id}`)
-	assert.deepEqual(reopened.entry.answer, accepted.answer, 'the reopened answer carries the same drawings')
-	assert.deepEqual(reopened.recorded, saved.recorded)
+	assert.deepEqual(reopened.entry.reply, replied.reply, 'the reopened reply carries the same drawings')
 	const recordCommit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: clone, encoding: 'utf8' }).trim()
 	assert.deepEqual(
 		[reopened.entry.head, reopened.head],
 		[head, recordCommit],
-		'the answer keeps the HEAD it was asked at, and the view says where HEAD is now',
+		'the reply keeps the HEAD it was asked at, and the view says where HEAD is now',
 	)
 })
 
-test('a question saved before ken kept the HEAD still opens with no HEAD of its own, and answers saved before risks, before the diagram rules, before the commit message count, before the names used elsewhere and before ken marked a risk checked open as they were', async () => {
+test('a question saved before ken kept the HEAD still opens with no HEAD of its own, and answers saved before ken replied in words, before risks, before the diagram rules, before the commit message count, before the names used elsewhere and before ken marked a risk checked open as replies, as they were', async () => {
 	const home = tempFolder('ken-home-')
 	const old = { id: 'old-1', question: 'What changed?', askedAt: '2026-11-01T10:00:00.000Z', steps: [], usage: null }
 	// An answered question as ken wrote it at f3e1e61, before answers carried risks. Its diagram has one arrow and a box
-	// no arrow joins, which the diagram check refuses in a new answer.
+	// no arrow joins, which the diagram check refuses in a new reply.
 	const quotes = [{ ...SLEEP, startLine: 4, endLine: 4 }]
 	const statement = { text: 'The loop sleeps.', label: 'inferred', quotes }
 	const boxes = ['retry', 'sleep', 'clock'].map((name, at) => ({ number: at + 1, name, group: null, quotes: [] }))
 	const arrow = { number: 4, from: 'retry', to: 'sleep', text: 'calls', label: 'inferred', quotes }
 	const diagram = { kind: 'component', title: 'Retry', label: 'inferred', boxes, arrows: [arrow] }
 	const answer = { summary: 'Retries wait.', statements: [statement], diagrams: [diagram], change: null }
-	const answered = { ...old, id: 'old-2', head, outcome: 'answered', answer, recorded: [], note: '' }
+	const answered = {
+		...old,
+		id: 'old-2',
+		head,
+		outcome: 'answered',
+		answer,
+		recorded: [],
+		note: 'I left out the clock.',
+	}
 	// An answer about a change as ken wrote it at 0d81f71, before it counted the quoted commit messages.
 	const change = { base, head, commits: [], covered: [], uncovered: [], binary: [] }
 	const risk = { text: 'A caller that needs an answer at once now waits.', label: 'inferred', quotes }
-	const counted = { ...answered, id: 'old-3', answer: { ...answer, diagrams: [], risks: [risk], change } }
+	const counted = { ...answered, id: 'old-3', answer: { ...answer, diagrams: [], risks: [risk], change }, note: '' }
+	// One whose every answer ken rejected, before a card could be sent back alone.
+	const rejected = {
+		...old,
+		id: 'old-4',
+		outcome: 'rejected',
+		steps: [{ kind: 'rejected', attempt: 1, problems: ['A quote is not there.'] }],
+	}
 	mkdirSync(path.join(home, 'projects', base), { recursive: true })
 	writeFileSync(
 		path.join(home, 'projects', base, 'history.jsonl'),
-		[{ ...old, outcome: 'stopped' }, answered, counted].map((entry) => `${JSON.stringify(entry)}\n`).join(''),
+		[{ ...old, outcome: 'stopped' }, answered, counted, rejected].map((entry) => `${JSON.stringify(entry)}\n`).join(''),
 	)
 	const server = await open(home, null)
 
@@ -238,46 +267,31 @@ test('a question saved before ken kept the HEAD still opens with no HEAD of its 
 	const headNow = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim()
 	assert.deepEqual([view.entry.question, view.entry.head, view.head], ['What changed?', null, headNow])
 	const reopened = await json(server, '/api/questions/old-2')
-	assert.deepEqual([reopened.entry.answer.statements, reopened.entry.answer.risks], [[statement], null])
-	const [drawn] = reopened.entry.answer.diagrams
+	const { items } = reopened.entry.reply
+	assert.deepEqual(
+		items.map((item: { kind: string; text?: string; card?: { kind: string } }) => item.text ?? item.card?.kind),
+		['Retries wait.', 'diagram', 'claim', 'I left out the clock.'],
+		'the summary and the note become words, the rest cards',
+	)
+	assert.deepEqual(items[2].card.claim, statement)
+	const drawn = items[1].card.diagram
 	assert.match(drawn.mermaid, /^flowchart LR\n.*n3\["3\. clock"\].*"4\. calls"/s, 'the old diagram still draws')
 	assert.equal(drawn.elements.length, 4)
 	const before = await json(server, '/api/questions/old-3')
 	assert.deepEqual(
-		before.entry.answer.change,
+		before.entry.reply.change,
 		{ ...change, messages: null, usedElsewhere: null },
 		'no count and no names, rather than a count of none and an empty list',
 	)
 	assert.deepEqual(
-		before.entry.answer.risks,
-		[risk],
+		before.entry.reply.items[1].card.risk,
+		risk,
 		'its risk reads with no mark of a check, rather than "not checked"',
 	)
-})
-
-test('a second question about the same commits shows the decision the first one recorded', async () => {
-	const work = { work: { title: 'Retries wait' } }
-	const first: Turn = { tool: 'ken__answer', args: { ...ANSWER.args, ...work } }
-	// The prompt tells the model not to send a decision the record already has.
-	const again: Turn = { tool: 'ken__answer', args: { ...ANSWER.args, ...work, decisions: [] } }
-	// The second answer keeps the piece of work the first one stored, so it gets no risk pass.
-	const model = await scriptedModel([DRAFT, first, ...nothingToRevise(1), { text: 'Done.' }, again, { text: 'Done.' }])
-	const repo = tempFolder('ken-clone-')
-	execFileSync('git', ['clone', '--quiet', root, repo])
-	const server = await open(tempFolder('ken-home-'), model.baseUrl, repo)
-
-	await ask(server, 'What did the last commit do?')
-	const lines = await ask(server, 'What did the last commit do, in short?')
-
-	const decisions = (recorded: { kind: string; question?: string }[]) =>
-		recorded.filter((entry) => entry.kind === 'decision').map((entry) => entry.question)
-	const shown = ['How long does a retry wait?']
-	assert.deepEqual(decisions(lines.find((line) => line.kind === 'accepted').recorded), shown, 'while the note streams')
-	assert.deepEqual(decisions(lines.at(-1).view.recorded), shown, 'once saved')
-	const { questions } = await json(server, '/api/questions')
+	const failed = await json(server, '/api/questions/old-4')
 	assert.deepEqual(
-		questions.map((row: { decisions: number }) => row.decisions),
-		[1, 1],
+		[failed.entry.outcome, failed.entry.steps],
+		['no-answer', [{ kind: 'sent-back', what: 'Answer 1', problems: ['A quote is not there.'] }]],
 	)
 })
 
@@ -286,7 +300,7 @@ test('closing the request stops the question, and the server then takes the next
 }, async () => {
 	let modelWaits = () => {}
 	const waiting = new Promise<void>((resolve) => (modelWaits = resolve))
-	const model = await scriptedModel([{ hang: modelWaits }, DRAFT, ANSWER, { text: 'Done.' }])
+	const model = await scriptedModel([{ hang: modelWaits }, { text: 'One thing changed: retries wait.' }])
 	const server = await open(tempFolder('ken-home-'), model.baseUrl)
 
 	const first = send(server, '/api/questions', { body: { question: 'What changed?' } })
@@ -346,39 +360,30 @@ test('"I know this" folds a topic in the next answer, a commit to its quoted lin
 	const home = tempFolder('ken-home-')
 	const retryLine = { ...RETRY_LINE, commit: 'HEAD' }
 	const explain = (topics: object[] = []): Turn => ({
-		tool: 'ken__answer',
+		tool: 'ken__show',
+		text: 'retry calls attempt in a loop and sleeps after each one.',
 		args: {
-			summary: 'retry calls attempt in a loop and sleeps after each one.',
-			statements: [
-				{ text: 'retry loops over attempts.', label: 'inferred', quotes: [retryLine], topic: 'Retry logic' },
-			],
+			claims: [{ text: 'retry loops over attempts.', label: 'inferred', quotes: [retryLine], topic: 'Retry logic' }],
 			topics,
 		},
 	})
 	const topic = { name: 'retry logic', quotes: [{ ...SLEEP, commit: 'HEAD' }], note: 'retry sleeps 100 ms.' }
-	const model = await scriptedModel([
-		explain([topic]),
-		{ text: 'Done.' },
-		explain(),
-		{ text: 'Done.' },
-		explain(),
-		{ text: 'Done.' },
-	])
+	const model = await scriptedModel([explain([topic]), { text: '' }, explain(), { text: '' }, explain(), { text: '' }])
 	const server = await open(home, model.baseUrl, repo)
 	const states = (list: { topic: string; kind: string }[]) => list.map((state) => [state.topic, state.kind])
 
-	const first = (await ask(server, 'How does retry work?')).find((line) => line.kind === 'accepted')
-	assert.deepEqual(first.answer.statements[0].topic, 'retry logic', 'the entry names the topic as the record does')
+	const first = (await ask(server, 'How does retry work?')).find((line) => line.kind === 'replied')
+	assert.deepEqual(first.reply.items[1].card.claim.topic, 'retry logic', 'the card names the topic as the record does')
 	assert.deepEqual(states(first.topics), [['retry logic', 'met']], 'a question is interest, not understanding')
 
-	const know = await send(server, '/api/map', { body: { signal: 'know', topics: first.answer.topics } }).response
+	const know = await send(server, '/api/map', { body: { signal: 'know', topics: first.reply.topics } }).response
 	assert.equal(know.status, 200, know.text)
 	const map = await json(server, '/api/map')
 	assert.ok(map.file.startsWith(home), `the map lives in the reader's home: ${map.file}`)
 	assert.deepEqual(states(map.states), [['retry logic', 'unchanged']])
 
-	const second = (await ask(server, 'How does retry work, again?')).find((line) => line.kind === 'accepted')
-	assert.deepEqual(states(second.topics), [['retry logic', 'unchanged']], 'the page folds the statement of this topic')
+	const second = (await ask(server, 'How does retry work, again?')).find((line) => line.kind === 'replied')
+	assert.deepEqual(states(second.topics), [['retry logic', 'unchanged']], 'the page folds the card of this topic')
 	const toModel = questionPrompt(model.requests[2])
 	assert.match(
 		toModel,
@@ -389,7 +394,7 @@ test('"I know this" folds a topic in the next answer, a commit to its quoted lin
 	execFileSync('git', ['-c', 'commit.gpgsign=false', 'commit', '--quiet', '--all', '--message', 'wait longer'], {
 		cwd: repo,
 	})
-	const third = (await ask(server, 'How does retry work now?')).find((line) => line.kind === 'accepted')
+	const third = (await ask(server, 'How does retry work now?')).find((line) => line.kind === 'replied')
 	assert.deepEqual(states(third.topics), [['retry logic', 'changed']], 'nothing folds')
 	assert.deepEqual(third.topics[0].changed, [{ path: 'src/retry.ts', startLine: 4, endLine: 4 }])
 	assert.match(questionPrompt(model.requests[4]), /retry logic: .*the code changed since: src\/retry\.ts line 4/)
@@ -477,15 +482,13 @@ test('what looks like a secret in a saved session reaches the model, the history
 	const session = (text: string) => ({ session: 'staging-session', text })
 	const model = await scriptedModel([
 		{ tool: 'ken__read_session', args: { session: 'staging-session' } },
-		DRAFT,
 		{
-			tool: 'ken__answer',
+			tool: 'ken__show',
+			text: 'Retries wait 100 ms.',
 			args: {
 				work: { title: 'Retry waits' },
 				scope: { base: first, head: last },
-				summary: 'Retries wait 100 ms.',
-				statements: [{ text: 'The owner gave a staging setup.', label: 'from-the-session', quotes: [session(hidden)] }],
-				risks: [],
+				claims: [{ text: 'The owner gave a staging setup.', label: 'from-the-session', quotes: [session(hidden)] }],
 				decisions: [
 					{
 						question: 'How long does a retry wait?',
@@ -500,14 +503,14 @@ test('what looks like a secret in a saved session reaches the model, the history
 				],
 			},
 		},
-		{ text: 'Done.' },
+		{ text: '' },
 	])
 	const home = tempFolder('ken-home-')
 	const env = { KEN_CLAUDE_PROJECTS: projects, KEN_TEST_GATEWAY_SECRET: secrets.environment }
 	const server = await open(home, model.baseUrl, built.root, env)
 	const lines = await ask(server, 'Why does retry wait?')
 	assert.ok(
-		lines.some((line) => line.kind === 'accepted'),
+		lines.some((line) => line.kind === 'replied'),
 		JSON.stringify(lines),
 	)
 

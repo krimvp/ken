@@ -87,12 +87,11 @@ function commit(root: string, files: Record<string, string>, message: string) {
 function noteAbout(base: string, head: string, text: string): Turn & { args: Record<string, unknown> } {
 	const quote = { path: 'src/retry.ts', commit: head, text: WAIT_LINE }
 	return {
-		tool: 'ken__answer',
+		tool: 'ken__show',
+		text,
 		args: {
 			scope: { base, head },
-			summary: text,
-			statements: [{ text: 'Each attempt now waits 100 ms.', label: 'inferred', quotes: [quote] }],
-			risks: [],
+			claims: [{ text: 'Each attempt now waits 100 ms.', label: 'inferred', quotes: [quote] }],
 			decisions: [
 				{
 					question: 'How long does a retry wait?',
@@ -109,11 +108,11 @@ function noteAbout(base: string, head: string, text: string): Turn & { args: Rec
 	}
 }
 
-test('with live on, a commit leads to a note about its range in the live feed without the owner asking, and it is recorded like any answer', async () => {
+test('with live on, a commit leads to a note about its range in the live feed without the owner asking, and it is recorded like any reply', async () => {
 	const { root, hashes } = buildRepository([{ message: 'feat: retry', files: { 'src/retry.ts': RETRY } }])
 	const [first = ''] = hashes
 	const note = noteAbout(first, '', 'Retries now wait between attempts.')
-	const model = await scriptedModel([note, { text: 'Done.' }])
+	const model = await scriptedModel([note, { text: '' }])
 	const server = await open(tempFolder('ken-home-'), model.baseUrl, root)
 	assert.equal((await live(server)).status, 'off', 'live mode is off until the owner turns it on')
 
@@ -130,7 +129,7 @@ test('with live on, a commit leads to a note about its range in the live feed wi
 		{ about: written?.entry.about, outcome: written?.entry.outcome },
 		{ about: { kind: 'commits', base: first, head }, outcome: 'answered' },
 	)
-	assert.equal(written.recorded.length, 1, 'the decision of a note on commits goes into the project record')
+	assert.equal(written.entry.recorded.length, 1, 'the decision of a note on commits goes into the project record')
 	assert.ok(existsSync(path.join(root, '.ken', 'record', 'decisions.jsonl')))
 })
 
@@ -185,38 +184,30 @@ test('an uncommitted edit leads to a draft note that quotes the uncommitted line
 		at: draft.entry.about.at,
 	})
 	assert.equal(draft.entry.outcome, 'answered')
+	const cards = draft.entry.reply.items.flatMap((item: { kind: string; card?: object }) => item.card ?? [])
 	assert.deepEqual(
-		draft.entry.answer.statements[0].quotes.map((quote: { commit: string; text: string }) => [
-			quote.commit,
-			quote.text,
-		]),
+		cards[0].claim.quotes.map((quote: { commit: string; text: string }) => [quote.commit, quote.text]),
 		[[snapshot.commit, WAIT_LINE]],
 	)
-	assert.deepEqual(
-		draft.entry.draft.map((d: { question: string; label: string }) => [d.question, d.label]),
-		[['How long does a retry wait?', 'inferred']],
-	)
+	assert.deepEqual([cards[1].decision.question, cards[1].decision.label], ['How long does a retry wait?', 'inferred'])
 	assert.ok(!existsSync(path.join(root, '.ken')), 'nothing went into the project record')
 	const history = readFileSync(path.join(home, 'projects', first, 'history.jsonl'), 'utf8')
 	assert.ok(history.includes(draft.entry.id), 'the note is in the reader history')
 })
 
-test('a question asked while a note is being written waits for it, then runs', async () => {
+test("a question asked while a note is being written waits for it, then runs in the reader's own chat, which never saw the note", async () => {
 	const { root, hashes } = buildRepository([{ message: 'feat: retry', files: { 'src/retry.ts': RETRY } }])
 	const [first = ''] = hashes
 	let release = () => {}
 	const held = new Promise<void>((resolve) => (release = resolve))
 	const note = { ...noteAbout(first, '', 'Retries now wait.'), held }
-	const question = {
-		tool: 'ken__answer',
-		args: { summary: 'Retry tries again.', statements: [] as object[] },
-	}
-	const model = await scriptedModel([note, { text: 'Done.' }, question, { text: 'Done.' }])
+	const question = { tool: 'ken__show', text: 'Retry tries again.', args: { claims: [] as object[] } }
+	const model = await scriptedModel([note, { text: '' }, question, { text: '' }])
 	const server = await open(tempFolder('ken-home-'), model.baseUrl, root)
 	await live(server, 'on')
 	const head = commit(root, { 'src/retry.ts': WAITING }, 'feat: wait between attempts')
 	note.args = noteAbout(first, head, 'Retries now wait.').args
-	question.args.statements = [
+	question.args.claims = [
 		{ text: 'Retry waits.', label: 'inferred', quotes: [{ path: 'src/retry.ts', commit: head, text: WAIT_LINE }] },
 	]
 	await until(
@@ -233,6 +224,10 @@ test('a question asked while a note is being written waits for it, then runs', a
 
 	const prompts = model.requests.map((request) => JSON.stringify(request.messages.at(-1)))
 	assert.ok(prompts[2]?.includes('What does retry do?'), 'the question starts after the note ends')
+	assert.ok(
+		!JSON.stringify(model.requests[2]?.messages).includes('ken is watching this project'),
+		"the reader's chat holds no turn of the note",
+	)
 	const lines = text
 		.trim()
 		.split('\n')

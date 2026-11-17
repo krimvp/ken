@@ -109,10 +109,9 @@ export function decisionQuotes(decision) {
 const NONE = new Set()
 
 // ken's copy of uncommitted work is a commit only in ken's own store, written as "ken" with no message (see the live
-// module). An answer that cites one is a draft, so only a draft can hold one. These are the hashes of its copies.
+// module). These are the hashes of the copies a reply's change holds.
 export function copiesOf(q) {
-	if (q.draft === undefined || !q.answer) return NONE
-	const commits = q.answer.change?.commits ?? []
+	const commits = q.reply?.change?.commits ?? []
 	return new Set(commits.filter((commit) => commit.email === 'ken@localhost').map((commit) => commit.hash))
 }
 
@@ -134,7 +133,7 @@ export function quoteBody(quote, where = '', named = false, copies = NONE) {
 // When an item quotes one file at more than one commit, each quote of it gets a tag, so the rows of a changed line tell
 // apart. ken's copy of uncommitted work sits on top of HEAD, so a quote of it is "now"; failing that, a quote at the HEAD
 // the question was asked at is "now". Every other quote of that file is older: "before". With neither, the commits of
-// the change the answer explains give the order, newest first and then the commit it starts from: the newest is
+// the change the reply explains give the order, newest first and then the commit it starts from: the newest is
 // "after", since later commits may have changed it again. A file whose commits ken cannot place gets no tag.
 export function quoteTags(quotes, { head = null, copies = NONE, change = null }) {
 	const order = change ? [...change.commits.map((commit) => commit.hash), change.base] : []
@@ -162,7 +161,7 @@ export function tagHtml(tag) {
 	return tag ? `<span class="q-then" title="${TAG_MEANS[tag]}">${tag}</span>` : ''
 }
 
-// At rest a quote is one row: the file, the lines, and the first quoted line, with the commit when the answer quotes
+// At rest a quote is one row: the file, the lines, and the first quoted line, with the commit when the reply quotes
 // more than one. Opened, it shows all its lines: in place, or in the panel on a wide screen, where only the row whose
 // quote the panel shows reads as open.
 export function quoteRows(quotes, key, { ui, commits, head = null, copies = NONE, change = null }) {
@@ -210,7 +209,7 @@ export const LABELS = {
 	},
 }
 
-// ken's own marks on a risk of an answer about a change, which it sets from git, and what each means. The label key
+// ken's own marks on a risk of a change, which it sets from git, and what each means. The label key
 // and each mark's tooltip say the meaning, so the note under the risks stays short.
 export const RISK_MARKS = {
 	outside: 'Quotes code outside the change',

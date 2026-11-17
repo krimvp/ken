@@ -3,7 +3,7 @@ import type { ModelFlags } from '../agent/index.ts'
 import { at } from '../follow-up/index.ts'
 import type { About, NowBlock } from '../live/index.ts'
 import { openProject, type QuestionView } from '../server/index.ts'
-import { formatAnswer, type Paint } from './answer/print-question.ts'
+import { formatReply, type Paint } from './reply/print-reply.ts'
 
 // "ken live": live mode in a terminal pane beside the coding agent. It prints the Now block once, then each note as
 // ken writes it, until Ctrl-C. It is the page's Live view without the page, and spends the same.
@@ -81,19 +81,16 @@ function formatNow(now: NowBlock, paint: Paint): string {
 	return lines.join('\n')
 }
 
-function formatNote({ entry, recorded, noNote }: QuestionView, paint: Paint): string {
+function formatNote({ entry, noNote }: QuestionView, paint: Paint): string {
 	const about = entry.about ? aboutText(entry.about) : 'a change'
-	const tries = entry.steps.filter((step) => step.kind === 'rejected').length
+	const sent = entry.steps.filter((step) => step.kind === 'sent-back').length
 	const cost = entry.usage ? `${entry.usage.seconds} s, ${tokens(entry.usage)} tokens` : 'no cost counted'
 	const head = paint('bold', `Note ${at(entry.askedAt)} on ${about}`)
-	const checked = tries === 0 ? 'its quotes passed first time' : `ken sent ${tries} back before one passed`
+	const checked = sent === 0 ? 'every card passed first time' : `ken sent ${sent} cards back`
 	if (entry.outcome !== 'answered') return `${head}\n${paint('dim', noNote ?? '')}`
-	const answer =
-		entry.about?.kind === 'uncommitted'
-			? { ...entry.answer, change: entry.answer.change && { ...entry.answer.change, commits: [] } }
-			: entry.answer
-	const body = formatAnswer(answer, [...recorded, ...(entry.draft ?? [])], paint)
-	return `${head}\n${paint('dim', `${cost}; ${checked}.`)}\n${body}`
+	// ken's copy of uncommitted work is no commit the reader can look up, so its commits are not listed.
+	const reply = entry.about?.kind === 'uncommitted' ? { ...entry.reply, change: null } : entry.reply
+	return `${head}\n${paint('dim', `${cost}; ${checked}.`)}\n${formatReply(reply, paint)}`
 }
 
 function aboutText(about: About): string {

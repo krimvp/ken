@@ -1,9 +1,10 @@
 // What is open, on the page: the decisions that need the reader's call, each kept or sent for a change with a note, and the
 // topics whose code changed since the reader understood them, with the commits that changed them and who made each. ken
 // works the list out from the record, the map and git; the page only shows it.
-import { decisionHtml } from './answer.js'
+
 import { answeredHtml, esc, prose, short, WHO, when, withCost } from './format.js'
 import { linesText, onDay } from './map.js'
+import { decisionHtml } from './reply.js'
 
 export function openCount(open) {
 	return open ? open.decisions.length + open.topics.length : 0

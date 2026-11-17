@@ -1,5 +1,5 @@
-// The states of a question with no answer to show: the first visit, the agent at work, and each way a question can
-// end without an answer. Also the list of steps, which the working state and "Show the steps" share.
+// The states of a question with no reply to show: the first visit, the model at work, and each way a question can end
+// without a reply. Also the list of steps, which the working state and "Show the steps" share.
 import { count, duration, esc, folderHtml, list, prose, withCost } from './format.js'
 
 const EXAMPLES = [
@@ -12,14 +12,14 @@ const EXAMPLES = [
 export function emptyHtml(project, canAsk) {
 	return `<section class="welcome">
 		<h1>${canAsk ? 'Ask about this project.' : 'ken has no model to ask.'}</h1>
-		<p class="lead">ken reads the code and the git history of ${folderHtml(project)}. ken's model answers in short statements, and each statement comes with the code it is about, quoted from git.</p>
+		<p class="lead">ken reads the code and the git history of ${folderHtml(project)}. ken's model answers as a colleague would. When a claim needs proof, it shows a card with the code it rests on, quoted from git.</p>
 	</section>`
 }
 
 export function emptyAfterHtml(lenses) {
 	return `<section class="welcome-after">
 		<div class="limit">
-			<p>ken checks that every quoted line is in git, at the commit the answer names.</p>
+			<p>ken checks that every line a card quotes is in git, at the commit the card names.</p>
 			<p class="muted">It cannot check that a sentence about the code is true. The quote is there so you can judge.</p>
 		</div>
 		<h2>You could start with</h2>
@@ -31,7 +31,7 @@ export function emptyAfterHtml(lenses) {
 
 // The project record is ken's own word, so the first step that names it says what it is.
 const RECORD = 'the project record'
-const RECORD_SAID = 'the project record, where ken keeps what earlier answers found'
+const RECORD_SAID = 'the project record, where ken keeps what earlier replies found'
 
 export function stepsHtml(steps, live = false) {
 	const first = steps.findIndex((step) => step.kind === 'tool' && step.text.includes(RECORD))
@@ -39,8 +39,8 @@ export function stepsHtml(steps, live = false) {
 		.map((step, i) => {
 			if (step.kind === 'tool')
 				return `<li class="tool">${prose(i === first ? step.text.replace(RECORD, RECORD_SAID) : step.text)}</li>`
-			if (step.kind === 'rejected') {
-				return `<li class="sent-back"><strong>ken rejected answer ${step.attempt}:</strong><ul>${step.problems.map((p) => `<li>${prose(readerProblem(p))}</li>`).join('')}</ul></li>`
+			if (step.kind === 'sent-back') {
+				return `<li class="sent-back"><strong>ken sent back ${esc(step.what.toLowerCase())}:</strong><ul>${step.problems.map((p) => `<li>${prose(readerProblem(p))}</li>`).join('')}</ul></li>`
 			}
 			const caret = live && i === steps.length - 1 ? '<span class="caret" aria-hidden="true"></span>' : ''
 			return `<li class="said">${prose(step.text.trim())}${caret}</li>`
@@ -50,51 +50,33 @@ export function stepsHtml(steps, live = false) {
 
 const SHOWN_WHILE_WORKING = 8
 
-export function workingHtml(q, ui, seconds) {
+// typing is what the model writes now, before ken knows whether it is working text or the reply.
+export function workingHtml(q, t, open, seconds) {
 	const tools = q.steps.filter((step) => step.kind === 'tool').length
-	const hidden = ui.stepsOpen ? 0 : Math.max(0, q.steps.length - SHOWN_WHILE_WORKING)
+	const hidden = open ? 0 : Math.max(0, q.steps.length - SHOWN_WHILE_WORKING)
 	const earlier =
 		hidden === 0
 			? ''
-			: `<p class="small"><button class="link" data-act="steps" data-key="steps">Show ${count(hidden, 'earlier step', 'earlier steps')}</button></p>`
-	return `<p class="working-head" aria-live="polite"><span>ken's model is reading the project</span><span class="small muted" id="working-clock">${duration(seconds)} so far, ${count(tools, 'step', 'steps')}</span></p>
+			: `<p class="small"><button class="link" data-act="steps" data-turn="${t}" data-key="steps-${t}">Show ${count(hidden, 'earlier step', 'earlier steps')}</button></p>`
+	const steps = [...q.steps.slice(hidden), ...(q.typing ? [{ kind: 'text', text: q.typing }] : [])]
+	return `<div class="working"><p class="working-head" aria-live="polite"><span>ken's model is reading the project</span><span class="small muted" id="working-clock">${duration(seconds)} so far, ${count(tools, 'step', 'steps')}</span></p>
 		${earlier}
-		${q.steps.length === 0 ? '<p class="small muted">Starting.</p>' : stepsHtml(q.steps.slice(hidden), true)}
-		<p class="actions"><button class="quiet-button" data-act="stop" data-key="stop">Stop</button></p>`
+		${steps.length === 0 ? '<p class="small muted">Starting.</p>' : stepsHtml(steps, Boolean(q.typing))}
+		<p class="actions"><button class="quiet-button" data-act="stop" data-key="stop">Stop</button></p></div>`
 }
 
 const HOW_KEN_CHECKS = `<ol>
-		<li>ken looks in git for every line the answer quotes.</li>
-		<li>If a quote is not there, ken rejects the answer. ken's model gets three tries.</li>
-		<li>The answer appears on the left. What ken checked appears here: the quotes, the changed code no quote covers, and the commits.</li>
+		<li>ken looks in git for every line a card quotes.</li>
+		<li>If a quote is not there, ken sends the card back to its model, and you never see it.</li>
+		<li>The reply appears on the left. What ken checked appears here: the quotes, the changed code no quote covers, and the commits.</li>
 	</ol>`
 
-export function workingPanelHtml() {
-	return `<div class="panel-empty"><h2>Nothing to check yet</h2><p>When ken's model sends its answer:</p>${HOW_KEN_CHECKS}</div>`
-}
-
-export function endedPanelHtml() {
-	return `<div class="panel-empty"><h2>Nothing to check</h2><p>This question has no answer, so there are no quotes to show. When a question gets an answer:</p>${HOW_KEN_CHECKS}</div>`
-}
-
-const ORDINAL = ['first', 'second', 'third']
-
-// Answers rejected for the same reasons fold into one item: "Second and third answers".
-function triesHtml(tries) {
-	const groups = []
-	for (const [i, step] of tries.entries()) {
-		const said = step.problems.map(readerProblem)
-		const last = groups.at(-1)
-		if (last && last.said.join('\n') === said.join('\n')) last.tries.push(i)
-		else groups.push({ tries: [i], said })
-	}
-	return groups
-		.map(({ tries: which, said }) => {
-			const names = list(which.map((i) => ORDINAL[i] ?? `number ${i + 1}`))
-			const name = which.length === 3 ? 'all three answers' : `${names} ${which.length === 1 ? 'answer' : 'answers'}`
-			return `<li><span class="try">${name[0].toUpperCase()}${name.slice(1)}</span><ul>${said.map((p) => `<li>${prose(p)}</li>`).join('')}</ul></li>`
-		})
-		.join('')
+// The panel when there are no quotes yet: working while the model still writes.
+export function noChecksPanelHtml(working) {
+	const said = working
+		? "When ken's model shows a card:"
+		: 'This reply has no cards, so there are no quotes to show. When one does:'
+	return `<div class="panel-empty"><h2>${working ? 'Nothing to check yet' : 'Nothing to check'}</h2><p>${said}</p>${HOW_KEN_CHECKS}</div>`
 }
 
 const STATUS = [
@@ -116,23 +98,13 @@ function modelProblem(error) {
 	return words ? `${words} (status ${status}).` : 'The request to the model failed.'
 }
 
-// Each way a question ends with no answer to show, with what it means and what the reader can do next.
-export function endedHtml(q) {
-	const button = '<button class="primary" data-act="again" data-key="again">Ask again</button>'
+// Each way a question ends with no reply to show, with what it means and what the reader can do next.
+export function endedHtml(q, t) {
+	const button = `<button class="primary" data-act="again" data-turn="${t}" data-key="again-${t}">Ask again</button>`
 	const again = withCost(button)
-	if (q.outcome === 'rejected') {
-		const tries = q.steps.filter((step) => step.kind === 'rejected')
-		return `<div class="notice" role="status">
-			<h3>No answer. ken rejected every answer.</h3>
-			<p>ken's model sent three answers. In each, a quote was not in its file at the commit it names, so ken rejected it. ken shows an answer only when it finds every quote.</p>
-			<ol class="tries">${triesHtml(tries)}</ol>
-			<p class="muted">A smaller question often works. Name one commit or one file.</p>
-			<p class="actions">${again}<button class="quiet-button" data-act="one-commit" data-key="one-commit">Ask what the last commit did</button></p>
-		</div>`
-	}
 	if (q.outcome === 'error') {
 		return `<div class="notice" role="alert">
-			<h3>ken's model did not answer</h3>
+			<h3>ken's model did not reply</h3>
 			<p>${modelProblem(q.error)}</p>
 			<p class="muted">What came back:</p>
 			<pre>${esc(q.error)}</pre>
@@ -140,7 +112,7 @@ export function endedHtml(q) {
 			<p class="actions">${
 				failsAgain(q.error)
 					? withCost(
-							'<button class="quiet-button" data-act="again" data-key="again">Ask again</button>',
+							`<button class="quiet-button" data-act="again" data-turn="${t}" data-key="again-${t}">Ask again</button>`,
 							'One model run. It fails the same way until you fix the setting and restart <code>ken open</code>.',
 						)
 					: again
@@ -152,15 +124,12 @@ export function endedHtml(q) {
 	}
 	const said = {
 		stopped: ['You stopped this question', 'ken shows nothing for a question you stopped.'],
-		'no-answer': [
-			"ken's model stopped without sending an answer",
-			'It wrote text, but never sent an answer for ken to check.',
-		],
+		'no-answer': ["ken's model stopped without a reply", 'It read the project but wrote nothing back.'],
 		'out-of-turns': [
 			"ken's model ran out of turns",
 			'It was still reading the project when it reached its limit of turns. A smaller question often works.',
 		],
-	}[q.outcome] ?? ['This question has no answer', '']
+	}[q.outcome] ?? ['This question has no reply', '']
 	return `<div class="notice" role="status">
 		<h3>${said[0]}</h3>
 		<p>${said[1]}</p>

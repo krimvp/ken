@@ -1,0 +1,312 @@
+// A reply in the thread: the model's own words as plain text, and the cards it showed, each in a box, in the order it
+// gave them. ken checked every card against git; the words are the model's, and one line at the top of the thread
+// says so, once. Under a reply about a change, two chips ask for its decisions and its risks.
+import { checksHtml } from './checks.js'
+import { diagramHtml, elementKey } from './diagram.js'
+import {
+	at,
+	copiesOf,
+	count,
+	decisionQuotes,
+	esc,
+	isSession,
+	label,
+	list,
+	prose,
+	quoteRows,
+	RISK_MARKS,
+	short,
+	WEIGHT_MEANS,
+	when,
+} from './format.js'
+import { foldedTopics, knownHtml, mapBarHtml } from './map.js'
+
+export const LEGEND = "Plain text is ken's model talking. A boxed card was checked against git."
+
+// What the chips under a reply about a change ask, in the reader's words.
+export const CHIPS = {
+	decisions: 'What did this change decide, and why?',
+	risks: 'What could go wrong with this change? Show me the risks.',
+}
+
+// The reply was asked at a HEAD the project has moved on from.
+export function isMoved(q) {
+	return Boolean(q.head && q.headNow && q.head !== q.headNow)
+}
+
+const UNDO = { easy: 'Easy', 'some-work': 'Some work', hard: 'Hard' }
+
+// The key of the card at item j of turn t, which its quote rows, its place in the panel and its element ids share.
+export function cardKey(t, j) {
+	return `t${t}c${j}`
+}
+
+// A diagram's id on the page: its turn and its item, so two diagrams in one thread never share one.
+export function diagramId(t, j) {
+	return `${t}-${j}`
+}
+
+// The cards of a reply with their place in the thread.
+export function cardsOf(q, t) {
+	return (q.reply?.items ?? []).flatMap((item, j) => (item.kind === 'card' ? [{ card: item.card, t, j }] : []))
+}
+
+// Every thing in the thread that carries quotes, in the order the page shows them, by the key the page uses for it.
+export function itemsOf(thread) {
+	return thread.flatMap((q, t) =>
+		cardsOf(q, t).flatMap(({ card, j }) => {
+			const key = cardKey(t, j)
+			switch (card.kind) {
+				case 'claim':
+					return [{ key, kind: 'claim', item: card.claim, q }]
+				case 'risk':
+					return [{ key, kind: 'risk', item: card.risk, q }]
+				case 'decision':
+					return [{ key, kind: 'decision', item: { ...card.decision, quotes: decisionQuotes(card.decision) }, q }]
+				case 'topic':
+					return [{ key, kind: 'topic', item: { text: card.topic.name, quotes: card.topic.quotes }, q }]
+				case 'withdrawn':
+					return [{ key, kind: 'withdrawn', item: { text: card.withdrawn.risk.text, quotes: card.withdrawn.proof }, q }]
+				case 'diagram':
+					return card.diagram.elements
+						.filter((element) => element.quotes.length > 0)
+						.map((element) => ({
+							key: elementKey(diagramId(t, j), element.number),
+							kind: 'element',
+							item: element,
+							diagram: card.diagram,
+							q,
+						}))
+				default:
+					return []
+			}
+		}),
+	)
+}
+
+// When the quotes of one reply come from more than one commit, each quote row of git names its commit.
+function manyCommits(q) {
+	const quotes = itemsOf([q]).flatMap(({ item }) => item.quotes.filter((quote) => !isSession(quote)))
+	return new Set(quotes.map((quote) => quote.commit)).size > 1
+}
+
+function topicOf(card) {
+	return card.claim?.topic ?? card.risk?.topic ?? card.decision?.topic ?? null
+}
+
+// inThread is false for a live note, which shows its words and cards alone: no chips, no map buttons, no checks.
+export function replyHtml(q, t, ui, { running, inThread }) {
+	const hidden = foldedTopics(q, ui)
+	const rows = { ui, commits: manyCommits(q), head: q.head, copies: copiesOf(q), change: q.reply.change }
+	const cards = cardsOf(q, t)
+	const named = new Set(cards.map(({ card }) => topicOf(card)).filter((name) => name !== null))
+	const parts = q.reply.items.map((item, j) => {
+		if (item.kind === 'words') return wordsHtml(item.text)
+		if (hidden.has(topicOf(item.card))) return ''
+		return cardHtml(item.card, t, j, rows)
+	})
+	const shown = new Set(cards.map(({ card }) => card.kind))
+	const asks =
+		inThread && q.reply.change && !q.about
+			? ['decisions', 'risks']
+					.filter((kind) => !shown.has(kind.slice(0, -1)))
+					.map(
+						(kind) =>
+							`<button class="chip" data-act="chip" data-chip="${kind}" data-key="chip-${t}-${kind}"${running ? ' disabled' : ''}>${kind === 'risks' ? 'Risks' : 'Decisions'}</button>`,
+					)
+			: []
+	const checks =
+		!inThread || cards.length === 0
+			? ''
+			: `<section class="checks-inline narrow-only" aria-label="What ken checked">${ui.wide ? '' : checksHtml(q, ui)}</section>`
+	return `${knownHtml(q, ui, named, isMoved(q))}
+		<div class="reply">${parts.join('')}</div>
+		${asks.length > 0 ? `<p class="chips"><span class="small muted">Ask for</span> ${asks.join(' ')}</p>` : ''}
+		${inThread && (q.reply.topics ?? []).length > 0 ? mapBarHtml(q, t, ui, running) : ''}
+		${checks}`
+}
+
+// The model writes plain text: paragraphs, now and then a list or a block of code. Each becomes its own element, and
+// everything in it is escaped.
+export function wordsHtml(text) {
+	const blocks = []
+	const lines = text.trim().split('\n')
+	for (let i = 0; i < lines.length; i++) {
+		const line = lines[i]
+		if (line.trim() === '') continue
+		if (line.trimStart().startsWith('```')) {
+			const code = []
+			for (i++; i < lines.length && !lines[i].trimStart().startsWith('```'); i++) code.push(lines[i])
+			blocks.push(`<pre class="code"><code>${esc(code.join('\n'))}</code></pre>`)
+			continue
+		}
+		const listed = line.match(/^\s*(?:[-*]|\d+\.)\s+/)
+		if (listed) {
+			const ordered = /\d/.test(listed[0])
+			const items = []
+			while (i < lines.length && /^\s*(?:[-*]|\d+\.)\s+/.test(lines[i])) {
+				items.push(`<li>${inline(lines[i].replace(/^\s*(?:[-*]|\d+\.)\s+/, ''))}</li>`)
+				i++
+			}
+			i--
+			blocks.push(`<${ordered ? 'ol' : 'ul'} class="words-list">${items.join('')}</${ordered ? 'ol' : 'ul'}>`)
+			continue
+		}
+		const paragraph = [line]
+		while (i + 1 < lines.length && lines[i + 1].trim() !== '' && !/^\s*(?:[-*]|\d+\.)\s+|^\s*```/.test(lines[i + 1])) {
+			paragraph.push(lines[++i])
+		}
+		blocks.push(`<p>${inline(paragraph.join(' ').replace(/^#+\s+/, ''))}</p>`)
+	}
+	return `<div class="words">${blocks.join('')}</div>`
+}
+
+// `code` as code and **bold** as bold, after escaping.
+function inline(text) {
+	return prose(text).replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+}
+
+// One renderer per kind of card. The page names a kind it cannot show, so a missing renderer never hides a card.
+const CARD_RENDERERS = {
+	claim: (card, key, rows) => claimHtml(card.claim, key, rows, ''),
+	risk: (card, key, rows) => claimHtml(card.risk, key, rows, 'Risk'),
+	decision: (card, key, rows) => decisionCardHtml(card.decision, key, rows),
+	diagram: (card, _key, rows, id) => diagramHtml(card.diagram, id, rows),
+	topic: (card, key, rows) =>
+		`<p class="card-text"><span class="card-kind">Topic</span> ken keeps <strong>${prose(card.topic.name)}</strong> in the project record, on these lines.</p>${quoteRows(card.topic.quotes, key, rows)}`,
+	withdrawn: (card, key, rows) => {
+		const { risk, reason, proof } = card.withdrawn
+		return `<p class="card-text"><span class="card-kind">Withdrawn risk</span> ${prose(risk.text)}</p>
+			<p class="small"><span class="d-field">Ruled out by the second look</span> ${prose(reason)}</p>
+			${quoteRows(proof, key, rows)}`
+	},
+}
+
+function cardHtml(card, t, j, rows) {
+	const key = cardKey(t, j)
+	const render = CARD_RENDERERS[card.kind]
+	const body = render
+		? render(card, key, rows, diagramId(t, j))
+		: '<p class="card-text">ken sent a card this page cannot show.</p>'
+	return `<div class="card card-${esc(card.kind)}" id="item-${key}"><span class="card-check" title="Checked against git" aria-label="Checked against git">✓</span><div class="card-body">${body}</div></div>`
+}
+
+// A claim or a risk: its marks, its text, ken's search for what it says is missing, and its quote rows. "Inferred" is
+// the label of most claims, so only another label is shown; the panel's key says what each means.
+function claimHtml(claim, key, rows, kind) {
+	const tag = kind ? `<span class="card-kind">${kind}</span> ` : ''
+	const marked = claim.label && claim.label !== 'inferred' ? label(claim.label) : ''
+	return `<p class="card-text">${tag}${marked}${fixedHtml(claim)}${checkedHtml(claim)}${weightHtml(claim)}${prose(claim.text)}</p>
+		${searchedHtml(claim.absent)}
+		${quoteRows(claim.quotes, key, rows)}`
+}
+
+// A decision shows its question, the option taken and why; its quotes and how hard it is to reverse open in place.
+function decisionCardHtml(d, key, rows) {
+	const open = rows.ui.openDecisions.has(key)
+	const quotes = decisionQuotes(d)
+	const call = d.needsOwner ? '<span class="your-call">Your call</span> ' : ''
+	const why = d.reason ? `<p class="d-why"><span class="d-field">Why</span> ${prose(d.reason.text)}</p>` : ''
+	const what = open
+		? 'Hide the quotes'
+		: `Show ${count(quotes.length, 'quote', 'quotes')} and how hard it is to reverse`
+	const answerIt = d.needsOwner && !d.answer ? `<p class="small">${answerItLink(key)}</p>` : ''
+	const more = open
+		? `<div class="d-card">${fromHtml(d)}${factsHtml(d, false)}${answerIt}${quoteRows(quotes, key, rows)}</div>`
+		: ''
+	return `<p class="card-text"><span class="card-kind">Decision</span> ${call}${label(d.label)} <span class="d-q">${prose(d.question)}</span> <span class="d-chosen"><span class="d-field">Chosen</span> ${prose(d.chosen)}</span></p>
+		${why}
+		${searchedHtml(d.absent)}
+		<button class="link small d-more" data-act="decision" data-item="${key}" data-key="${key}-row" aria-expanded="${open}">${what}</button>
+		${more}`
+}
+
+// ken's own search for the text a card says is missing, which found nothing.
+function searchedHtml(absent) {
+	if (!absent) return ''
+	const under = absent.under === null ? '' : ` under <code>${esc(absent.under)}</code>`
+	return `<p class="searched">ken searched for <code>${esc(absent.text)}</code>${under} at <code>${short(absent.commit)}</code> and found nothing.</p>`
+}
+
+// ken's own mark on a risk, from git: solid when a quote lies outside the change, dashed when not.
+function checkedHtml({ checked }) {
+	if (checked === undefined) return ''
+	const [style, name, means] = checked
+		? ['recorded', RISK_MARKS.outside, RISK_MARKS.outsideMeans]
+		: ['inferred', RISK_MARKS.inside, RISK_MARKS.insideMeans]
+	return `<span class="label label-${style}" title="${esc(means)}">${name}</span>`
+}
+
+// ken's mark on a risk that quotes the message of a commit made after the change: the project fixed it since.
+function fixedHtml({ fixedIn }) {
+	if (fixedIn === undefined) return ''
+	return `<span class="label label-recorded" title="${esc(RISK_MARKS.fixedMeans)}">${RISK_MARKS.fixed} <code>${short(fixedIn)}</code></span>`
+}
+
+// The model's weight on a risk. ken does not judge it.
+function weightHtml({ weight }) {
+	if (weight === undefined) return ''
+	return `<span class="label label-inferred" title="${esc(WEIGHT_MEANS[weight])}">${weight === 'serious' ? 'Serious' : 'Minor'}</span>`
+}
+
+// A decision in a list: its question and the option the code took, a row that opens it in place.
+export function decisionHtml(d, key, rows, marked) {
+	const open = rows.ui.openDecisions.has(key)
+	const call = d.needsOwner ? '<span class="your-call">Your call</span> ' : ''
+	const mark = marked.has(d.label) ? `${label(d.label)} ` : ''
+	const row = `<button class="d-row" data-act="decision" data-item="${key}" data-key="${key}-row" aria-expanded="${open}">
+		<span class="d-line">${call}${mark}<span class="d-q">${prose(d.question)}</span> <span class="d-chosen"><span class="d-field">Chosen</span> ${prose(d.chosen)}</span></span></button>`
+	if (!open) return `<li class="decision" id="item-${key}">${row}</li>`
+	const answerIt = d.needsOwner && !d.answer && !rows.waiting ? `<p class="small">${answerItLink(key)}</p>` : ''
+	return `<li class="decision open" id="item-${key}">${row}
+		<div class="d-card">
+			${factsHtml(d)}
+			${answerIt}
+			${quoteRows(decisionQuotes(d), key, rows)}
+		</div>
+	</li>`
+}
+
+// A decision that needs the reader's call is answered in "Waiting on you"; this opens it.
+export function answerItLink(key) {
+	return `<button class="link" data-act="follow-up" data-key="answer-it-${esc(key)}">Answer it in Waiting on you</button>`
+}
+
+// A decision's facts under what was chosen, the same in a reply, in "Waiting on you" and in Decisions: why, the
+// other options when there are any, and how hard it is to reverse.
+export function factsHtml(d, why = true) {
+	const others = d.rejected
+		.map((r) => `<dd>${prose(r.option)}<span class="why">Why not: ${prose(r.reason)}</span></dd>`)
+		.join('')
+	return `<dl class="facts">
+		${why && d.reason ? `<div><dt>Why</dt><dd>${prose(d.reason.text)}${fromHtml(d)}${searchedHtml(d.absent)}</dd></div>` : ''}
+		${others ? `<div><dt>Other options</dt>${others}</div>` : ''}
+		<div><dt>Reversing it later</dt><dd>${UNDO[d.undo] ?? esc(d.undo)}</dd></div>
+	</dl>`
+}
+
+// Where a decision's reason comes from, by its label: who logged it with ken decide, the commit messages its reason
+// quotes, or the saved session it quotes.
+function fromHtml(d) {
+	return d.reason || d.logged ? `<span class="why">${sourceLine(d)}</span>` : ''
+}
+
+function sourceLine(d) {
+	if (d.logged) {
+		const by = d.logged.by ? ` (${esc(d.logged.by)})` : ''
+		const head = d.logged.head ? `, at commit <code>${short(d.logged.head)}</code>` : ', before the first commit'
+		// An answered decision is a new entry, so its own time is when the owner answered, not when it was logged.
+		const time = d.answer ? '' : ` ${at(d.at)}`
+		return `Your coding agent${by} logged this${time}${head}. ken did not check the reason.`
+	}
+	const quotes = d.reason?.quotes ?? []
+	if (d.label === 'recorded') {
+		const messages = [...new Set(quotes.filter((q) => !isSession(q) && q.path === null).map((q) => short(q.commit)))]
+		return `Quoted from the commit message of ${list(messages.map((hash) => `<code>${hash}</code>`))}.`
+	}
+	if (d.label === 'from-the-session') {
+		const times = [...new Set(quotes.filter(isSession).map((quote) => when(quote.at)))]
+		return `Quoted from your coding agent's saved session of ${list(times)}.`
+	}
+	return ''
+}

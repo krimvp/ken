@@ -172,7 +172,7 @@ test('a request that is not JSON or not addressed to 127.0.0.1 is refused withou
 	assert.equal(claude.calls().length, 1)
 })
 
-test('ken ask --json on a repository ends in an accepted answer when claude answers through the endpoint', async () => {
+test('ken ask --json on a repository ends in a reply with a checked card when claude answers through the endpoint', async () => {
 	const { root, hashes } = buildRepository([
 		{ message: 'feat: start', files: { 'app.py': 'def total(items):\n    return 0\n' } },
 		{ message: 'fix: add the items', files: { 'app.py': 'def total(items):\n    return sum(items)\n' } },
@@ -180,25 +180,19 @@ test('ken ask --json on a repository ends in an accepted answer when claude answ
 	const [base = '', head = ''] = hashes
 	const quote = { path: 'app.py', commit: head, text: '    return sum(items)' }
 	fakeClaude([
-		cliResult({ text: 'Before, total returned 0. Now it adds the items.', tool_calls: [] }),
 		cliResult({
-			text: 'The diff is one line.',
+			text: 'Before, total returned 0. Now it adds the items.',
 			tool_calls: [
 				{
-					name: 'ken__answer',
+					name: 'ken__show',
 					arguments: {
 						scope: { base, head },
-						work: { title: 'Fix total' },
-						summary: 'total now adds the items.',
-						statements: [{ text: 'total returns the sum of the items.', label: 'inferred', quotes: [quote] }],
-						risks: [],
+						claims: [{ text: 'total returns the sum of the items.', label: 'inferred', quotes: [quote] }],
 					},
 				},
 			],
 		}),
 		cliResult({ text: '', tool_calls: [] }),
-		cliResult({ text: '', tool_calls: [{ name: 'ken__revise_answer', arguments: {} }] }),
-		cliResult({ text: 'Nothing was left out.', tool_calls: [] }),
 	])
 	const env = {
 		...Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith('KEN_'))),
@@ -216,8 +210,7 @@ test('ken ask --json on a repository ends in an accepted answer when claude answ
 
 	const result = JSON.parse(stdout || '{}')
 	assert.equal(result.outcome, 'answered', `${stderr}${stdout}`)
-	assert.deepEqual(result.rejected, [])
-	assert.deepEqual(result.answer.statements[0].quotes, [{ ...quote, startLine: 2, endLine: 2 }])
-	assert.equal(result.note, 'Nothing was left out.')
-	assert.deepEqual([result.usage.inputTokens, result.usage.outputTokens], [5000, 150], 'five runs of claude, summed')
+	assert.deepEqual(result.reply.items[0], { kind: 'words', text: 'Before, total returned 0. Now it adds the items.' })
+	assert.deepEqual(result.reply.items[1].card.claim.quotes, [{ ...quote, startLine: 2, endLine: 2 }])
+	assert.deepEqual([result.usage.inputTokens, result.usage.outputTokens], [2000, 60], 'two runs of claude, summed')
 })

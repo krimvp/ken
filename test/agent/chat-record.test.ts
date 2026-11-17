@@ -4,7 +4,8 @@ import { type ChatEvent, startChat } from '../../src/agent/index.ts'
 import { fileRecordStore } from '../../src/record/index.ts'
 import { gitRepository } from '../../src/repo/index.ts'
 import { buildRepository } from '../fixtures/build-repository.ts'
-import { type ChatRequest, DRAFT, scriptedModel, type Turn, toolResults } from '../fixtures/scripted-model.ts'
+import { replyIn, sentBackIn } from '../fixtures/chat-events.ts'
+import { type ChatRequest, scriptedModel, type Turn, toolResults } from '../fixtures/scripted-model.ts'
 
 const RETRY = 'export function retry(times: number) {\n\tfor (let i = 0; i < times; i++) {\n\t\tattempt()\n'
 const { root, hashes } = buildRepository([
@@ -29,10 +30,11 @@ const DECISION = {
 }
 const TOPIC = { name: 'retry logic', quotes: [SLEEP], note: 'retry calls attempt, then sleeps 100 ms.' }
 
-function answer(extra: Record<string, unknown>): Turn {
+function show(extra: Record<string, unknown>): Turn {
 	return {
-		tool: 'ken__answer',
-		args: { scope: { base, head }, summary: 'Retries now wait 100 ms.', statements: [STATEMENT], risks: [], ...extra },
+		tool: 'ken__show',
+		text: 'Retries now wait 100 ms.',
+		args: { scope: { base, head }, claims: [STATEMENT], ...extra },
 	}
 }
 
@@ -51,23 +53,17 @@ async function ask(script: Turn[]) {
 	return { events, requests: model.requests }
 }
 
-function accepted(events: ChatEvent[]) {
-	const event = events.find((each) => each.kind === 'accepted')
-	return event?.kind === 'accepted' ? event : assert.fail(`no answer was accepted: ${JSON.stringify(events)}`)
-}
-
 function firstPrompt(request: ChatRequest | undefined): string {
 	return JSON.stringify(request?.messages.filter((message) => message.role === 'user') ?? [])
 }
 
-test('an accepted answer stores its work, decision and topic, and the next question starts from them', async () => {
+test('a reply stores its work, decision and topic when it ends, and the next question starts from them', async () => {
 	const first = await ask([
-		DRAFT,
-		answer({ work: { title: 'Retries wait' }, decisions: [DECISION], topics: [TOPIC] }),
-		{ text: 'Done.' },
+		show({ work: { title: 'Retries wait' }, decisions: [DECISION], topics: [TOPIC] }),
+		{ text: '' },
 	])
 
-	const { recorded } = accepted(first.events)
+	const { recorded } = replyIn(first.events)
 	assert.deepEqual(
 		recorded.map((entry) => entry.kind),
 		['work', 'topic', 'note', 'decision'],
@@ -82,8 +78,8 @@ test('an accepted answer stores its work, decision and topic, and the next quest
 
 	const second = await ask([
 		{ tool: 'ken__read_record', args: { id: work?.id } },
-		answer({ work: { title: 'Retries wait, again' } }),
-		{ text: 'Done.' },
+		show({ work: { title: 'Retries wait, again' } }),
+		{ text: '' },
 	])
 
 	const prompt = firstPrompt(second.requests[0])
@@ -92,7 +88,7 @@ test('an accepted answer stores its work, decision and topic, and the next quest
 	}
 	const read = toolResults(second.requests[1])[0] ?? ''
 	assert.ok(read.includes('\t\tsleep(100)') && read.includes(head), `read_record gives the stored quote: ${read}`)
-	assert.deepEqual(accepted(second.events).recorded, [], 'the range already has its piece of work')
+	assert.deepEqual(replyIn(second.events).recorded, [], 'the range already has its piece of work')
 	assert.equal((await fileRecordStore(root, gitRepository(root)).read()).entries.length, 4)
 })
 
@@ -100,40 +96,30 @@ test('a topic named like one in the record, in another case and spacing, is refu
 	const store = fileRecordStore(root, gitRepository(root))
 	const seeded = await store.append([{ kind: 'topic', name: TOPIC.name, quotes: TOPIC.quotes }])
 	const existing = seeded.kind === 'appended' ? seeded.entries[0]?.entry : undefined
-	const { events, requests } = await ask([
-		DRAFT,
-		answer({ topics: [{ ...TOPIC, name: '  Retry   Logic ' }] }),
-		answer({}),
-		{ text: 'Done.' },
-	])
+	const { events, requests } = await ask([show({ topics: [{ ...TOPIC, name: '  Retry   Logic ' }] }), { text: '' }])
 
 	assert.deepEqual(
-		events.filter((event) => event.kind === 'rejected' || event.kind === 'accepted').map((event) => event.kind),
-		['rejected', 'accepted'],
+		sentBackIn(events).map((step) => step.what),
+		['Topic 1'],
 	)
-	const toModel = toolResults(requests[2])[0] ?? ''
+	const toModel = toolResults(requests[1])[0] ?? ''
 	assert.ok(existing && toModel.includes(existing.id), `the model is told which topic to reuse: ${toModel}`)
 	const topics = (await store.read()).entries.filter((e) => e.kind === 'topic')
 	assert.equal(topics.length, 1)
 })
 
-test('decisions sent as JSON text are stored, raw tabs in its quotes included, and JSON text that lacks a field is rejected with the field named', async () => {
+test('decisions sent as JSON text are stored, raw tabs in its quotes included, and JSON text that lacks a field comes back with the field named', async () => {
 	const { undo, ...withoutUndo } = DECISION
 	const waits = { ...DECISION, question: 'Does a retry wait after the last attempt too?' }
 	const { events, requests } = await ask([
-		DRAFT,
-		answer({ decisions: JSON.stringify([withoutUndo]) }),
+		show({ decisions: JSON.stringify([withoutUndo]) }),
 		// The quote holds tab-indented code. A model that writes the tabs raw inside the JSON text makes it invalid JSON.
-		answer({ decisions: JSON.stringify([waits]).replaceAll('\\t', '\t') }),
-		{ text: 'Done.' },
+		show({ decisions: JSON.stringify([waits]).replaceAll('\\t', '\t') }),
+		{ text: '' },
 	])
 
-	assert.deepEqual(
-		events.filter((event) => event.kind === 'rejected' || event.kind === 'accepted').map((event) => event.kind),
-		['rejected', 'accepted'],
-	)
-	const toModel = toolResults(requests[2])[0] ?? ''
+	const toModel = toolResults(requests[1])[0] ?? ''
 	assert.ok(toModel.includes('decisions, item 1 needs "undo"'), `the model is told what is missing: ${toModel}`)
-	const stored = accepted(events).recorded.find((entry) => entry.kind === 'decision')
+	const stored = replyIn(events).recorded.find((entry) => entry.kind === 'decision')
 	assert.deepEqual(stored?.kind === 'decision' && [stored.question, stored.undo], [waits.question, undo])
 })

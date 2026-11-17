@@ -58,9 +58,10 @@ export async function openServer(options: {
 		const url = new URL(request.url ?? '/', 'http://ken.invalid')
 		const where = `${request.method} ${url.pathname}`
 		if (where === 'GET /api/state') {
+			// thread is the chat a question asked now joins, so the page shows it in the thread it belongs to.
 			const state =
 				model.kind === 'ok'
-					? { kind: 'ok', name: model.name }
+					? { kind: 'ok', name: model.name, thread: model.chat.thread }
 					: { kind: 'unset', message: model.message, missing: model.missing, example: MODEL_EXAMPLE }
 			return sendJson(response, 200, { project: shown, model: state, live: live?.on() ?? false })
 		}

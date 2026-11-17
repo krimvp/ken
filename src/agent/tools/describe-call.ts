@@ -41,17 +41,15 @@ const SENTENCES: Record<string, (args: Said) => string> = {
 		return `Read saved session ${code(args.text('session')?.slice(0, 8))}${part}`
 	},
 	search_sessions: (args) => `Searched the saved sessions for ${code(args.text('text'))}`,
-	answer: (args) => {
-		const statements = args.count('statements')
-		const risks = args.count('risks')
-		const listed = [`${statements} ${statements === 1 ? 'statement' : 'statements'}`]
-		if (risks > 0) listed.push(`${risks} ${risks === 1 ? 'risk' : 'risks'}`)
-		return `Sent an answer with ${listed.join(' and ')} for ken to check`
+	show: (args) => {
+		const cards = ['claims', 'decisions', 'risks', 'diagrams', 'topics'].reduce((n, list) => n + args.count(list), 0)
+		return cards === 0
+			? 'Named the change the reply is about'
+			: `Sent ${cards === 1 ? 'a card' : `${cards} cards`} for ken to check`
 	},
-	revise_answer: (args) => {
+	revise_risks: (args) => {
 		const changes = [
 			[args.count('risks'), 'added', 'risk', 'risks'],
-			[args.count('decisions'), 'added', 'decision', 'decisions'],
 			[args.count('withdraw'), 'withdrew', 'risk', 'risks'],
 		] as const
 		const listed = changes.flatMap(([n, verb, one, many]) => (n > 0 ? [`${verb} ${n} ${n === 1 ? one : many}`] : []))
