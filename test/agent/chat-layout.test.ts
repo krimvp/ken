@@ -20,7 +20,7 @@ process.env[KEY_ENV] = 'scripted-model-key'
 const IMPORT = { path: 'src/server/serve.ts', commit: 'HEAD', text: "import { answer } from '../agent/answer.ts'" }
 const PORT = { path: 'src/server/serve.ts', commit: 'HEAD', text: 'export const port = 80' }
 
-function layout(quote: typeof IMPORT) {
+function layout(quote: { path: string; commit?: string; text: string }) {
 	return {
 		within: [],
 		parts: [
@@ -49,11 +49,11 @@ function firstPrompt(request: ChatRequest | undefined): string {
 	return JSON.stringify(request?.messages.filter((message) => message.role === 'user') ?? [])
 }
 
-test('a layout whose arrow quotes a line that does not name its target is sent back alone while the words and the claim stand; the fixed one is kept, and the next question starts from its part names', async () => {
+test("a layout whose arrow quotes a line that does not name its target is sent back alone while the words and the claim stand; the fixed one, its quote read at the layout's commit, is kept, and the next question starts from its part names", async () => {
 	const claim = { text: 'The server listens on port 80.', label: 'inferred', quotes: [PORT] }
 	const first = await ask([
 		{ tool: 'ken__show', text: 'There are two parts.', args: { claims: [claim], layout: layout(PORT) } },
-		{ tool: 'ken__show', args: { layout: layout(IMPORT) } },
+		{ tool: 'ken__show', args: { layout: layout({ path: IMPORT.path, text: IMPORT.text }) } },
 		{ text: '' },
 	])
 

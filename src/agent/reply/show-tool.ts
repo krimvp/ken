@@ -272,8 +272,10 @@ function layoutOf(raw: JsonObject, quoteOf: ReadQuote, problems: string[]): Layo
 		}),
 		arrows: optionalList(raw.arrows).map((each) => {
 			const arrow = readArgs(each, 'show arrow')
+			// A layout names its commit once, so an arrow's quote that gives none is read at it.
+			const at = layout.optionalText('at') ?? 'HEAD'
 			const quotes = listOf(each.quotes).flatMap((one) => {
-				const quote = quoteOf(one)
+				const quote = quoteOf('commit' in one || 'session' in one ? one : { ...one, commit: at })
 				if (!('session' in quote)) return [quote]
 				problems.push('An arrow between parts quotes a file of the project, never a saved session.')
 				return []
@@ -739,7 +741,11 @@ const LAYOUT_SCHEMA = {
 					from: { type: 'string', description: 'The name of the part that uses the other' },
 					to: { type: 'string', description: 'The name of the part it uses' },
 					text: { type: 'string', description: 'A verb of one to four words, such as "calls", "reads" or "serves"' },
-					quotes: { type: 'array', items: QUOTE },
+					quotes: {
+						type: 'array',
+						description: "Each with path and text. A quote with no commit is read at the layout's at.",
+						items: QUOTE,
+					},
 				},
 				required: ['from', 'to', 'text', 'quotes'],
 				additionalProperties: false,

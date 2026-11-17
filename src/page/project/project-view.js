@@ -111,13 +111,18 @@ function formHtml(view) {
 	const groups = GROUPS.flatMap(([kind, title]) => {
 		const choices = view.changes.filter((c) => c.kind === kind)
 		if (choices.length === 0) return []
-		return [`<optgroup label="${title}">${choices.map((c) => option(c.change, c.name)).join('')}</optgroup>`]
+		return [`<optgroup label="${title}">${choices.map((c) => option(c.change, plainName(c))).join('')}</optgroup>`]
 	})
 	return `<form class="pv-form" autocomplete="off">
 		<span class="pv-field"><label for="pv-at">At commit</label><input id="pv-at" name="at" value="${esc(view.at)}" placeholder="HEAD" spellcheck="false" /></span>
 		<span class="pv-field pv-change"><label for="pv-change">Mark what a change touched</label><select id="pv-change" name="change">${option('', 'No change')}${groups.join('')}</select></span>
 		<button class="quiet-button" type="submit" data-key="pv-show">Show</button>
 	</form>`
+}
+
+// A merge or a commit is named by its subject alone. The hash says nothing to the reader the subject does not.
+function plainName(choice) {
+	return choice.name.replace(/^[0-9a-f]{7} /, '')
 }
 
 // Who drew the level, and the one button that asks ken's model to name it: on a folder level, or on a named one that
@@ -156,7 +161,7 @@ function atLine(look, changes) {
 	}
 	if (look.change) {
 		const picked = changes.find((c) => c.change === look.change.name)
-		const name = picked ? picked.name.replace(/^[0-9a-f]{7} /, '') : look.change.name
+		const name = picked ? plainName(picked) : look.change.name
 		const { files } = look.change
 		said.push(
 			files === 0
