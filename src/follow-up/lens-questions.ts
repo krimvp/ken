@@ -152,7 +152,9 @@ export function rangeQuestion(range: TimeRange, record: RecordRead, userEmail: s
 
 // "Ask ken to name these parts" and "Name them again" in the Project view. The level as the reader sees it now is the
 // starting point, and the rules are those show's layout is checked against, so the model can pass the check first time.
+// name is what the reader calls the level, such as the part they opened, or null for the whole project.
 export type PartsLevel = {
+	name: string | null
 	within: string[]
 	head: string
 	bounds: { fewest: number; parts: number; arrows: number }
@@ -163,7 +165,7 @@ export type PartsLevel = {
 
 export function partsQuestion(level: PartsLevel): LensQuestion {
 	const { within, head, bounds, boxes, named } = level
-	const where = within.length === 0 ? 'this project' : within.join(', ')
+	const where = level.name ?? (within.length === 0 ? 'this project' : within.join(', '))
 	const box = (each: PartsLevel['boxes'][number]) =>
 		`${each.name} (${each.paths.join(', ')}, ${each.files === 1 ? '1 file' : `${each.files} files`})${each.job ? `: ${each.job}` : ''}`
 	const changed = boxes.filter((each) => each.state !== 'same').map((each) => each.name)
@@ -185,7 +187,7 @@ export function partsQuestion(level: PartsLevel): LensQuestion {
 			...(level.loose.length > 0 ? [`- In no part now: ${level.loose.join(', ')}.`] : []),
 			'',
 			`Read the code at HEAD (${head}), then call show with layout, and within set to ${JSON.stringify(within)}.`,
-			`Group the paths into ${bounds.fewest} to ${bounds.parts} parts the owner would name. Give each a short name, one line on its job, and the folders or files it holds, each inside within. No two parts share a file. Leave out what is not code if it does not help, such as docs; ken lists it as in no part.`,
+			`Group the paths into ${bounds.fewest} to ${bounds.parts} parts the owner would name. Give each a short name, one line of about 80 characters on its job, and the folders or files it holds, each inside within. No two parts share a file. Leave out what is not code if it does not help, such as docs; ken lists it as in no part.`,
 			`Add at most ${bounds.arrows} arrows for which part uses which, each with a short verb. Each arrow quotes lines from a file of the part it starts at that name a folder or file of the part it ends at: an import line does. Leave out an arrow you cannot quote that way.`,
 			'Then say in two or three sentences how the parts fit together.',
 		].join('\n'),

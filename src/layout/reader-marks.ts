@@ -50,15 +50,15 @@ export function nextOf(boxes: { name: string; topics: BoxTopic[] }[]): Next {
 }
 
 function nextLine(changed: string[], unmet: string[], anyTopic: boolean): string {
-	if (!anyTopic) return 'ken knows no topic in these boxes yet. Ask about one, and your map starts there.'
+	if (!anyTopic)
+		return 'ken knows no topic in these boxes yet. Ask about a part, and the topics ken explains show on its box.'
 	if (changed.length === 0 && unmet.length === 0) {
-		return 'No topic you understood has changed, and you have met a topic in every box that has one.'
+		return 'Nothing you understood here has changed, and you have asked about every box that has topics.'
 	}
 	const said: string[] = []
-	if (changed.length > 0) said.push(`Look next at ${names(changed)}: code you understood there changed since.`)
+	if (changed.length > 0) said.push(`Code you understood in ${names(changed)} has changed since. Look there first.`)
 	if (unmet.length > 0) {
-		const lead = changed.length > 0 ? 'Then at' : 'Look next at'
-		said.push(`${lead} ${names(unmet)}: you have not met ${unmet.length === 1 ? 'its' : 'their'} topics yet.`)
+		said.push(`You have not asked about the topics in ${names(unmet)} yet.`)
 	}
 	return said.join(' ')
 }

@@ -46,7 +46,7 @@ export function splitScope(files: string[], scope: RepoPath[]): Seed[] {
 		)
 	}
 	if (here.length === 0) return fit(folderSeeds, 'folders')
-	const name = base === null ? 'Files at the top' : `Files in ${path.posix.basename(base)}`
+	const name = base === null ? 'Files at the top' : `Files directly in ${path.posix.basename(base)}`
 	return [...fit(folderSeeds, 'folders', MAX_BOXES - 1), { name, paths: here as RepoPath[], files: here.length }]
 }
 

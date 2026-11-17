@@ -168,7 +168,7 @@ test('a topic the reader understood whose code then changed marks its box, and t
 	assert.deepEqual(box(after, 'b')?.topics, [{ topic: 'quote check', mark: 'new' }])
 	assert.deepEqual(box(after, 'c')?.topics, [])
 	assert.deepEqual([after.next.changed, after.next.unmet], [['a'], ['b']])
-	assert.match(after.next.line, /^Look next at a\b.*Then at b\b/)
+	assert.match(after.next.line, /\ba\b.*\bb\b/, 'the changed box comes before the unmet one')
 })
 
 test('a commit, a path or a change the project does not have is refused before ken reads git with it', async () => {

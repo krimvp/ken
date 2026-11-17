@@ -718,7 +718,7 @@ const LAYOUT_SCHEMA = {
 					},
 					job: {
 						type: 'string',
-						description: `What it does, in one line of at most ${LAYOUT_BOUNDS.job} characters`,
+						description: `What it does, in one short line of about 80 characters, never more than ${LAYOUT_BOUNDS.job}`,
 					},
 					paths: {
 						type: 'array',
@@ -738,7 +738,7 @@ const LAYOUT_SCHEMA = {
 				properties: {
 					from: { type: 'string', description: 'The name of the part that uses the other' },
 					to: { type: 'string', description: 'The name of the part it uses' },
-					text: { type: 'string', description: 'A short verb, such as "calls", "reads" or "serves"' },
+					text: { type: 'string', description: 'A verb of one to four words, such as "calls", "reads" or "serves"' },
 					quotes: { type: 'array', items: QUOTE },
 				},
 				required: ['from', 'to', 'text', 'quotes'],

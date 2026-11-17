@@ -75,7 +75,7 @@ const state = {
 	decisionsKey: false,
 	// The level of the layout on screen, the changes it can lay over the boxes, the boxes the reader opened to get here,
 	// and the commit and change in the form, as typed or picked.
-	layout: { look: null, changes: [], trail: [WHOLE], at: '', change: '', problem: null },
+	layout: { look: null, changes: [], trail: [WHOLE], at: '', change: '', problem: null, openArrows: new Set() },
 	ui: freshUi(),
 	// What is open, with its own open decisions and quotes, the line that says what the last button saved, and the
 	// decisions the reader answered on this visit.
@@ -126,6 +126,7 @@ const LENS_TITLES = {
 	range: 'What happened?',
 	topic: 'What changed since I understood it?',
 	note: 'Go deeper on this note',
+	parts: 'Name the main parts',
 }
 
 // A saved question as the page shows it: the history entry, and the project's HEAD now, to compare with the HEAD it
@@ -463,7 +464,7 @@ function movedHtml(q, t) {
 function threadHtml() {
 	if (state.view === 'map') return mapViewHtml(state.map, state.model?.kind === 'ok' && !state.running, state.mapSaid)
 	if (state.view === 'decisions') return decisionsViewHtml(state.decisions, state.decisionsKey)
-	if (state.view === 'project') return projectViewHtml(state.layout)
+	if (state.view === 'project') return projectViewHtml(state.layout, state.model?.kind === 'ok')
 	if (state.view === 'live') {
 		const canAsk = state.model?.kind === 'ok' && !state.running
 		const seen = { seen: state.liveSeen, hideAsk: state.hideAsk }
@@ -502,6 +503,7 @@ function render() {
 	const scroll = panel.scrollTop
 	page.classList.toggle('first-visit', !q && state.view === 'question')
 	page.classList.toggle('single', !q || state.view !== 'question')
+	page.classList.toggle('wide-view', state.view === 'project')
 	$('#project').innerHTML = state.project ? `<span class="reads">reads </span>${folderHtml(state.project)}` : ''
 	$('#menu').innerHTML = menuHtml()
 	const across = [...document.querySelectorAll('.drawing')].map((box) => box.scrollLeft)
@@ -744,7 +746,7 @@ function closeDecisions() {
 }
 
 // The Project view asks the server for one level each time the reader opens a box, goes back up, or picks a commit or
-// a change. A level the server refuses leaves the last one on screen, under the reason.
+// a change. A level the server refuses takes the last one off the screen and shows the reason in its place.
 async function loadLayout() {
 	const { trail, at, change } = state.layout
 	const query = new URLSearchParams()
@@ -753,7 +755,7 @@ async function loadLayout() {
 	if (change !== '') query.set('change', change)
 	try {
 		const { look, changes } = await getJson(`/api/layout?${query}`)
-		state.layout = { ...state.layout, look, changes, problem: null }
+		state.layout = { ...state.layout, look, changes, problem: null, openArrows: new Set() }
 	} catch (error) {
 		state.layout = { ...state.layout, problem: error.message }
 	}
@@ -887,6 +889,20 @@ const actions = {
 		return moveTo([...state.layout.trail, { name: box.name, within: box.paths }])
 	},
 	'pv-crumb': (el) => moveTo(state.layout.trail.slice(0, Number(el.dataset.index) + 1)),
+	'pv-arrow'(el) {
+		toggle(state.layout.openArrows, Number(el.dataset.index))
+		render()
+	},
+	'pv-name'() {
+		const { trail } = state.layout
+		const name = trail.length > 1 ? trail.at(-1).name : null
+		return send({ lens: { kind: 'parts', within: trail.at(-1).within, name } })
+	},
+	async 'pv-reset'() {
+		state.layout = { ...state.layout, at: '', change: '' }
+		await loadLayout()
+		$('#pv-level')?.focus({ preventScroll: true })
+	},
 	'dv-key'() {
 		state.decisionsKey = !state.decisionsKey
 		render()

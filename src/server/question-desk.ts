@@ -291,10 +291,14 @@ export function questionDesk(
 			const ask = await readLayoutAsk(layout, { within: paths })
 			if (ask.kind !== 'ok') return { kind: 'refused', problem: ask.message }
 			const look = await lookAtLayout(layout, ask.ask, new Date())
-			return {
-				kind: 'ok',
-				text: partsQuestion({ ...look, within: ask.ask.within, bounds: LAYOUT_BOUNDS }).text,
+			const name = fieldOf(lens, 'name')
+			const level = {
+				...look,
+				name: typeof name === 'string' && name.trim() !== '' ? name.trim().slice(0, 80) : null,
+				within: ask.ask.within,
+				bounds: LAYOUT_BOUNDS,
 			}
+			return { kind: 'ok', text: partsQuestion(level).text }
 		}
 		if (kind === 'topic') {
 			const { record: read, states } = await lensFacts()

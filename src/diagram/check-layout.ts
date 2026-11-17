@@ -22,7 +22,7 @@ export type LayoutDraft = {
 	arrows: { from: string; to: string; text: string; quotes: GitQuote[] }[]
 }
 
-export const LAYOUT_BOUNDS = { fewest: 2, parts: 6, arrows: 8, quotes: 3, name: 40, job: 100, text: 30 } as const
+export const LAYOUT_BOUNDS = { fewest: 2, parts: 6, arrows: 8, quotes: 3, name: 40, job: 120, text: 40 } as const
 
 export type LayoutCheck = { kind: 'ok'; layout: Layout } | { kind: 'refused'; problems: string[] }
 
@@ -162,11 +162,13 @@ export function under(file: string, place: string): boolean {
 	return place === '' || file === place || file.startsWith(`${place}/`)
 }
 
-// A line names a part when it holds the last segment of one of the part's paths, without its extension, in any case.
-// An import line does; "calls the stores" does not.
+// A line names a part when it holds the last segment of one of the part's paths, without its extension, in any case, as
+// a whole word: "record" in "../record/index.ts", never "pi" in "api". An import line does; "calls the stores" does not.
 function namesPart(text: string, paths: string[]): boolean {
-	const lower = text.toLowerCase()
-	return paths.some((place) => lower.includes(segment(place).toLowerCase()))
+	return paths.some((place) => {
+		const name = segment(place).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+		return new RegExp(`(^|[^a-z0-9])${name}([^a-z0-9]|$)`, 'i').test(text)
+	})
 }
 
 function segment(place: string): string {
