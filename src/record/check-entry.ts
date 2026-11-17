@@ -70,7 +70,8 @@ export type EntryCheck =
 	| { kind: 'ok'; entry: Entry; replaces: EntryId | null }
 	| { kind: 'refused'; problems: string[] }
 
-// Long enough for a plain answer, short enough that a model cannot pour a file into the record.
+// Long enough for a plain answer, short enough that a model cannot pour a file into the record. show holds its cards
+// to the same limits, so a card the reader sees is one the record can keep.
 const MAX = {
 	title: 120,
 	summary: 1200,
@@ -83,6 +84,8 @@ const MAX = {
 	list: 20,
 }
 
+export { MAX as RECORD_LIMITS }
+
 // known is every entry in the record plus those an append will write before this one; current is the newest entry of
 // each chain among them.
 export async function checkEntry(
@@ -93,10 +96,9 @@ export async function checkEntry(
 ): Promise<EntryCheck> {
 	const problems: string[] = []
 	const text = (field: string, value: string, max: number) => {
-		const trimmed = value.trim()
-		if (trimmed === '') problems.push(`${field} is empty.`)
-		else if (trimmed.length > max) problems.push(`${field} has ${trimmed.length} characters; keep it under ${max}.`)
-		return trimmed
+		const problem = textProblem(field, value, max)
+		if (problem) problems.push(problem)
+		return value.trim()
 	}
 	const { repo } = sources
 	const counted = (field: string, raw: Quote[], needed: boolean) => {
@@ -266,6 +268,13 @@ export async function checkEntry(
 			return draft satisfies never
 	}
 	return problems.length > 0 ? { kind: 'refused', problems } : { kind: 'ok', entry, replaces }
+}
+
+export function textProblem(field: string, value: string, max: number): string | null {
+	const trimmed = value.trim()
+	if (trimmed === '') return `${field} is empty.`
+	if (trimmed.length > max) return `${field} has ${trimmed.length} characters; keep it under ${max}.`
+	return null
 }
 
 async function searched(

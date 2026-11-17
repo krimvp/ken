@@ -1,7 +1,8 @@
 // What a reply adds to the project record when its question ends: the piece of work it explains, with its claims,
 // risks and diagrams, the decisions it showed, and its topics with a note each. It runs once, from what the reply
 // holds, so a question stopped halfway records nothing, and asking again writes the same entries, which the record
-// keeps once because ids hash content. The record checks each entry again before it writes any.
+// keeps once because ids hash content. The record checks each entry again, and one it refuses leaves out that entry
+// and those that name it, never the rest.
 //
 // The draft rule lives here too. ken keeps snapshots of uncommitted work in its own store, which no collaborator has, so
 // a reply that cites a commit the project's own git cannot find adds nothing to the project record. The reader's
@@ -24,8 +25,9 @@ import type { Gate, Round } from './show-tool.ts'
 // Long enough for the story of a change, short enough for the record's limit on a summary.
 const MAX_SUMMARY_CHARS = 1000
 
+// problems says why the record refused the entries it left out.
 export type Recorded =
-	| { kind: 'recorded'; entries: RecordEntry[] }
+	| { kind: 'recorded'; entries: RecordEntry[]; problems: string[] }
 	| { kind: 'draft' }
 	| { kind: 'refused'; problems: string[] }
 
@@ -106,11 +108,11 @@ export async function recordReply(
 			...(decision.absent && { absent: decision.absent }),
 		})
 	}
-	if (problems.length > 0) return { kind: 'refused', problems }
-	if (drafts.length === 0) return { kind: 'recorded', entries: [] }
+	if (drafts.length === 0) return { kind: 'recorded', entries: [], problems }
 	const appended = await store.append(drafts, signal)
 	if (appended.kind === 'refused') return appended
-	return { kind: 'recorded', entries: appended.entries.filter((each) => each.written).map((each) => each.entry) }
+	const entries = appended.entries.filter((each) => each.written).map((each) => each.entry)
+	return { kind: 'recorded', entries, problems }
 }
 
 function raw(quote: VerifiedQuote): Quote {
@@ -119,8 +121,8 @@ function raw(quote: VerifiedQuote): Quote {
 }
 
 // The end of a question with a reply: the change facts from git over every quote the reader saw, the record entries
-// the reply adds, and the topics it names, marked as asked on the reader's map. problems says why the record took
-// nothing, when it refused an entry; the reply stands either way.
+// the reply adds, and the topics it names, marked as asked on the reader's map. problems says why the record left out
+// an entry; the reply stands either way.
 export async function endReply(
 	gate: Gate,
 	round: Round,
@@ -138,7 +140,7 @@ export async function endReply(
 	return {
 		reply: { items, change, topics },
 		recorded: recorded.kind === 'recorded' ? recorded.entries : [],
-		problems: recorded.kind === 'refused' ? recorded.problems : [],
+		problems: recorded.kind === 'draft' ? [] : recorded.problems,
 	}
 }
 

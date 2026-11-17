@@ -39,10 +39,10 @@ function show(extra: Record<string, unknown>): Turn {
 }
 
 // A new chat each time, the way a new ken process starts, so what one question wrote must come back from disk.
-async function ask(script: Turn[]) {
+async function ask(script: Turn[], directory = root) {
 	const model = await scriptedModel(script)
 	const started = await startChat({
-		directory: root,
+		directory,
 		model: { model: 'scripted', baseUrl: model.baseUrl, apiKeyEnv: KEY_ENV },
 		env: {},
 	})
@@ -122,4 +122,41 @@ test('decisions sent as JSON text are stored, raw tabs in its quotes included, a
 	assert.ok(toModel.includes('decisions, item 1 needs "undo"'), `the model is told what is missing: ${toModel}`)
 	const stored = replyIn(events).recorded.find((entry) => entry.kind === 'decision')
 	assert.deepEqual(stored?.kind === 'decision' && [stored.question, stored.undo], [waits.question, undo])
+})
+
+function freshRepository() {
+	return buildRepository([
+		{ message: 'feat: start', files: { 'src/retry.ts': `${RETRY}\t}\n}\n` } },
+		{ message: 'feat: wait between attempts', files: { 'src/retry.ts': `${RETRY}\t\tsleep(100)\n\t}\n}\n` } },
+	]).root
+}
+
+test('a card too long for the record goes back from show while the model can fix it, and the rest of the reply is stored', async () => {
+	const directory = freshRepository()
+	const long = { ...STATEMENT, text: `The loop sleeps. ${'It waits. '.repeat(130)}` }
+	const { events, requests } = await ask(
+		[show({ work: { title: 'Retries wait' }, claims: [STATEMENT, long], decisions: [DECISION] }), { text: '' }],
+		directory,
+	)
+
+	const toModel = toolResults(requests[1])[0] ?? ''
+	assert.match(toModel, /Claim 2 sent back\.[\s\S]*keep it under 1200/, 'the model is told while it can still fix it')
+	assert.deepEqual(
+		replyIn(events).recorded.map((entry) => entry.kind),
+		['work', 'decision'],
+	)
+})
+
+test('an entry the record refuses when the reply ends leaves out only that entry, and the reader is told why', async () => {
+	const directory = freshRepository()
+	const other = { ...TOPIC, name: 'Retry-logic', quotes: [{ ...SLEEP, text: RETRY.split('\n')[0] }] }
+	const { events } = await ask(
+		[show({ work: { title: 'Retries wait' }, decisions: [DECISION], topics: [TOPIC, other] }), { text: '' }],
+		directory,
+	)
+
+	const stored = (await fileRecordStore(directory, gitRepository(directory)).read()).current
+	assert.deepEqual(stored.map((entry) => entry.kind).sort(), ['decision', 'note', 'topic', 'work'])
+	const told = sentBackIn(events).find((step) => step.what === 'The project record')
+	assert.match(told?.problems.join(' ') ?? '', /Retry-logic/)
 })

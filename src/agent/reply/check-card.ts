@@ -20,7 +20,7 @@ import {
 	verifyQuote,
 } from '../../checks/index.ts'
 import { checkDiagram, type DiagramDraft, diagramElements } from '../../diagram/index.ts'
-import type { Undo } from '../../record/index.ts'
+import { RECORD_LIMITS, textProblem, type Undo } from '../../record/index.ts'
 import type { CommitHash, Range, Repository } from '../../repo/index.ts'
 import type { Card, Change, Item, Weight } from './reply.ts'
 
@@ -64,10 +64,11 @@ export type CardCheck = { kind: 'ok'; card: Card } | { kind: 'refused'; problems
 
 export async function checkCard(
 	context: CardContext,
-	{ kind, draft }: CardDraft,
+	card: CardDraft,
 	where: string,
 	signal: AbortSignal,
 ): Promise<CardCheck> {
+	const { kind, draft } = card
 	const { sources, change } = context
 	const problems: string[] = []
 	const verify = (field: string, quotes: Quote[]) => verifyQuotes(sources, field, quotes, problems, signal)
@@ -77,6 +78,7 @@ export async function checkCard(
 		return await searchAbsent(sources.repo, at, where, sought, problems, signal)
 	}
 	const refused = () => ({ kind: 'refused', problems }) as const
+	for (const problem of limitProblems(card)) problems.push(`${where}: ${problem}`)
 	switch (kind) {
 		case 'claim':
 		case 'risk': {
@@ -132,6 +134,46 @@ export async function checkCard(
 		default:
 			return kind satisfies never
 	}
+}
+
+// The record's limits on texts and quotes, so a card the reader sees is one the record can keep.
+function limitProblems(card: CardDraft): string[] {
+	const { text, reason, name, note, option, quotes, list } = RECORD_LIMITS
+	const texts: [string, string, number][] = []
+	const counts: [string, number][] = []
+	const problems: string[] = []
+	switch (card.kind) {
+		case 'claim':
+		case 'risk':
+			texts.push(['the text', card.draft.text, text])
+			counts.push(['', card.draft.quotes.length])
+			break
+		case 'decision': {
+			const { draft } = card
+			texts.push(['the question', draft.question, option], ['chosen', draft.chosen, text])
+			texts.push(['the reason', draft.reason.text, reason])
+			for (const [at, rejected] of draft.rejected.entries()) {
+				texts.push([`rejected option ${at + 1}`, rejected.option, option])
+				texts.push([`the reason for rejected option ${at + 1}`, rejected.reason, text])
+			}
+			counts.push(['', draft.quotes.length], [' for its reason', draft.reason.quotes.length])
+			if (draft.rejected.length > list) problems.push(`keep the rejected options to ${list}.`)
+			break
+		}
+		case 'topic':
+			texts.push(['the name', card.draft.name, name], ['the note', card.draft.note, note])
+			counts.push(['', card.draft.quotes.length])
+			break
+		case 'diagram':
+			break
+		default:
+			return card satisfies never
+	}
+	problems.push(...texts.flatMap(([field, value, max]) => textProblem(field, value, max) ?? []))
+	for (const [what, count] of counts) {
+		if (count > quotes) problems.push(`it has ${count} quotes${what}; keep it to ${quotes}.`)
+	}
+	return problems
 }
 
 // Every git quote a card shows, a decision's reasons and a diagram's arrows included.

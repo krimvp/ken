@@ -7,7 +7,7 @@ import type { JsonObject, JsonValue, Tool } from 'aigent/plugin'
 import type { ChangedHunk, Quote, QuoteSources } from '../../checks/index.ts'
 import { CARDINALITIES, DIAGRAM_BOUNDS, DIAGRAM_KINDS, type DiagramDraft } from '../../diagram/index.ts'
 import type { UnderstandingMap } from '../../map/index.ts'
-import { type RecordStore, sameName, UNDO } from '../../record/index.ts'
+import { RECORD_LIMITS, type RecordStore, sameName, textProblem, UNDO } from '../../record/index.ts'
 import { type Range, type Repository, resolveRange } from '../../repo/index.ts'
 import type { ChatEvent } from '../chat-event.ts'
 import { scopeProblem } from '../tools/exploration-tools.ts'
@@ -82,7 +82,9 @@ export function showTool(gate: Gate, round: () => Round): Tool {
 			const lines: string[] = []
 			if (raw.work !== undefined) {
 				const title = readArgs(objectOf(raw.work), 'show work').text('title')
-				if (current.scope) current.scope.work = title
+				const long = textProblem('The work title', title, RECORD_LIMITS.title)
+				if (long) lines.push(`${long} ken stored no title: send work again.`)
+				else if (current.scope) current.scope.work = title
 				else lines.push('work needs scope, the range of commits the piece of work covers, so ken stored no title.')
 			}
 			const context = contextOf(gate, current)
