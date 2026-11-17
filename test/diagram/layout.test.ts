@@ -9,7 +9,7 @@ const { root } = buildRepository([
 		message: 'feat: start',
 		files: {
 			'src/server/serve.ts':
-				"import { answer } from '../agent/answer.ts'\nexport const port = 80\nexport const restored = 1\n",
+				"import { answer } from '../agent/answer.ts'\nexport const port = 80\nexport const restored = 1\n// the answers come from\n// ../agent/answer.ts\n",
 			'src/agent/answer.ts': "import { save } from '../store/save.ts'\nexport function answer() {}\n",
 			'src/store/save.ts': 'export function save() {}\n',
 			'README.md': '# demo\n',
@@ -100,6 +100,13 @@ test('each broken rule refuses the layout and names the problem', async () => {
 			'a quote that does not name the to part',
 			draft({ arrows: [{ ...arrow, to: 'Store' }] }),
 			/names no folder or file of Store \(store\)/,
+		],
+		[
+			'a quote whose lines are all comments',
+			draft({
+				arrows: [{ ...arrow, quotes: [{ ...IMPORT, text: '// the answers come from\n// ../agent/answer.ts' }] }],
+			}),
+			/holds only comments/,
 		],
 		[
 			'a quote that holds the name only inside a longer word',

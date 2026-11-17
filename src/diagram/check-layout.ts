@@ -1,7 +1,7 @@
 // A level of the project's layout as ken's model names it: 2 to 6 parts, each a name, a one-line job and the paths it
 // holds, and at most 8 arrows between them. ken checks every path with git, and every arrow rests on quoted lines in a
-// file of the part it starts at that name a folder or file of the part it ends at, as an import line does. So an
-// arrow is never the model's guess, and no parser is needed. ken stores git's id of each path, so it can tell later,
+// file of the part it starts at that name a folder or file of the part it ends at, as an import line does, and are not
+// all comments. So an arrow is never the model's guess, and no parser is needed. ken stores git's id of each path, so it can tell later,
 // at any commit, which parts changed since the model named them.
 import { type GitQuote, type VerifiedGitQuote, verifyGitQuote } from '../checks/index.ts'
 import { type CommitHash, type ObjectId, parsePath, type RepoPath, type Repository } from '../repo/index.ts'
@@ -107,7 +107,9 @@ export async function checkLayout(
 					`${which} is from ${path ?? 'a commit message'}, which is not in ${from.name}. Quote a file of the part the arrow starts at.`,
 				)
 			}
-			if (to && !namesPart(verdict.quote.text, to.paths)) {
+			if (onlyComments(verdict.quote.text)) {
+				say(`${which} holds only comments. Quote a line of code that uses ${arrow.to}, such as an import line.`)
+			} else if (to && !namesPart(verdict.quote.text, to.paths)) {
 				say(
 					`${which} names no folder or file of ${to.name} (${to.paths.map(segment).join(', ')}). Quote a line that does, such as an import line.`,
 				)
@@ -169,6 +171,18 @@ function namesPart(text: string, paths: string[]): boolean {
 		const name = segment(place).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 		return new RegExp(`(^|[^a-z0-9])${name}([^a-z0-9]|$)`, 'i').test(text)
 	})
+}
+
+// By plain text, with no parser: a line whose trimmed start opens a comment in a common language. C's #include and
+// #import are code.
+const COMMENT = /^(\/\/|\/\*|\*|--|;|#(?!\s*(include|import)\b))/
+
+function onlyComments(text: string): boolean {
+	return text
+		.split('\n')
+		.map((line) => line.trim())
+		.filter((line) => line !== '')
+		.every((line) => COMMENT.test(line))
 }
 
 function segment(place: string): string {

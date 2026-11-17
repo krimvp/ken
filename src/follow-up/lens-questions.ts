@@ -188,7 +188,7 @@ export function partsQuestion(level: PartsLevel): LensQuestion {
 			'',
 			`Read the code at HEAD (${head}), then call show with layout, and within set to ${JSON.stringify(within)}.`,
 			`Group the paths into ${bounds.fewest} to ${bounds.parts} parts the owner would name. Give each a short name, one line of about 80 characters on its job, and the folders or files it holds, each inside within. No two parts share a file. Leave out what is not code if it does not help, such as docs; ken lists it as in no part.`,
-			`Add at most ${bounds.arrows} arrows for which part uses which, each with a short verb. Each arrow quotes lines from a file of the part it starts at that name a folder or file of the part it ends at: an import line does. Leave out an arrow you cannot quote that way.`,
+			`Add at most ${bounds.arrows} arrows for which part uses which, each with a short verb. Each arrow quotes lines from a file of the part it starts at that name a folder or file of the part it ends at: an import line does, a comment does not. Leave out an arrow you cannot quote that way.`,
 			'Then say in two or three sentences how the parts fit together.',
 		].join('\n'),
 		empty: false,

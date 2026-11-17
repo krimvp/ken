@@ -734,7 +734,7 @@ const LAYOUT_SCHEMA = {
 		},
 		arrows: {
 			type: 'array',
-			description: `At most ${LAYOUT_BOUNDS.arrows}: which part uses which. Each rests on lines from a file of the part it starts at that name a folder or file of the part it ends at, as an import line does. Leave out an arrow you cannot quote that way.`,
+			description: `At most ${LAYOUT_BOUNDS.arrows}: which part uses which. Each rests on lines from a file of the part it starts at that name a folder or file of the part it ends at, as an import line does. A comment does not count. Leave out an arrow you cannot quote that way.`,
 			items: {
 				type: 'object',
 				properties: {
