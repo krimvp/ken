@@ -88,11 +88,12 @@ export function showTool(gate: Gate, round: () => Round): Tool {
 				else lines.push('work needs scope, the range of commits the piece of work covers, so ken stored no title.')
 			}
 			const context = contextOf(gate, current)
-			const topics = optionalList(raw.topics).map((each) => readArgs(each, 'show topic').text('name'))
-			const known = [...(await topicNames(gate.store)), ...topicsShown(current), ...topics]
-			const shown: string[] = []
-			const held: string[] = []
-			for (const { where, parse } of draftsOf(raw)) {
+			// Topics are checked first, so a card may name a topic of this call only once that topic has passed.
+			const known = [...(await topicNames(gate.store)), ...topicsShown(current)]
+			const drafts = draftsOf(raw).map((draft, at) => ({ ...draft, at }))
+			const topicsFirst = [...drafts].sort((a, b) => Number(b.kind === 'topic') - Number(a.kind === 'topic'))
+			const passed: Card[] = []
+			for (const { at, where, parse } of topicsFirst) {
 				if (current.sentBack >= MAX_SENT_BACK) {
 					lines.push(`${where} was not checked. ${SPENT}`)
 					continue
@@ -102,7 +103,7 @@ export function showTool(gate: Gate, round: () => Round): Tool {
 				const topic = 'topic' in draft.draft ? draft.draft.topic : undefined
 				if (topic !== undefined && !known.some((name) => sameName(name, topic))) {
 					problems.push(
-						`${where} names the topic "${topic}", which is neither in the record nor sent in topics. Use the name the index gives, send the topic, or leave topic out.`,
+						`${where} names the topic "${topic}", which is neither in the record nor a topic shown in this reply. Use the name the index gives, send the topic, or leave topic out.`,
 					)
 				}
 				const checked = problems.length > 0 ? null : await checkCard(context, draft, where, ctx.signal)
@@ -126,6 +127,14 @@ export function showTool(gate: Gate, round: () => Round): Tool {
 					continue
 				}
 				current.shown.add(id)
+				if (card.kind === 'topic') known.push(card.topic.name)
+				passed[at] = card
+			}
+			const shown: string[] = []
+			const held: string[] = []
+			for (const [at, card] of passed.entries()) {
+				if (!card) continue
+				const where = drafts[at]?.where ?? ''
 				// Risks of a change come when the reader asks for them, most often after the record already holds the change,
 				// so they get the second look whatever the record holds.
 				if (card.kind === 'risk' && current.asked && current.scope) {
@@ -196,18 +205,26 @@ type ReadQuote = (raw: JsonObject) => Quote
 
 // Each card the call sends, in the order the reader gets them, with the name the result uses for it. A card parses
 // into its draft with the quote problems it has, which send it back before ken checks a quote.
-function draftsOf(raw: JsonObject): { where: string; parse: (problems: string[]) => CardDraft }[] {
-	const each = (list: string, name: string, toDraft: (one: JsonObject, quote: ReadQuote) => CardDraft) =>
+function draftsOf(
+	raw: JsonObject,
+): { kind: CardDraft['kind']; where: string; parse: (problems: string[]) => CardDraft }[] {
+	const each = (
+		list: string,
+		name: string,
+		kind: CardDraft['kind'],
+		toDraft: (one: JsonObject, quote: ReadQuote) => CardDraft,
+	) =>
 		optionalList(raw[list]).map((one, at) => ({
+			kind,
 			where: `${name} ${at + 1}`,
 			parse: (problems: string[]) => toDraft(one, (quote) => quoteOf(quote, problems)),
 		}))
 	return [
-		...each('diagrams', 'Diagram', (one, quote) => ({ kind: 'diagram', draft: diagramDraftOf(one, quote) })),
-		...each('claims', 'Claim', (one, quote) => ({ kind: 'claim', draft: claimOf(one, 'show claim', quote) })),
-		...each('decisions', 'Decision', (one, quote) => ({ kind: 'decision', draft: decisionOf(one, quote) })),
-		...each('risks', 'Risk', (one, quote) => ({ kind: 'risk', draft: claimOf(one, 'show risk', quote) })),
-		...each('topics', 'Topic', (one, quote) => ({ kind: 'topic', draft: topicOf(one, quote) })),
+		...each('diagrams', 'Diagram', 'diagram', (one, quote) => ({ kind: 'diagram', draft: diagramDraftOf(one, quote) })),
+		...each('claims', 'Claim', 'claim', (one, quote) => ({ kind: 'claim', draft: claimOf(one, 'show claim', quote) })),
+		...each('decisions', 'Decision', 'decision', (one, quote) => ({ kind: 'decision', draft: decisionOf(one, quote) })),
+		...each('risks', 'Risk', 'risk', (one, quote) => ({ kind: 'risk', draft: claimOf(one, 'show risk', quote) })),
+		...each('topics', 'Topic', 'topic', (one, quote) => ({ kind: 'topic', draft: topicOf(one, quote) })),
 	]
 }
 
@@ -482,6 +499,7 @@ export const DECISION_SCHEMA = {
 				'true when the owner should look at it: a choice a commit message leaves to the owner, a guess about intent, a risk, or a choice with a cost',
 		},
 		quotes: { type: 'array', minItems: 1, description: 'The lines that show what was chosen', items: QUOTE },
+		topic: TOPIC_NAME,
 		absent: ABSENT_SCHEMA,
 	},
 	required: ['question', 'chosen', 'reason', 'reason_quotes', 'rejected', 'undo', 'needs_owner', 'quotes'],

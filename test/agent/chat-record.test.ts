@@ -160,3 +160,26 @@ test('an entry the record refuses when the reply ends leaves out only that entry
 	const told = sentBackIn(events).find((step) => step.what === 'The project record')
 	assert.match(told?.problems.join(' ') ?? '', /Retry-logic/)
 })
+
+test('a decision may name a topic the same call sends, and goes back with it when that topic goes back', async () => {
+	const directory = freshRepository()
+	const backoff = { ...TOPIC, name: 'backoff', quotes: [{ ...SLEEP, text: '    sleep(100)' }] }
+	const waits = { ...DECISION, topic: TOPIC.name }
+	const grows = { ...DECISION, question: 'Does the wait grow?', topic: backoff.name }
+	const { events } = await ask(
+		[show({ work: { title: 'Retries wait' }, decisions: [waits, grows], topics: [TOPIC, backoff] }), { text: '' }],
+		directory,
+	)
+
+	assert.deepEqual(
+		sentBackIn(events)
+			.map((step) => step.what)
+			.sort(),
+		['Decision 2', 'Topic 2'],
+	)
+	const decisions = replyIn(events).recorded.flatMap((entry) => (entry.kind === 'decision' ? [entry] : []))
+	assert.deepEqual(
+		decisions.map((decision) => [decision.question, decision.topic]),
+		[[waits.question, TOPIC.name]],
+	)
+})
