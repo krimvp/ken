@@ -9,7 +9,7 @@ import { elementKey } from './views/diagram.js'
 import { count, duration, esc, folderHtml, prose, short, when, withCost } from './views/format.js'
 import { changedLine, changedTopics, lensHtml, mapViewHtml } from './views/map.js'
 import { openCount, openViewHtml } from './views/open.js'
-import { CHIPS, cardsOf, isMoved, itemsOf, LEGEND, replyHtml } from './views/reply.js'
+import { cardsOf, chipQuestion, isMoved, itemsOf, LEGEND, replyHtml } from './views/reply.js'
 import {
 	emptyAfterHtml,
 	emptyHtml,
@@ -823,7 +823,7 @@ const actions = {
 		const q = state.thread[Number(el.dataset.turn)]
 		void send({ lens: { kind: 'deeper', topics: q.reply.topics, question: firstLine(q.question) } })
 	},
-	chip: (el) => send({ question: CHIPS[el.dataset.chip] }),
+	chip: (el) => send({ question: chipQuestion(el.dataset.chip, state.thread[Number(el.dataset.turn)].reply.change) }),
 	unfold(el) {
 		toggle(state.ui.unfolded, el.dataset.topic)
 		render()

@@ -99,7 +99,9 @@ export function checksHtml(q, ui) {
 		back === 0
 			? ''
 			: `<p class="muted">ken sent ${count(back, 'card', 'cards')} back to its model first. The steps say why.</p>`
+	// A thread holds several replies, so the panel names the question whose reply it checked.
 	return `<div class="panel-head"><h2>What ken checked</h2></div>
+		<p class="panel-for small">For your question: ${prose(q.question.split('\n')[0])}</p>
 		<p class="panel-limit">${limit(q)}</p>
 		<section class="check" id="check-quotes">
 			<h3>Quotes</h3>

@@ -23,10 +23,13 @@ import { foldedTopics, knownHtml, mapBarHtml } from './map.js'
 
 export const LEGEND = "Plain text is ken's model talking. A boxed card was checked against git."
 
-// What the chips under a reply about a change ask, in the reader's words.
-export const CHIPS = {
-	decisions: 'What did this change decide, and why?',
-	risks: 'What could go wrong with this change? Show me the risks.',
+// What the chips under a reply about a change ask, in the reader's words. They name the commits, so the question stands
+// on its own in a chat that never saw the change.
+export function chipQuestion(kind, change) {
+	const range = `the change from ${short(change.base)} to ${short(change.head)}`
+	return kind === 'risks'
+		? `What could go wrong with ${range}? Show me the risks.`
+		: `What did ${range} decide, and why?`
 }
 
 // The reply was asked at a HEAD the project has moved on from.
@@ -112,7 +115,7 @@ export function replyHtml(q, t, ui, { running, inThread }) {
 					.filter((kind) => !shown.has(kind.slice(0, -1)))
 					.map(
 						(kind) =>
-							`<button class="chip" data-act="chip" data-chip="${kind}" data-key="chip-${t}-${kind}"${running ? ' disabled' : ''}>${kind === 'risks' ? 'Risks' : 'Decisions'}</button>`,
+							`<button class="chip" data-act="chip" data-chip="${kind}" data-turn="${t}" data-key="chip-${t}-${kind}"${running ? ' disabled' : ''}>${kind === 'risks' ? 'Risks' : 'Decisions'}</button>`,
 					)
 			: []
 	const checks =
