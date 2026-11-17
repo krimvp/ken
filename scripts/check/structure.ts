@@ -21,12 +21,12 @@ export const MODULES: Record<string, Module> = {
 		packages: [],
 	},
 	diagram: {
-		job: 'Diagrams as checked data: boxes and arrows that rest on quotes, and their Mermaid text.',
+		job: "Diagrams as checked data: boxes and arrows that rest on quotes, and their Mermaid text, and the check on a level of the project's parts.",
 		imports: ['repo', 'checks'],
 		packages: [],
 	},
 	record: {
-		job: 'The project record: an append-only store of pieces of work, decisions, topics and notes.',
+		job: "The project record: an append-only store of pieces of work, decisions, topics, notes and the named levels of the project's layout.",
 		imports: ['repo', 'checks', 'diagram', 'transcripts'],
 		packages: [],
 	},
@@ -46,7 +46,7 @@ export const MODULES: Record<string, Module> = {
 		packages: [],
 	},
 	layout: {
-		job: "The project's layout at a commit: a few boxes per level over its folders, which of them changed or are gone, what a change touched, and what the reader's map says about each.",
+		job: "The project's layout at a commit: a few boxes per level, the parts ken's model named or else the folders, which of them changed or are gone, what a change touched, and what the reader's map says about each.",
 		imports: ['live', 'map', 'record', 'repo'],
 		packages: [],
 	},

@@ -59,7 +59,7 @@ The design has two stores and a set of lenses. A lens picks a part of the projec
 
 ### The project record
 
-The project record is about the code and is the same for every reader. It holds four kinds of entry.
+The project record is about the code and is the same for every reader. It holds five kinds of entry.
 
 | Entry         | What it holds                                                                                                                              |
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -67,6 +67,7 @@ The project record is about the code and is the same for every reader. It holds 
 | Decision      | The question, the option chosen, the options rejected with a reason each, how easy it is to undo, and whether it needs the owner's opinion |
 | Topic         | A named part of the project, such as "retry logic", with the quoted code it rests on                                                       |
 | Note          | The agent's cached summary of a topic, stored with the hash of the code it describes                                                       |
+| Layout        | One level of the project's parts as ken's model named them: each part's name, job and paths with git's id of each, and the quoted arrows  |
 
 "Who did it" is one of: the owner, the owner's agent, a collaborator, or unknown. Git tells the owner from a collaborator. It cannot always tell the owner from the owner's agent, so the record says "unknown" when it has no evidence.
 
@@ -93,7 +94,12 @@ The owner asked on 2026-11-17 for ken to "show me the state of the repo architec
 - **A change laid over it.** A range, a branch from where it left the main branch, or the reader's uncommitted work, through live mode's snapshot. Each box shows the files it touched and the lines added and removed. A changed file in no box is named.
 - **The reader's map on each box.** Each topic in the record sits in the boxes that hold a file it quotes. A box says which of its topics the reader never met, met, understood, or understood before their code changed. One line over the view says where to look next: first the boxes whose code changed since the reader understood it, then the boxes whose topics they never met.
 
-No model takes part, and nothing is stored: each look reads git, the record and the map again. The next step lets the model draw a level: name the boxes and add arrows that rest on quoted lines. Those drawn levels will be stored in the record as a fifth kind of entry, `layout`, that only grows, with every version kept. That kind is not built yet, because nothing reads it before the model can write it.
+- **ken's model names the parts.** "Ask ken to name these parts" on a folder level sends a question into the reader's thread with the folder split as the starting point and the layout rules. The model explores and sends `show` with a layout: 2 to 6 parts, each a name the owner would use, a one-line job and its paths, and at most 8 arrows. ken checks it like any card, and a layout that fails goes back alone. Every path must hold a file at the commit and sit inside the level, and no two parts share a file. Every arrow quotes lines from a file of the part it starts at, and those lines name a folder or file of the part it ends at, as an import line does. ken checks the quote in git and the name by plain text, with no parser. An arrow the model cannot quote that way is left out: no arrow is a guess.
+- **Every version is kept.** A named level is a `layout` entry in the record, with git's id of each path at the commit it was named at. A new one replaces the one before and the old one stays. The view of a level at a commit picks the version with the most parts the same there by those ids, the newest on a tie. With none, it shows the folder split.
+- **It says when it no longer fits.** A part whose ids differ from when it was named says so, the arrows that start at it may be out of date, and a folder that is new and in no part is named ("src/extra is new and in no part"). The view says who named the parts and at which commit, and offers "Name them again".
+- **The model speaks in the reader's names.** Each question's first message lists the top named level, one line per part, so the model's words use the parts the reader sees.
+
+Looking at the layout takes no model: each look reads git, the record and the map again. Only naming a level asks the model.
 
 This touches "no code index". The layout is not an index: it is a few folders per level, read from git when the reader looks, with no symbols, no call graph and no cache. A drawn level adds a few named boxes and quoted arrows, still not an index of the code.
 
@@ -197,7 +203,7 @@ The chat agent reads the repository and the stores directly. Anything it or a co
 | Checks            | The quote checker, the git change facts with hunk coverage, and the validation of every store entry.                                                                                            |
 | Stores            | The project record and the understanding map, as plain append-only files.                                                                                                                       |
 | Decision command  | A small command that any coding agent can call during its work to log a decision. It writes through the same checks.                                                                            |
-| Layout            | The project as a few boxes per level, at any commit, with a change and the reader's map laid over them. Plain code reads it from git, the record and the map; nothing is stored yet.            |
+| Layout            | The project as a few boxes per level, at any commit, with a change and the reader's map laid over them. A level is the folders, or the parts ken's model named, with checked arrows. |
 
 ## Build order
 
