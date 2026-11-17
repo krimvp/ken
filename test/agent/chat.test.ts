@@ -203,3 +203,44 @@ test('a reply about a branch that is behind main covers only the hunks the branc
 		['a.ts'],
 	)
 })
+
+test('a stop pressed while the reply is being saved still ends the question, and the chat takes the next one', {
+	timeout: 20_000,
+}, async () => {
+	// Two hundred changed files make saving the reply slow enough for the stop to land while it runs.
+	const files: Record<string, string> = { 'src/retry.ts': `${RETRY}\t\tsleep(100)\n\t}\n}\n` }
+	for (let at = 0; at < 200; at++) files[`src/use-${at}.ts`] = `export const wait${at} = retry(${at})\n`
+	const big = buildRepository([
+		{ message: 'feat: start', files: { 'src/retry.ts': `${RETRY}\t}\n}\n` } },
+		{ message: 'feat: wait, and use retry everywhere', files },
+	])
+	const [from = '', to = ''] = big.hashes
+	const sleep = { path: 'src/retry.ts', commit: to, text: '\t\tsleep(100)' }
+	const model = await scriptedModel([
+		{ tool: 'ken__show', args: { scope: { base: from, head: to }, claims: [claim(sleep)] } },
+		{ text: 'Retries wait.' },
+		{ text: 'Still here.' },
+	])
+	const started = await startChat({
+		directory: big.root,
+		model: { model: 'scripted', baseUrl: model.baseUrl, apiKeyEnv: KEY_ENV },
+		env: {},
+	})
+	if (started.kind !== 'ok') throw new Error(started.message)
+	const stop = new AbortController()
+	const stopped: ChatEvent[] = []
+	for await (const event of started.chat.ask('What did the last commit do?', stop.signal)) {
+		stopped.push(event)
+		// The words end the talk. The reply is saved in the tasks that follow, so the stop lands while it is saved.
+		if (event.kind === 'item' && event.item.kind === 'words') setTimeout(() => stop.abort(), 0)
+	}
+	const next: ChatEvent[] = []
+	for await (const event of started.chat.ask('Are you there?')) next.push(event)
+	await started.chat.close()
+
+	assert.ok(
+		['done', 'error'].includes(stopped.at(-1)?.kind ?? ''),
+		`the stopped question ends: ${stopped.map((e) => e.kind)}`,
+	)
+	assert.deepEqual(replyIn(next).items, [{ kind: 'words', text: 'Still here.' }])
+})

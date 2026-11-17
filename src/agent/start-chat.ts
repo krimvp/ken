@@ -171,7 +171,7 @@ export async function startChat(options: {
 			await session
 				.prompt(text, { signal: signal ? AbortSignal.any([signal, own.signal]) : own.signal })
 				.catch((error: unknown): RunResult => ({ stop: 'error', message: String(error), turns: 0 }))
-		const run = (async () => {
+		const talk = async () => {
 			const result = await prompt(`${index}${reader}\n\nThe question: ${question}`, stops.talk)
 			let secondLook: Cost | null = null
 			const { scope } = current
@@ -199,7 +199,8 @@ export async function startChat(options: {
 			// Cards of a turn that never ended, and risks the second look did not settle, show as ken first checked them.
 			file([...current.pending.splice(0), ...current.held.splice(0).map((risk) => riskItem(risk).card)])
 			if (current.items.length > 0 && !signal?.aborted) {
-				const ended = await endReply(gate, current, signal ?? new AbortController().signal)
+				// Past this check the reply is whole, so a stop that comes while it is saved does not lose it.
+				const ended = await endReply(gate, current, new AbortController().signal)
 				if (ended.problems.length > 0) {
 					const what = 'The project record'
 					events.push({ kind: 'step', step: { kind: 'sent-back', what, problems: ended.problems } })
@@ -209,8 +210,14 @@ export async function startChat(options: {
 			const seconds = Math.round((performance.now() - started) / 100) / 10
 			events.push({ kind: 'usage', inputTokens: tokens.input, outputTokens: tokens.output, seconds, secondLook })
 			events.push(endOf(result, current))
-			events.close()
-		})()
+		}
+		// Git and the record can fail, and the stop can land in a git call, so every way out of talk ends the question.
+		const run = talk()
+			.catch((error: unknown) => {
+				const message = signal?.aborted ? STOPPED : error instanceof Error ? error.message : String(error)
+				events.push({ kind: 'error', message })
+			})
+			.finally(() => events.close())
 		try {
 			yield* events.drain()
 		} finally {
@@ -235,8 +242,10 @@ function costSince(
 	return { inputTokens: tokens.input - before.input, outputTokens: tokens.output - before.output, seconds }
 }
 
+const STOPPED = 'The question was stopped before it had a reply.'
+
 function endOf(result: RunResult, round: Round): ChatEvent {
-	if (result.stop === 'aborted') return { kind: 'error', message: 'The question was stopped before it had a reply.' }
+	if (result.stop === 'aborted') return { kind: 'error', message: STOPPED }
 	if (round.items.length > 0) return { kind: 'done', outcome: 'answered' }
 	if (result.stop === 'error') return { kind: 'error', message: result.message }
 	return { kind: 'done', outcome: result.stop === 'max_turns' ? 'out-of-turns' : 'no-answer' }
