@@ -2341,6 +2341,80 @@ button.pv-box:hover .pv-inside {
 	font-size: var(--text-note);
 }
 
+/* The change card: what a change touched, over the project's top level of parts, at the top of a reply about it. */
+.change-card {
+	margin-bottom: var(--space-5);
+	padding: var(--space-4);
+	border: 1px solid var(--color-box-border);
+	border-radius: var(--radius-md);
+	background: var(--color-card);
+}
+
+.cc-title {
+	font-size: var(--text-md);
+	font-weight: 650;
+}
+
+.cc-sub {
+	margin-top: var(--space-4);
+	font-size: var(--text-note);
+	font-weight: 650;
+}
+
+.cc-line {
+	margin-top: var(--space-2);
+	color: var(--color-note);
+	font-size: var(--text-note);
+}
+
+.change-card .pv-picture {
+	margin-top: var(--space-3);
+}
+
+.change-card .pv-box {
+	padding: var(--space-3);
+	background: var(--color-bg);
+}
+
+.cc-touched {
+	font-size: var(--text-note);
+	font-weight: 600;
+}
+
+.cc-quiet {
+	color: var(--color-note);
+	font-size: var(--text-note);
+}
+
+.cc-commits {
+	margin-top: var(--space-1);
+	padding: 0;
+	list-style: none;
+	font-size: var(--text-note);
+}
+
+.cc-commit {
+	padding: var(--space-1) 0;
+	overflow-wrap: anywhere;
+}
+
+/* On a narrow screen the card lists only the parts the change touched, and names the others in one line. */
+@media (max-width: 759px) {
+	.change-card .cc-untouched {
+		display: none;
+	}
+}
+
+@media (min-width: 760px) {
+	.change-card .pv-picture .pv-boxes {
+		gap: var(--space-6) var(--space-7);
+	}
+
+	.cc-narrow {
+		display: none;
+	}
+}
+
 /* Following up: the lens "What changed" and the open list */
 .change-form label {
 	display: block;

@@ -80,7 +80,9 @@ async function changeOf(
 	if (!base || !head || rest.length > 0)
 		return { kind: 'refused', message: `"${text}" is not a range such as main..feature.` }
 	const range = await resolveRange(repo, { base, head }, signal)
-	if (range.kind === 'ok') return { kind: 'ok', change: { name: text, asked: text, range: range.range } }
+	// A change card asks by full hashes, which the reader reads more easily cut to seven characters.
+	const name = text.replace(/\b[0-9a-f]{40}\b/g, (hash) => hash.slice(0, 7))
+	if (range.kind === 'ok') return { kind: 'ok', change: { name, asked: text, range: range.range } }
 	if (range.kind === 'unrelated') return { kind: 'refused', message: `${base} and ${head} share no history.` }
 	return {
 		kind: 'refused',

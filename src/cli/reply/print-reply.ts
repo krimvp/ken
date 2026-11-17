@@ -18,6 +18,7 @@ export async function printQuestion(events: AsyncIterable<ChatEvent>, out: NodeJ
 	for await (const event of events) {
 		switch (event.kind) {
 			case 'text':
+			case 'change':
 				break
 			case 'tool':
 				line(paint('dim', `  ${event.step}`))

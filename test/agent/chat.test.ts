@@ -90,6 +90,15 @@ test('a show call with a good card, a false quote and a label the quotes do not 
 	assert.ok(toModel.includes(JSON.stringify('\t\tsleep(100)')), `the model is shown the line with its tabs: ${toModel}`)
 	assert.match(toModel, /Claim 3 sent back/)
 	assert.deepEqual(events.at(-1), { kind: 'done', outcome: 'answered' })
+	const named = events.findIndex((event) => event.kind === 'change')
+	const said = events.findIndex((event) => event.kind === 'item')
+	assert.ok(named >= 0 && named < said, 'the page learns the change before the first part of the reply')
+	const live = events[named]
+	assert.deepEqual(live?.kind === 'change' && [live.base, live.head, live.commits.map((commit) => commit.subject)], [
+		base,
+		head,
+		['feat: wait between attempts'],
+	])
 
 	const { change } = replyIn(events)
 	assert.deepEqual(change, {

@@ -3,6 +3,7 @@
 // place. The page talks only to the server that sent it.
 import { fillDrawings, markPart } from './draw-diagrams.js'
 import { liveLook, liveViewHtml } from './live/live-view.js'
+import { changeKey } from './project/change-card.js'
 import { drawPictures } from './project/parts-picture.js'
 import { projectViewHtml } from './project/project-view.js'
 import { allQuotesHtml, checksHtml, quoteCardHtml } from './views/checks.js'
@@ -52,6 +53,8 @@ const freshUi = () => ({
 	// and its signal.
 	unfolded: new Set(),
 	mapSaid: null,
+	// Each change a reply is about, by changeKey, with the project's top level laid over by it: null while ken reads it.
+	changeLooks: new Map(),
 	wide: wideQuery.matches,
 })
 
@@ -165,6 +168,10 @@ function addEvent(q, event) {
 			q.typing = ''
 			q.reply ??= { items: [], change: null, topics: [] }
 			q.reply.items.push(event.item)
+			break
+		case 'change':
+			q.reply ??= { items: [], change: null, topics: [] }
+			q.reply.change ??= { base: event.base, head: event.head, commits: event.commits }
 			break
 		case 'waiting':
 			q.steps.push({ kind: 'text', text: 'ken is finishing a note for Live. Your question starts when it ends.' })
@@ -533,6 +540,7 @@ function render() {
 	if (tooWide.length > 0) schedule()
 	for (const [i, box] of document.querySelectorAll('.drawing').entries()) box.scrollLeft = across[i] ?? 0
 	drawPictures($('#thread'))
+	if (state.view === 'question') loadChangeLooks()
 	const part = ui.wide && ui.panel.kind === 'quote' && ui.panel.key.match(/^g([\w-]+)n(\d+)$/)
 	if (part) markPart($('#thread'), part[1], part[2])
 	const canAsk = state.model?.kind === 'ok'
@@ -797,6 +805,37 @@ function closeProject() {
 	$('[data-key="project"]')?.focus({ preventScroll: true })
 }
 
+// A reply about a change shows the project's top level with the change laid over it. ken reads it from git once per
+// change while the page is open.
+function loadChangeLooks() {
+	const looks = state.ui.changeLooks
+	for (const q of state.thread) {
+		const change = q.reply?.change
+		if (!change || looks.has(changeKey(change))) continue
+		const key = changeKey(change)
+		looks.set(key, null)
+		getJson(`/api/layout?change=${encodeURIComponent(key)}`)
+			.then(({ look }) => looks.set(key, look))
+			.catch((error) => looks.set(key, { problem: error.message }))
+			.finally(render)
+	}
+}
+
+// A part on a change card opens the Project view at that part, with the same change laid over it.
+async function openChangePart(t, index) {
+	const change = state.thread[t]?.reply?.change
+	const box = change && state.ui.changeLooks.get(changeKey(change))?.boxes?.[index]
+	if (!box) return
+	state.view = 'project'
+	state.menuOpen = false
+	const trail = [WHOLE, { name: box.name, within: box.paths }]
+	state.layout = { ...state.layout, trail, at: '', change: changeKey(change), formOpen: false }
+	render()
+	await loadLayout()
+	window.scrollTo({ top: 0 })
+	$('#pv-level')?.focus({ preventScroll: true })
+}
+
 // The level changes under the reader's focus, so focus goes to the level's heading, which names where they are now.
 async function moveTo(trail) {
 	state.layout = { ...state.layout, trail }
@@ -910,6 +949,7 @@ const actions = {
 		return moveTo([...state.layout.trail, { name: box.name, within: box.paths }])
 	},
 	'pv-crumb': (el) => moveTo(state.layout.trail.slice(0, Number(el.dataset.index) + 1)),
+	'cc-open': (el) => openChangePart(Number(el.dataset.turn), Number(el.dataset.index)),
 	// An arrow picked in the picture opens in the list beside it, and focus goes there, where the line now shows.
 	'pv-arrow'(el) {
 		toggle(state.layout.openArrows, Number(el.dataset.index))

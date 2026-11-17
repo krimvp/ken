@@ -141,6 +141,7 @@ test('a question streams its steps, the words and the cards in order, a diagram 
 			'tool',
 			'step',
 			'tool',
+			'change',
 			'item',
 			'item',
 			'item',

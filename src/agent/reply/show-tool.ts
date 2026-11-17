@@ -194,6 +194,9 @@ async function setScope(gate: Gate, current: Round, raw: JsonObject, signal: Abo
 		return same ? null : `This reply is about ${now}. One reply explains one change: leave out scope.`
 	}
 	current.scope = { range, work: null, hunks: null }
+	// The page draws the change over the project's parts at the top of the reply as soon as it knows the range.
+	const log = await gate.sources.repo.log(range, signal)
+	current.emit({ kind: 'change', base: range.base, head: range.head, commits: log.kind === 'ok' ? log.commits : [] })
 	// A risk shown in the same turn, before the scope came, is about the change too.
 	if (current.asked && current.step === 'talk') {
 		const risks = current.pending.flatMap((card) => (card.kind === 'risk' ? [card.risk] : []))

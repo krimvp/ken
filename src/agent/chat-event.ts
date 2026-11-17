@@ -1,8 +1,9 @@
 // What one question produces, in this order: text while the model types, a tool line for each call, a step for each
-// working turn and each card ken sent back, an item for each part of the reply as its turn ends, at most one
+// working turn and each card ken sent back, the change the reply is about once the model names it, an item for each part of the reply as its turn ends, at most one
 // "replied" with the whole reply as it is saved, then "usage", then "done" or "error" as the last event. Plain data,
 // so the terminal and a server can pass it on as it is.
 import type { RecordEntry } from '../record/index.ts'
+import type { Commit, CommitHash } from '../repo/index.ts'
 import type { Item, Reply } from './reply/reply.ts'
 
 // What happened while the model worked, behind "Show the steps". "tool" is one call as a sentence, "text" is what the
@@ -21,6 +22,9 @@ export type ChatEvent =
 	| { kind: 'tool'; name: string; step: string }
 	| { kind: 'step'; step: Step }
 	| { kind: 'item'; item: Item }
+	// Live only: the change the reply is about, as soon as the model names it, so the page can lead the reply with it.
+	// The reply's own change, in "replied", says the same and more.
+	| { kind: 'change'; base: CommitHash; head: CommitHash; commits: Commit[] }
 	// recorded holds the entries the reply added to the project record; an entry already there is not repeated.
 	| { kind: 'replied'; reply: Reply; recorded: RecordEntry[] }
 	// The whole question's cost. secondLook is the part the second look at risks took, null when it did not run.

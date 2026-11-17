@@ -1,9 +1,15 @@
 import assert from 'node:assert/strict'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { test } from 'node:test'
+import { after, test } from 'node:test'
 import { CARD_KINDS, type Card, type CardKind } from '../../src/agent/index.ts'
 import { verifyGitQuote } from '../../src/checks/index.ts'
 import { drawn } from '../../src/diagram/index.ts'
+import { lookAtLayout, readLayoutAsk } from '../../src/layout/index.ts'
+import { openSnapshots } from '../../src/live/index.ts'
+import { openMap } from '../../src/map/index.ts'
+import { fileRecordStore } from '../../src/record/index.ts'
 import { gitRepository } from '../../src/repo/index.ts'
 import { buildRepository } from '../fixtures/build-repository.ts'
 
@@ -117,4 +123,39 @@ test('the page shows a card of every kind ken can send, boxed and with its text,
 		at,
 		'the cards keep the order the reply gives them',
 	)
+})
+
+test('a reply about a change opens on the change card, before the words: the parts it touched with files and lines, the others not touched, and its commits', async () => {
+	const { root: project, hashes } = buildRepository([
+		{ message: 'feat: start', files: { 'src/retry/loop.ts': 'retry()\n', 'src/clock/wait.ts': 'wait()\n' } },
+		{ message: 'feat: wait between attempts', files: { 'src/retry/loop.ts': 'retry()\nsleep(100)\nsleep(200)\n' } },
+	])
+	const [base = '', head = ''] = hashes
+	const home = mkdtempSync(path.join(tmpdir(), 'ken-home-'))
+	after(() => rmSync(home, { recursive: true, force: true }))
+	const repo = gitRepository(project)
+	const record = fileRecordStore(project, repo)
+	const opened = await openMap(home, repo, record)
+	if (opened.kind !== 'ok') assert.fail('the fixture has commits')
+	const sources = { root: project, repo, snapshots: await openSnapshots(home, repo, project), record, map: opened.map }
+	const asked = await readLayoutAsk(sources, { within: ['src'], change: `${base}..${head}` })
+	if (asked.kind !== 'ok') assert.fail(asked.message)
+	const look = await lookAtLayout(sources, asked.ask, new Date())
+	const range = asked.ask.change?.range
+	const log = range && (await repo.log(range))
+	if (log?.kind !== 'ok') assert.fail('the fixture log reads')
+
+	const change = { base, head, commits: log.commits }
+	const words = 'Each retry now waits before the next attempt.'
+	const q = { reply: { items: [{ kind: 'words', text: words }], change, topics: [] } }
+	const ui = { panel: { kind: 'checks' }, unfolded: new Set(), changeLooks: new Map([[`${base}..${head}`, look]]) }
+	const html = page.replyHtml(q, 0, ui, { running: false, inThread: true })
+
+	const card = html.indexOf('What this change touched')
+	assert.ok(card >= 0 && card < html.indexOf(words), 'the change card comes before the words')
+	const shown = html.slice(card, html.indexOf(words))
+	assert.match(shown, /retry<\/span><span class="cc-touched">1 file: 2 lines added, 0 removed/)
+	assert.match(shown, /clock<\/span><span class="cc-quiet">Not touched/)
+	assert.match(shown, /feat: wait between attempts/)
+	assert.match(html, /Ask what could go wrong/)
 })

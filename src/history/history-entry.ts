@@ -68,6 +68,7 @@ export function entryFrom(asked: Asked, events: ChatEvent[], stopped: boolean): 
 				break
 			case 'text':
 			case 'item':
+			case 'change':
 				break
 			default:
 				event satisfies never

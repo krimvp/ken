@@ -1,6 +1,8 @@
 // A reply in the thread: the model's own words as plain text, and the cards it showed, each in a box, in the order it
 // gave them. ken checked every card against git; the words are the model's, and one line at the top of the thread
-// says so, once. Under a reply about a change, two chips ask for its decisions and its risks.
+// says so, once. A reply about a change opens on the change card, before the model's words, and under it two chips
+// ask for the change's decisions and its risks.
+import { changeCardHtml, changeKey } from '../project/change-card.js'
 import { checksHtml } from './checks.js'
 import { diagramHtml, elementKey } from './diagram.js'
 import {
@@ -130,8 +132,10 @@ export function replyHtml(q, t, ui, { running, inThread }) {
 		!inThread || cards.length === 0
 			? ''
 			: `<section class="checks-inline narrow-only" aria-label="What ken checked">${ui.wide ? '' : checksHtml(q, ui)}</section>`
+	const { change } = q.reply
+	const card = inThread && change ? changeCardHtml(change, ui.changeLooks?.get(changeKey(change)) ?? null, t) : ''
 	return `${knownHtml(q, ui, named, isMoved(q))}
-		<div class="reply">${parts.join('')}</div>
+		<div class="reply">${card}${parts.join('')}</div>
 		${asks.length > 0 ? `<p class="chips">${asks.join(' ')}</p>` : ''}
 		${inThread && (q.reply.topics ?? []).length > 0 ? mapBarHtml(q, t, ui, running) : ''}
 		${checks}`
