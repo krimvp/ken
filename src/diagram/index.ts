@@ -1,8 +1,21 @@
 // Diagrams as checked data, and their Mermaid text. A model sends boxes and arrows, never diagram syntax, and
 // checkDiagram turns each into a diagram whose every arrow, message and relation rests on a quote that passed
 // checkQuote. mermaidText writes the drawing and diagramElements the numbered list that goes under it, and drawn adds
-// both to a diagram on its way to a reader. No model here.
+// both to a diagram on its way to a reader. checkLayout does the same for a level of the project's layout, whose
+// arrows rest on lines that name the part they point to. No model here.
+
 export { checkDiagram, DIAGRAM_BOUNDS, type DiagramCheck, diagramDraft } from './check-diagram.ts'
+export {
+	checkLayout,
+	LAYOUT_BOUNDS,
+	type Layout,
+	type LayoutCheck,
+	type LayoutDraft,
+	layoutDraft,
+	type Part,
+	type PartArrow,
+	type Place,
+} from './check-layout.ts'
 export {
 	type Arrow,
 	type Box,

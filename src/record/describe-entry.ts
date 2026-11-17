@@ -20,6 +20,8 @@ export function entryLine(entry: RecordEntry): string {
 			return `${head} "${entry.name}"`
 		case 'note':
 			return `${head}, on topic ${entry.topic}`
+		case 'layout':
+			return `${head} parts of ${entry.within.length === 0 ? 'the whole project' : entry.within.join(', ')}: ${entry.parts.map((part) => part.name).join(', ')}`
 		default:
 			return entry satisfies never
 	}
@@ -105,6 +107,15 @@ export async function describeEntry(
 		}
 		case 'note':
 			lines.push(`code hash ${entry.codeHash}`, entry.text)
+			break
+		case 'layout':
+			lines.push(`named at ${entry.drawnAt}`)
+			for (const part of entry.parts) {
+				lines.push(`part "${part.name}" (${part.places.map((place) => place.path).join(', ')}): ${part.job}`)
+			}
+			for (const arrow of entry.arrows) {
+				lines.push(`arrow: ${arrow.from} ${arrow.text} ${arrow.to}`, ...arrow.quotes.flatMap(quoted))
+			}
 			break
 		default:
 			return entry satisfies never

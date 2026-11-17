@@ -14,7 +14,7 @@ import {
 	verifyGitQuote,
 	verifyQuote,
 } from '../checks/index.ts'
-import { checkDiagram, type Diagram, type DiagramDraft } from '../diagram/index.ts'
+import { checkDiagram, checkLayout, type Diagram, type DiagramDraft, type LayoutDraft } from '../diagram/index.ts'
 import { type CommitHash, type Repository, resolveRange } from '../repo/index.ts'
 import {
 	type Decision,
@@ -65,6 +65,7 @@ export type EntryDraft =
 	  } & Replaces)
 	| ({ kind: 'topic'; name: string; quotes: Quote[] } & Replaces)
 	| ({ kind: 'note'; topic: string; text: string } & Replaces)
+	| ({ kind: 'layout' } & LayoutDraft & Replaces)
 
 export type EntryCheck =
 	| { kind: 'ok'; entry: Entry; replaces: EntryId | null }
@@ -262,6 +263,12 @@ export async function checkEntry(
 				return { kind: 'refused', problems }
 			}
 			entry = { kind: 'note', topic: topic.id, text: note, codeHash: codeHash(topic.quotes) } satisfies Note
+			break
+		}
+		case 'layout': {
+			const checked = await checkLayout(repo, draft, 'the layout', signal)
+			if (checked.kind === 'refused') return checked
+			entry = checked.layout
 			break
 		}
 		default:
