@@ -30,6 +30,8 @@ test('ken live prints the Now block, then a note for a commit as it lands, and s
 		KEN_TEST_LIVE_CLI_KEY: 'scripted-model-key',
 	}
 	const ken = spawn('node', [KEN, 'live', '--repo', root], { env })
+	// A failing step must not leave ken live running, or the test run never ends.
+	after(() => ken.kill('SIGKILL'))
 	let out = ''
 	const seen = (text: string) =>
 		new Promise<void>((resolve, reject) => {
