@@ -956,6 +956,12 @@ const actions = {
 		render()
 		if (el.closest('svg')) $(`[data-key="pv-arrow-${el.dataset.index}"]`)?.focus({ preventScroll: true })
 	},
+	'pv-all'() {
+		const { look, openArrows } = state.layout
+		const all = openArrows.size === look.arrows.length
+		state.layout = { ...state.layout, openArrows: new Set(all ? [] : look.arrows.map((_, i) => i)) }
+		render()
+	},
 	'pv-name'() {
 		const { trail } = state.layout
 		const name = trail.length > 1 ? trail.at(-1).name : null

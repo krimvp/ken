@@ -12,4 +12,4 @@ export {
 	type Scope,
 	type Touched,
 } from './layout-look.ts'
-export type { BoxTopic, Mark, Next } from './reader-marks.ts'
+export type { BoxMap, BoxTopic, Mark, Next, Standing } from './reader-marks.ts'

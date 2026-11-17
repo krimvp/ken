@@ -2065,11 +2065,10 @@ ul.left-out {
 	min-height: 2.75rem;
 }
 
+/* Where the reader is: the change laid over the parts, and the commit when it is not the one checked out. */
 .pv-at {
-	margin-top: var(--space-5);
+	margin-top: var(--space-3);
 	max-width: var(--measure);
-	color: var(--color-note);
-	font-size: var(--text-note);
 }
 
 /* On a narrow screen the boxes are one list. From 760 pixels they are a picture: a grid with room between the boxes for
@@ -2254,8 +2253,9 @@ button.pv-box:hover .pv-inside {
 	white-space: nowrap;
 }
 
-.pv-map .pv-strong {
+.pv-map.pv-strong {
 	color: var(--color-text);
+	font-weight: 600;
 }
 
 .pv-state,
@@ -2324,10 +2324,15 @@ button.pv-box:hover .pv-inside {
 	color: var(--color-accent);
 }
 
-.pv-stale {
-	display: block;
-	color: var(--color-note);
+/* One control opens or closes the line under every arrow. */
+.pv-all {
+	margin-top: var(--space-2);
 	font-size: var(--text-note);
+}
+
+.pv-arrow:focus-visible {
+	outline-width: 2px;
+	outline-offset: 2px;
 }
 
 .pv-arrow-item .q-source {
@@ -2339,6 +2344,11 @@ button.pv-box:hover .pv-inside {
 	max-width: var(--measure);
 	color: var(--color-note);
 	font-size: var(--text-note);
+}
+
+.pv-more-toggle {
+	width: fit-content;
+	cursor: pointer;
 }
 
 /* The change card: what a change touched, over the project's top level of parts, at the top of a reply about it. */

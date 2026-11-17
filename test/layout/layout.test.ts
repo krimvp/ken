@@ -196,6 +196,37 @@ test('a topic the reader understood whose code then changed marks its box, and t
 	assert.match(after.next.line, /\ba\b.*\bb\b/, 'the changed box comes before the unmet one')
 })
 
+test('the line over the level and the line on each box say the same of the map, so a part the reader asked about and did not say they understand is never called done', async () => {
+	const { root } = buildRepository([
+		{ message: 'feat: start', files: { 'src/a/retry.ts': 'retry()\n', 'src/b/quote.ts': 'check(quote)\n' } },
+	])
+	const sources = await sourcesFor(root)
+	const appended = await sources.record.append([
+		{ kind: 'topic', name: 'retry', quotes: [{ path: 'src/a/retry.ts', commit: 'HEAD', text: 'retry()' }] },
+		{ kind: 'topic', name: 'quote check', quotes: [{ path: 'src/b/quote.ts', commit: 'HEAD', text: 'check(quote)' }] },
+	])
+	if (appended.kind !== 'appended') assert.fail(appended.problems.join(' '))
+	await sources.map.learn('know', ['retry'], NOW)
+	await sources.map.learn('asked', ['quote check'], NOW)
+
+	const asked = await look(sources, { within: ['src'] })
+	assert.deepEqual(
+		asked.boxes.map((each) => [each.name, each.map.standing]),
+		[
+			['a', 'understood'],
+			['b', 'open'],
+		],
+	)
+	assert.deepEqual(asked.next.open, ['b'])
+	assert.match(asked.next.line, /\bb\b.*not said you understand/, 'the level names the part the box says is not done')
+	assert.doesNotMatch(asked.next.line, /every part/)
+
+	await sources.map.learn('know', ['quote check'], NOW)
+	const done = await look(sources, { within: ['src'] })
+	assert.ok(done.boxes.every((each) => each.map.standing === 'understood'))
+	assert.match(done.next.line, /every part/)
+})
+
 test('a commit, a path or a change the project does not have is refused before ken reads git with it', async () => {
 	const { root } = buildRepository([{ message: 'feat: start', files: { 'src/a/x.ts': 'x\n' } }])
 	const sources = await sourcesFor(root)
@@ -241,10 +272,14 @@ test('at an old commit the view shows the version of a named level that fit the 
 	const parts = (seen: LayoutLook) => seen.boxes.map((each) => [each.name, each.state])
 
 	const old = await look(sources, { within: ['src'], at: hashes[0] })
-	assert.deepEqual(parts(old), [
-		['Alpha', 'same'],
-		['Beta', 'same'],
-	])
+	assert.deepEqual(
+		parts(old),
+		[
+			['Alpha', 'changed'],
+			['Beta', 'same'],
+		],
+		'at an old commit each part says whether it was different then from now',
+	)
 	assert.equal(old.named?.stale, false)
 	const now = await look(sources, { within: ['src'] })
 	assert.deepEqual(parts(now), [

@@ -9,7 +9,7 @@ import type { UnderstandingMap } from '../map/index.ts'
 import type { EntryId, RecordEntry, RecordStore } from '../record/index.ts'
 import type { CommitHash, FileDiff, ObjectId, Range, RepoPath, Repository } from '../repo/index.ts'
 import { type Seed, splitScope, under } from './folder-split.ts'
-import { type BoxTopic, boxTopics, type Next, nextOf } from './reader-marks.ts'
+import { type BoxMap, type BoxTopic, boxMap, boxTopics, type Next, nextOf } from './reader-marks.ts'
 
 // The paths a level shows the inside of, sorted. The empty list is the whole project.
 export type Scope = RepoPath[]
@@ -33,14 +33,15 @@ export type Touched = { files: number; added: number; removed: number }
 
 // job is the model's one line on a part it named, null for a folder. files counts the files under the box at HEAD for
 // a folder and at the commit asked for a part. opens is false for a box of one file, which has no level inside. state
-// compares the box at the commit asked with HEAD for a folder, and with the commit it was named at for a part. touched
-// is null when no change is asked or this one leaves the box alone.
+// compares the box at an older commit with HEAD, and a named part at HEAD with the commit it was named at. touched is
+// null when no change is asked or this one leaves the box alone.
 export type LookBox = Seed & {
 	job: string | null
 	opens: boolean
 	state: 'same' | 'changed' | 'gone'
 	touched: Touched | null
 	topics: BoxTopic[]
+	map: BoxMap
 }
 
 // A level ken's model named: the record entry, the commit it was named at, and what no longer fits there. added names
@@ -86,7 +87,7 @@ export async function lookAtLayout(
 	)
 	const level =
 		versions.length > 0
-			? await namedLevel(repo, versions, ask, signal)
+			? await namedLevel(repo, versions, ask, head.commit, signal)
 			: await folderLevel(repo, ask, head.commit, signal)
 	const places = level.boxes.flatMap((box) => box.paths)
 	const [diff, mapRead] = await Promise.all([
@@ -94,12 +95,16 @@ export async function lookAtLayout(
 		sources.map.read(now, signal),
 	])
 	const topics = read.current.flatMap((entry) => (entry.kind === 'topic' ? [entry] : []))
-	const boxes: LookBox[] = level.boxes.map((box) => ({
-		...box,
-		opens: box.files > 1,
-		touched: diff && touchedIn(box.paths, diff),
-		topics: boxTopics(box.paths, topics, mapRead.states),
-	}))
+	const boxes: LookBox[] = level.boxes.map((box) => {
+		const marks = boxTopics(box.paths, topics, mapRead.states)
+		return {
+			...box,
+			opens: box.files > 1,
+			touched: diff && touchedIn(box.paths, diff),
+			topics: marks,
+			map: boxMap(marks),
+		}
+	})
 	const change =
 		ask.change && diff
 			? {
@@ -120,7 +125,13 @@ type Level = {
 
 // Among every stored version of the level, the one with the most parts the same at the commit asked, the newest on a
 // tie. So at an old commit the version that fit the code then wins, and at HEAD the newest that fits.
-async function namedLevel(repo: Repository, versions: Stored[], ask: LayoutAsk, signal?: AbortSignal): Promise<Level> {
+async function namedLevel(
+	repo: Repository,
+	versions: Stored[],
+	ask: LayoutAsk,
+	head: CommitHash,
+	signal?: AbortSignal,
+): Promise<Level> {
 	const places = [
 		...new Set(versions.flatMap((version) => version.parts.flatMap((part) => part.places)).map((p) => p.path)),
 	]
@@ -136,9 +147,14 @@ async function namedLevel(repo: Repository, versions: Stored[], ask: LayoutAsk, 
 		const [a, b] = [same(version), same(best)]
 		return a > b || (a === b && version.at >= best.at) ? version : best
 	})
+	// At HEAD a part says whether it changed since it was named. At an older commit it says, as a folder does, whether it
+	// was different then from now, which is what the reader looking back wants to know.
+	const headIds = ask.at === head ? null : await repo.objectIds(head, places, signal)
+	const atHead = new Map(places.map((place, i) => [place, headIds?.[i] ?? null]))
 	const boxes = chosen.parts.map((part) => {
 		const paths = part.places.map((place) => place.path)
-		return { name: part.name, job: part.job, paths, files: countUnder(files, paths), state: stateOf(part) }
+		const state = headIds ? stateAt(paths, atHead, idAt) : stateOf(part)
+		return { name: part.name, job: part.job, paths, files: countUnder(files, paths), state }
 	})
 	const loose = looseIn(
 		files,
@@ -147,7 +163,7 @@ async function namedLevel(repo: Repository, versions: Stored[], ask: LayoutAsk, 
 	)
 	const thenIds = await repo.objectIds(chosen.drawnAt, loose as RepoPath[], signal)
 	const added = loose.filter((_, i) => thenIds[i] === null)
-	const changed = new Set(boxes.filter((box) => box.state !== 'same').map((box) => box.name))
+	const changed = new Set(chosen.parts.filter((part) => stateOf(part) !== 'same').map((part) => part.name))
 	return {
 		named: { id: chosen.id, drawnAt: chosen.drawnAt, added, stale: changed.size > 0 || added.length > 0 },
 		boxes,

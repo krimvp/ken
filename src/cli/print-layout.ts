@@ -1,5 +1,5 @@
 import { kenHome } from '../history/index.ts'
-import { type LayoutLook, type LookBox, lookAtLayout, type Mark, type RawAsk, readLayoutAsk } from '../layout/index.ts'
+import { type LayoutLook, type LookBox, lookAtLayout, type RawAsk, readLayoutAsk } from '../layout/index.ts'
 import { openSnapshots } from '../live/index.ts'
 import { openMap } from '../map/index.ts'
 import { fileRecordStore } from '../record/index.ts'
@@ -32,18 +32,11 @@ function refuse(message: string): number {
 	return 2
 }
 
-// A folder is compared with HEAD, a part ken's model named with the commit it was named at.
-const STATES: Record<LookBox['state'], [string | null, string | null, string | null]> = {
-	same: [null, null, null],
-	changed: ['different at this commit', 'changed since it was named', 'different from when it was named'],
-	gone: ['not there at this commit', 'not there at this commit', 'not there at this commit'],
-}
-
-const MARKS: Record<Mark, string> = {
-	changed: 'you said you understood it, and its code changed since',
-	new: 'you have not asked about it yet',
-	met: 'you asked about it, and have not said you understand it',
-	understood: 'you said you understand it',
+// At HEAD a named part is compared with the commit it was named at. At an older commit every box is compared with HEAD.
+const STATES: Record<LookBox['state'], [string | null, string | null]> = {
+	same: [null, null],
+	changed: ['changed since it was named', 'different then from now'],
+	gone: ['not there at this commit', 'not there at this commit'],
 }
 
 function layoutText(look: LayoutLook): string {
@@ -55,8 +48,13 @@ function layoutText(look: LayoutLook): string {
 				? short(look.at)
 				: `${short(look.at)}, in the folders of HEAD (${short(look.head)})`
 	const change = look.change && `Change: ${look.change.name}, ${count(look.change.files, 'file')} changed.`
+	const changed = look.boxes.filter((box) => box.state !== 'same').map((box) => box.name)
+	const stale =
+		look.named?.stale && look.at === look.head && changed.length > 0
+			? ` Since then ${changed.join(', ')} changed, so the arrows from ${changed.length === 1 ? 'it' : 'them'} may be out of date.`
+			: ''
 	const by = look.named
-		? `Parts named by ken's model at ${short(look.named.drawnAt)}.`
+		? `Parts named by ken's model at ${short(look.named.drawnAt)}.${stale}`
 		: "Split by folder. ken's model has not named these parts."
 	const lines = [`At ${at}, ${where}.`, by, ...(change ? [change] : []), look.next.line, '']
 	for (const box of look.boxes) {
@@ -65,23 +63,21 @@ function layoutText(look: LayoutLook): string {
 			box.paths.length === 1 && only?.split('/').at(-1) === box.name ? only : `${box.name} (${box.paths.join(', ')})`
 		lines.push(`  ${named}, ${count(box.files, 'file')}`)
 		if (box.job) lines.push(`    ${box.job}`)
-		const state = STATES[box.state][look.named ? (look.at === look.head ? 1 : 2) : 0]
+		const state = STATES[box.state][look.at === look.head ? 0 : 1]
 		if (state) lines.push(`    ${state}`)
 		if (box.touched) {
 			const { files, added, removed } = box.touched
 			lines.push(`    the change: ${count(files, 'file')}, ${count(added, 'line')} added, ${removed} removed`)
 		}
-		const marks = (Object.keys(MARKS) as Mark[]).flatMap((mark) => {
-			const topics = box.topics.filter((topic) => topic.mark === mark).map((topic) => topic.topic)
-			return topics.length === 0 ? [] : [`${MARKS[mark]}: ${topics.join(', ')}`]
-		})
-		if (marks.length > 0) lines.push(`    your map: ${marks.join('; ')}`)
+		if (box.map.line !== '') {
+			lines.push(`    ${box.map.line} Topics: ${box.topics.map((topic) => topic.topic).join(', ')}.`)
+		}
 	}
 	if (look.arrows.length > 0) lines.push('', 'How the parts use each other, each from a quoted line:')
 	for (const arrow of look.arrows) {
 		const quote = arrow.quotes[0]
 		const where = quote ? ` (${quote.path}:${quote.startLine})` : ''
-		lines.push(`  ${arrow.from} ${arrow.text} ${arrow.to}${where}${arrow.stale ? ', may be out of date' : ''}`)
+		lines.push(`  ${arrow.from} ${arrow.text} ${arrow.to}${where}`)
 	}
 	lines.push('')
 	const added = look.named?.added ?? []

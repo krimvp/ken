@@ -14,26 +14,14 @@ const GROUPS = [
 	['branch', 'Branches'],
 ]
 
-// What each mark of the reader's map means, said plainly, for one topic and for several.
-const MARKS = [
-	['changed', 'you understood, changed since', 'you understood, changed since'],
-	['met', 'you asked about, not marked understood', 'you asked about, not marked understood'],
-	['new', 'you have not asked about', 'you have not asked about'],
-	['understood', 'you understand', 'you understand'],
-]
-
 // Paths a box lists before it says how many more it holds.
 const SHOWN_PATHS = 3
 
-function mapLine(topics) {
-	if (topics.length === 0) return ''
-	const parts = MARKS.flatMap(([mark, one, many]) => {
-		const n = topics.filter((t) => t.mark === mark).length
-		if (n === 0) return []
-		const text = `${n} ${n === 1 ? one : many}`
-		return [mark === 'changed' ? `<strong class="pv-strong">${text}</strong>` : text]
-	})
-	return `<span class="pv-map">${count(topics.length, 'Topic', 'Topics')} here: ${parts.join('; ')}.</span>`
+// The map's word on the box, written by the server from the same standing as the line over the level.
+function mapLine(map) {
+	if (map.line === '') return ''
+	const strong = map.standing === 'changed' ? ' pv-strong' : ''
+	return `<span class="pv-map${strong}">${esc(map.line)}</span>`
 }
 
 // The paths when they say more than the name does, and the file count.
@@ -47,12 +35,12 @@ function pathsLine(box) {
 	return `<span class="pv-paths">${paths}. ${files}.</span>`
 }
 
-// A folder is compared with the commit checked out now, a named part with the commit it was named at.
+// At the commit checked out now, a named part says whether it changed since ken's model named it. At an older commit,
+// every box says whether it was different then from now.
 function stateLine(box, look) {
 	if (box.state === 'gone') return '<span class="pv-state">Not there at this commit</span>'
 	if (box.state !== 'changed') return ''
-	if (!look.named) return '<span class="pv-state">Different at this commit</span>'
-	const said = look.at === look.head ? 'Changed since the parts were named' : 'Different from when the parts were named'
+	const said = look.at === look.head ? 'Changed since ken named the parts' : 'Different then from now'
 	return `<span class="pv-state">${said}</span>`
 }
 
@@ -65,7 +53,7 @@ function boxHtml(box, i, look) {
 		${pathsLine(box)}
 		${stateLine(box, look)}
 		${touched}
-		${mapLine(box.topics)}
+		${mapLine(box.map)}
 		${box.opens ? '<span class="pv-inside" aria-hidden="true">Look inside</span>' : ''}`
 	const classes = `pv-box is-${box.state}${box.touched ? ' is-touched' : ''}`
 	const html = box.opens
@@ -86,9 +74,6 @@ function arrowsHtml(look, open) {
 	if (look.arrows.length === 0) return ''
 	const items = look.arrows.map((arrow, i) => {
 		const shown = open.has(i)
-		const stale = arrow.stale
-			? `<span class="pv-stale">${esc(arrow.from)} changed since, so this may be out of date</span>`
-			: ''
 		const quotes = shown
 			? arrow.quotes
 					.map((quote) => quoteBody(quote, `<code>${esc(quote.path)}</code>, line ${quote.startLine}. `))
@@ -99,13 +84,13 @@ function arrowsHtml(look, open) {
 				<span class="pv-num" aria-hidden="true">${i + 1}</span>
 				<span class="pv-arrow-text"><strong>${esc(arrow.from)}</strong> ${esc(arrow.text)} <strong>${esc(arrow.to)}</strong></span>
 			</button>
-			${stale}
 			${quotes}
 		</li>`
 	})
 	return `<section class="pv-side" aria-labelledby="pv-uses">
 		<h2 class="pv-sub" id="pv-uses">How the parts use each other</h2>
-		<p class="pv-note">Each arrow is a line of code, such as an import, in the part it starts from. Pick an arrow to see its line.</p>
+		<p class="pv-note">Each arrow rests on a line of code, such as an import, in the part it starts from. Pick an arrow to see its line.</p>
+		<button class="link pv-all" data-act="pv-all" data-key="pv-all">${open.size === look.arrows.length ? 'Hide the lines' : 'Show every line'}</button>
 		<ol class="pv-arrows">${items.join('')}</ol>
 	</section>`
 }
@@ -153,8 +138,9 @@ function plainName(choice) {
 	return choice.name.replace(/^[0-9a-f]{7} /, '')
 }
 
-// Who drew the level, and the one button that asks ken's model to name it: on a folder level, or on a named one that
-// no longer fits. Both name the parts at the commit checked out, so they show only there.
+// Who named the parts, and the one button that asks ken's model to name them: on a folder level, or on a named one
+// that no longer fits. Both name the parts at the commit checked out, so they show only there. What no longer fits is
+// said here once, not on each arrow.
 function byHtml(look, canAsk) {
 	const here = look.at === look.head
 	const ask = (text) =>
@@ -163,14 +149,18 @@ function byHtml(look, canAsk) {
 		return `<div class="pv-by"><p class="pv-by-line">These boxes are the folders. ken's model has not named the parts here yet.</p>${ask('Ask ken to name these parts')}</div>`
 	}
 	const { drawnAt, added, stale } = look.named
-	const by = `<p class="pv-by-line">Named by ken's model at commit <code>${esc(drawnAt.slice(0, 7))}</code>. ken checked every path and arrow.</p>`
+	const by = `<p class="pv-by-line">ken's model named these parts at commit <code>${esc(drawnAt.slice(0, 7))}</code>, and ken checked each path and arrow against the code.</p>`
 	if (!stale || !here) return `<div class="pv-by">${by}</div>`
 	const changed = look.boxes.filter((box) => box.state !== 'same').map((box) => box.name)
 	const why = [
-		...(changed.length > 0 ? [`${names(changed)} changed since`] : []),
-		...(added.length > 0 ? [`${names(added)} ${added.length === 1 ? 'is' : 'are'} new and in no part`] : []),
+		...(changed.length > 0
+			? [
+					`Since then ${names(changed)} changed, so the arrows from ${changed.length === 1 ? 'it' : 'them'} may be out of date.`,
+				]
+			: []),
+		...(added.length > 0 ? [`${names(added)} ${added.length === 1 ? 'is' : 'are'} new and in no part.`] : []),
 	]
-	return `<div class="pv-by">${by}<p class="pv-by-line pv-stale-line">The drawing may no longer fit: ${esc(why.join('; '))}.</p>${ask('Name them again')}</div>`
+	return `<div class="pv-by">${by}<p class="pv-by-line pv-stale-line">${esc(why.join(' '))}</p>${ask('Name them again')}</div>`
 }
 
 function names(list) {
@@ -181,10 +171,9 @@ function names(list) {
 function atLine(look, changes) {
 	const said = []
 	if (look.at !== look.head) {
+		const boxes = look.named ? 'the parts as they were named then' : "today's folders"
 		said.push(
-			look.named
-				? `You are looking at an older commit, <code>${esc(look.at.slice(0, 7))}</code>.`
-				: `You are looking at an older commit, <code>${esc(look.at.slice(0, 7))}</code>. The boxes are today's folders, each marked by how it differed then.`,
+			`You are looking at commit <code>${esc(look.at.slice(0, 7))}</code>, not the one checked out now. The boxes are ${boxes}.`,
 		)
 	}
 	if (look.change) {
@@ -205,16 +194,20 @@ function atLine(look, changes) {
 	return said.length === 0 ? '' : `<p class="pv-at">${said.join(' ')}</p>`
 }
 
+// What sits in no box folds behind one line: the reader rarely needs the list.
 function moreHtml(look) {
 	const paths = (items) => items.map((p) => `<code class="pv-path">${esc(p)}</code>`).join(', ')
 	const added = look.named?.added ?? []
 	const left = look.loose.filter((p) => !added.includes(p))
 	const noun = look.named ? 'part' : 'box'
-	const loose = left.length === 0 ? '' : `<p class="pv-more">In no ${noun} at this commit: ${paths(left)}.</p>`
+	const loose =
+		left.length === 0
+			? ''
+			: `<details class="pv-more"><summary class="pv-more-toggle">${count(left.length, 'file or folder', 'files and folders')} at this commit ${left.length === 1 ? 'is' : 'are'} in no ${noun}</summary><p>${paths(left)}.</p></details>`
 	const outside = look.change?.outside ?? []
 	const changed =
 		outside.length === 0 ? '' : `<p class="pv-more">The change also touched files in no ${noun}: ${paths(outside)}.</p>`
-	return loose + changed
+	return changed + loose
 }
 
 // view holds the level on screen (look), the change choices, the reader's trail of opened boxes, the commit and the
@@ -247,10 +240,10 @@ export function projectViewHtml(view, canAsk) {
 				)
 	return `<section class="project-view">
 		${trail}${heading}
-		${byHtml(look, canAsk)}
-		<p class="lead pv-next">${esc(look.next.line)}</p>
-		${formHtml(view)}
 		${atLine(look, view.changes)}
+		${byHtml(look, canAsk)}
+		${look.next.line === '' ? '' : `<p class="lead pv-next">${esc(look.next.line)}</p>`}
+		${formHtml(view)}
 		<div class="pv-level-body${look.arrows.length > 0 ? ' has-arrows' : ''}">${boxes}${arrowsHtml(look, open)}</div>
 		${moreHtml(look)}
 	</section>`
