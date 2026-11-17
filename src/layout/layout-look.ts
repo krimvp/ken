@@ -1,11 +1,12 @@
-// One level of the project's layout as it looks at one commit. The boxes split the level's scope at HEAD; git's own
-// ids then say which of them are the same, different or not there at the commit asked, a change is laid over them by
-// its diff paths, and the reader's map marks the topics inside each. All of it is derived on every read, from git, the
-// record and the map, and nothing is stored. A box opens the level whose scope is the box's paths.
+// One level of the project's layout as it looks at one commit. The boxes are the parts ken's model named for the level's
+// scope, when the record holds such a level, or else the scope's folders at HEAD. git's own ids then say which boxes
+// are the same, different or not there at the commit asked, a change is laid over them by its diff paths, and the
+// reader's map marks the topics inside each. All of it is derived on every read, from git, the record and the map, and
+// nothing is stored here. A box opens the level whose scope is the box's paths.
 
 import type { SnapshotStore } from '../live/index.ts'
 import type { UnderstandingMap } from '../map/index.ts'
-import type { RecordStore } from '../record/index.ts'
+import type { EntryId, RecordEntry, RecordStore } from '../record/index.ts'
 import type { CommitHash, FileDiff, ObjectId, Range, RepoPath, Repository } from '../repo/index.ts'
 import { type Seed, splitScope, under } from './folder-split.ts'
 import { type BoxTopic, boxTopics, type Next, nextOf } from './reader-marks.ts'
@@ -29,23 +30,38 @@ export type LayoutSources = {
 
 export type Touched = { files: number; added: number; removed: number }
 
-// files counts the files under the box at HEAD. opens is false for a box of one file, which has no level inside.
-// state compares the box at the commit asked with HEAD. touched is null when no change is asked or this one leaves
-// the box alone.
+// job is the model's one line on a part it named, null for a folder. files counts the files under the box at HEAD for
+// a folder and at the commit asked for a part. opens is false for a box of one file, which has no level inside. state
+// compares the box at the commit asked with HEAD for a folder, and with the commit it was named at for a part. touched
+// is null when no change is asked or this one leaves the box alone.
 export type LookBox = Seed & {
+	job: string | null
 	opens: boolean
 	state: 'same' | 'changed' | 'gone'
 	touched: Touched | null
 	topics: BoxTopic[]
 }
 
-// loose names what sits in the scope at the commit asked and in no box, such as a folder HEAD no longer has. outside
-// names the changed files no box holds.
+// A level ken's model named: the record entry, the commit it was named at, and what no longer fits there. added names
+// what sits in the scope at the commit asked, in no part, and was not there when the model named the parts. stale says
+// the drawing no longer fits: a part changed or went, or something was added in no part.
+export type Named = { id: EntryId; drawnAt: CommitHash; added: string[]; stale: boolean }
+
+// An arrow is possibly stale when the part it starts at changed since the model named the parts, since its lines may
+// have changed with it.
+export type LookArrow = Stored['arrows'][number] & { stale: boolean }
+
+type Stored = Extract<RecordEntry, { kind: 'layout' }>
+
+// loose names what sits in the scope at the commit asked and in no box, such as a folder HEAD no longer has or one the
+// model left out of its parts. outside names the changed files no box holds.
 export type LayoutLook = {
 	at: CommitHash
 	head: CommitHash
 	within: Scope
+	named: Named | null
 	boxes: LookBox[]
+	arrows: LookArrow[]
 	loose: string[]
 	change: (Change & { files: number; outside: string[] }) | null
 	next: Next
@@ -63,26 +79,25 @@ export async function lookAtLayout(
 	const { repo } = sources
 	const head = await repo.resolve('HEAD', signal)
 	if (head.kind !== 'ok') throw new Error(`${sources.root} has no HEAD commit to lay out`)
-	const seeds = splitScope(await projectFiles(repo, head.commit, signal), ask.within)
-	const places = seeds.flatMap((seed) => seed.paths)
-	const [idsAtHead, idsAt, loose, diff, read, mapRead] = await Promise.all([
-		repo.objectIds(head.commit, places, signal),
-		ask.at === head.commit ? null : repo.objectIds(ask.at, places, signal),
-		ask.at === head.commit ? [] : looseAt(repo, ask.at, ask.within, places, signal),
+	const read = await sources.record.read()
+	const versions = read.entries.flatMap((entry) =>
+		entry.kind === 'layout' && sameScope(entry, ask.within) ? [entry] : [],
+	)
+	const level =
+		versions.length > 0
+			? await namedLevel(repo, versions, ask, signal)
+			: await folderLevel(repo, ask, head.commit, signal)
+	const places = level.boxes.flatMap((box) => box.paths)
+	const [diff, mapRead] = await Promise.all([
 		ask.change && changedFiles(repo, ask.change.range, signal),
-		sources.record.read(),
 		sources.map.read(now, signal),
 	])
 	const topics = read.current.flatMap((entry) => (entry.kind === 'topic' ? [entry] : []))
-	// No path sits in two boxes, so each box finds its ids by its paths.
-	const atHead = new Map(places.map((place, i) => [place, idsAtHead[i] ?? null]))
-	const atAsked = idsAt && new Map(places.map((place, i) => [place, idsAt[i] ?? null]))
-	const boxes: LookBox[] = seeds.map((seed) => ({
-		...seed,
-		opens: seed.files > 1,
-		state: atAsked ? stateAt(seed.paths, atHead, atAsked) : 'same',
-		touched: diff && touchedIn(seed.paths, diff),
-		topics: boxTopics(seed.paths, topics, mapRead.states),
+	const boxes: LookBox[] = level.boxes.map((box) => ({
+		...box,
+		opens: box.files > 1,
+		touched: diff && touchedIn(box.paths, diff),
+		topics: boxTopics(box.paths, topics, mapRead.states),
 	}))
 	const change =
 		ask.change && diff
@@ -92,7 +107,82 @@ export async function lookAtLayout(
 					outside: diff.map((file) => file.path).filter((file) => !places.some((place) => under(file, place))),
 				}
 			: null
-	return { at: ask.at, head: head.commit, within: ask.within, boxes, loose, change, next: nextOf(boxes) }
+	return { at: ask.at, head: head.commit, within: ask.within, ...level, boxes, change, next: nextOf(boxes) }
+}
+
+type Level = {
+	named: Named | null
+	boxes: (Seed & { job: string | null; state: LookBox['state'] })[]
+	arrows: LookArrow[]
+	loose: string[]
+}
+
+// Among every stored version of the level, the one with the most parts the same at the commit asked, the newest on a
+// tie. So at an old commit the version that fit the code then wins, and at HEAD the newest that fits.
+async function namedLevel(repo: Repository, versions: Stored[], ask: LayoutAsk, signal?: AbortSignal): Promise<Level> {
+	const places = [
+		...new Set(versions.flatMap((version) => version.parts.flatMap((part) => part.places)).map((p) => p.path)),
+	]
+	const [ids, files] = await Promise.all([repo.objectIds(ask.at, places, signal), projectFiles(repo, ask.at, signal)])
+	const idAt = new Map(places.map((place, i) => [place, ids[i] ?? null]))
+	const stateOf = (part: Stored['parts'][number]): LookBox['state'] => {
+		if (part.places.every((place) => idAt.get(place.path) === null)) return 'gone'
+		return part.places.every((place) => idAt.get(place.path) === place.id) ? 'same' : 'changed'
+	}
+	const same = (version: Stored) => version.parts.filter((part) => stateOf(part) === 'same').length
+	// A merge of two clones' records can put a newer line before an older one, so ties go by when ken wrote each.
+	const chosen = versions.reduce((best, version) => {
+		const [a, b] = [same(version), same(best)]
+		return a > b || (a === b && version.at >= best.at) ? version : best
+	})
+	const boxes = chosen.parts.map((part) => {
+		const paths = part.places.map((place) => place.path)
+		return { name: part.name, job: part.job, paths, files: countUnder(files, paths), state: stateOf(part) }
+	})
+	const loose = looseIn(
+		files,
+		ask.within,
+		boxes.flatMap((box) => box.paths),
+	)
+	const thenIds = await repo.objectIds(chosen.drawnAt, loose as RepoPath[], signal)
+	const added = loose.filter((_, i) => thenIds[i] === null)
+	const changed = new Set(boxes.filter((box) => box.state !== 'same').map((box) => box.name))
+	return {
+		named: { id: chosen.id, drawnAt: chosen.drawnAt, added, stale: changed.size > 0 || added.length > 0 },
+		boxes,
+		arrows: chosen.arrows.map((arrow) => ({ ...arrow, stale: changed.has(arrow.from) })),
+		loose,
+	}
+}
+
+// The scope's folders at HEAD, with no model. Each is the same, changed or gone at the commit asked, against HEAD.
+async function folderLevel(repo: Repository, ask: LayoutAsk, head: CommitHash, signal?: AbortSignal): Promise<Level> {
+	const seeds = splitScope(await projectFiles(repo, head, signal), ask.within)
+	const places = seeds.flatMap((seed) => seed.paths)
+	if (ask.at === head) {
+		return { named: null, boxes: seeds.map((seed) => ({ ...seed, job: null, state: 'same' })), arrows: [], loose: [] }
+	}
+	const [idsAtHead, idsAt, files] = await Promise.all([
+		repo.objectIds(head, places, signal),
+		repo.objectIds(ask.at, places, signal),
+		projectFiles(repo, ask.at, signal),
+	])
+	const atHead = new Map(places.map((place, i) => [place, idsAtHead[i] ?? null]))
+	const atAsked = new Map(places.map((place, i) => [place, idsAt[i] ?? null]))
+	return {
+		named: null,
+		boxes: seeds.map((seed) => ({ ...seed, job: null, state: stateAt(seed.paths, atHead, atAsked) })),
+		arrows: [],
+		loose: looseIn(files, ask.within, places),
+	}
+}
+
+function sameScope(layout: Stored, within: Scope): boolean {
+	return layout.within.length === within.length && layout.within.every((place, i) => place === within[i])
+}
+
+function countUnder(files: string[], paths: string[]): number {
+	return files.filter((file) => paths.some((place) => under(file, place))).length
 }
 
 type Ids = Map<string, ObjectId | null>
@@ -110,21 +200,18 @@ async function projectFiles(repo: Repository, commit: CommitHash, signal?: Abort
 	return listed.paths.filter((file) => !under(file, RECORD))
 }
 
-// The entries of the scope at the commit, as its next path segment names them, that no box holds.
-async function looseAt(
-	repo: Repository,
-	at: CommitHash,
-	within: Scope,
-	places: string[],
-	signal?: AbortSignal,
-): Promise<string[]> {
-	const [only] = within
-	const prefix = within.length === 1 && only !== undefined ? `${only}/` : ''
-	const inScope = (file: string) => (within.length === 0 ? true : within.some((place) => under(file, place)))
-	const entries = (await projectFiles(repo, at, signal))
-		.filter((file) => inScope(file) && !places.some((place) => under(file, place)))
-		.map((file) => (file.startsWith(prefix) ? `${prefix}${file.slice(prefix.length).split('/')[0]}` : file))
-	return [...new Set(entries)]
+// The entries of the scope, as its next path segment names them, that hold files and sit in no box.
+function looseIn(files: string[], within: Scope, places: string[]): string[] {
+	const entryOf = (file: string): string | null => {
+		if (within.length === 0) return file.split('/')[0] ?? file
+		const scope = within.find((place) => under(file, place))
+		if (scope === undefined) return null
+		return file === scope ? file : `${scope}/${file.slice(scope.length + 1).split('/')[0]}`
+	}
+	const loose = files
+		.filter((file) => !places.some((place) => under(file, place)))
+		.flatMap((file) => entryOf(file) ?? [])
+	return [...new Set(loose)]
 }
 
 async function changedFiles(repo: Repository, range: Range, signal?: AbortSignal): Promise<FileDiff[]> {

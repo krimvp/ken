@@ -178,3 +178,163 @@ test('a commit, a path or a change the project does not have is refused before k
 		assert.equal((await readLayoutAsk(sources, raw)).kind, 'refused', JSON.stringify(raw))
 	}
 })
+
+type Part = { name: string; job: string; paths: string[] }
+type Arrow = { from: string; to: string; text: string; quotes: { path: string; commit: string; text: string }[] }
+
+async function name(sources: LayoutSources, within: string[], parts: Part[], arrows: Arrow[] = [], at = 'HEAD') {
+	const read = await sources.record.read()
+	const before = read.current.findLast((entry) => entry.kind === 'layout' && entry.within.join() === within.join())
+	const appended = await sources.record.append([{ kind: 'layout', within, at, parts, arrows, replaces: before?.id }])
+	if (appended.kind !== 'appended') assert.fail(appended.problems.join(' '))
+}
+
+test('at an old commit the view shows the version of a named level that fit the code then, and at HEAD the newest', async () => {
+	const { root, hashes } = buildRepository([
+		{ message: 'feat: start', files: { 'src/a/x.ts': 'x\n', 'src/b/y.ts': 'y\n' } },
+		{ message: 'feat: add c, change a', files: { 'src/a/x.ts': 'x2\n', 'src/c/z.ts': 'z\n' } },
+	])
+	const sources = await sourcesFor(root)
+	await name(
+		sources,
+		['src'],
+		[
+			{ name: 'Alpha', job: 'does a', paths: ['src/a'] },
+			{ name: 'Beta', job: 'does b', paths: ['src/b'] },
+		],
+		[],
+		hashes[0],
+	)
+	await name(
+		sources,
+		['src'],
+		[
+			{ name: 'Alpha', job: 'does a', paths: ['src/a'] },
+			{ name: 'Rest', job: 'does b and c', paths: ['src/b', 'src/c'] },
+		],
+	)
+	const parts = (seen: LayoutLook) => seen.boxes.map((each) => [each.name, each.state])
+
+	const old = await look(sources, { within: ['src'], at: hashes[0] })
+	assert.deepEqual(parts(old), [
+		['Alpha', 'same'],
+		['Beta', 'same'],
+	])
+	assert.equal(old.named?.stale, false)
+	const now = await look(sources, { within: ['src'] })
+	assert.deepEqual(parts(now), [
+		['Alpha', 'same'],
+		['Rest', 'same'],
+	])
+	assert.deepEqual(box(now, 'Rest')?.job, 'does b and c')
+})
+
+test('a commit inside one named part marks that part changed and its arrows possibly stale, and a new folder in no part says the drawing no longer fits', async () => {
+	const { root } = buildRepository([
+		{
+			message: 'feat: start',
+			files: {
+				'src/server/serve.ts': "import { answer } from '../agent/answer.ts'\n",
+				'src/agent/answer.ts': "import { save } from '../store/save.ts'\n",
+				'src/store/save.ts': 'export function save() {}\n',
+			},
+		},
+	])
+	const sources = await sourcesFor(root)
+	const quote = (path: string, text: string) => [{ path, commit: 'HEAD', text }]
+	await name(
+		sources,
+		[],
+		[
+			{ name: 'Server', job: 'serves', paths: ['src/server'] },
+			{ name: 'Engine', job: 'answers', paths: ['src/agent'] },
+			{ name: 'Store', job: 'saves', paths: ['src/store'] },
+		],
+		[
+			{
+				from: 'Server',
+				to: 'Engine',
+				text: 'asks',
+				quotes: quote('src/server/serve.ts', "import { answer } from '../agent/answer.ts'"),
+			},
+			{
+				from: 'Engine',
+				to: 'Store',
+				text: 'saves to',
+				quotes: quote('src/agent/answer.ts', "import { save } from '../store/save.ts'"),
+			},
+		],
+	)
+	const fresh = await look(sources, {})
+	assert.equal(fresh.named?.stale, false)
+	assert.deepEqual(fresh.loose, [])
+
+	writeFileSync(path.join(root, 'src/agent/answer.ts'), "import { save } from '../store/save.ts'\nsave()\n")
+	git(root, ['commit', '--quiet', '--all', '--message', 'fix: the engine saves'])
+	const after = await look(sources, {})
+	assert.deepEqual(
+		after.boxes.map((each) => [each.name, each.state]),
+		[
+			['Server', 'same'],
+			['Engine', 'changed'],
+			['Store', 'same'],
+		],
+	)
+	assert.deepEqual(
+		after.arrows.map((each) => [each.from, each.stale]),
+		[
+			['Server', false],
+			['Engine', true],
+		],
+	)
+	assert.equal(after.named?.stale, true)
+
+	writeFileSync(path.join(root, 'tools.ts'), 'tool\n')
+	git(root, ['add', 'tools.ts'])
+	git(root, ['commit', '--quiet', '--message', 'feat: a tool'])
+	assert.deepEqual((await look(sources, {})).named?.added, ['tools.ts'])
+})
+
+test('a named part opens to the level named for its paths, or to the folders inside it', async () => {
+	const { root } = buildRepository([
+		{
+			message: 'feat: start',
+			files: { 'src/engine/run/a.ts': 'a\n', 'src/engine/check/b.ts': 'b\n', 'src/page/p.js': 'p\n' },
+		},
+	])
+	const sources = await sourcesFor(root)
+	await name(
+		sources,
+		[],
+		[
+			{ name: 'Engine', job: 'runs and checks', paths: ['src/engine'] },
+			{ name: 'Page', job: 'shows it', paths: ['src/page'] },
+		],
+	)
+	const engine = box(await look(sources, {}), 'Engine')
+	assert.ok(engine?.opens)
+
+	const folders = await look(sources, { within: engine.paths })
+	assert.equal(folders.named, null)
+	assert.deepEqual(
+		folders.boxes.map((each) => each.name),
+		['check', 'run'],
+	)
+
+	await name(
+		sources,
+		['src/engine'],
+		[
+			{ name: 'Runner', job: 'runs', paths: ['src/engine/run'] },
+			{ name: 'Checker', job: 'checks', paths: ['src/engine/check'] },
+		],
+	)
+	const named = await look(sources, { within: engine.paths })
+	assert.deepEqual(
+		named.boxes.map((each) => [each.name, each.job]),
+		[
+			['Runner', 'runs'],
+			['Checker', 'checks'],
+		],
+	)
+})

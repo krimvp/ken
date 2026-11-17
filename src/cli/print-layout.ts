@@ -32,17 +32,18 @@ function refuse(message: string): number {
 	return 2
 }
 
-const STATES: Record<LookBox['state'], string | null> = {
-	same: null,
-	changed: 'different at this commit',
-	gone: 'not there at this commit',
+// A folder is compared with HEAD, a part ken's model named with the commit it was named at.
+const STATES: Record<LookBox['state'], [string | null, string | null]> = {
+	same: [null, null],
+	changed: ['different at this commit', 'changed since it was named'],
+	gone: ['not there at this commit', 'not there at this commit'],
 }
 
 const MARKS: Record<Mark, string> = {
-	changed: 'changed since you understood it',
-	new: 'never met',
-	met: 'met, not understood yet',
-	understood: 'understood',
+	changed: 'you said you understood it, and its code changed since',
+	new: 'you have not asked about it yet',
+	met: 'you asked about it, and have not said you understand it',
+	understood: 'you said you understand it',
 }
 
 function layoutText(look: LayoutLook): string {
@@ -52,13 +53,17 @@ function layoutText(look: LayoutLook): string {
 			? `${short(look.at)} (HEAD)`
 			: `${short(look.at)}, in the folders of HEAD (${short(look.head)})`
 	const change = look.change && `Change: ${look.change.name}, ${count(look.change.files, 'file')} changed.`
-	const lines = [`At ${at}, ${where}.`, ...(change ? [change] : []), look.next.line, '']
+	const by = look.named
+		? `Parts named by ken's model at ${short(look.named.drawnAt)}.`
+		: "Split by folder. ken's model has not named these parts."
+	const lines = [`At ${at}, ${where}.`, by, ...(change ? [change] : []), look.next.line, '']
 	for (const box of look.boxes) {
 		const [only] = box.paths
 		const named =
 			box.paths.length === 1 && only?.split('/').at(-1) === box.name ? only : `${box.name} (${box.paths.join(', ')})`
 		lines.push(`  ${named}, ${count(box.files, 'file')}`)
-		const state = STATES[box.state]
+		if (box.job) lines.push(`    ${box.job}`)
+		const state = STATES[box.state][look.named ? 1 : 0]
 		if (state) lines.push(`    ${state}`)
 		if (box.touched) {
 			const { files, added, removed } = box.touched
@@ -70,8 +75,17 @@ function layoutText(look: LayoutLook): string {
 		})
 		if (marks.length > 0) lines.push(`    your map: ${marks.join('; ')}`)
 	}
+	if (look.arrows.length > 0) lines.push('', 'How the parts use each other, each from a quoted line:')
+	for (const arrow of look.arrows) {
+		const quote = arrow.quotes[0]
+		const where = quote ? ` (${quote.path}:${quote.startLine})` : ''
+		lines.push(`  ${arrow.from} ${arrow.text} ${arrow.to}${where}${arrow.stale ? ', may be out of date' : ''}`)
+	}
 	lines.push('')
-	if (look.loose.length > 0) lines.push(`Also at this commit, in no box: ${list(look.loose)}.`)
+	const added = look.named?.added ?? []
+	if (added.length > 0) lines.push(`${list(added)} ${added.length === 1 ? 'is' : 'are'} new and in no part.`)
+	const left = look.loose.filter((entry) => !added.includes(entry))
+	if (left.length > 0) lines.push(`Also at this commit, in no box: ${list(left)}.`)
 	if (look.change && look.change.outside.length > 0)
 		lines.push(`Changed outside these boxes: ${list(look.change.outside)}.`)
 	if (look.boxes.some((box) => box.opens)) lines.push('Open a box with --within and each of its paths.')
