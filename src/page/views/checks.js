@@ -163,6 +163,9 @@ function marksKey(q) {
 		risks.some((risk) => risk.checked === false)
 			? `<div><dt><span class="label label-inferred">${RISK_MARKS.inside}</span></dt><dd>${RISK_MARKS.insideMeans}</dd></div>`
 			: '',
+		risks.some((risk) => risk.unreviewed)
+			? `<div><dt><span class="label label-inferred">${RISK_MARKS.unreviewed}</span></dt><dd>${esc(RISK_MARKS.unreviewedMeans)}</dd></div>`
+			: '',
 		risks.some((risk) => risk.fixedIn !== undefined)
 			? `<div><dt><span class="label label-recorded">Fixed since</span></dt><dd>${RISK_MARKS.fixedMeans}</dd></div>`
 			: '',

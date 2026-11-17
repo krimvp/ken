@@ -63,10 +63,11 @@ export type Claim = Statement & { topic?: string; absent?: Absence }
 
 // checked is ken's own mark on a risk of a change, set from git: true when a quote lies wholly outside the change.
 // fixedIn is the later commit, after the change's head, whose message the risk quotes: the project fixed it since.
-// weight is the model's own (see WEIGHT_RULE). ken does not judge it.
+// weight is the model's own (see WEIGHT_RULE). ken does not judge it. unreviewed is set on a risk the second look held
+// and never settled: it errored, ran out of attempts or turns, or did not run.
 export const WEIGHTS = ['serious', 'minor'] as const
 export type Weight = (typeof WEIGHTS)[number]
-export type Risk = Claim & { checked?: boolean; weight?: Weight; fixedIn?: CommitHash }
+export type Risk = Claim & { checked?: boolean; weight?: Weight; fixedIn?: CommitHash; unreviewed?: true }
 
 // A judge found that two risks withdrawn on a sentence alone were the two the project later had to fix, so a
 // withdrawal carries the lines that make the risk false, checked as every quote is.

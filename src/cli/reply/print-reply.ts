@@ -125,6 +125,7 @@ function riskMarks(risk: Risk, paint: Paint): string {
 	const marks = [
 		risk.weight === undefined ? '' : `${risk.weight}, by ken's model`,
 		risk.fixedIn === undefined ? '' : `Fixed since, in ${risk.fixedIn.slice(0, 7)}`,
+		risk.unreviewed ? 'No second look: shown as ken first checked it' : '',
 		risk.checked === undefined ? '' : CHECKED[`${risk.checked}`],
 		risk.label,
 	].filter((mark) => mark !== '')

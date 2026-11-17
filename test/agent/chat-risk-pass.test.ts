@@ -331,3 +331,19 @@ test('a risk shown during the second look shows as it is and leaves the numbers 
 		[CALLER_RISK.text, FIRST_RISK.text],
 	)
 })
+
+test('risks the second look never settled say so on each card, and reviewed ones do not', async () => {
+	const { events } = await ask([
+		show({ scope: { base, head }, risks: [FIRST_RISK, SECOND_RISK] }),
+		{ text: '' },
+		{ text: 'I looked again and found nothing new.' },
+	])
+
+	assert.deepEqual(
+		risks(events).map((risk) => [risk.text, risk.unreviewed]),
+		[
+			[FIRST_RISK.text, true],
+			[SECOND_RISK.text, true],
+		],
+	)
+})

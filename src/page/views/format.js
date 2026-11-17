@@ -218,6 +218,9 @@ export const RISK_MARKS = {
 	inside: 'Quotes only the changed lines',
 	insideMeans:
 		'Every quote of a file in the risk holds a line the change touched. A risk that quotes no file, only commit messages, has neither mark.',
+	unreviewed: 'No second look',
+	unreviewedMeans:
+		"ken's second look at the risks did not finish, so this risk shows as ken first checked it, not checked against the code a second time.",
 	fixed: 'Fixed since, in',
 	fixedMeans:
 		'The risk quotes the message of a commit made after the change, the one named, which says what was wrong. ken shows these risks after the open ones.',

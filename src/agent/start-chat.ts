@@ -197,7 +197,8 @@ export async function startChat(options: {
 				secondLook = costSince(before, tokens)
 			}
 			// Cards of a turn that never ended, and risks the second look did not settle, show as ken first checked them.
-			file([...current.pending.splice(0), ...current.held.splice(0).map((risk) => riskItem(risk).card)])
+			const unreviewed = current.held.splice(0).map((risk) => riskItem({ ...risk, unreviewed: true }).card)
+			file([...current.pending.splice(0), ...unreviewed])
 			if (current.items.length > 0 && !signal?.aborted) {
 				// Past this check the reply is whole, so a stop that comes while it is saved does not lose it.
 				const ended = await endReply(gate, current, new AbortController().signal)

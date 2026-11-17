@@ -199,7 +199,7 @@ function cardHtml(card, t, j, rows) {
 function claimHtml(claim, key, rows, kind) {
 	const tag = kind ? `<span class="card-kind">${kind}</span> ` : ''
 	const marked = claim.label && claim.label !== 'inferred' ? label(claim.label) : ''
-	return `<p class="card-text">${tag}${marked}${fixedHtml(claim)}${checkedHtml(claim)}${weightHtml(claim)}${prose(claim.text)}</p>
+	return `<p class="card-text">${tag}${marked}${fixedHtml(claim)}${unreviewedHtml(claim)}${checkedHtml(claim)}${weightHtml(claim)}${prose(claim.text)}</p>
 		${searchedHtml(claim.absent)}
 		${quoteRows(claim.quotes, key, rows)}`
 }
@@ -238,6 +238,12 @@ function checkedHtml({ checked }) {
 		? ['recorded', RISK_MARKS.outside, RISK_MARKS.outsideMeans]
 		: ['inferred', RISK_MARKS.inside, RISK_MARKS.insideMeans]
 	return `<span class="label label-${style}" title="${esc(means)}">${name}</span>`
+}
+
+// ken's mark on a risk the second look held and never settled.
+function unreviewedHtml({ unreviewed }) {
+	if (!unreviewed) return ''
+	return `<span class="label label-inferred" title="${esc(RISK_MARKS.unreviewedMeans)}">${RISK_MARKS.unreviewed}</span>`
 }
 
 // ken's mark on a risk that quotes the message of a commit made after the change: the project fixed it since.
