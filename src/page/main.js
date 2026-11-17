@@ -481,7 +481,7 @@ function panelHtml() {
 	if (ui.panel.kind === 'quote') return quoteCardHtml(ui, items)
 	if (ui.panel.kind === 'all') return allQuotesHtml(items)
 	if (!q.reply || cardsOf(q, 0).length === 0) return noChecksPanelHtml(q.live)
-	return checksHtml(q, ui)
+	return checksHtml(q, ui, state.thread.length > 1)
 }
 
 function render() {

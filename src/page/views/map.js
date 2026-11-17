@@ -85,20 +85,16 @@ const SAID = {
 	'too-much': (names) => `Saved. The next reply on ${names} will be shorter.`,
 }
 
-// The three buttons under a reply, which act on the topics it names. t is the reply's turn in the thread.
+// The three buttons under a reply, on one quiet line, which act on the topics it names. t is the reply's turn in the thread.
 export function mapBarHtml(q, t, ui, running) {
 	const names = q.reply.topics ?? []
 	const named = list(names.map((name) => `<strong>${esc(name)}</strong>`))
 	const saved = ui.mapSaid?.turn === t ? ui.mapSaid.signal : null
 	const said = saved ? `<p class="map-said" role="status">${SAID[saved](list(names.map(esc)))}</p>` : ''
-	const deeper = `<button class="quiet-button" data-act="map-deeper" data-turn="${t}" data-key="map-deeper-${t}"${running ? ' disabled' : ''}>Go deeper</button>`
-	return `<section class="map-bar" aria-label="Your map">
-		<p class="small">Tell ken how well you know ${named}:</p>
-		<ul class="map-buttons">
-			<li><button class="quiet-button" data-act="map-know" data-turn="${t}" data-key="map-know-${t}">I know this</button><span>Later replies show it as one line.</span></li>
-			<li><button class="quiet-button" data-act="map-too-much" data-turn="${t}" data-key="map-too-much-${t}">Too much detail</button><span>The next reply on it is shorter.</span></li>
-			<li>${deeper}<span>The next reply on it goes into more detail. One model run.</span></li>
-		</ul>
+	const button = (act, text, means, off = false) =>
+		`<button class="link" data-act="map-${act}" data-turn="${t}" data-key="map-${act}-${t}" title="${means}"${off ? ' disabled' : ''}>${text}</button>`
+	return `<section class="map-bar small" aria-label="Your map">
+		<p>How well do you know ${named}? ${button('know', 'I know this', 'Later replies show it as one line.')} <span aria-hidden="true">·</span> ${button('too-much', 'Too much detail', 'The next reply on it is shorter.')} <span aria-hidden="true">·</span> ${button('deeper', 'Go deeper', 'Asks for more detail. One model run.', running)}</p>
 		${said}
 	</section>`
 }

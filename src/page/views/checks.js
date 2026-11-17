@@ -60,7 +60,8 @@ function blocks(n) {
 	return count(n, 'changed block', 'changed blocks')
 }
 
-export function checksHtml(q, ui) {
+// ofMany: the thread holds more than one question, so the panel names the one it checked.
+export function checksHtml(q, ui, ofMany = false) {
 	const all = quotesOf(q)
 	const quotes = all.filter((quote) => !isSession(quote))
 	const copies = copiesOf(q)
@@ -99,9 +100,9 @@ export function checksHtml(q, ui) {
 		back === 0
 			? ''
 			: `<p class="muted">ken sent ${count(back, 'card', 'cards')} back to its model first. The steps say why.</p>`
-	// A thread holds several replies, so the panel names the question whose reply it checked.
+	const which = ofMany ? `<p class="panel-for">For "${prose(q.question.split('\n')[0])}"</p>` : ''
 	return `<div class="panel-head"><h2>What ken checked</h2></div>
-		<p class="panel-for small">For your question: ${prose(q.question.split('\n')[0])}</p>
+		${which}
 		<p class="panel-limit">${limit(q)}</p>
 		<section class="check" id="check-quotes">
 			<h3>Quotes</h3>

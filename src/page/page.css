@@ -140,8 +140,18 @@ html {
 	font-size: var(--text-md);
 }
 
-.primary[disabled] {
-	opacity: 0.55;
+/* A button that cannot act now keeps its label readable. */
+.primary[disabled],
+.quiet-button[disabled] {
+	border-color: var(--color-border);
+	background: var(--color-code-bg);
+	color: var(--color-muted);
+	cursor: default;
+}
+
+.link[disabled] {
+	color: var(--color-muted);
+	text-decoration: none;
 	cursor: default;
 }
 
@@ -691,7 +701,7 @@ span.label {
 	align-items: center;
 	gap: 0.4em;
 	padding: 0 0.5em;
-	border: 1px dashed var(--color-muted);
+	border: 1.5px dashed var(--color-text);
 	border-radius: var(--radius-sm);
 	color: var(--color-text);
 	font-size: var(--text-note);
@@ -841,6 +851,10 @@ span.label-from-the-session {
 
 .q-row[aria-expanded="true"] .q-first {
 	display: none;
+}
+
+.q-there {
+	color: var(--color-note);
 }
 
 .q-source {
@@ -1139,6 +1153,13 @@ ul.left-out {
 	line-height: var(--leading-tight);
 }
 
+.panel-for {
+	margin-top: var(--space-1);
+	color: var(--color-note);
+	font-size: var(--text-note);
+	line-height: 1.5;
+}
+
 .panel-limit {
 	margin-top: var(--space-2);
 	color: var(--color-note);
@@ -1385,16 +1406,6 @@ ul.left-out {
 .panel-empty h2 {
 	margin-bottom: var(--space-3);
 	color: var(--color-text);
-}
-
-.panel-empty ol {
-	margin-top: var(--space-3);
-	padding-left: 1.25rem;
-	list-style: decimal;
-}
-
-.panel-empty li {
-	margin-bottom: var(--space-2);
 }
 
 /* First visit */
@@ -1688,16 +1699,10 @@ ul.left-out {
 	color: var(--color-text);
 }
 
+/* The map's buttons under a reply: one quiet line, below the reply and its chips. */
 .map-bar {
-	margin-top: var(--space-6);
-	padding-top: var(--space-4);
-	border-top: 1px solid var(--color-border);
-}
-
-/* With no closing note, the rule under the last statement is the one above the buttons. */
-ol + .map-bar {
-	margin-top: 0;
-	border-top: 0;
+	margin-top: var(--space-4);
+	color: var(--color-note);
 }
 
 .map-buttons {
@@ -1710,11 +1715,6 @@ ol + .map-bar {
 .map-buttons .quiet-button,
 .lenses .quiet-button {
 	min-height: 2.75rem;
-}
-
-.quiet-button[disabled] {
-	opacity: 0.55;
-	cursor: default;
 }
 
 .map-said {
@@ -1884,11 +1884,6 @@ ol + .map-bar {
 }
 
 @media (max-width: 1099px) {
-	.map-bar .map-buttons li {
-		display: grid;
-		justify-items: start;
-	}
-
 	.map-view,
 	.decisions-view {
 		padding-top: var(--space-5);
@@ -2404,25 +2399,7 @@ q.subject {
 	}
 }
 
-/* The buttons under an answer, each with what it does, and the lenses folded behind one line. */
-.map-bar .map-buttons li {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	gap: var(--space-1) var(--space-3);
-	color: var(--color-note);
-	font-size: var(--text-note);
-}
-
-.map-bar .map-buttons {
-	display: grid;
-	gap: var(--space-2);
-}
-
-.map-bar .map-buttons .quiet-button {
-	min-width: 8.5rem;
-}
-
+/* The lenses under an answer, folded behind one line. */
 .lens-fold {
 	padding: var(--space-3) 0 var(--space-6);
 }
@@ -2506,8 +2483,13 @@ q.subject {
 	overflow-wrap: anywhere;
 }
 
+/* The words and the cards share one width, about 80 characters of body text. */
+.words,
+.card {
+	max-width: 44rem;
+}
+
 .words {
-	max-width: var(--measure);
 	line-height: 1.6;
 }
 

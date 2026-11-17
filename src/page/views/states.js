@@ -65,18 +65,12 @@ export function workingHtml(q, t, open, seconds) {
 		<p class="actions"><button class="quiet-button" data-act="stop" data-key="stop">Stop</button></p></div>`
 }
 
-const HOW_KEN_CHECKS = `<ol>
-		<li>ken looks in git for every line a card quotes.</li>
-		<li>If a quote is not there, ken sends the card back to its model, and you never see it.</li>
-		<li>The reply appears on the left. What ken checked appears here: the quotes, the changed code no quote covers, and the commits.</li>
-	</ol>`
-
 // The panel when there are no quotes yet: working while the model still writes.
 export function noChecksPanelHtml(working) {
 	const said = working
-		? "When ken's model shows a card:"
-		: 'This reply has no cards, so there are no quotes to show. When one does:'
-	return `<div class="panel-empty"><h2>${working ? 'Nothing to check yet' : 'Nothing to check'}</h2><p>${said}</p>${HOW_KEN_CHECKS}</div>`
+		? "When ken's model shows a card, ken looks in git for each line it quotes and lists here what it found."
+		: 'This reply has no cards, so there is no quote to check.'
+	return `<div class="panel-empty"><h2>${working ? 'Nothing to check yet' : 'Nothing to check'}</h2><p>${said}</p></div>`
 }
 
 const STATUS = [

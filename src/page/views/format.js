@@ -162,8 +162,8 @@ export function tagHtml(tag) {
 }
 
 // At rest a quote is one row: the file, the lines, and the first quoted line, with the commit when the reply quotes
-// more than one. Opened, it shows all its lines: in place, or in the panel on a wide screen, where only the row whose
-// quote the panel shows reads as open.
+// more than one. Opened, it shows all its lines: in place, or in the panel on a wide screen, where the row whose quote
+// the panel shows says so.
 export function quoteRows(quotes, key, { ui, commits, head = null, copies = NONE, change = null }) {
 	const tags = quoteTags(quotes, { head, copies, change })
 	return `<ul class="quotes">${quotes
@@ -179,7 +179,7 @@ export function quoteRows(quotes, key, { ui, commits, head = null, copies = NONE
 					: ''
 			return `<li class="q${chosen ? ' chosen' : ''}">
 				<button class="q-row" data-act="quote" data-item="${key}" data-quote="${j}" data-key="${id}" aria-expanded="${ui.wide ? chosen : open}"${ui.wide ? ' aria-controls="panel"' : ''}>
-					<span class="q-path">${quoteSource(quote)}</span><span class="q-lines">${then}<span class="nowrap">${quoteLines(quote)}</span>${at}</span>${first ? `<span class="q-first">${esc(first.trim())}</span>` : ''}
+					<span class="q-path">${quoteSource(quote)}</span><span class="q-lines">${then}<span class="nowrap">${quoteLines(quote)}</span>${at}</span>${chosen ? '<span class="q-there">Shown in the panel on the right</span>' : first ? `<span class="q-first">${esc(first.trim())}</span>` : ''}
 				</button>
 				${open ? quoteBody(quote, '', commits, copies) : ''}
 			</li>`
