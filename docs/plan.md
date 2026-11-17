@@ -1,6 +1,6 @@
 # Plan: a code companion that explains a project to its reader
 
-As of 2026-11-15
+As of 2026-11-17
 
 ## Summary
 
@@ -84,6 +84,19 @@ The hash is what replaces the cursor. When the code under a topic changes, the e
 
 The map is a plain file the reader can open and correct, because it will sometimes be wrong. A question asked is evidence of interest, not proof of understanding.
 
+### The project's layout
+
+The owner asked on 2026-11-17 for ken to "show me the state of the repo architecture-wise at any point and zoom in on the feature, change etc I am doing", and for a guide that "shows me data I want to follow", lets them look closer when they want, "and makes a model of what I know about it". The layout is that view, and the page's Project view is its home.
+
+- **A level is a few boxes over paths.** With nothing drawn, plain code splits the level's scope by its next folder: the five largest folders by file count, one "N more folders" box for the rest, and one box for the files that sit right in the folder. A box opens the level whose scope is its paths, so zooming in is a lookup and nothing has to be kept in step.
+- **Any commit.** The boxes are the folders at HEAD. At another commit, git's own ids say which boxes hold the same content, which are different, and which are not there yet. What sat in the scope then and in no box now is named.
+- **A change laid over it.** A range, a branch from where it left the main branch, or the reader's uncommitted work, through live mode's snapshot. Each box shows the files it touched and the lines added and removed. A changed file in no box is named.
+- **The reader's map on each box.** Each topic in the record sits in the boxes that hold a file it quotes. A box says which of its topics the reader never met, met, understood, or understood before their code changed. One line over the view says where to look next: first the boxes whose code changed since the reader understood it, then the boxes whose topics they never met.
+
+No model takes part, and nothing is stored: each look reads git, the record and the map again. The next step lets the model draw a level: name the boxes and add arrows that rest on quoted lines. Those drawn levels will be stored in the record as a fifth kind of entry, `layout`, that only grows, with every version kept. That kind is not built yet, because nothing reads it before the model can write it.
+
+This touches "no code index". The layout is not an index: it is a few folders per level, read from git when the reader looks, with no symbols, no call graph and no cache. A drawn level adds a few named boxes and quoted arrows, still not an index of the code.
+
 ### Lenses
 
 | Lens              | Question it answers                               |
@@ -153,7 +166,7 @@ Add one only as another tool the agent can call, such as "outline this file", an
 
 ## Components
 
-The new repository has six parts. Only the chat agent calls a model; everything else is plain code.
+The new repository has seven parts. Only the chat agent calls a model; everything else is plain code.
 
 ```mermaid
 flowchart LR
@@ -184,6 +197,7 @@ The chat agent reads the repository and the stores directly. Anything it or a co
 | Checks            | The quote checker, the git change facts with hunk coverage, and the validation of every store entry.                                                                                            |
 | Stores            | The project record and the understanding map, as plain append-only files.                                                                                                                       |
 | Decision command  | A small command that any coding agent can call during its work to log a decision. It writes through the same checks.                                                                            |
+| Layout            | The project as a few boxes per level, at any commit, with a change and the reader's map laid over them. Plain code reads it from git, the record and the map; nothing is stored yet.            |
 
 ## Build order
 
@@ -273,6 +287,7 @@ The owner chose these on 2026-11-17, after saying the answers felt scripted and 
 | --------------------------- | ---------------------------------------------------------------------------------------------------------- |
 | How ken replies             | Talk first. The model replies in its own words and shows a checked card only where a claim needs proof.   |
 | Decisions and risks         | Risks on ask. A reply about a change gives the story and a one-line hint; the reader asks for the rest. The second look runs on the risks when they come. |
+| The architecture view       | The project's layout at any commit, with zoom into a part and a change laid over it, and the reader's map on each part. See "The project's layout". |
 
 ## Out of scope for the first version
 
@@ -282,7 +297,7 @@ The owner chose these on 2026-11-17, after saying the answers felt scripted and 
 - Quizzes, or any gate before a push or a merge.
 - Testing the reader, for example by asking them to predict what the code does.
 - Recording full agent sessions. Other tools do this; the companion reads what they save.
-- Large diagrams, such as a full call graph or a map of every file. A diagram in an answer stays basic: a few boxes and arrows that support the high level.
+- Large diagrams, such as a full call graph or a map of every file. A diagram in an answer stays basic: a few boxes and arrows that support the high level. The project's layout keeps to a few boxes per level too.
 - Editor plugins.
 
 ## Sources

@@ -14,6 +14,7 @@ Screenshot of an answer on ken's local page, about a commit in a small made-up p
 - **Answers you can find again.** Your questions and ken's answers stay on your machine, in `~/.ken/projects/<first commit>/`. The decisions, their reasons and what each piece of work did go into the project record, in `.ken/record/`, as JSON Lines files that ken only adds to. You commit the record, so a collaborator and their coding agents can read it.
 - **Where each reason comes from.** ken labels each decision from its quotes, so a model cannot mark its own guess as recorded. "Recorded" means written down at the time, in a commit message or with `ken decide`. "From the session" means quoted from a saved session. "Inferred" means the model worked it out. "Found by search" marks a link between pieces of code that rests on a text search.
 - **What waits on you.** "Waiting on you" lists the decisions a coding agent left for you, and the topics you marked as known whose code has changed since, with who changed them. Answer a decision with "Keep what was chosen" or "I want it changed". ken saves your answer and changes no code.
+- **The project at a glance.** The Project view shows the project as a few boxes, one per main folder, and opens any box to show the boxes inside it. Pick a commit to see which boxes were different then or not there yet, and lay a change over the boxes: a recent merge, a branch, or your uncommitted work. Each box says which of your topics you never met, understood, or understood before their code changed, and one line says where to look next. All of it comes from git, the record and your map, with no model.
 - **Live mode.** Beside your coding agent, ken writes a short note on each commit and on uncommitted work that has gone quiet. Live mode is off until you turn it on, and it shows what it spends.
 
 In ken's last two test rounds, on pull requests it had never seen, fresh AI judges compared its answers with a plain chat on the same model, and each time rated ken's narrowly better overall, for its checked quotes and its kept record. The verdicts are in [docs/checkpoint/](docs/checkpoint/).
@@ -89,6 +90,14 @@ npm run ken -- catch-up --repo ../my-project
 npm run ken -- area src/server --repo ../my-project
 ```
 
+`layout` prints one level of the project's layout and needs no model. `--at` picks the commit, `--within` opens a box (give each of its paths), and `--change` lays a change over the boxes: a range such as `main..feature`, a branch, or `uncommitted`.
+
+```sh
+npm run ken -- layout --repo ../my-project
+npm run ken -- layout --within src --change uncommitted --repo ../my-project
+npm run ken -- layout --at v0.3.0 --change main..feature --repo ../my-project
+```
+
 `follow-up` prints what is open: the decisions that need your call, and the topics you understood whose code changed since, with the commits that changed them. `who` lists one author's commits, named by email or part of a name, and the topics you know that they touched. `since` lists what landed in a span for everyone, with the pieces of work the record has in it. A span is a day such as `2026-11-01` or a number of days such as `14d`; `who` uses the time since your last question unless you give `--since`. Each prints its list without a model, then asks the agent when a model is set. When the list holds nothing to explain, it asks nothing.
 
 ```sh
@@ -97,7 +106,7 @@ npm run ken -- who bo@example.com --since 14d --repo ../my-project
 npm run ken -- since 2026-11-01 --repo ../my-project
 ```
 
-`open` starts the page for the repository in the current folder, or the one you name, and opens it in your browser. It prints the address too, in case no browser opens. Press Ctrl-C to stop it. With no model set, the page still opens: it shows your earlier answers and says what to set. The page draws diagrams with Mermaid, which ken serves from its own address. Under each reply that names a topic, "I know this", "Too much" and "Go deeper" update your map. The header links to "Decisions" and "Your map", to "Live" when a model is set, and to "Waiting on you" when something waits on you. The lenses sit under the question box: catch up, an area, and what changed, by one person or by everyone, in a span you pick.
+`open` starts the page for the repository in the current folder, or the one you name, and opens it in your browser. It prints the address too, in case no browser opens. Press Ctrl-C to stop it. With no model set, the page still opens: it shows your earlier answers and says what to set. The page draws diagrams with Mermaid, which ken serves from its own address. Under each reply that names a topic, "I know this", "Too much" and "Go deeper" update your map. The header links to "Project", "Decisions" and "Your map", to "Live" when a model is set, and to "Waiting on you" when something waits on you. The lenses sit under the question box: catch up, an area, and what changed, by one person or by everyone, in a span you pick.
 
 ```sh
 npm run ken -- open
