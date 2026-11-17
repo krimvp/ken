@@ -52,7 +52,7 @@ export function nextOf(boxes: { name: string; topics: BoxTopic[] }[]): Next {
 function nextLine(changed: string[], unmet: string[], anyTopic: boolean): string {
 	if (!anyTopic) return 'ken knows no topic in these boxes yet. Ask about one, and your map starts there.'
 	if (changed.length === 0 && unmet.length === 0) {
-		return 'Nothing waits for you here: no topic you understood has changed, and you have met a topic in every box that has one.'
+		return 'No topic you understood has changed, and you have met a topic in every box that has one.'
 	}
 	const said: string[] = []
 	if (changed.length > 0) said.push(`Look next at ${names(changed)}: code you understood there changed since.`)

@@ -48,7 +48,9 @@ const MARKS: Record<Mark, string> = {
 function layoutText(look: LayoutLook): string {
 	const where = look.within.length === 0 ? 'the whole project' : `inside ${list(look.within)}`
 	const at =
-		look.at === look.head ? `${short(look.at)} (HEAD)` : `${short(look.at)}, in the boxes of HEAD ${short(look.head)}`
+		look.at === look.head
+			? `${short(look.at)} (HEAD)`
+			: `${short(look.at)}, in the folders of HEAD (${short(look.head)})`
 	const change = look.change && `Change: ${look.change.name}, ${count(look.change.files, 'file')} changed.`
 	const lines = [`At ${at}, ${where}.`, ...(change ? [change] : []), look.next.line, '']
 	for (const box of look.boxes) {
@@ -70,7 +72,8 @@ function layoutText(look: LayoutLook): string {
 	}
 	lines.push('')
 	if (look.loose.length > 0) lines.push(`Also at this commit, in no box: ${list(look.loose)}.`)
-	if (look.change && look.change.outside.length > 0) lines.push(`Changed, in no box: ${list(look.change.outside)}.`)
+	if (look.change && look.change.outside.length > 0)
+		lines.push(`Changed outside these boxes: ${list(look.change.outside)}.`)
 	if (look.boxes.some((box) => box.opens)) lines.push('Open a box with --within and each of its paths.')
 	return `${lines.join('\n')}\n`
 }
