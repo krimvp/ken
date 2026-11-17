@@ -1031,8 +1031,12 @@ $('#question').addEventListener('keydown', (event) => {
 })
 
 // A mark on a card says what it means when the reader points at it, moves to it with the keyboard, or taps it. The one
-// tooltip is fixed to the screen, so it never widens the page; it stays inside the screen and follows its mark on scroll.
+// tooltip is fixed to the screen, so it never widens the page, and follows its mark on scroll. It goes above the
+// card's line of marks, else beside the mark, else under the card's text: the first place inside the screen that leaves
+// the card's text clear. With no such place it goes above, held inside the screen.
 let tipFor = null
+const GAP = 6
+const EDGE = 8
 
 function showTip(mark) {
 	const tip = $('#tip')
@@ -1040,10 +1044,23 @@ function showTip(mark) {
 	tip.textContent = mark.dataset.tip
 	tip.hidden = false
 	const box = mark.getBoundingClientRect()
-	const left = Math.max(8, Math.min(box.left, innerWidth - tip.offsetWidth - 8))
-	const below = box.bottom + 6
-	tip.style.left = `${left}px`
-	tip.style.top = `${below + tip.offsetHeight > innerHeight - 8 ? box.top - tip.offsetHeight - 6 : below}px`
+	const marks = (mark.closest('.card-marks') ?? mark).getBoundingClientRect()
+	const text = mark.closest('.card')?.querySelector('.card-text')?.getBoundingClientRect()
+	const [width, height] = [tip.offsetWidth, tip.offsetHeight]
+	const clampLeft = (left) => Math.max(EDGE, Math.min(left, innerWidth - width - EDGE))
+	const places = [
+		{ left: clampLeft(box.left), top: marks.top - height - GAP },
+		{ left: box.right + GAP, top: box.bottom - height },
+		{ left: box.left - width - GAP, top: box.bottom - height },
+		{ left: clampLeft(box.left), top: Math.max(box.bottom, text?.bottom ?? 0) + GAP },
+	]
+	const fits = ({ left, top }) =>
+		left >= EDGE && top >= EDGE && left + width <= innerWidth - EDGE && top + height <= innerHeight - EDGE
+	const clear = ({ left, top }) =>
+		!text || left + width <= text.left || left >= text.right || top + height <= text.top || top >= text.bottom
+	const place = places.find((each) => fits(each) && clear(each)) ?? places[0]
+	tip.style.left = `${place.left}px`
+	tip.style.top = `${Math.max(EDGE, Math.min(place.top, innerHeight - height - EDGE))}px`
 }
 
 function hideTip() {
