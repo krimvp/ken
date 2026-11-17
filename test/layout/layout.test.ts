@@ -142,6 +142,31 @@ test("a branch's change counts from where it left main, lands its files in their
 	assert.deepEqual(uncommitted.change?.outside, [])
 })
 
+test("with no change asked, the view lays the reader's uncommitted work over the boxes, else their branch against main, else nothing", async () => {
+	const { root, hashes } = buildRepository([
+		{ message: 'feat: start', files: { 'src/a/x.ts': 'x\n', 'src/b/y.ts': 'y\n' } },
+		{ message: 'feat: side work', files: { 'src/b/y.ts': 'y\ny2\n' } },
+	])
+	git(root, ['branch', '--force', 'feature', hashes[1] ?? ''])
+	git(root, ['reset', '--quiet', '--hard', hashes[0] ?? ''])
+	const sources = await sourcesFor(root)
+	const touched = (seen: LayoutLook) => seen.boxes.filter((each) => each.touched).map((each) => each.name)
+
+	const onMain = await look(sources, { within: ['src'] })
+	assert.equal(onMain.change, null, 'on main with nothing uncommitted there is nothing to lay over')
+
+	git(root, ['checkout', '--quiet', 'feature'])
+	const onBranch = await look(sources, { within: ['src'] })
+	assert.equal(onBranch.change?.name, 'feature')
+	assert.deepEqual(touched(onBranch), ['b'])
+
+	writeFileSync(path.join(root, 'src/a/x.ts'), 'x\nnot committed\n')
+	const working = await look(sources, { within: ['src'] })
+	assert.equal(working.change?.name, 'Uncommitted work')
+	assert.deepEqual(touched(working), ['a'], 'uncommitted work comes before the branch')
+	assert.equal((await look(sources, { within: ['src'], change: 'none' })).change, null)
+})
+
 test('a topic the reader understood whose code then changed marks its box, and that box leads where to look next, before a box whose topics they never met', async () => {
 	const { root } = buildRepository([
 		{

@@ -76,7 +76,17 @@ const state = {
 	decisionsKey: false,
 	// The level of the layout on screen, the changes it can lay over the boxes, the boxes the reader opened to get here,
 	// and the commit and change in the form, as typed or picked.
-	layout: { look: null, changes: [], trail: [WHOLE], at: '', change: '', problem: null, openArrows: new Set() },
+	// change is '' until the server picks the reader's own work, then the text that asks for the change on screen.
+	layout: {
+		look: null,
+		changes: [],
+		trail: [WHOLE],
+		at: '',
+		change: '',
+		problem: null,
+		openArrows: new Set(),
+		formOpen: false,
+	},
 	ui: freshUi(),
 	// What is open, with its own open decisions and quotes, the line that says what the last button saved, and the
 	// decisions the reader answered on this visit.
@@ -756,17 +766,26 @@ async function loadLayout() {
 	for (const path of trail.at(-1).within) query.append('within', path)
 	if (change !== '') query.set('change', change)
 	try {
-		const { look, changes } = await getJson(`/api/layout?${query}`)
-		state.layout = { ...state.layout, look, changes, problem: null, openArrows: new Set() }
+		const response = await fetch(`/api/layout?${query}`)
+		const body = await response.json()
+		if (!response.ok) {
+			state.layout = { ...state.layout, problem: { message: body.message, field: body.field ?? null } }
+		} else {
+			const { look, changes } = body
+			const change = look.change?.asked ?? 'none'
+			state.layout = { ...state.layout, look, changes, change, problem: null, openArrows: new Set() }
+		}
 	} catch (error) {
-		state.layout = { ...state.layout, problem: error.message }
+		state.layout = { ...state.layout, problem: { message: error.message, field: null } }
 	}
 	render()
 }
 
+// The view opens on where the reader is: their own work laid over the whole project, at the commit checked out now.
 async function showProject() {
 	state.view = 'project'
 	state.menuOpen = false
+	state.layout = { ...state.layout, trail: [WHOLE], at: '', change: '', formOpen: false }
 	render()
 	await loadLayout()
 	window.scrollTo({ top: 0 })
@@ -903,7 +922,7 @@ const actions = {
 		return send({ lens: { kind: 'parts', within: trail.at(-1).within, name } })
 	},
 	async 'pv-reset'() {
-		state.layout = { ...state.layout, at: '', change: '' }
+		state.layout = { ...state.layout, at: '', change: '', formOpen: false }
 		await loadLayout()
 		$('#pv-level')?.focus({ preventScroll: true })
 	},
@@ -1069,10 +1088,11 @@ document.addEventListener('click', (event) => {
 	else if (state.thread.length > 0) chooseInDrawing(event.target)
 })
 
-// A file's diff is drawn when the reader opens it.
+// A file's diff is drawn when the reader opens it. The Project view keeps whether its form is open across renders.
 document.addEventListener(
 	'toggle',
 	(event) => {
+		if (event.target.matches?.('.pv-other')) state.layout.formOpen = event.target.open
 		const file = event.target.dataset?.file
 		if (file === undefined) return
 		const open = state.ui.openFiles

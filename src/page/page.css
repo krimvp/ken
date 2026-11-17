@@ -1968,12 +1968,37 @@ ul.left-out {
 	font-weight: 600;
 }
 
+.pv-other {
+	margin-top: var(--space-5);
+}
+
+.pv-other-toggle {
+	width: fit-content;
+	min-height: 2.75rem;
+	padding: var(--space-2) 0;
+	color: var(--color-accent);
+	cursor: pointer;
+	text-decoration: underline;
+	text-decoration-thickness: 1px;
+	text-underline-offset: 0.18em;
+}
+
+.pv-error {
+	max-width: 24rem;
+	color: var(--color-text);
+	font-weight: 600;
+}
+
+.pv-form [aria-invalid="true"] {
+	border: 2px solid var(--color-warn-border);
+}
+
 .pv-form {
 	display: flex;
 	flex-wrap: wrap;
-	align-items: flex-end;
+	align-items: flex-start;
 	gap: var(--space-3);
-	margin-top: var(--space-5);
+	margin-top: var(--space-2);
 }
 
 .pv-field {
@@ -2014,6 +2039,7 @@ ul.left-out {
 
 .pv-form .quiet-button {
 	min-height: 2.75rem;
+	margin-top: 1.6rem;
 }
 
 .pv-by {

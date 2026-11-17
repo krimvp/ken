@@ -101,7 +101,7 @@ export async function openServer(options: {
 				change: query.get('change') ?? undefined,
 			}
 			const ask = await readLayoutAsk(layout, raw)
-			if (ask.kind !== 'ok') return sendJson(response, 400, { message: ask.message })
+			if (ask.kind !== 'ok') return sendJson(response, 400, { message: ask.message, field: ask.field })
 			const [look, changes] = await Promise.all([lookAtLayout(layout, ask.ask, new Date()), changeChoices(layout)])
 			return sendJson(response, 200, { look, changes })
 		}

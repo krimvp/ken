@@ -119,6 +119,8 @@ function trailHtml(trail) {
 	return `<nav class="pv-trail" aria-label="Where you are in the project"><ol>${crumbs.join('')}</ol></nav>`
 }
 
+// Another commit or another change, folded away: the view opens on where the reader is, and this is rarely needed. A
+// commit or a change the server refused shows its reason under its own field.
 function formHtml(view) {
 	const option = (value, text) =>
 		`<option value="${esc(value)}"${value === view.change ? ' selected' : ''}>${esc(text)}</option>`
@@ -127,11 +129,23 @@ function formHtml(view) {
 		if (choices.length === 0) return []
 		return [`<optgroup label="${title}">${choices.map((c) => option(c.change, plainName(c))).join('')}</optgroup>`]
 	})
-	return `<form class="pv-form" autocomplete="off">
-		<span class="pv-field"><label for="pv-at">At commit</label><input id="pv-at" name="at" value="${esc(view.at)}" placeholder="HEAD" spellcheck="false" /></span>
-		<span class="pv-field pv-change"><label for="pv-change">Mark what a change touched</label><select id="pv-change" name="change">${option('', 'No change')}${groups.join('')}</select></span>
-		<button class="quiet-button" type="submit" data-key="pv-show">Show</button>
-	</form>`
+	const listed = view.change === 'none' || view.changes.some((c) => c.change === view.change)
+	const current = !listed && view.look?.change ? option(view.change, view.look.change.name) : ''
+	const error = (field) =>
+		view.problem?.field === field
+			? `<span class="pv-error" id="pv-${field}-error">${esc(view.problem.message)}</span>`
+			: ''
+	const invalid = (field) =>
+		view.problem?.field === field ? ` aria-invalid="true" aria-describedby="pv-${field}-error"` : ''
+	const open = view.formOpen || view.problem ? ' open' : ''
+	return `<details class="pv-other"${open}>
+		<summary class="pv-other-toggle" data-key="pv-other">Look at another commit or change</summary>
+		<form class="pv-form" autocomplete="off">
+			<span class="pv-field"><label for="pv-at">At commit</label><input id="pv-at" name="at" value="${esc(view.at)}" placeholder="HEAD" spellcheck="false"${invalid('at')} />${error('at')}</span>
+			<span class="pv-field pv-change"><label for="pv-change">Lay a change over the parts</label><select id="pv-change" name="change"${invalid('change')}>${option('none', 'None')}${current}${groups.join('')}</select>${error('change')}</span>
+			<button class="quiet-button" type="submit" data-key="pv-show">Show</button>
+		</form>
+	</details>`
 }
 
 // A merge or a commit is named by its subject alone. The hash says nothing to the reader the subject does not.
@@ -174,13 +188,18 @@ function atLine(look, changes) {
 		)
 	}
 	if (look.change) {
-		const picked = changes.find((c) => c.change === look.change.name)
-		const name = picked ? plainName(picked) : look.change.name
+		const picked = changes.find((c) => c.change === look.change.asked)
+		const what =
+			look.change.asked === 'uncommitted'
+				? 'your uncommitted work'
+				: picked?.kind === 'branch'
+					? `the branch ${esc(look.change.name)}`
+					: esc(picked ? plainName(picked) : look.change.name)
 		const { files } = look.change
 		said.push(
 			files === 0
-				? `Marked: ${esc(name)}, which changed nothing here.`
-				: `Marked: what ${esc(name)} touched, ${count(files, 'file', 'files')} in all.`,
+				? `Laid over the parts: ${what}, which changed no file.`
+				: `Laid over the parts: ${what}, ${count(files, 'file', 'files')} changed.`,
 		)
 	}
 	return said.length === 0 ? '' : `<p class="pv-at">${said.join(' ')}</p>`
@@ -212,8 +231,8 @@ export function projectViewHtml(view, canAsk) {
 	if (view.problem || !view.look) {
 		return `<section class="project-view">
 			${trail}${heading}
+			<p class="pv-at" role="alert">ken could not show this level. ${view.problem?.field ? 'The reason is under the field below.' : esc(view.problem?.message ?? '')} <button class="link" data-act="pv-reset" data-key="pv-reset">Show where you are now</button></p>
 			${formHtml(view)}
-			<div class="notice" role="alert"><p>${esc(view.problem)}</p><p><button class="link" data-act="pv-reset" data-key="pv-reset">Show the commit checked out now</button></p></div>
 		</section>`
 	}
 	const { look } = view

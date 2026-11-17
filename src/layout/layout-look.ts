@@ -14,8 +14,9 @@ import { type BoxTopic, boxTopics, type Next, nextOf } from './reader-marks.ts'
 // The paths a level shows the inside of, sorted. The empty list is the whole project.
 export type Scope = RepoPath[]
 
-// name says what the change is to the reader: "Uncommitted work", a branch, or a range as they typed it.
-export type Change = { name: string; range: Range }
+// name says what the change is to the reader: "Uncommitted work", a branch, or a range as they typed it. asked is the
+// text that asks for this change again.
+export type Change = { name: string; asked: string; range: Range }
 
 export type LayoutAsk = { at: CommitHash; within: Scope; change: Change | null }
 

@@ -35,7 +35,7 @@ const USAGE = `Usage:
   ken ask "<question>" [--repo <path>] [--json]
   ken record [<id>] [--repo <path>] [--json]
   ken map [--repo <path>] [--json]
-  ken layout [--at <ref>] [--within <path>]... [--change <a..b, branch or uncommitted>] [--repo <path>] [--json]
+  ken layout [--at <ref>] [--within <path>]... [--change <a..b, branch, uncommitted or none>] [--repo <path>] [--json]
   ken catch-up [--repo <path>]
   ken area <path> [--repo <path>]
   ken follow-up [--repo <path>]

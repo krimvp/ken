@@ -1,6 +1,7 @@
 // What a reader asks of the layout comes as text, from the terminal's flags or the page's query, so it is parsed here
 // into commits and paths before anything reads git with it. A change is a range, a branch, or the reader's uncommitted
-// work, which live mode's snapshot turns into a commit ken can diff.
+// work, which live mode's snapshot turns into a commit ken can diff. With no change asked, the view shows where the
+// reader is: their uncommitted work if there is any, else the branch HEAD is on against the main branch, else none.
 import { takeSnapshot } from '../live/index.ts'
 import { type CommitHash, parsePath, type Repository, resolveRange } from '../repo/index.ts'
 import type { Change, LayoutAsk, LayoutSources } from './layout-look.ts'
@@ -8,6 +9,8 @@ import type { Change, LayoutAsk, LayoutSources } from './layout-look.ts'
 export type RawAsk = { at?: string | undefined; within?: string[] | undefined; change?: string | undefined }
 
 const UNCOMMITTED = 'uncommitted'
+// Asks for no change at all, where leaving the change out asks for the reader's own work.
+const NONE = 'none'
 // A branch's change starts where it split from the first of these that the project has.
 const MAIN_BRANCHES = ['main', 'master', 'origin/HEAD']
 // The picker offers this many merges, or commits when the main line has no merge.
@@ -17,20 +20,41 @@ export async function readLayoutAsk(
 	sources: LayoutSources,
 	raw: RawAsk,
 	signal?: AbortSignal,
-): Promise<{ kind: 'ok'; ask: LayoutAsk } | { kind: 'refused'; message: string }> {
+): Promise<{ kind: 'ok'; ask: LayoutAsk } | { kind: 'refused'; field: 'at' | 'within' | 'change'; message: string }> {
 	const { repo } = sources
 	const ref = raw.at?.trim() || 'HEAD'
 	const at = await repo.resolve(ref, signal)
-	if (at.kind !== 'ok') return { kind: 'refused', message: `"${ref}" is not a commit of this project.` }
+	if (at.kind !== 'ok') return { kind: 'refused', field: 'at', message: `"${ref}" is not a commit of this project.` }
 	const within = []
 	for (const each of raw.within ?? []) {
 		const parsed = parsePath(each)
-		if (parsed.kind !== 'ok') return { kind: 'refused', message: `${parsed.reason}.` }
+		if (parsed.kind !== 'ok') return { kind: 'refused', field: 'within', message: `${parsed.reason}.` }
 		within.push(parsed.path)
 	}
-	const change = raw.change?.trim() ? await changeOf(sources, raw.change.trim(), signal) : null
-	if (change?.kind === 'refused') return change
+	const text = raw.change?.trim() ?? ''
+	const change =
+		text === NONE
+			? null
+			: text === ''
+				? { kind: 'ok' as const, change: await ownWork(sources, signal) }
+				: await changeOf(sources, text, signal)
+	if (change?.kind === 'refused') return { ...change, field: 'change' }
 	return { kind: 'ok', ask: { at: at.commit, within: [...new Set(within)].sort(), change: change?.change ?? null } }
+}
+
+async function ownWork(sources: LayoutSources, signal?: AbortSignal): Promise<Change | null> {
+	const { repo, snapshots, root } = sources
+	const snapshot = await takeSnapshot(snapshots, repo, root, signal)
+	if (snapshot.kind === 'taken') return uncommitted(snapshot.head, snapshot.commit)
+	const [branch, main] = await Promise.all([repo.branch(signal), mainBranch(repo, signal)])
+	if (branch === null || main === null || branch === main) return null
+	const range = await resolveRange(repo, { base: main, head: branch }, signal)
+	if (range.kind !== 'ok' || range.range.base === range.range.head) return null
+	return { name: branch, asked: branch, range: range.range }
+}
+
+function uncommitted(head: CommitHash, snapshot: CommitHash): Change {
+	return { name: 'Uncommitted work', asked: UNCOMMITTED, range: { base: head, head: snapshot } }
 }
 
 async function changeOf(
@@ -41,13 +65,9 @@ async function changeOf(
 	const { repo, snapshots, root } = sources
 	if (text === UNCOMMITTED) {
 		const snapshot = await takeSnapshot(snapshots, repo, root, signal)
-		const head = snapshot.head
 		return {
 			kind: 'ok',
-			change: {
-				name: 'Uncommitted work',
-				range: { base: head, head: snapshot.kind === 'taken' ? snapshot.commit : head },
-			},
+			change: uncommitted(snapshot.head, snapshot.kind === 'taken' ? snapshot.commit : snapshot.head),
 		}
 	}
 	const [base, head, ...rest] = text.includes('..') ? text.split('..') : [await mainBranch(repo, signal), text]
@@ -60,7 +80,7 @@ async function changeOf(
 	if (!base || !head || rest.length > 0)
 		return { kind: 'refused', message: `"${text}" is not a range such as main..feature.` }
 	const range = await resolveRange(repo, { base, head }, signal)
-	if (range.kind === 'ok') return { kind: 'ok', change: { name: text, range: range.range } }
+	if (range.kind === 'ok') return { kind: 'ok', change: { name: text, asked: text, range: range.range } }
 	if (range.kind === 'unrelated') return { kind: 'refused', message: `${base} and ${head} share no history.` }
 	return {
 		kind: 'refused',
