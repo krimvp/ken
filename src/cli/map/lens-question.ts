@@ -19,17 +19,15 @@ export async function lensQuestion(
 	const opened = await mapOf(directory)
 	if (opened.kind !== 'ok') return opened
 	const repo = gitRepository(opened.root)
-	const [{ states }, record] = await Promise.all([
-		opened.map.read(new Date()),
-		fileRecordStore(opened.root, repo).read(),
-	])
+	const store = fileRecordStore(opened.root, repo)
+	const [{ states }, record] = await Promise.all([opened.map.read(new Date()), store.read()])
 	if (lens.kind === 'area') {
 		const area = parsePath(lens.path)
 		if (area.kind !== 'ok') return { kind: 'refused', message: `Name a folder or a file: ${area.reason}.` }
 		return { kind: 'ok', text: areaQuestion(area.path, states, record, onDay), empty: false }
 	}
 	if (lens.kind === 'follow-up') return { kind: 'ok', ...openQuestion(await openItems(repo, record, states)) }
-	const history = await openHistory(kenHome(process.env), repo)
+	const history = await openHistory(kenHome(process.env), repo, store)
 	const asked = history.kind === 'ok' ? await history.history.list() : []
 	if (lens.kind === 'who' || lens.kind === 'since') {
 		const facts = { record, states, lastQuestion: asked.at(-1) }

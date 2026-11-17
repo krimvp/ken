@@ -9,6 +9,7 @@
 	--color-del: #8c2b1c;
 	--color-warn-bg: #fbf3e4;
 	--color-warn-border: #b8913f;
+	--color-box-border: var(--color-border);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -18,6 +19,8 @@
 		--color-del: #eda497;
 		--color-warn-bg: #2a2418;
 		--color-warn-border: #9c7f42;
+		/* The shared border is too faint on a dark card for a box the reader must see. */
+		--color-box-border: #4d545e;
 	}
 }
 
@@ -140,8 +143,18 @@ html {
 	font-size: var(--text-md);
 }
 
-.primary[disabled] {
-	opacity: 0.55;
+/* A button that cannot act now keeps its label readable. */
+.primary[disabled],
+.quiet-button[disabled] {
+	border-color: var(--color-border);
+	background: var(--color-code-bg);
+	color: var(--color-muted);
+	cursor: default;
+}
+
+.link[disabled] {
+	color: var(--color-muted);
+	text-decoration: none;
 	cursor: default;
 }
 
@@ -219,6 +232,11 @@ html {
 .page.single {
 	display: block;
 	max-width: calc(44rem + 2 * var(--space-6));
+}
+
+/* The Project view lays its boxes side by side, so it takes a wider column on a wide screen. */
+.page.single.wide-view {
+	max-width: calc(76rem + 2 * var(--space-6));
 }
 
 .chat {
@@ -361,6 +379,32 @@ html {
 .asked {
 	color: var(--color-note);
 	font-size: var(--text-note);
+}
+
+/* On a wide screen with more than one reply, the turn the panel describes has a bar at its left and says so. */
+.turn.described {
+	position: relative;
+}
+
+.turn.described::before {
+	content: "";
+	position: absolute;
+	top: var(--space-6);
+	bottom: var(--space-6);
+	left: calc(-1 * var(--space-4));
+	width: 3px;
+	border-radius: 2px;
+	background: var(--color-accent);
+}
+
+.described-note {
+	display: none;
+}
+
+.turn.described .described-note {
+	display: inline;
+	margin-left: var(--space-3);
+	color: var(--color-accent);
 }
 
 .question {
@@ -691,7 +735,7 @@ span.label {
 	align-items: center;
 	gap: 0.4em;
 	padding: 0 0.5em;
-	border: 1px dashed var(--color-muted);
+	border: 1.5px dashed var(--color-text);
 	border-radius: var(--radius-sm);
 	color: var(--color-text);
 	font-size: var(--text-note);
@@ -755,13 +799,7 @@ span.label-from-the-session {
 	color: var(--color-note);
 }
 
-/* A risk mark's name is longer than the label column, so its meaning goes below it */
-.marks div {
-	grid-template-columns: minmax(0, 1fr);
-	gap: var(--space-1);
-}
-
-/* Quote rows: at rest they show the file, the lines and the first quoted line */
+/* Quote rows: the file and the lines over the quoted code, or its first lines when it is long */
 .quotes {
 	display: grid;
 	grid-template-columns: minmax(0, 1fr);
@@ -830,17 +868,8 @@ span.label-from-the-session {
 	white-space: nowrap;
 }
 
-.q-first {
-	overflow: hidden;
-	color: var(--color-code-text);
-	font-family: var(--font-code);
-	font-size: var(--text-code);
-	white-space: pre;
-	text-overflow: ellipsis;
-}
-
-.q-row[aria-expanded="true"] .q-first {
-	display: none;
+.q-there {
+	color: var(--color-note);
 }
 
 .q-source {
@@ -854,7 +883,8 @@ span.label-from-the-session {
 	color: var(--color-code-text);
 }
 
-/* Code: a gutter of line numbers, and lines that wrap under their own number so a long line stays one line */
+/* Code: a gutter of line numbers, and lines that wrap under their own number. The rest of a wrapped line sits two
+   characters further in, so it never reads as a line of its own. */
 .code {
 	overflow-x: auto;
 	margin: 0;
@@ -883,6 +913,8 @@ span.label-from-the-session {
 
 .code .lc {
 	min-width: 0;
+	padding-left: 2ch;
+	text-indent: -2ch;
 	white-space: pre-wrap;
 	overflow-wrap: anywhere;
 }
@@ -899,6 +931,15 @@ span.label-from-the-session {
 	grid-column: 2;
 	white-space: normal;
 	color: var(--color-note);
+	font-family: var(--font-text);
+	font-size: var(--text-note);
+}
+
+/* Under the first lines of a long quote on a card, the button that shows them all */
+.code .q-all {
+	grid-column: 2;
+	justify-self: start;
+	margin-top: var(--space-1);
 	font-family: var(--font-text);
 	font-size: var(--text-note);
 }
@@ -1124,11 +1165,6 @@ ul.left-out {
 	line-height: 1.5;
 }
 
-.note {
-	margin-top: var(--space-5);
-	overflow-wrap: anywhere;
-}
-
 /* The panel */
 .panel-head {
 	display: flex;
@@ -1144,10 +1180,33 @@ ul.left-out {
 	line-height: var(--leading-tight);
 }
 
-.panel-limit {
-	margin-top: var(--space-2);
+.panel-for {
+	margin-top: var(--space-1);
 	color: var(--color-note);
 	font-size: var(--text-note);
+	line-height: 1.5;
+}
+
+/* What ken found, and each thing no quote shows, read before any detail. */
+.verdict {
+	margin-top: var(--space-3);
+}
+
+.verdict > * + * {
+	margin-top: var(--space-3);
+}
+
+.verdict-line {
+	font-weight: 600;
+}
+
+.gap {
+	padding-left: var(--space-3);
+	border-left: 3px solid var(--color-border);
+}
+
+.details-toggle {
+	margin-top: var(--space-4);
 }
 
 .panel-nav {
@@ -1392,16 +1451,6 @@ ul.left-out {
 	color: var(--color-text);
 }
 
-.panel-empty ol {
-	margin-top: var(--space-3);
-	padding-left: 1.25rem;
-	list-style: decimal;
-}
-
-.panel-empty li {
-	margin-bottom: var(--space-2);
-}
-
 /* First visit */
 .welcome {
 	padding: var(--space-8) 0 var(--space-5);
@@ -1617,10 +1666,6 @@ ul.left-out {
 		min-width: 0;
 	}
 
-	.q-first {
-		flex-basis: 100%;
-	}
-
 	.drawing {
 		padding: var(--space-2);
 	}
@@ -1693,16 +1738,10 @@ ul.left-out {
 	color: var(--color-text);
 }
 
+/* The map's buttons under a reply: one quiet line, below the reply and its chips. */
 .map-bar {
-	margin-top: var(--space-6);
-	padding-top: var(--space-4);
-	border-top: 1px solid var(--color-border);
-}
-
-/* With no closing note, the rule under the last statement is the one above the buttons. */
-ol + .map-bar {
-	margin-top: 0;
-	border-top: 0;
+	margin-top: var(--space-4);
+	color: var(--color-note);
 }
 
 .map-buttons {
@@ -1715,11 +1754,6 @@ ol + .map-bar {
 .map-buttons .quiet-button,
 .lenses .quiet-button {
 	min-height: 2.75rem;
-}
-
-.quiet-button[disabled] {
-	opacity: 0.55;
-	cursor: default;
 }
 
 .map-said {
@@ -1775,19 +1809,22 @@ ol + .map-bar {
 }
 
 .map-view,
-.decisions-view {
+.decisions-view,
+.project-view {
 	padding: var(--space-7) 0 var(--space-6);
 }
 
 .map-view h1,
-.decisions-view h1 {
+.decisions-view h1,
+.project-view h1 {
 	font-size: 2rem;
 	font-weight: 650;
 	line-height: var(--leading-tight);
 }
 
 .map-view .lead,
-.decisions-view .lead {
+.decisions-view .lead,
+.project-view .lead {
 	margin-top: var(--space-3);
 	max-width: var(--measure);
 }
@@ -1889,18 +1926,15 @@ ol + .map-bar {
 }
 
 @media (max-width: 1099px) {
-	.map-bar .map-buttons li {
-		display: grid;
-		justify-items: start;
-	}
-
 	.map-view,
-	.decisions-view {
+	.decisions-view,
+	.project-view {
 		padding-top: var(--space-5);
 	}
 
 	.map-view h1,
-	.decisions-view h1 {
+	.decisions-view h1,
+	.project-view h1 {
 		font-size: 1.625rem;
 	}
 
@@ -1910,6 +1944,484 @@ ol + .map-bar {
 
 	.area-form input {
 		flex: 1 1 9rem;
+	}
+}
+
+/* The Project view: the trail of opened boxes, the form, and the boxes of one level */
+.pv-trail ol {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-1) var(--space-2);
+	margin-bottom: var(--space-2);
+	padding: 0;
+	list-style: none;
+	font-size: var(--text-note);
+}
+
+.pv-trail li + li::before {
+	content: "/";
+	margin-right: var(--space-2);
+	color: var(--color-note);
+}
+
+.pv-trail [aria-current] {
+	font-weight: 600;
+}
+
+.pv-other {
+	margin-top: var(--space-5);
+}
+
+.pv-other-toggle {
+	width: fit-content;
+	min-height: 2.75rem;
+	padding: var(--space-2) 0;
+	color: var(--color-accent);
+	cursor: pointer;
+	text-decoration: underline;
+	text-decoration-thickness: 1px;
+	text-underline-offset: 0.18em;
+}
+
+.pv-error {
+	max-width: 24rem;
+	color: var(--color-text);
+	font-weight: 600;
+}
+
+.pv-form [aria-invalid="true"] {
+	border: 2px solid var(--color-warn-border);
+}
+
+.pv-form {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-start;
+	gap: var(--space-3);
+	margin-top: var(--space-2);
+}
+
+.pv-field {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-1);
+	min-width: 0;
+	font-size: var(--text-note);
+	font-weight: 600;
+}
+
+.pv-change {
+	flex: 1 1 14rem;
+}
+
+.pv-form input,
+.pv-form select {
+	min-width: 0;
+	min-height: 2.75rem;
+	padding: var(--space-2) var(--space-3);
+	border: 1px solid var(--color-muted);
+	border-radius: var(--radius-sm);
+	background: var(--color-card);
+	color: var(--color-text);
+	font-size: var(--text-note);
+	font-weight: 400;
+}
+
+.pv-form input {
+	width: 10rem;
+	font-family: var(--font-code);
+}
+
+.pv-form input::placeholder {
+	color: var(--color-note);
+	opacity: 1;
+}
+
+.pv-form .quiet-button {
+	min-height: 2.75rem;
+	margin-top: 1.6rem;
+}
+
+.pv-by {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-2) var(--space-4);
+	margin-top: var(--space-3);
+	max-width: var(--measure);
+	color: var(--color-note);
+	font-size: var(--text-note);
+}
+
+.pv-by-line {
+	flex: 1 1 100%;
+}
+
+.pv-stale-line {
+	color: var(--color-text);
+}
+
+.pv-ask {
+	min-height: 2.75rem;
+}
+
+/* Where the reader is: the change laid over the parts, and the commit when it is not the one checked out. */
+.pv-at {
+	margin-top: var(--space-3);
+	max-width: var(--measure);
+}
+
+/* On a narrow screen the boxes are one list. From 760 pixels they are a picture: a grid with room between the boxes for
+   the arrows, which parts-picture.js draws once the boxes are laid out. --draw tells it whether to draw. */
+.pv-level-body {
+	margin-top: var(--space-5);
+}
+
+.pv-picture {
+	--draw: 0;
+	position: relative;
+}
+
+.pv-boxes {
+	display: grid;
+	gap: var(--space-3);
+	padding: 0;
+	list-style: none;
+}
+
+.pv-cell {
+	display: flex;
+	min-width: 0;
+}
+
+@media (min-width: 760px) {
+	.pv-picture {
+		--draw: 1;
+	}
+
+	.pv-picture .pv-boxes {
+		grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
+		/* Every row as tall as the tallest box, so the boxes line up. */
+		grid-template-rows: repeat(var(--rows), 1fr);
+		gap: 6rem var(--space-8);
+	}
+
+	.pv-picture .pv-cell {
+		position: relative;
+		z-index: 1;
+		grid-row: var(--row);
+		grid-column: var(--col);
+	}
+}
+
+@media (min-width: 1100px) {
+	.pv-level-body.has-arrows {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) 22rem;
+		align-items: start;
+		gap: var(--space-7);
+	}
+
+	.pv-level-body.has-arrows .pv-sub {
+		margin-top: 0;
+	}
+}
+
+.pv-lines {
+	position: absolute;
+	inset: 0;
+	z-index: 0;
+	overflow: visible;
+}
+
+.pv-line {
+	stroke: var(--color-muted);
+	stroke-width: 1.5;
+}
+
+.pv-head {
+	fill: var(--color-muted);
+}
+
+.pv-head.is-open {
+	fill: var(--color-accent);
+}
+
+.pv-hit {
+	stroke: transparent;
+	stroke-width: 16;
+}
+
+.pv-link[data-act] {
+	cursor: pointer;
+}
+
+.pv-link.is-open .pv-line,
+.pv-link[data-act]:hover .pv-line {
+	stroke: var(--color-accent);
+	stroke-width: 2.5;
+}
+
+.pv-badge {
+	fill: var(--color-card);
+	stroke: var(--color-muted);
+	stroke-width: 1.5;
+}
+
+.pv-link.is-open .pv-badge,
+.pv-link[data-act]:hover .pv-badge {
+	stroke: var(--color-accent);
+	stroke-width: 2.5;
+}
+
+.pv-badge-text {
+	fill: var(--color-text);
+	font-size: 14px;
+	font-weight: 650;
+	text-anchor: middle;
+	dominant-baseline: central;
+}
+
+.pv-box {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-1);
+	width: 100%;
+	min-width: 0;
+	padding: var(--space-4);
+	border: 1px solid var(--color-box-border);
+	border-radius: var(--radius-md);
+	background: var(--color-card);
+	color: var(--color-text);
+	font: inherit;
+	text-align: left;
+}
+
+button.pv-box {
+	cursor: pointer;
+}
+
+button.pv-box:hover {
+	border-color: var(--color-accent);
+}
+
+/* One signal per state: a change's touch is the amber edge, a part not there is the dashed border, and a part that
+   changed is its line of words. */
+.pv-box.is-gone {
+	border-style: dashed;
+}
+
+.pv-box.is-touched {
+	border-left: 4px solid var(--color-warn-border);
+}
+
+.pv-name {
+	font-size: var(--text-md);
+	font-weight: 650;
+}
+
+/* A box that opens says so in the accent colour, as a link does. */
+.pv-inside {
+	color: var(--color-accent);
+	font-size: var(--text-note);
+	font-weight: 600;
+	margin-top: auto;
+	padding-top: var(--space-2);
+}
+
+.pv-inside::after {
+	content: " \203A";
+}
+
+button.pv-box:hover .pv-inside {
+	text-decoration: underline;
+	text-underline-offset: 0.18em;
+}
+
+.pv-job {
+	font-size: var(--text-md);
+}
+
+.pv-paths,
+.pv-map {
+	font-size: var(--text-note);
+	color: var(--color-note);
+}
+
+/* A path wraps between paths, never inside one. */
+.pv-path {
+	white-space: nowrap;
+}
+
+.pv-map.pv-strong {
+	color: var(--color-text);
+	font-weight: 600;
+}
+
+.pv-state,
+.pv-touched {
+	font-size: var(--text-note);
+	font-weight: 600;
+}
+
+.pv-sub {
+	margin-top: var(--space-6);
+	font-size: var(--text-h2);
+	font-weight: 650;
+	line-height: var(--leading-tight);
+}
+
+.pv-note {
+	margin-top: var(--space-1);
+	max-width: var(--measure);
+	color: var(--color-note);
+	font-size: var(--text-note);
+}
+
+.pv-arrows {
+	margin-top: var(--space-3);
+	padding: 0;
+	list-style: none;
+	border-top: 1px solid var(--color-box-border);
+}
+
+.pv-arrow-item {
+	padding: var(--space-2) 0;
+	border-bottom: 1px solid var(--color-box-border);
+}
+
+.pv-arrow {
+	display: flex;
+	align-items: center;
+	gap: var(--space-1) var(--space-4);
+	width: 100%;
+	min-height: 2.75rem;
+	padding: var(--space-2) 0;
+	border: 0;
+	background: none;
+	color: var(--color-text);
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+/* The arrow's number, as the picture shows it on the arrow. */
+.pv-num {
+	display: inline-grid;
+	flex: none;
+	place-items: center;
+	width: 1.625rem;
+	height: 1.625rem;
+	border: 1.5px solid var(--color-muted);
+	border-radius: 50%;
+	font-size: var(--text-note);
+	font-weight: 650;
+}
+
+.pv-arrow[aria-expanded="true"] .pv-num,
+.pv-arrow:hover .pv-num {
+	border-color: var(--color-accent);
+	color: var(--color-accent);
+}
+
+/* One control opens or closes the line under every arrow. */
+.pv-all {
+	margin-top: var(--space-2);
+	font-size: var(--text-note);
+}
+
+.pv-arrow:focus-visible {
+	outline-width: 2px;
+	outline-offset: 2px;
+}
+
+.pv-arrow-item .q-source {
+	margin-top: var(--space-2);
+}
+
+.pv-more {
+	margin-top: var(--space-5);
+	max-width: var(--measure);
+	color: var(--color-note);
+	font-size: var(--text-note);
+}
+
+.pv-more-toggle {
+	width: fit-content;
+	cursor: pointer;
+}
+
+/* The change card: what a change touched, over the project's top level of parts, at the top of a reply about it. */
+.change-card {
+	margin-bottom: var(--space-5);
+	padding: var(--space-4);
+	border: 1px solid var(--color-box-border);
+	border-radius: var(--radius-md);
+	background: var(--color-card);
+}
+
+.cc-title {
+	font-size: var(--text-md);
+	font-weight: 650;
+}
+
+.cc-sub {
+	margin-top: var(--space-4);
+	font-size: var(--text-note);
+	font-weight: 650;
+}
+
+.cc-line {
+	margin-top: var(--space-2);
+	color: var(--color-note);
+	font-size: var(--text-note);
+}
+
+.change-card .pv-picture {
+	margin-top: var(--space-3);
+}
+
+.change-card .pv-box {
+	padding: var(--space-3);
+	background: var(--color-bg);
+}
+
+.cc-touched {
+	font-size: var(--text-note);
+	font-weight: 600;
+}
+
+.cc-quiet {
+	color: var(--color-note);
+	font-size: var(--text-note);
+}
+
+.cc-commits {
+	margin-top: var(--space-1);
+	padding: 0;
+	list-style: none;
+	font-size: var(--text-note);
+}
+
+.cc-commit {
+	padding: var(--space-1) 0;
+	overflow-wrap: anywhere;
+}
+
+/* On a narrow screen the card lists only the parts the change touched, and names the others in one line. */
+@media (max-width: 759px) {
+	.change-card .cc-untouched {
+		display: none;
+	}
+}
+
+@media (min-width: 760px) {
+	.change-card .pv-picture .pv-boxes {
+		gap: var(--space-6) var(--space-7);
+	}
+
+	.cc-narrow {
+		display: none;
 	}
 }
 
@@ -2409,25 +2921,7 @@ q.subject {
 	}
 }
 
-/* The buttons under an answer, each with what it does, and the lenses folded behind one line. */
-.map-bar .map-buttons li {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	gap: var(--space-1) var(--space-3);
-	color: var(--color-note);
-	font-size: var(--text-note);
-}
-
-.map-bar .map-buttons {
-	display: grid;
-	gap: var(--space-2);
-}
-
-.map-bar .map-buttons .quiet-button {
-	min-width: 8.5rem;
-}
-
+/* The lenses under an answer, folded behind one line. */
 .lens-fold {
 	padding: var(--space-3) 0 var(--space-6);
 }
@@ -2483,4 +2977,147 @@ q.subject {
 	.decide-form {
 		padding-left: 0;
 	}
+}
+
+/* The thread. One line at its top says once what plain text and a box mean, so no card needs a caption. */
+.legend {
+	margin-top: var(--space-5);
+	color: var(--color-note);
+	font-size: var(--text-note);
+}
+
+.turn + .turn {
+	border-top: 1px solid var(--color-border);
+}
+
+/* A reply: the model's words as plain text, and its cards boxed between them. */
+.reply {
+	margin-top: var(--space-4);
+}
+
+.words > * + * {
+	margin-top: var(--space-3);
+}
+
+.words,
+.card {
+	margin-top: var(--space-4);
+	overflow-wrap: anywhere;
+}
+
+/* The words and the cards share one width, about 80 characters of body text. */
+.words,
+.card {
+	max-width: 44rem;
+}
+
+.words {
+	line-height: 1.6;
+}
+
+.words-list {
+	padding-left: var(--space-5);
+}
+
+.words-list > * + * {
+	margin-top: var(--space-1);
+}
+
+.card {
+	display: grid;
+	grid-template-columns: 1.5rem minmax(0, 1fr);
+	padding: var(--space-3) var(--space-4) var(--space-3) var(--space-3);
+	border: 1px solid var(--color-border);
+	border-left: 3px solid var(--color-add);
+	border-radius: var(--radius-md);
+	background: var(--color-card);
+	scroll-margin-top: var(--top);
+}
+
+.card-check {
+	color: var(--color-add);
+	font-weight: 700;
+	line-height: 1.6;
+}
+
+.card-body > :first-child {
+	margin-top: 0;
+}
+
+.card-text {
+	line-height: 1.6;
+}
+
+/* A card's kind and its marks, on a line above its text, with room between them. */
+.card-marks {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-2);
+	margin-bottom: var(--space-2);
+}
+
+[data-tip] {
+	cursor: help;
+}
+
+/* The one tooltip of the page, placed by main.js inside the screen next to the mark it explains. */
+#tip {
+	position: fixed;
+	z-index: 50;
+	max-width: min(22rem, calc(100vw - 2 * var(--gutter)));
+	padding: var(--space-2) var(--space-3);
+	border: 1px solid var(--color-border);
+	border-radius: var(--radius-sm);
+	background: var(--color-card);
+	box-shadow: 0 4px 16px rgb(0 0 0 / 0.15);
+	color: var(--color-text);
+	font-size: var(--text-note);
+	line-height: 1.5;
+	pointer-events: none;
+}
+
+.card-kind {
+	margin-right: 0.35em;
+	color: var(--color-note);
+	font-size: var(--text-note);
+	font-weight: 650;
+}
+
+.card .diagram {
+	margin-top: 0;
+}
+
+/* Under a reply about a change: ask for its decisions or its risks. */
+.chips {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-2);
+	margin-top: var(--space-4);
+}
+
+.chip {
+	min-height: 2.75rem;
+	padding: var(--space-1) var(--space-4);
+	border: 1px solid var(--color-border);
+	border-radius: 999px;
+	background: var(--color-card);
+	color: var(--color-accent);
+	font: inherit;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.chip:hover:not(:disabled) {
+	border-color: var(--color-accent);
+}
+
+.chip:disabled {
+	color: var(--color-muted);
+	cursor: default;
+}
+
+.working {
+	margin-top: var(--space-4);
 }

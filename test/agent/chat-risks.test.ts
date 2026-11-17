@@ -4,7 +4,8 @@ import { type ChatEvent, startChat } from '../../src/agent/index.ts'
 import { fileRecordStore } from '../../src/record/index.ts'
 import { gitRepository } from '../../src/repo/index.ts'
 import { buildRepository } from '../fixtures/build-repository.ts'
-import { DRAFT, scriptedModel, type Turn, toolResults } from '../fixtures/scripted-model.ts'
+import { cardsIn, replyIn, sentBackIn } from '../fixtures/chat-events.ts'
+import { nothingToRevise, scriptedModel, type Turn, toolResults } from '../fixtures/scripted-model.ts'
 
 // The change lowers a limit. Its risk sits in a file the change did not touch: a caller that still waits as long as
 // the old limit allowed.
@@ -27,10 +28,11 @@ const RISK = {
 	weight: 'serious',
 }
 
-function answer(args: Record<string, unknown>): Turn {
+function show(args: Record<string, unknown>): Turn {
 	return {
-		tool: 'ken__answer',
-		args: { scope: { base, head }, summary: 'The timeout is shorter.', statements: [STATEMENT], ...args },
+		tool: 'ken__show',
+		text: 'The timeout is shorter.',
+		args: { scope: { base, head }, claims: [STATEMENT], ...args },
 	}
 }
 
@@ -49,32 +51,29 @@ async function ask(script: Turn[]) {
 	return { events, requests: model.requests }
 }
 
-function outcomes(events: ChatEvent[]) {
-	return events.filter((event) => event.kind === 'rejected' || event.kind === 'accepted').map((event) => event.kind)
+function risks(events: ChatEvent[]) {
+	return cardsIn(events).flatMap((card) => (card.kind === 'risk' ? [card.risk] : []))
 }
 
-function accepted(events: ChatEvent[]) {
-	const event = events.find((each) => each.kind === 'accepted')
-	return event?.kind === 'accepted' ? event : assert.fail(`no answer was accepted: ${JSON.stringify(events)}`)
-}
-
-test('a risk with a false quote rejects the answer and names the risk; with a true quote the risk is stored with its piece of work and read back after a restart', async () => {
+test('a risk with a false quote is sent back and named; with a true quote the risk shows with its mark, is stored with its piece of work and read back after a restart', async () => {
 	// The file indents with a tab; the false quote uses four spaces, the miss real models make most.
 	const falseRisk = { ...RISK, quotes: [{ ...CALL, text: '    return await fetchWithin(TIMEOUT_MS * 2)' }] }
 	const work = { work: { title: 'Time out sooner' } }
 	const first = await ask([
-		DRAFT,
-		answer({ ...work, risks: [falseRisk] }),
-		answer({ ...work, risks: [RISK] }),
-		{ text: '.' },
+		show({ ...work, risks: [falseRisk] }),
+		show({ ...work, risks: [RISK] }),
+		{ text: '' },
+		...nothingToRevise(1),
 	])
 
-	assert.deepEqual(outcomes(first.events), ['rejected', 'accepted'])
-	assert.match(toolResults(first.requests[2])[0] ?? '', /Risk 1, quote 1: .*src\/load\.ts/)
-	const { answer: checked, recorded } = accepted(first.events)
+	assert.deepEqual(
+		sentBackIn(first.events).map((step) => step.what),
+		['Risk 1'],
+	)
+	assert.match(toolResults(first.requests[1])[0] ?? '', /Risk 1, quote 1: .*src\/load\.ts/)
 	const { weight: _, ...risk } = { ...RISK, quotes: [{ ...CALL, startLine: 2, endLine: 2 }] }
-	assert.deepEqual(checked.risks, [{ ...risk, weight: 'serious', checked: true }])
-	const stored = recorded.find((entry) => entry.kind === 'work')
+	assert.deepEqual(risks(first.events), [{ ...risk, weight: 'serious', checked: true }])
+	const stored = replyIn(first.events).recorded.find((entry) => entry.kind === 'work')
 	const onDisk = (await fileRecordStore(root, gitRepository(root)).read()).current.find((e) => e.id === stored?.id)
 	assert.deepEqual(
 		onDisk?.kind === 'work' && onDisk.risks,
@@ -87,40 +86,19 @@ test('a risk with a false quote rejects the answer and names the risk; with a tr
 	assert.ok(read.includes(`risk 1 [inferred]: ${RISK.text}`) && read.includes(CALL.text), `read_record: ${read}`)
 })
 
-test("a risk that says a name is missing is rejected when ken finds the name, with the place, and accepted with ken's search when it does not", async () => {
+test("a risk that says a name is missing is sent back when ken finds the name, with the place, and shown with ken's search when it does not", async () => {
 	const missing = (text: string) => ({
 		...RISK,
 		text: 'Nothing else in src waits on the limit.',
 		absent: { text, under: 'src/' },
 	})
 	const { events } = await ask([
-		DRAFT,
-		answer({ risks: [missing('fetchWithin')] }),
-		answer({ risks: [missing('retryLater')] }),
+		show({ risks: [missing('fetchWithin')] }),
+		show({ risks: [missing('retryLater')] }),
 		{ text: '' },
+		...nothingToRevise(1),
 	])
 
-	assert.deepEqual(outcomes(events), ['rejected', 'accepted'])
-	const rejected = events.find((event) => event.kind === 'rejected')
-	assert.match(rejected?.kind === 'rejected' ? (rejected.problems[0] ?? '') : '', /^Risk 1: .*src\/load\.ts:2/)
-	assert.deepEqual(accepted(events).answer.risks?.[0]?.absent, { text: 'retryLater', under: 'src/', commit: head })
-})
-
-test('an answer about a change that says nothing about risks, or has a long summary, comes back without using an attempt; an answer about the code as it is may leave risks out', async () => {
-	const silent = answer({})
-	const wordy = answer({ risks: [], summary: `The timeout is shorter. ${'It drops by 400 ms. '.repeat(36)}` })
-	const { events, requests } = await ask([DRAFT, silent, wordy, silent, answer({ risks: [] }), { text: '.' }])
-
-	assert.deepEqual(outcomes(events), ['accepted'], 'three answers came back and none of them used an attempt')
-	const [noRisks = '', tooLong = ''] = [toolResults(requests[2])[0], toolResults(requests[3]).at(-1)]
-	assert.match(noRisks, /risks/)
-	assert.match(noRisks, /empty list/, 'the model is told how to say it found none')
-	assert.match(tooLong, /summary has \d+ characters/)
-	assert.deepEqual(accepted(events).answer.risks, [], 'an empty list says the agent found none')
-
-	const now = await ask([
-		{ tool: 'ken__answer', args: { summary: 'The timeout is 100 ms.', statements: [STATEMENT] } },
-		{ text: '.' },
-	])
-	assert.equal(accepted(now.events).answer.risks, null)
+	assert.match(sentBackIn(events)[0]?.problems[0] ?? '', /^Risk 1: .*src\/load\.ts:2/)
+	assert.deepEqual(risks(events)[0]?.absent, { text: 'retryLater', under: 'src/', commit: head })
 })

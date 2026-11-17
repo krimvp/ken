@@ -1,5 +1,5 @@
 // The reader's understanding map on the page: the line under an answer that says which topics its buttons update, the
-// one line a topic the reader knows folds to, and the "Your map" view. ken works out each topic's state from the map
+// line that says ken hid the cards of a topic the reader knows, and the "Your map" view. ken works out each topic's state from the map
 // file and the code at HEAD; the page only shows it.
 import { day, esc, list, WHO, withCost } from './format.js'
 
@@ -62,7 +62,7 @@ export function knownHtml(q, ui, named, moved) {
 		if (t.kind === 'unchanged' && named.has(t.topic)) {
 			const open = ui.unfolded.has(t.topic)
 			return [
-				`<p class="known">You know ${esc(t.topic)} and the lines quoted here are the same as ${sinceDay(t.entry.date)}, so they are folded. <button class="link" data-act="unfold" data-topic="${esc(t.topic)}" data-key="unfold-${esc(t.topic)}" aria-expanded="${open}">${open ? 'Fold them again' : 'Show them anyway'}</button></p>`,
+				`<p class="known">${open ? 'Showing' : 'Hiding'} the cards on ${esc(t.topic)}. You know it, and its code has not changed since ${sinceDay(t.entry.date)}. <button class="link" data-act="unfold" data-topic="${esc(t.topic)}" data-key="unfold-${esc(t.topic)}" aria-expanded="${open}">${open ? 'Hide them' : 'Show them'}</button></p>`,
 			]
 		}
 		if ((t.kind === 'changed' || t.kind === 'long-ago') && t.changed.length > 0) {
@@ -81,26 +81,21 @@ export function knownHtml(q, ui, named, moved) {
 
 const SAID = {
 	know: (names) =>
-		`Saved. Your map says you know ${names}, as the code is now. Later answers show what you know as one line.`,
-	'too-much': (names) => `Saved. The next answer on ${names} will be shorter.`,
+		`Saved to your map. Later replies hide the cards on ${list(names)} until ${names.length === 1 ? 'its' : 'their'} code changes.`,
+	'too-much': (names) => `Saved. The next reply on ${list(names)} will be shorter.`,
 }
 
-// The three buttons under an answer, which act on the topics it names. An answer that names none has no buttons.
-export function mapBarHtml(q, ui, running) {
-	const names = q.answer.topics ?? []
-	if (names.length === 0) {
-		return '<p class="map-bar muted small">This answer names no topic, so it does not change your map.</p>'
-	}
+// The three buttons under a reply, on one quiet line, which act on the topics it names. t is the reply's turn in the thread.
+export function mapBarHtml(q, t, ui, running) {
+	const names = q.reply.topics ?? []
 	const named = list(names.map((name) => `<strong>${esc(name)}</strong>`))
-	const said = ui.mapSaid ? `<p class="map-said" role="status">${SAID[ui.mapSaid](list(names.map(esc)))}</p>` : ''
-	const deeper = `<button class="quiet-button" data-act="map-deeper" data-key="map-deeper"${running ? ' disabled' : ''}>Go deeper</button>`
-	return `<section class="map-bar" aria-label="Your map">
-		<p class="small">Tell ken how well you know ${named}:</p>
-		<ul class="map-buttons">
-			<li><button class="quiet-button" data-act="map-know" data-key="map-know">I know this</button><span>Later answers show it as one line.</span></li>
-			<li><button class="quiet-button" data-act="map-too-much" data-key="map-too-much">Too much detail</button><span>The next answer on it is shorter.</span></li>
-			<li>${deeper}<span>The next answer on it goes into more detail. One model run.</span></li>
-		</ul>
+	const saved = ui.mapSaid?.turn === t ? ui.mapSaid.signal : null
+	const said = saved ? `<p class="map-said" role="status">${SAID[saved](names.map(esc))}</p>` : ''
+	const button = (act, text, means, off = false) =>
+		`<button class="link" data-act="map-${act}" data-turn="${t}" data-key="map-${act}-${t}" title="${means}"${off ? ' disabled' : ''}>${text}</button>`
+	return `<section class="map-bar small" aria-label="Your map">
+		<p>Tell ken how well you know ${named} now.</p>
+		<p class="map-buttons-line">${button('know', 'I know it', 'Later replies hide its cards until its code changes.')} <span aria-hidden="true">·</span> ${button('too-much', 'Too much detail', 'The next reply on it is shorter.')} <span aria-hidden="true">·</span> ${button('deeper', 'Go deeper', 'Asks for more detail. One model run.', running)}</p>
 		${said}
 	</section>`
 }

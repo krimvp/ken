@@ -1,9 +1,10 @@
 // The "Decisions" view: every current decision in the project record, newest first, each with its label, its facts laid
 // out as in an answer, and the change it belongs to. It holds the decisions a coding agent logged with ken decide,
 // which belong to no answer, as well as those answers found.
-import { answerItLink, factsHtml } from './answer.js'
+
 import { labelKey } from './checks.js'
 import { answeredHtml, at, count, esc, LABELS, label, prose, quoteBody, quoteSource } from './format.js'
+import { answerItLink, factsHtml } from './reply.js'
 
 function rowHtml({ decision: d, work, replacedBy }) {
 	const call = d.needsOwner && !replacedBy ? '<span class="your-call">Your call</span> ' : ''

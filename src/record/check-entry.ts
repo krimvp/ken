@@ -14,7 +14,7 @@ import {
 	verifyGitQuote,
 	verifyQuote,
 } from '../checks/index.ts'
-import { checkDiagrams, type DiagramDraft } from '../diagram/index.ts'
+import { checkDiagram, checkLayout, type Diagram, type DiagramDraft, type LayoutDraft } from '../diagram/index.ts'
 import { type CommitHash, type Repository, resolveRange } from '../repo/index.ts'
 import {
 	type Decision,
@@ -65,12 +65,14 @@ export type EntryDraft =
 	  } & Replaces)
 	| ({ kind: 'topic'; name: string; quotes: Quote[] } & Replaces)
 	| ({ kind: 'note'; topic: string; text: string } & Replaces)
+	| ({ kind: 'layout' } & LayoutDraft & Replaces)
 
 export type EntryCheck =
 	| { kind: 'ok'; entry: Entry; replaces: EntryId | null }
 	| { kind: 'refused'; problems: string[] }
 
-// Long enough for a plain answer, short enough that a model cannot pour a file into the record.
+// Long enough for a plain answer, short enough that a model cannot pour a file into the record. show holds its cards
+// to the same limits, so a card the reader sees is one the record can keep.
 const MAX = {
 	title: 120,
 	summary: 1200,
@@ -83,6 +85,8 @@ const MAX = {
 	list: 20,
 }
 
+export { MAX as RECORD_LIMITS }
+
 // known is every entry in the record plus those an append will write before this one; current is the newest entry of
 // each chain among them.
 export async function checkEntry(
@@ -93,10 +97,9 @@ export async function checkEntry(
 ): Promise<EntryCheck> {
 	const problems: string[] = []
 	const text = (field: string, value: string, max: number) => {
-		const trimmed = value.trim()
-		if (trimmed === '') problems.push(`${field} is empty.`)
-		else if (trimmed.length > max) problems.push(`${field} has ${trimmed.length} characters; keep it under ${max}.`)
-		return trimmed
+		const problem = textProblem(field, value, max)
+		if (problem) problems.push(problem)
+		return value.trim()
 	}
 	const { repo } = sources
 	const counted = (field: string, raw: Quote[], needed: boolean) => {
@@ -147,8 +150,12 @@ export async function checkEntry(
 			}
 			const statements = await claims('statement', draft.statements)
 			const risks = draft.risks === undefined ? null : await claims('risk', draft.risks)
-			const diagrams = await checkDiagrams(repo, draft.diagrams ?? [], signal)
-			if (diagrams.kind === 'refused') problems.push(...diagrams.problems)
+			const diagrams: Diagram[] = []
+			for (const [index, each] of (draft.diagrams ?? []).entries()) {
+				const checked = await checkDiagram(repo, each, `Diagram ${index + 1}`, signal)
+				if (checked.kind === 'refused') problems.push(...checked.problems)
+				else diagrams.push(checked.diagram)
+			}
 			if (work.kind === 'refused') return { kind: 'refused', problems }
 			entry = {
 				kind: 'work',
@@ -157,7 +164,7 @@ export async function checkEntry(
 				...work.facts,
 				statements,
 				risks,
-				diagrams: diagrams.kind === 'ok' ? diagrams.diagrams : [],
+				diagrams,
 			} satisfies Work
 			break
 		}
@@ -258,10 +265,23 @@ export async function checkEntry(
 			entry = { kind: 'note', topic: topic.id, text: note, codeHash: codeHash(topic.quotes) } satisfies Note
 			break
 		}
+		case 'layout': {
+			const checked = await checkLayout(repo, draft, 'the layout', signal)
+			if (checked.kind === 'refused') return checked
+			entry = checked.layout
+			break
+		}
 		default:
 			return draft satisfies never
 	}
 	return problems.length > 0 ? { kind: 'refused', problems } : { kind: 'ok', entry, replaces }
+}
+
+export function textProblem(field: string, value: string, max: number): string | null {
+	const trimmed = value.trim()
+	if (trimmed === '') return `${field} is empty.`
+	if (trimmed.length > max) return `${field} has ${trimmed.length} characters; keep it under ${max}.`
+	return null
 }
 
 async function searched(

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { type ChatEvent, startChat } from '../../src/agent/index.ts'
 import { buildRepository } from '../fixtures/build-repository.ts'
+import { replyIn } from '../fixtures/chat-events.ts'
 import { type ChatRequest, scriptedModel, type Turn, toolResults } from '../fixtures/scripted-model.ts'
 
 const { root } = buildRepository([{ message: 'feat: start', files: { 'src/retry.ts': 'export const TIMES = 3\n' } }])
@@ -9,11 +10,11 @@ const KEY_ENV = 'KEN_TEST_MODEL_KEY'
 process.env[KEY_ENV] = 'scripted-model-key'
 
 const READ: Turn = { tool: 'ken__read_file', args: { path: 'src/retry.ts' } }
-const ANSWER: Turn = {
-	tool: 'ken__answer',
+const SHOW: Turn = {
+	tool: 'ken__show',
+	text: 'Retries run three times.',
 	args: {
-		summary: 'Retries run three times.',
-		statements: [
+		claims: [
 			{
 				text: 'TIMES is 3.',
 				label: 'inferred',
@@ -43,7 +44,7 @@ function turnsLeftIn(request: ChatRequest | undefined): number | undefined {
 	return match ? Number(match[1]) : undefined
 }
 
-test('a model that keeps exploring is told near the end how many turns are left, and an answer sent then is accepted', async () => {
+test('a model that keeps exploring is told near the end how many turns are left, and a reply sent then reaches the reader', async () => {
 	const explorer = await ask(Array.from({ length: 200 }, () => READ))
 	assert.deepEqual(explorer.events.at(-1), { kind: 'done', outcome: 'out-of-turns' })
 	const first = explorer.requests.findIndex((request) => turnsLeftIn(request) !== undefined)
@@ -53,11 +54,11 @@ test('a model that keeps exploring is told near the end how many turns are left,
 	assert.ok(left !== undefined && left > 1 && left < 10, `the notice comes near the end, with room to answer: ${left}`)
 	assert.ok(first > 10, 'a short question never sees the notice')
 
-	const answered = await ask([...Array.from({ length: first }, () => READ), ANSWER, { text: 'I read one file.' }])
+	const answered = await ask([...Array.from({ length: first }, () => READ), SHOW, { text: 'I read one file.' }])
 	assert.equal(turnsLeftIn(answered.requests[first]), left)
-	assert.equal(
-		answered.events.some((event) => event.kind === 'accepted'),
-		true,
+	assert.deepEqual(
+		replyIn(answered.events).items.map((item) => item.kind),
+		['words', 'card', 'words'],
 	)
 	assert.deepEqual(answered.events.at(-1), { kind: 'done', outcome: 'answered' })
 })

@@ -7,6 +7,9 @@ export type RepoPath = string & { readonly __brand: 'RepoPath' }
 
 export type Range = { base: CommitHash; head: CommitHash }
 
+// git's own id of the tree or file at a path. Two commits that give a path the same id hold the same content under it.
+export type ObjectId = string & { readonly __brand: 'ObjectId' }
+
 // coAuthors holds the value of each Co-authored-by trailer, such as "Claude <noreply@anthropic.com>". A merge has two or
 // more parents; the first is the line it was merged into.
 export type Commit = {
@@ -86,6 +89,10 @@ export interface Repository {
 	diff(range: Range, signal?: AbortSignal): Promise<{ kind: 'ok'; files: FileDiff[] } | TooLarge>
 	// The branch HEAD is on, or null when HEAD is detached.
 	branch(signal?: AbortSignal): Promise<string | null>
+	// The project's local branches, the one with the newest commit first.
+	branches(signal?: AbortSignal): Promise<string[]>
+	// git's id of the tree or file at each path at the commit, null where the path is not there. One git call.
+	objectIds(commit: CommitHash, paths: RepoPath[], signal?: AbortSignal): Promise<(ObjectId | null)[]>
 	// The files with uncommitted changes, ken's own .ken/ left out. It reads the working tree and the index and writes
 	// neither.
 	uncommitted(signal?: AbortSignal): Promise<{ kind: 'ok'; files: Uncommitted[] } | TooLarge>

@@ -1,10 +1,10 @@
-// The four kinds of entry in the project record, as the plan names them: a piece of work, a decision, a topic and a
-// note. An entry holds only checked facts. Its quotes passed verifyQuote, and its commits and authors come from git.
+// The five kinds of entry in the project record: a piece of work, a decision, a topic, a note, and a level of the
+// project's layout that ken's model named. An entry holds only checked facts. Its quotes passed verifyQuote, and its commits and authors come from git.
 // A quote of a saved session is kept as ken checked it: the session's id, the message's number, who wrote it and when,
 // and the quoted lines, which passed secretHider. No other text of the session reaches the record.
 import { createHash } from 'node:crypto'
 import type { Absence, Label, VerifiedGitQuote, VerifiedQuote } from '../checks/index.ts'
-import type { Diagram } from '../diagram/index.ts'
+import type { Diagram, Layout } from '../diagram/index.ts'
 import type { CommitHash, Range } from '../repo/index.ts'
 
 // A short hash of the entry's content, so the same entry written twice has the same id.
@@ -76,7 +76,8 @@ export type Topic = { kind: 'topic'; name: string; quotes: VerifiedGitQuote[] }
 // codeHash is a hash over the topic's quoted lines when the note was written. See noteFreshness.
 export type Note = { kind: 'note'; topic: EntryId; text: string; codeHash: string }
 
-export type Entry = Work | Decision | Topic | Note
+// Every version of a layout stays, so the view at an old commit can pick the one that fit the code then.
+export type Entry = Work | Decision | Topic | Note | Layout
 export type Kind = Entry['kind']
 
 // What the store holds. at is when ken wrote the entry and is not part of the id. replaces names the entry this one

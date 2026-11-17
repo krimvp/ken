@@ -12,6 +12,7 @@ export type {
 	Hunk,
 	NoCommit,
 	NoFile,
+	ObjectId,
 	Range,
 	Refused,
 	RepoPath,

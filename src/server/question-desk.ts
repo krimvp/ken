@@ -1,37 +1,48 @@
 import { randomUUID } from 'node:crypto'
-import type { Answer, Chat, ChatEvent } from '../agent/index.ts'
-import { withDrawings } from '../diagram/index.ts'
-import { type LensFacts, onDay, openItems, personLens, rangeLens, topicQuestion } from '../follow-up/index.ts'
+import { type Chat, type ChatEvent, firstWords, type Item, type Reply } from '../agent/index.ts'
+import { drawn, LAYOUT_BOUNDS } from '../diagram/index.ts'
+import {
+	type LensFacts,
+	onDay,
+	openItems,
+	partsQuestion,
+	personLens,
+	rangeLens,
+	topicQuestion,
+} from '../follow-up/index.ts'
 import { entryFrom, type History, type HistoryEntry, whyNoNote } from '../history/index.ts'
+import { type LayoutSources, lookAtLayout, readLayoutAsk } from '../layout/index.ts'
 import type { About } from '../live/index.ts'
 import { areaQuestion, catchUpQuestion, deeperQuestion, type TopicState, type UnderstandingMap } from '../map/index.ts'
-import { type EntryId, type RecordEntry, type RecordRead, type RecordStore, sameName } from '../record/index.ts'
+import { type RecordStore, sameName } from '../record/index.ts'
 import { parsePath, type Repository } from '../repo/index.ts'
 
 const MAX_QUESTION_CHARS = 4000
 const MAX_TOPICS = 20
+// How much of a note's words the next question about it quotes back.
+const NOTE_CHARS = 400
 
-// One row in the page's list of questions. calls counts the decisions the agent wants the reader to decide. risks is
-// null when the answer did not look for risks, and hunks when it was not about a range of commits.
+// One row in the page's list of questions. cards counts the checked cards of the reply, calls the decisions the model
+// wants the reader to decide, and risks its risks. hunks is null when the reply was not about a range of commits.
+// thread groups the rows the page shows as one thread.
 export type QuestionRow = {
 	id: string
 	question: string
 	askedAt: string
+	thread: string | null
 	outcome: HistoryEntry['outcome']
-	statements: number
-	decisions: number
+	cards: number
 	calls: number
-	risks: number | null
+	risks: number
 	hunks: { uncovered: number; total: number } | null
 }
 
-// An entry from the history, with the project record entries its answer stands on (see entriesOf). Its diagrams carry
-// their drawings. head is the project's HEAD now, which the page compares with the entry's own. topics holds the state
-// of each topic the answer names for this reader now, from the understanding map; the page folds every entry of a
-// topic whose state is "unchanged" into one line. noNote says why a live note has no answer, and is null otherwise.
+// An entry from the history, its diagrams with their drawings. head is the project's HEAD now, which the page
+// compares with the entry's own. topics holds the state of each topic the reply names for this reader now, from the
+// understanding map; the page folds the cards of a topic whose state is "unchanged" into one line. noNote says why a
+// live note has no reply, and is null otherwise.
 export type QuestionView = {
 	entry: HistoryEntry
-	recorded: RecordEntry[]
 	head: string | null
 	topics: TopicState[]
 	noNote: string | null
@@ -40,22 +51,27 @@ export type QuestionView = {
 // What live mode's notes cost: how many there are and the tokens they took.
 export type Spent = { notes: number; inputTokens: number; outputTokens: number }
 
-type Accepted = Extract<ChatEvent, { kind: 'accepted' }>
+type Replied = Extract<ChatEvent, { kind: 'replied' }>
 
 // What the page receives while a question runs: "waiting" first when ken is writing a live note, then the question as
-// ken asks it, which for a lens ken wrote itself, each chat event, then the saved entry as the last line. An accepted
-// answer's diagrams carry their drawings, its recorded entries are the ones it stands on, and it carries its topics'
-// states as a view does.
+// ken asks it, which for a lens ken wrote itself, each chat event, then the saved entry as the last line. A diagram
+// card carries its drawing, and the reply carries its topics' states as a view does.
 export type QuestionLine =
 	| { kind: 'waiting' }
 	| { kind: 'asked'; question: string }
-	| Exclude<ChatEvent, Accepted>
-	| (Accepted & { topics: TopicState[] })
+	| Exclude<ChatEvent, Replied>
+	| (Replied & { topics: TopicState[] })
 	| { kind: 'saved'; view: QuestionView }
 
 // Runs the page's questions and live mode's notes one model run at a time, and keeps each in the reader's history,
 // together with what it ended in. A question asked while a note runs waits for it; a second question is refused.
-export function questionDesk(history: History, record: RecordStore, repo: Repository, map: UnderstandingMap) {
+export function questionDesk(
+	history: History,
+	record: RecordStore,
+	repo: Repository,
+	map: UnderstandingMap,
+	layout: LayoutSources,
+) {
 	let running: { stop: AbortSignal; done: Promise<void> } | null = null
 	let questions = 0
 	let holder: 'question' | 'note' | null = null
@@ -105,19 +121,21 @@ export function questionDesk(history: History, record: RecordStore, repo: Reposi
 	}
 
 	async function run(chat: Chat, question: string, stop: AbortSignal, send: (line: QuestionLine) => void) {
-		const asked = { id: randomUUID(), question, askedAt: new Date().toISOString(), head: await headNow() }
+		const asked = {
+			id: randomUUID(),
+			question,
+			askedAt: new Date().toISOString(),
+			head: await headNow(),
+			thread: chat.thread,
+		}
 		send({ kind: 'asked', question })
 		const events: ChatEvent[] = []
 		for await (const event of chat.ask(question, stop)) {
 			events.push(event)
-			if (event.kind !== 'accepted') {
-				send(event)
-				continue
-			}
-			const added = event.recorded.map((stored) => stored.id)
-			const recorded = entriesOf(event.answer, added, await record.read())
-			const topics = await topicsOf(event.answer.topics)
-			send({ ...event, answer: withDrawings(event.answer), recorded, topics })
+			if (event.kind === 'item') send({ ...event, item: drawnItem(event.item) })
+			else if (event.kind === 'replied') {
+				send({ ...event, reply: drawnReply(event.reply), topics: await topicsOf(event.reply.topics) })
+			} else send(event)
 		}
 		const entry = entryFrom(asked, events, stop.aborted)
 		await history.add(entry)
@@ -127,7 +145,14 @@ export function questionDesk(history: History, record: RecordStore, repo: Reposi
 	// A note ken writes by itself in live mode, saved in the history with what it is about.
 	async function note(chat: Chat, about: About, question: string, stop: AbortSignal): Promise<QuestionView> {
 		return await inTurn('note', async () => {
-			const asked = { id: randomUUID(), question, askedAt: new Date().toISOString(), head: await headNow(), about }
+			const asked = {
+				id: randomUUID(),
+				question,
+				askedAt: new Date().toISOString(),
+				head: await headNow(),
+				thread: chat.thread,
+				about,
+			}
 			const events: ChatEvent[] = []
 			for await (const event of chat.ask(question, stop, 'note')) events.push(event)
 			const entry = entryFrom(asked, events, stop.aborted)
@@ -166,11 +191,10 @@ export function questionDesk(history: History, record: RecordStore, repo: Reposi
 	async function viewOf(entry: HistoryEntry): Promise<QuestionView> {
 		const head = await headNow()
 		if (entry.outcome !== 'answered') {
-			return { entry, recorded: [], head, topics: [], noNote: entry.about ? whyNoNote(entry) : null }
+			return { entry, head, topics: [], noNote: entry.about ? whyNoNote(entry) : null }
 		}
-		const drawn = { ...entry, answer: withDrawings(entry.answer) }
-		const recorded = entriesOf(entry.answer, entry.recorded, await record.read())
-		return { entry: drawn, recorded, head, topics: await topicsOf(entry.answer.topics), noNote: null }
+		const shown = { ...entry, reply: drawnReply(entry.reply) }
+		return { entry: shown, head, topics: await topicsOf(entry.reply.topics), noNote: null }
 	}
 
 	// In the order the answer names them. A topic the record no longer has is left out.
@@ -181,22 +205,20 @@ export function questionDesk(history: History, record: RecordStore, repo: Reposi
 
 	async function rows(): Promise<QuestionRow[]> {
 		await settled()
-		const [entries, read] = await Promise.all([history.list(), record.read()])
-		return entries
+		return (await history.list())
 			.filter((entry) => entry.about === undefined)
 			.map((entry) => {
-				const row = { id: entry.id, question: entry.question, askedAt: entry.askedAt, outcome: entry.outcome }
-				if (entry.outcome !== 'answered')
-					return { ...row, statements: 0, decisions: 0, calls: 0, risks: null, hunks: null }
-				const { statements, risks, change } = entry.answer
+				const { id, question, askedAt, thread, outcome } = entry
+				const row = { id, question, askedAt, thread, outcome }
+				if (entry.outcome !== 'answered') return { ...row, cards: 0, calls: 0, risks: 0, hunks: null }
+				const { items, change } = entry.reply
+				const cards = items.flatMap((item) => (item.kind === 'card' ? [item.card] : []))
 				const total = change ? change.covered.length + change.uncovered.length : 0
-				const decisions = entriesOf(entry.answer, entry.recorded, read).filter((stored) => stored.kind === 'decision')
 				return {
 					...row,
-					statements: statements.length,
-					decisions: decisions.length,
-					calls: decisions.filter((decision) => decision.needsOwner).length,
-					risks: risks === null ? null : risks.length,
+					cards: cards.length,
+					calls: cards.filter((card) => card.kind === 'decision' && card.decision.needsOwner).length,
+					risks: cards.filter((card) => card.kind === 'risk').length,
 					hunks: change && { uncovered: change.uncovered.length, total },
 				}
 			})
@@ -258,8 +280,25 @@ export function questionDesk(history: History, record: RecordStore, repo: Reposi
 			if (note?.about === undefined || note.outcome !== 'answered') {
 				return { kind: 'refused', problem: 'There is no such note.' }
 			}
-			const commits = note.answer.change?.commits.length ?? 0
-			return { kind: 'ok', text: deeperOnNote(note.about, note.askedAt, note.answer.summary, commits) }
+			const commits = note.reply.change?.commits.length ?? 0
+			const said = firstWords(note.reply.items, NOTE_CHARS)
+			return { kind: 'ok', text: deeperOnNote(note.about, note.askedAt, said, commits) }
+		}
+		if (kind === 'parts') {
+			const within = fieldOf(lens, 'within')
+			const paths = Array.isArray(within) ? within.map(String) : []
+			// The model names parts at HEAD, so the starting point is the level at HEAD whatever commit the page shows.
+			const ask = await readLayoutAsk(layout, { within: paths })
+			if (ask.kind !== 'ok') return { kind: 'refused', problem: ask.message }
+			const look = await lookAtLayout(layout, ask.ask, new Date())
+			const name = fieldOf(lens, 'name')
+			const level = {
+				...look,
+				name: typeof name === 'string' && name.trim() !== '' ? name.trim().slice(0, 80) : null,
+				within: ask.ask.within,
+				bounds: LAYOUT_BOUNDS,
+			}
+			return { kind: 'ok', text: partsQuestion(level).text }
 		}
 		if (kind === 'topic') {
 			const { record: read, states } = await lensFacts()
@@ -275,7 +314,7 @@ export function questionDesk(history: History, record: RecordStore, repo: Reposi
 		if (kind !== 'deeper' || names.length === 0 || names.length > MAX_TOPICS || typeof asked !== 'string') {
 			return {
 				kind: 'refused',
-				problem: 'Send a question, or a lens: catch-up, area with a path, deeper, person, range, topic or note.',
+				problem: 'Send a question, or a lens: catch-up, area with a path, deeper, parts, person, range, topic or note.',
 			}
 		}
 		await map.learn('deeper', names, new Date())
@@ -285,7 +324,7 @@ export function questionDesk(history: History, record: RecordStore, repo: Reposi
 	return { settled, busy, ask, note, notes, spentSince, writing, rows, view, questionOf }
 }
 
-// "Open as a question" on a live note: the full answer on the change the note was about. The first line is the title the
+// "Open as a question" on a live note: the full reply on the change the note was about. The first line is the title the
 // page shows as the question. The page shows a line under it only when it starts with "- ", as a lens's list does, so
 // the lines here are for the agent alone. The server runs on the reader's machine, so its clock is the reader's.
 function deeperOnNote(about: About, at: string, summary: string, commits: number): string {
@@ -304,19 +343,14 @@ function deeperOnNote(about: About, at: string, summary: string, commits: number
 	return `Go deeper on the ${time} note about uncommitted work\nken copied that work into commit ${short(about.snapshot)} in its own store, on top of HEAD ${short(about.head)}. Read it with diff from ${short(about.base)} to ${short(about.snapshot)} and with read_file at ${short(about.snapshot)}, as you would a commit.\n${explain}`
 }
 
-// The record entries an answer stands on: the ones it added, and the current decisions of its piece of work. An answer
-// about commits that already have a piece of work keeps it, so the decisions an earlier question found are not added
-// again, and they would be missing from the answer if it showed only what it added.
-function entriesOf(answer: Answer, added: EntryId[], record: RecordRead): RecordEntry[] {
-	const range = answer.change
-	const work =
-		range &&
-		record.current.find(
-			(stored) => stored.kind === 'work' && stored.range.base === range.base && stored.range.head === range.head,
-		)
-	const own = record.entries.filter((stored) => added.includes(stored.id))
-	const ofWork = work ? record.current.filter((stored) => stored.kind === 'decision' && stored.work === work.id) : []
-	return [...own, ...ofWork.filter((stored) => !added.includes(stored.id))]
+// A diagram card leaves ken with its drawing.
+function drawnItem(item: Item): Item {
+	if (item.kind !== 'card' || item.card.kind !== 'diagram') return item
+	return { kind: 'card', card: { kind: 'diagram', diagram: drawn(item.card.diagram) } }
+}
+
+function drawnReply(reply: Reply): Reply {
+	return { ...reply, items: reply.items.map(drawnItem) }
 }
 
 // A field of a JSON body the page sent, or undefined.

@@ -4,14 +4,8 @@ import path from 'node:path'
 import { after, test } from 'node:test'
 import { type ChatEvent, startChat } from '../../src/agent/index.ts'
 import { buildRepository, OWNER } from '../fixtures/build-repository.ts'
-import {
-	DRAFT,
-	nothingToRevise,
-	scriptedModel,
-	type Turn,
-	toolResults,
-	USAGE_PER_REPLY,
-} from '../fixtures/scripted-model.ts'
+import { cardsIn, replyIn, sentBackIn } from '../fixtures/chat-events.ts'
+import { reply, scriptedModel, type Turn, toolResults, USAGE_PER_REPLY } from '../fixtures/scripted-model.ts'
 
 const RETRY = 'export function retry(times: number) {\n\tfor (let i = 0; i < times; i++) {\n\t\tattempt()\n'
 const { root, hashes } = buildRepository([
@@ -28,20 +22,14 @@ const [base = '', head = ''] = hashes
 const KEY_ENV = 'KEN_TEST_MODEL_KEY'
 process.env[KEY_ENV] = 'scripted-model-key'
 
-function answer(quote: { path: string; commit: string; text: string }, label = 'inferred'): Turn {
-	return {
-		tool: 'ken__answer',
-		args: {
-			scope: { base, head: 'HEAD' },
-			summary: 'Each retry now waits before the next attempt.',
-			statements: [{ text: 'The loop sleeps after each attempt.', label, quotes: [quote] }],
-			risks: [],
-		},
-	}
-}
 const TRUE_QUOTE = { path: 'src/retry.ts', commit: 'HEAD', text: '\t\tsleep(100)' }
 // Wrong indentation is the miss real models make most: the file indents with two tabs.
 const FALSE_QUOTE = { path: 'src/retry.ts', commit: 'HEAD', text: '    sleep(100)' }
+const claim = (quote: typeof TRUE_QUOTE, label = 'inferred') => ({
+	text: 'The loop sleeps after each attempt.',
+	label,
+	quotes: [quote],
+})
 
 async function ask(script: Turn[], directory = path.join(root, 'src')) {
 	const model = await scriptedModel(script)
@@ -57,118 +45,131 @@ async function ask(script: Turn[], directory = path.join(root, 'src')) {
 	return { events, requests: model.requests }
 }
 
-test('a false quote is rejected with its reasons sent to the model, and a true quote then gets a checked answer', async () => {
-	const { events, requests } = await ask([
-		DRAFT,
-		answer(FALSE_QUOTE),
-		answer(TRUE_QUOTE),
-		...nothingToRevise(0),
-		{ text: 'I left out the README.' },
+test("a plain question gets the model's own words as the reply, and what it wrote while it read is a step", async () => {
+	const { events } = await ask([
+		{ tool: 'ken__read_file', args: { path: 'src/retry.ts' }, text: 'Let me read the retry loop.' },
+		{ text: 'Each retry now waits 100 ms before the next attempt.' },
 	])
 
+	assert.deepEqual(replyIn(events).items, [
+		{ kind: 'words', text: 'Each retry now waits 100 ms before the next attempt.' },
+	])
 	assert.deepEqual(
-		events.filter((event) => event.kind !== 'text').map((event) => event.kind),
-		['tool', 'rejected', 'tool', 'tool', 'accepted', 'usage', 'done'],
+		events.flatMap((event) => (event.kind === 'step' ? [event.step] : [])),
+		[{ kind: 'text', text: 'Let me read the retry loop.' }],
 	)
-	assert.equal(
-		events.map((event) => (event.kind === 'text' ? event.delta : '')).join(''),
-		`${DRAFT.text}I left out the README.`,
-		'the model writes its draft and its closing note, and never the answer',
-	)
-	const toModel = toolResults(requests[2])[0] ?? ''
-	assert.ok(toModel.includes('src/retry.ts'), `the model is told which quote failed: ${toModel}`)
-	assert.ok(toModel.includes(JSON.stringify('\t\tsleep(100)')), `the model is shown the line with its tabs: ${toModel}`)
 	assert.deepEqual(events.at(-1), { kind: 'done', outcome: 'answered' })
 	const usage = events.find((event) => event.kind === 'usage')
-	assert.deepEqual(
-		[usage?.kind === 'usage' && usage.inputTokens, usage?.kind === 'usage' && usage.outputTokens],
-		[6 * USAGE_PER_REPLY.prompt_tokens, 6 * USAGE_PER_REPLY.completion_tokens],
+	assert.equal(usage?.kind === 'usage' && usage.inputTokens, 2 * USAGE_PER_REPLY.prompt_tokens)
+})
+
+test('a show call with a good card, a false quote and a label the quotes do not allow shows the good card after the words, and sends back only the bad two, each with its problem', async () => {
+	const { events, requests } = await ask(
+		reply('Each retry now waits before the next attempt.', {
+			scope: { base, head: 'HEAD' },
+			claims: [claim(TRUE_QUOTE, 'found-by-search'), claim(FALSE_QUOTE), claim(TRUE_QUOTE, 'recorded')],
+		}),
 	)
 
-	const accepted = events.find((event) => event.kind === 'accepted')
-	assert.deepEqual(accepted?.kind === 'accepted' && accepted.answer, {
-		summary: 'Each retry now waits before the next attempt.',
-		statements: [
+	assert.deepEqual(
+		replyIn(events).items.map((item) => (item.kind === 'words' ? item.text : item.card.kind)),
+		['Each retry now waits before the next attempt.', 'claim'],
+	)
+	const [shown] = cardsIn(events)
+	assert.deepEqual(shown?.kind === 'claim' && shown.claim, {
+		text: 'The loop sleeps after each attempt.',
+		label: 'found-by-search',
+		quotes: [{ path: 'src/retry.ts', commit: head, startLine: 4, endLine: 4, text: '\t\tsleep(100)' }],
+	})
+	assert.deepEqual(
+		sentBackIn(events).map((step) => step.what),
+		['Claim 2', 'Claim 3'],
+	)
+	const toModel = toolResults(requests[1])[0] ?? ''
+	assert.match(toModel, /Claim 2 sent back/)
+	assert.ok(toModel.includes(JSON.stringify('\t\tsleep(100)')), `the model is shown the line with its tabs: ${toModel}`)
+	assert.match(toModel, /Claim 3 sent back/)
+	assert.deepEqual(events.at(-1), { kind: 'done', outcome: 'answered' })
+	const named = events.findIndex((event) => event.kind === 'change')
+	const said = events.findIndex((event) => event.kind === 'item')
+	assert.ok(named >= 0 && named < said, 'the page learns the change before the first part of the reply')
+	const live = events[named]
+	assert.deepEqual(live?.kind === 'change' && [live.base, live.head, live.commits.map((commit) => commit.subject)], [
+		base,
+		head,
+		['feat: wait between attempts'],
+	])
+
+	const { change } = replyIn(events)
+	assert.deepEqual(change, {
+		base,
+		head,
+		commits: [
 			{
-				text: 'The loop sleeps after each attempt.',
-				label: 'inferred',
-				quotes: [{ path: 'src/retry.ts', commit: head, startLine: 4, endLine: 4, text: '\t\tsleep(100)' }],
+				hash: head,
+				parents: [base],
+				author: OWNER.name,
+				email: OWNER.email,
+				date: '2026-01-02T00:00:00.000Z',
+				subject: 'feat: wait between attempts',
+				coAuthors: [],
+				paths: ['README.md', 'src/retry.ts'],
 			},
 		],
-		risks: [],
-		topics: [],
-		diagrams: [],
-		change: {
-			base,
-			head,
-			commits: [
-				{
-					hash: head,
-					parents: [base],
-					author: OWNER.name,
-					email: OWNER.email,
-					date: '2026-01-02T00:00:00.000Z',
-					subject: 'feat: wait between attempts',
-					coAuthors: [],
-					paths: ['README.md', 'src/retry.ts'],
-				},
-			],
-			covered: [
-				{
-					path: 'src/retry.ts',
-					oldPath: 'src/retry.ts',
-					hunk: { oldStart: 3, oldLength: 0, newStart: 4, newLength: 1, lines: ['+\t\tsleep(100)'] },
-				},
-			],
-			uncovered: [
-				{
-					path: 'README.md',
-					oldPath: 'README.md',
-					hunk: { oldStart: 1, oldLength: 0, newStart: 2, newLength: 2, lines: ['+', '+Retries wait 100 ms.'] },
-				},
-			],
-			binary: [],
-			messages: { quoted: [], unquoted: [head] },
-			usedElsewhere: { followed: [], notFollowed: [] },
-		},
+		covered: [
+			{
+				path: 'src/retry.ts',
+				oldPath: 'src/retry.ts',
+				hunk: { oldStart: 3, oldLength: 0, newStart: 4, newLength: 1, lines: ['+\t\tsleep(100)'] },
+			},
+		],
+		uncovered: [
+			{
+				path: 'README.md',
+				oldPath: 'README.md',
+				hunk: { oldStart: 1, oldLength: 0, newStart: 2, newLength: 2, lines: ['+', '+Retries wait 100 ms.'] },
+			},
+		],
+		binary: [],
+		messages: { quoted: [], unquoted: [head] },
+		usedElsewhere: { followed: [], notFollowed: [] },
 	})
 })
 
-test('a model that keeps sending false quotes ends with no checked answer after three rejections', async () => {
+test('after six cards sent back, show checks nothing more and says so, and the words still reach the reader', async () => {
+	const bad = Array.from({ length: 7 }, () => claim(FALSE_QUOTE))
 	const { events, requests } = await ask([
-		DRAFT,
-		answer(FALSE_QUOTE),
-		answer({ ...FALSE_QUOTE, text: 'sleep(1000)' }),
-		answer({ ...FALSE_QUOTE, path: 'src/missing.ts' }),
-		answer(TRUE_QUOTE),
+		{ tool: 'ken__show', args: { claims: bad } },
+		{ tool: 'ken__show', args: { claims: [claim(TRUE_QUOTE)] } },
+		{ text: 'The loop sleeps after each attempt, but I could not quote it.' },
 	])
 
-	assert.deepEqual(
-		events.flatMap((event) => (event.kind === 'rejected' ? [event.attempt] : [])),
-		[1, 2, 3],
-	)
-	assert.equal(
-		events.some((event) => event.kind === 'accepted'),
-		false,
-	)
-	assert.deepEqual(events.at(-1), { kind: 'done', outcome: 'rejected' })
-	assert.equal(requests.length, 4, 'the model is not asked again after the last rejection')
+	assert.equal(sentBackIn(events).length, 6)
+	assert.match(toolResults(requests[1])[0] ?? '', /Claim 7 was not checked\. ken has sent back 6 cards/)
+	assert.match(toolResults(requests[2]).at(-1) ?? '', /checks no more/)
+	assert.deepEqual(replyIn(events).items, [
+		{ kind: 'words', text: 'The loop sleeps after each attempt, but I could not quote it.' },
+	])
 })
 
-test('a label this slice does not allow is refused, and an allowed one is kept', async () => {
-	const { events } = await ask([
-		DRAFT,
-		answer(TRUE_QUOTE, 'recorded'),
-		answer(TRUE_QUOTE, 'found-by-search'),
-		{ text: 'Done.' },
-	])
+test('the words of a turn that shows a card again after one was sent back are a step, unless no later turn writes', async () => {
+	const firstTry: Turn = { tool: 'ken__show', text: 'Each retry now waits.', args: { claims: [claim(FALSE_QUOTE)] } }
+	const again: Turn = { tool: 'ken__show', text: 'Sending it again with tabs.', args: { claims: [claim(TRUE_QUOTE)] } }
+	const said = (events: ChatEvent[]) =>
+		replyIn(events).items.map((item) => (item.kind === 'words' ? item.text : item.card.kind))
 
-	assert.deepEqual(
-		events.filter((event) => event.kind === 'rejected' || event.kind === 'accepted').map((event) => event.kind),
-		['rejected', 'accepted'],
+	const closed = await ask([firstTry, again, { text: 'The wait is 100 ms.' }])
+	assert.deepEqual(said(closed.events), ['Each retry now waits.', 'claim', 'The wait is 100 ms.'])
+	assert.ok(
+		closed.events.some(
+			(event) =>
+				event.kind === 'step' && event.step.kind === 'text' && event.step.text === 'Sending it again with tabs.',
+		),
+		'the retry words are in the steps',
 	)
-	const accepted = events.find((event) => event.kind === 'accepted')
-	assert.equal(accepted?.kind === 'accepted' && accepted.answer.statements[0]?.label, 'found-by-search')
+
+	const last = await ask([firstTry, { ...again, text: 'The loop sleeps 100 ms after each attempt.' }, { text: '' }])
+	assert.deepEqual(said(last.events), ['Each retry now waits.', 'The loop sleeps 100 ms after each attempt.', 'claim'])
 })
 
 test('a ref or path that starts with "-" or leaves the repository is refused and never reaches git', async () => {
@@ -203,7 +204,7 @@ test('a ref or path that starts with "-" or leaves the repository is refused and
 	assert.equal(existsSync(written), false, 'git never ran with an option the model wrote')
 })
 
-test('an answer about a branch that is behind main covers only the hunks the branch changed', async () => {
+test('a reply about a branch that is behind main covers only the hunks the branch changed', async () => {
 	const branch = buildRepository([
 		{ message: 'feat: start', files: { 'a.ts': 'one\n', 'b.ts': 'two\n' } },
 		{ message: 'feat: the branch adds a line', files: { 'a.ts': 'one\nbranch\n' } },
@@ -211,33 +212,64 @@ test('an answer about a branch that is behind main covers only the hunks the bra
 	])
 	const [start = '', branchTip = '', mainTip = ''] = branch.hashes
 	const { events } = await ask(
-		[
-			DRAFT,
-			{
-				tool: 'ken__answer',
-				args: {
-					scope: { base: mainTip, head: branchTip },
-					summary: 'The branch adds one line to a.ts.',
-					risks: [],
-					statements: [
-						{
-							text: 'a.ts gains a line.',
-							label: 'inferred',
-							quotes: [{ path: 'a.ts', commit: branchTip, text: 'branch' }],
-						},
-					],
+		reply('The branch adds one line to a.ts.', {
+			scope: { base: mainTip, head: branchTip },
+			claims: [
+				{
+					text: 'a.ts gains a line.',
+					label: 'inferred',
+					quotes: [{ path: 'a.ts', commit: branchTip, text: 'branch' }],
 				},
-			},
-			{ text: 'Done.' },
-		],
+			],
+		}),
 		branch.root,
 	)
 
-	const accepted = events.find((event) => event.kind === 'accepted')
-	const change = accepted?.kind === 'accepted' ? accepted.answer.change : null
+	const { change } = replyIn(events)
 	assert.equal(change?.base, start, 'the change starts where the branch split from main')
 	assert.deepEqual(
 		[...(change?.covered ?? []), ...(change?.uncovered ?? [])].map((hunk) => hunk.path),
 		['a.ts'],
 	)
+})
+
+test('a stop pressed while the reply is being saved still ends the question, and the chat takes the next one', {
+	timeout: 20_000,
+}, async () => {
+	// Two hundred changed files make saving the reply slow enough for the stop to land while it runs.
+	const files: Record<string, string> = { 'src/retry.ts': `${RETRY}\t\tsleep(100)\n\t}\n}\n` }
+	for (let at = 0; at < 200; at++) files[`src/use-${at}.ts`] = `export const wait${at} = retry(${at})\n`
+	const big = buildRepository([
+		{ message: 'feat: start', files: { 'src/retry.ts': `${RETRY}\t}\n}\n` } },
+		{ message: 'feat: wait, and use retry everywhere', files },
+	])
+	const [from = '', to = ''] = big.hashes
+	const sleep = { path: 'src/retry.ts', commit: to, text: '\t\tsleep(100)' }
+	const model = await scriptedModel([
+		{ tool: 'ken__show', args: { scope: { base: from, head: to }, claims: [claim(sleep)] } },
+		{ text: 'Retries wait.' },
+		{ text: 'Still here.' },
+	])
+	const started = await startChat({
+		directory: big.root,
+		model: { model: 'scripted', baseUrl: model.baseUrl, apiKeyEnv: KEY_ENV },
+		env: {},
+	})
+	if (started.kind !== 'ok') throw new Error(started.message)
+	const stop = new AbortController()
+	const stopped: ChatEvent[] = []
+	for await (const event of started.chat.ask('What did the last commit do?', stop.signal)) {
+		stopped.push(event)
+		// The words end the talk. The reply is saved in the tasks that follow, so the stop lands while it is saved.
+		if (event.kind === 'item' && event.item.kind === 'words') setTimeout(() => stop.abort(), 0)
+	}
+	const next: ChatEvent[] = []
+	for await (const event of started.chat.ask('Are you there?')) next.push(event)
+	await started.chat.close()
+
+	assert.ok(
+		['done', 'error'].includes(stopped.at(-1)?.kind ?? ''),
+		`the stopped question ends: ${stopped.map((e) => e.kind)}`,
+	)
+	assert.deepEqual(replyIn(next).items, [{ kind: 'words', text: 'Still here.' }])
 })

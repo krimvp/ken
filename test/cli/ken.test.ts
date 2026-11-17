@@ -8,7 +8,7 @@ import { openMap } from '../../src/map/index.ts'
 import { fileRecordStore } from '../../src/record/index.ts'
 import { gitRepository } from '../../src/repo/index.ts'
 import { buildRepository } from '../fixtures/build-repository.ts'
-import { DRAFT, nothingToRevise, scriptedModel } from '../fixtures/scripted-model.ts'
+import { nothingToRevise, scriptedModel } from '../fixtures/scripted-model.ts'
 
 const KEN = path.join(import.meta.dirname, '../../src/cli/main.ts')
 // The fixture dates every commit, so a copy has the same hashes. The first test records a piece of work, so a test that
@@ -32,17 +32,15 @@ function ken(args: string[], env: Record<string, string | undefined>) {
 
 const SUM = { path: 'app.py', commit: head, text: '    return sum(items)' }
 
-test('ken ask --json prints the checked answer, what it recorded and the closing note, and ken record reads it back with no model', async () => {
+test('ken ask --json prints the reply, words and checked cards in order, and what it recorded, and ken record reads it back with no model', async () => {
 	const model = await scriptedModel([
-		DRAFT,
 		{
-			text: 'Let me read the diff.',
-			tool: 'ken__answer',
+			text: 'total now adds the items.',
+			tool: 'ken__show',
 			args: {
 				scope: { base, head },
 				work: { title: 'Fix total' },
-				summary: 'total now adds the items.',
-				statements: [{ text: 'total returns the sum of the items instead of 0.', label: 'inferred', quotes: [SUM] }],
+				claims: [{ text: 'total returns the sum of the items instead of 0.', label: 'inferred', quotes: [SUM] }],
 				risks: [
 					{
 						text: 'A caller that passes text now gets a TypeError.',
@@ -77,8 +75,8 @@ test('ken ask --json prints the checked answer, what it recorded and the closing
 				],
 			},
 		},
+		{ text: '' },
 		...nothingToRevise(1),
-		{ text: 'Nothing was left out.' },
 	])
 	const env = {
 		...NO_KEN_VARIABLES,
@@ -92,24 +90,26 @@ test('ken ask --json prints the checked answer, what it recorded and the closing
 	assert.equal(code, 0, `${stderr}${stdout}`)
 	const result = JSON.parse(stdout)
 	assert.equal(result.outcome, 'answered')
-	assert.equal(result.note, 'Nothing was left out.', 'the note holds only what the agent wrote after the answer')
-	const verified = [{ path: 'app.py', commit: head, startLine: 2, endLine: 2, text: '    return sum(items)' }]
-	assert.deepEqual(result.answer.statements[0].quotes, verified)
-	assert.deepEqual(result.answer.risks, [
-		{
-			text: 'A caller that passes text now gets a TypeError.',
-			label: 'inferred',
-			quotes: verified,
-			weight: 'minor',
-			checked: false,
-		},
-	])
+	const { items, change } = result.reply
 	assert.deepEqual(
-		result.answer.change.commits.map((commit: { subject: string }) => commit.subject),
+		items.map((item: { kind: string; text?: string; card?: { kind: string } }) => item.text ?? item.card?.kind),
+		['total now adds the items.', 'diagram', 'claim', 'decision', 'risk'],
+	)
+	const verified = [{ path: 'app.py', commit: head, startLine: 2, endLine: 2, text: '    return sum(items)' }]
+	assert.deepEqual(items[2].card.claim.quotes, verified)
+	assert.deepEqual(items[4].card.risk, {
+		text: 'A caller that passes text now gets a TypeError.',
+		label: 'inferred',
+		quotes: verified,
+		weight: 'minor',
+		checked: false,
+	})
+	assert.deepEqual(
+		change.commits.map((commit: { subject: string }) => commit.subject),
 		['fix: add the items'],
 	)
-	assert.deepEqual(result.answer.change.uncovered, [])
-	const [diagram] = result.answer.diagrams
+	assert.deepEqual(change.uncovered, [])
+	const { diagram } = items[1].card
 	assert.deepEqual(
 		[diagram.kind, diagram.arrows[0].number, diagram.arrows[0].label],
 		['component', 3, 'found-by-search'],
@@ -130,57 +130,67 @@ test('ken ask --json prints the checked answer, what it recorded and the closing
 	assert.equal((await ken(['record', 'no-such-id', '--repo', root], NO_KEN_VARIABLES)).code, 1)
 })
 
-test('ken ask prints the risks in the order the answer gives them, whatever their weight, each with its weight, and names the points of the draft it left out', async () => {
+function withModel(baseUrl: string) {
+	return {
+		...NO_KEN_VARIABLES,
+		KEN_MODEL: 'scripted',
+		KEN_BASE_URL: baseUrl,
+		KEN_API_KEY_ENV: 'KEN_TEST_KEY',
+		KEN_TEST_KEY: 'scripted-model-key',
+	}
+}
+
+test('ken ask prints the words, then the cards in the order the reply gives them, each risk with its weight', async () => {
 	const risk = (text: string, weight: string) => ({ text, label: 'inferred', quotes: [SUM], weight })
 	const model = await scriptedModel([
-		DRAFT,
 		{
-			tool: 'ken__answer',
+			tool: 'ken__show',
+			text: 'total returned 0 for every list. It now adds the items.',
 			args: {
 				scope: { base, head },
-				summary: 'total returned 0 for every list. It now adds the items. Watch the reports that showed 0.',
-				statements: [{ text: 'total returns the sum of the items instead of 0.', label: 'inferred', quotes: [SUM] }],
+				claims: [{ text: 'total returns the sum of the items instead of 0.', label: 'inferred', quotes: [SUM] }],
 				risks: [
 					risk('A caller that passes text now gets a TypeError.', 'minor'),
 					risk('Every report that showed a total of 0 now shows a different number.', 'serious'),
 					risk('A list of floats now gets a rounding error in its total.', 'minor'),
 					risk('An export that summed the items itself now counts them twice.', 'serious'),
 				],
-				left_out: ['a guess about who reads the reports'],
 			},
 		},
+		{ text: '' },
 		...nothingToRevise(4),
-		{ text: 'Nothing else.' },
 	])
-	const env = {
-		...NO_KEN_VARIABLES,
-		KEN_MODEL: 'scripted',
-		KEN_BASE_URL: model.baseUrl,
-		KEN_API_KEY_ENV: 'KEN_TEST_KEY',
-		KEN_TEST_KEY: 'scripted-model-key',
-	}
-	const { code, stdout, stderr } = await ken(['ask', 'What did the fix do?', '--repo', root], env)
+	const { code, stdout, stderr } = await ken(
+		['ask', 'What did the fix do?', '--repo', buildRepository(COMMITS).root],
+		withModel(model.baseUrl),
+	)
 
 	assert.equal(code, 0, `${stderr}${stdout}`)
 	const lines = stdout.split('\n')
 	const at = (start: string) => lines.findIndex((line) => line.includes(start))
-	const shown = ['A caller that passes', 'Every report that', 'A list of floats', 'An export that'].map(at)
+	const shown = [
+		'total returned 0 for every list',
+		'total returns the sum',
+		'A caller that passes',
+		'Every report that',
+		'A list of floats',
+		'An export that',
+	].map(at)
+	assert.ok((shown[0] ?? -1) >= 0, `the reply is printed: ${stdout}`)
 	assert.deepEqual(
 		[...shown].sort((a, b) => a - b),
 		shown,
-		`the risks come in the answer's order, the minor first one first: ${stdout}`,
+		`the words, then the cards in the reply's order, the minor first risk first: ${stdout}`,
 	)
-	assert.ok((shown[0] ?? -1) > 0, `the risks are printed: ${stdout}`)
 	assert.deepEqual(
-		shown.map((line) => /\[(serious|minor), by ken's model\]/.exec(lines[line] ?? '')?.[1]),
+		shown.slice(2).map((line) => /\[(serious|minor), by ken's model\]/.exec(lines[line] ?? '')?.[1]),
 		['minor', 'serious', 'minor', 'serious'],
 		'each risk carries the weight the model gave it',
 	)
-	assert.match(stdout, /1 point of the draft had no line to quote[^\n]*\n.*- a guess about who reads the reports/)
 })
 
 // The fix branched from inside the change and was merged after it, so the change's head does not reach it.
-test('ken ask prints a risk that quotes a later commit after the open one, marked fixed since in that commit, even when the fix branched from inside the change', async () => {
+test('ken ask marks a risk that quotes a later commit as fixed since in that commit, even when the fix branched from inside the change', async () => {
 	const later = buildRepository([
 		{ message: 'feat: start', files: { 'app.py': 'def total(items):\n    return 0\n' } },
 		{ message: 'fix: add the items', files: { 'app.py': 'def total(items):\n    return sum(items)\n' } },
@@ -203,85 +213,63 @@ test('ken ask prints a risk that quotes a later commit after the open one, marke
 	}
 	const open = { text: 'A list of floats gets a rounding error.', label: 'inferred', quotes: [sum], weight: 'minor' }
 	const model = await scriptedModel([
-		DRAFT,
 		{
-			tool: 'ken__answer',
+			tool: 'ken__show',
+			text: 'total returned 0 for every list. It now adds the items.',
 			args: {
 				scope: { base: from, head: to },
-				summary: 'total returned 0 for every list. It now adds the items.',
-				statements: [{ text: 'total returns the sum of the items.', label: 'inferred', quotes: [sum] }],
+				claims: [{ text: 'total returns the sum of the items.', label: 'inferred', quotes: [sum] }],
 				risks: [fixed, open],
 			},
 		},
+		{ text: '' },
 		...nothingToRevise(2),
-		{ text: 'Nothing else.' },
 	])
-	const env = {
-		...NO_KEN_VARIABLES,
-		KEN_MODEL: 'scripted',
-		KEN_BASE_URL: model.baseUrl,
-		KEN_API_KEY_ENV: 'KEN_TEST_KEY',
-		KEN_TEST_KEY: 'scripted-model-key',
-	}
-	const { code, stdout, stderr } = await ken(['ask', 'What did the fix do?', '--repo', later.root], env)
+	const { code, stdout, stderr } = await ken(
+		['ask', 'What did the fix do?', '--repo', later.root],
+		withModel(model.baseUrl),
+	)
 
 	assert.equal(code, 0, `${stderr}${stdout}`)
-	assert.match(stdout, /2 risks, 1 fixed since:/)
-	const [first, second] = [open.text, fixed.text].map((text) => stdout.split('\n').find((line) => line.includes(text)))
-	assert.match(first ?? '', /^1\. A list of floats/, `the open risk comes first: ${stdout}`)
-	assert.match(second ?? '', new RegExp(`^2\\. A caller that passes text.*\\[Fixed since, in ${fix.slice(0, 7)}\\]`))
-	assert.doesNotMatch(first ?? '', /Fixed since/)
+	const [stillOpen, wasFixed] = [open.text, fixed.text].map((text) =>
+		stdout.split('\n').find((line) => line.includes(text)),
+	)
+	assert.match(wasFixed ?? '', new RegExp(`A caller that passes text.*\\[Fixed since, in ${fix.slice(0, 7)}\\]`))
+	assert.doesNotMatch(stillOpen ?? '', /Fixed since/, `the open risk has no such mark: ${stdout}`)
 })
 
-test('ken ask prints the risks the second look withdrew as one count, each with the line that rules it out, and the search ken made for what an entry says is missing', async () => {
+test('ken ask prints a risk the second look withdrew with the line that rules it out, apart from the risks, and the search ken made for what a card says is missing', async () => {
 	const risk = (text: string) => ({ text, label: 'inferred', quotes: [SUM], weight: 'minor' })
 	const model = await scriptedModel([
-		DRAFT,
 		{
-			tool: 'ken__answer',
+			tool: 'ken__show',
+			text: 'total returned 0 for every list. It now adds the items.',
 			args: {
 				scope: { base, head },
-				summary: 'total returned 0 for every list. It now adds the items.',
-				statements: [
-					{
-						text: 'No test covers total.',
-						label: 'inferred',
-						quotes: [SUM],
-						absent: { text: 'test_total' },
-					},
-				],
+				claims: [{ text: 'No test covers total.', label: 'inferred', quotes: [SUM], absent: { text: 'test_total' } }],
 				risks: [risk('An empty list now fails.'), risk('A caller that passes text now gets a TypeError.')],
 			},
 		},
 		{ text: '' },
 		{
-			tool: 'ken__revise_answer',
-			args: {
-				withdraw: [{ risk: 1, reason: 'sum of an empty list is 0.', quotes: [SUM] }],
-				order: [2],
-			},
+			tool: 'ken__revise_risks',
+			args: { withdraw: [{ risk: 1, reason: 'sum of an empty list is 0.', quotes: [SUM] }], order: [2] },
 		},
-		{ text: 'Nothing else.' },
+		{ text: 'The second look took one risk out.' },
 	])
-	const env = {
-		...NO_KEN_VARIABLES,
-		KEN_MODEL: 'scripted',
-		KEN_BASE_URL: model.baseUrl,
-		KEN_API_KEY_ENV: 'KEN_TEST_KEY',
-		KEN_TEST_KEY: 'scripted-model-key',
-	}
 	const { code, stdout, stderr } = await ken(
 		['ask', 'What did the fix do?', '--repo', buildRepository(COMMITS).root],
-		env,
+		withModel(model.baseUrl),
 	)
 
 	assert.equal(code, 0, `${stderr}${stdout}`)
 	assert.match(
 		stdout,
-		/1 risk withdrawn by the second look, with the line that rules it out:\n1\. An empty list now fails\.[^\n]*\n {3}Ruled out: sum of an empty list is 0\.\n {3}app\.py @ \w{7}, line 2\n.*return sum\(items\)/,
+		/Withdrawn by the second look: An empty list now fails\.\n {3}Ruled out: sum of an empty list is 0\.\n {3}app\.py @ \w{7}, line 2\n.*return sum\(items\)/,
 		stdout,
 	)
-	assert.match(stdout, /Risks, heaviest first \(1\):/, 'the withdrawn risk is not among the risks')
+	assert.doesNotMatch(stdout, /Risk: An empty list now fails/, 'the withdrawn risk is not among the risks')
+	assert.match(stdout, /Risk: A caller that passes text/)
 	assert.match(stdout, /No test covers total\.[^\n]*\n {3}ken searched for `test_total` at \w{7} and found nothing\./)
 })
 

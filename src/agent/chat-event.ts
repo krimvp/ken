@@ -1,35 +1,36 @@
-// What one question produces, in this order: text and tool calls while the model works, one "rejected" for each
-// answer that failed a check, at most one "accepted", then "usage", then "done" or "error" as the last event.
-// Plain data, so the terminal and a server can pass it on as it is.
-import type { Decision, RecordEntry } from '../record/index.ts'
-import type { Answer } from './answer/answer.ts'
+// What one question produces, in this order: text while the model types, a tool line for each call, a step for each
+// working turn and each card ken sent back, the change the reply is about once the model names it, an item for each part of the reply as its turn ends, at most one
+// "replied" with the whole reply as it is saved, then "usage", then "done" or "error" as the last event. Plain data,
+// so the terminal and a server can pass it on as it is.
+import type { RecordEntry } from '../record/index.ts'
+import type { Commit, CommitHash } from '../repo/index.ts'
+import type { Item, Reply } from './reply/reply.ts'
 
-// What the risk pass changed in the first answer. risks gives, for each risk of the final answer in its order, where it
-// came from: its number in the first answer, kept as it was or rewritten, or added by the pass. decisions is how many
-// decisions the pass added, at the end of their list. The risks it took out are kept with the answer (see Withdrawn).
-export type Revision = {
-	risks: ({ kind: 'kept' | 'rewritten'; was: number } | { kind: 'added' })[]
-	decisions: number
-}
+// What happened while the model worked, behind "Show the steps". "tool" is one call as a sentence, "text" is what the
+// model wrote in a turn that read the project, and "sent-back" is a card ken's checks refused, with why.
+export type Step =
+	| { kind: 'tool'; text: string }
+	| { kind: 'text'; text: string }
+	| { kind: 'sent-back'; what: string; problems: string[] }
 
 export type Cost = { inputTokens: number; outputTokens: number; seconds: number }
 
 export type ChatEvent =
+	// Live only: the model's text as it types. When its turn ends, ken files that text as a step or as words of the reply.
 	| { kind: 'text'; delta: string }
 	// step is the call as one plain sentence for the reader, such as "Read `src/cli.ts`, lines 100 to 180".
 	| { kind: 'tool'; name: string; step: string }
-	| { kind: 'rejected'; attempt: number; problems: string[] }
-	// recorded holds the entries this answer added to the project record; an entry already there is not repeated. draft
-	// is set when the answer cites ken's snapshot of uncommitted work: nothing was recorded, and it holds the answer's
-	// decisions as ken checked and labelled them, for the reader's history alone.
-	// revision is null when there was no risk pass, or when nothing it sent passed and the first answer stands.
-	| { kind: 'accepted'; answer: Answer; recorded: RecordEntry[]; draft: Decision[] | null; revision: Revision | null }
-	// The whole question's cost. fromDraft is the part that turning the draft into the answer took, and riskPass the part
-	// the risk pass took, each null when the question had no such step.
-	| ({ kind: 'usage'; fromDraft: Cost | null; riskPass: Cost | null } & Cost)
+	| { kind: 'step'; step: Step }
+	| { kind: 'item'; item: Item }
+	// Live only: the change the reply is about, as soon as the model names it, so the page can lead the reply with it.
+	// The reply's own change, in "replied", says the same and more.
+	| { kind: 'change'; base: CommitHash; head: CommitHash; commits: Commit[] }
+	// recorded holds the entries the reply added to the project record; an entry already there is not repeated.
+	| { kind: 'replied'; reply: Reply; recorded: RecordEntry[] }
+	// The whole question's cost. secondLook is the part the second look at risks took, null when it did not run.
+	| ({ kind: 'usage'; secondLook: Cost | null } & Cost)
 	| { kind: 'done'; outcome: Outcome }
 	| { kind: 'error'; message: string }
 
-// "rejected": every answer the model sent failed a check, up to the limit, so there is no checked answer.
-// "no-answer": the model stopped without sending an answer. "out-of-turns": it was still exploring at the turn limit.
-export type Outcome = 'answered' | 'rejected' | 'no-answer' | 'out-of-turns'
+// "no-answer": the model wrote nothing and showed nothing. "out-of-turns": it was still reading at the turn limit.
+export type Outcome = 'answered' | 'no-answer' | 'out-of-turns'

@@ -1,17 +1,15 @@
 // The question ken asks itself in live mode, while a coding agent works in the project and the owner watches. A note is
-// an ordinary answer, checked the same way, with rules for this case on top of the system prompt: it says what is new
-// since the last note and why, in a few entries, and leaves out what earlier notes said. It follows plain-words.
+// an ordinary reply in its own chat, with rules for this case on top of the system prompt: it says what is new since
+// the last note and why in a few sentences, and leaves out what earlier notes said. It follows plain-words.
 import type { About } from '../live/index.ts'
 
-// earlier: the summaries of the last notes, newest first. session: the id of the newest saved session, null when ken
+// earlier: the first words of the last notes, newest first. session: the id of the newest saved session, null when ken
 // reads none. leftOut: files the snapshot left out because they were binary or too large.
 export type NoteFacts = {
 	earlier: { at: string; summary: string }[]
 	session: string | null
 	leftOut: number
 }
-
-export const MAX_NOTE_ENTRIES = 3
 
 export function noteQuestion(about: About, facts: NoteFacts): string {
 	const short = (hash: string) => hash.slice(0, 7)
@@ -46,17 +44,13 @@ export function noteQuestion(about: About, facts: NoteFacts): string {
 		'',
 		what,
 		'',
-		`Send the note with the answer tool, with scope base ${about.base} and head ${head}. These rules come before the general ones:`,
-		`- Say what changed since the last note and why, in at most ${MAX_NOTE_ENTRIES} entries: statements, decisions and risks together.`,
-		'- Lead with what matters to someone watching: what the change does and what it means for the code, not which lines moved.',
-		'- Quote the changed lines.',
+		'These rules come before the general ones:',
+		'- Say what changed since the last note and why, in two to four sentences. Lead with what the change does and what it means for the code, not which lines moved.',
+		`- Call show with scope base ${about.base} and head ${head}. Send a card only for a decision the change made or a risk that is real, with the changed lines quoted.`,
+		'- Read only the code the change touches and the lines next to it; do not search the rest of the project.',
 		'- Speak to the reader as "you": write "you asked for", never "the owner asked for".',
-		'- Name a risk only if it is real. If there is none, send risks as an empty list. Read only the code the change touches and the lines next to it; do not search the rest of the project.',
-		"- Use the reader's map: skip what they know, and lead with what changed in what they knew.",
 		earlier,
 		...session,
-		'- Send a decision only when the change made one.',
-		'- Send no diagram unless the change is about how parts connect.',
 		...uncommitted,
 	].join('\n')
 }

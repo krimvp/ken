@@ -109,10 +109,9 @@ export function decisionQuotes(decision) {
 const NONE = new Set()
 
 // ken's copy of uncommitted work is a commit only in ken's own store, written as "ken" with no message (see the live
-// module). An answer that cites one is a draft, so only a draft can hold one. These are the hashes of its copies.
+// module). These are the hashes of the copies a reply's change holds.
 export function copiesOf(q) {
-	if (q.draft === undefined || !q.answer) return NONE
-	const commits = q.answer.change?.commits ?? []
+	const commits = q.reply?.change?.commits ?? []
 	return new Set(commits.filter((commit) => commit.email === 'ken@localhost').map((commit) => commit.hash))
 }
 
@@ -134,7 +133,7 @@ export function quoteBody(quote, where = '', named = false, copies = NONE) {
 // When an item quotes one file at more than one commit, each quote of it gets a tag, so the rows of a changed line tell
 // apart. ken's copy of uncommitted work sits on top of HEAD, so a quote of it is "now"; failing that, a quote at the HEAD
 // the question was asked at is "now". Every other quote of that file is older: "before". With neither, the commits of
-// the change the answer explains give the order, newest first and then the commit it starts from: the newest is
+// the change the reply explains give the order, newest first and then the commit it starts from: the newest is
 // "after", since later commits may have changed it again. A file whose commits ken cannot place gets no tag.
 export function quoteTags(quotes, { head = null, copies = NONE, change = null }) {
 	const order = change ? [...change.commits.map((commit) => commit.hash), change.base] : []
@@ -162,9 +161,13 @@ export function tagHtml(tag) {
 	return tag ? `<span class="q-then" title="${TAG_MEANS[tag]}">${tag}</span>` : ''
 }
 
-// At rest a quote is one row: the file, the lines, and the first quoted line, with the commit when the answer quotes
-// more than one. Opened, it shows all its lines: in place, or in the panel on a wide screen, where only the row whose
-// quote the panel shows reads as open.
+// A card shows a short quote whole, and a long one by its first lines.
+const SHOWN_LINES = 4
+const WHOLE_UP_TO = 6
+
+// A quote is a row that names the file, the lines and the commit when the reply quotes more than one, over the quoted
+// lines as code. A long quote shows its first lines and a button for the rest. Opened, it shows all its lines: in
+// place, or in the panel on a wide screen, where the row whose quote the panel shows says so.
 export function quoteRows(quotes, key, { ui, commits, head = null, copies = NONE, change = null }) {
 	const tags = quoteTags(quotes, { head, copies, change })
 	return `<ul class="quotes">${quotes
@@ -173,19 +176,27 @@ export function quoteRows(quotes, key, { ui, commits, head = null, copies = NONE
 			const id = `${key}-q${j}`
 			const chosen = ui.wide && ui.panel.kind === 'quote' && ui.panel.key === key && ui.panel.quote === j
 			const open = !ui.wide && ui.openQuotes.has(id)
-			const first = quote.text.split('\n').find((line) => line.trim() !== '') ?? ''
 			const at =
 				commits && !isSession(quote) && quote.path !== null
 					? `<span class="q-commit">${copies.has(quote.commit) ? "in ken's copy" : `at <code>${short(quote.commit)}</code>`}</span>`
 					: ''
+			const act = `data-act="quote" data-item="${key}" data-quote="${j}"`
 			return `<li class="q${chosen ? ' chosen' : ''}">
-				<button class="q-row" data-act="quote" data-item="${key}" data-quote="${j}" data-key="${id}" aria-expanded="${ui.wide ? chosen : open}"${ui.wide ? ' aria-controls="panel"' : ''}>
-					<span class="q-path">${quoteSource(quote)}</span><span class="q-lines">${then}<span class="nowrap">${quoteLines(quote)}</span>${at}</span>${first ? `<span class="q-first">${esc(first.trim())}</span>` : ''}
+				<button class="q-row" ${act} data-key="${id}" aria-expanded="${ui.wide ? chosen : open}"${ui.wide ? ' aria-controls="panel"' : ''}>
+					<span class="q-path">${quoteSource(quote)}</span><span class="q-lines">${then}<span class="nowrap">${quoteLines(quote)}</span>${at}</span>${chosen ? '<span class="q-there">Shown in the panel on the right</span>' : ''}
 				</button>
-				${open ? quoteBody(quote, '', commits, copies) : ''}
+				${open ? quoteBody(quote, '', commits, copies) : firstLinesHtml(quote, `${act} data-key="${id}-all"`)}
 			</li>`
 		})
 		.join('')}</ul>`
+}
+
+function firstLinesHtml(quote, act) {
+	const lines = quote.text.split('\n')
+	const numbers = lines.map((_, k) => quote.startLine + k)
+	if (lines.length <= WHOLE_UP_TO) return `<pre class="code"><code>${codeLines(lines, numbers)}</code></pre>`
+	const all = `<button class="link q-all" ${act}>Show all ${lines.length} lines</button>`
+	return `<pre class="code"><code>${codeLines(lines.slice(0, SHOWN_LINES), numbers)}${all}</code></pre>`
 }
 
 export const LABELS = {
@@ -210,29 +221,45 @@ export const LABELS = {
 	},
 }
 
-// ken's own marks on a risk of an answer about a change, which it sets from git, and what each means. The label key
-// and each mark's tooltip say the meaning, so the note under the risks stays short.
+// ken's own marks on a risk of a change, which it sets from git, and what each means. Each mark says its meaning when
+// the reader points at it or moves to it with the keyboard.
 export const RISK_MARKS = {
 	outside: 'Quotes code outside the change',
 	outsideMeans:
-		'A quote of the risk lies wholly outside the lines the change touched, at its last commit. ken checks where the quote is, not whether the risk is true.',
+		'At least one quote of this risk is from code the change did not touch. ken checked where the quote is, not whether the risk is real.',
 	inside: 'Quotes only the changed lines',
 	insideMeans:
-		'Every quote of a file in the risk holds a line the change touched. A risk that quotes no file, only commit messages, has neither mark.',
+		'Every file this risk quotes is quoted at a line the change touched. ken checked where the quotes are, not whether the risk is real.',
+	unreviewed: 'No second look',
+	unreviewedMeans:
+		"ken's second look at the risks did not finish. This risk was checked against git once, not read against the code a second time.",
 	fixed: 'Fixed since, in',
 	fixedMeans:
-		'The risk quotes the message of a commit made after the change, the one named, which says what was wrong. ken shows these risks after the open ones.',
+		'A later commit, the one named, fixed this risk. The card quotes its message. ken lists these after the open risks.',
+	withdrawnMeans:
+		"ken's model took a second look at the risks and found code that rules this one out. The quote below is that code.",
 }
 
 // The weight ken's model gives a risk, and what each means. ken does not judge it.
 export const WEIGHT_MEANS = {
 	serious:
-		"ken's model weighs it serious: someone who uses the code in the normal way loses work, gets a wrong result or a failure, or finds refused what worked before. ken does not judge the weight.",
-	minor: "ken's model weighs it minor: it needs a rare case or costs little. ken does not judge the weight.",
+		"ken's model rates this risk serious. Someone who uses the code the normal way loses work, gets a wrong result or a failure, or finds that something that worked is now refused. ken does not judge the rating.",
+	minor: "ken's model rates this risk minor. It needs a rare case, or it costs little. ken does not judge the rating.",
 }
 
-export function label(name) {
-	return `<span class="label label-${esc(name)}">${esc(LABELS[name]?.name ?? name)}</span>`
+// A mark on a card. Pointing at it, moving to it with the keyboard, or tapping it shows what it means in the page's one
+// tooltip, #tip.
+export function markHtml(className, text, means) {
+	return `<span class="${className}" tabindex="0" data-tip="${esc(means)}" aria-describedby="tip">${text}</span>`
+}
+
+// A label, and on a card one that says what it means.
+export function label(name, onCard = false) {
+	const text = esc(LABELS[name]?.name ?? name)
+	const className = `label label-${esc(name)}`
+	return onCard && LABELS[name]
+		? markHtml(className, text, LABELS[name].means.replaceAll('`', ''))
+		: `<span class="${className}">${text}</span>`
 }
 
 // The owner's answer to a decision, said back to them. An answer saved before ken asked for an outcome has none.

@@ -1,7 +1,7 @@
 import { lstat, readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { parseDiff } from './parse-diff.ts'
-import type { BlameLine, Commit, CommitHash, Repository, SearchMatch, Uncommitted } from './repository.ts'
+import type { BlameLine, Commit, CommitHash, ObjectId, Repository, SearchMatch, Uncommitted } from './repository.ts'
 import { MAX_OUTPUT_BYTES, runGit } from './run-git.ts'
 
 // ken commits its own record to .ken/. Those bookkeeping commits are not changes to explain (plan risk: "The record's
@@ -17,7 +17,8 @@ const LOG_FORMAT =
 // alternate is a folder of git objects this repository may also read, such as ken's store of snapshots of uncommitted
 // work, so a commit there reads like one of the project's own.
 export function gitRepository(root: string, options: { alternate?: string } = {}): Repository {
-	const git = (args: string[], signal?: AbortSignal) => runGit(root, args, signal, options.alternate ?? null)
+	const git = (args: string[], signal?: AbortSignal, input = '') =>
+		runGit(root, args, signal, options.alternate ?? null, input)
 	const tooLarge = { kind: 'too-large', limitBytes: MAX_OUTPUT_BYTES } as const
 
 	async function isFile(commit: CommitHash, path: string, signal?: AbortSignal) {
@@ -147,6 +148,31 @@ export function gitRepository(root: string, options: { alternate?: string } = {}
 		async branch(signal) {
 			const run = await git(['symbolic-ref', '--quiet', '--short', 'HEAD'], signal)
 			return run.kind === 'ok' && run.stdout.trim() !== '' ? run.stdout.trim() : null
+		},
+
+		async branches(signal) {
+			const run = await git(
+				['for-each-ref', '--sort=-committerdate', '--format=%(refname:short)', 'refs/heads'],
+				signal,
+			)
+			return run.kind === 'ok' ? run.stdout.split('\n').filter((name) => name !== '') : []
+		},
+
+		// cat-file reads "<commit>:<path>" exactly, where ls-tree would read a path as a pattern and list a folder's
+		// children. It answers one line per line it reads, so the answers pair up with the paths by position. A path
+		// with a line break in it cannot be sent that way, so it reads as not there.
+		async objectIds(commit, paths, signal) {
+			const sent = paths.filter((each) => !each.includes('\n'))
+			if (sent.length === 0) return paths.map(() => null)
+			const asked = sent.map((each) => `${commit}:${each}\n`).join('')
+			const run = await git(['cat-file', '--batch-check=%(objectname)'], signal, asked)
+			if (run.kind !== 'ok') throw new Error(`git cat-file failed on a resolved commit: ${run.kind}`)
+			const lines = run.stdout.split('\n')
+			const answers = new Map(sent.map((each, index) => [each, lines[index] ?? '']))
+			return paths.map((each) => {
+				const answer = answers.get(each) ?? ''
+				return HASH.test(answer) ? (answer as ObjectId) : null
+			})
 		},
 
 		// Plumbing only: diff-index and ls-files never write the index, where git status and git diff may refresh it.

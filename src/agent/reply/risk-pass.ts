@@ -1,31 +1,29 @@
-// The risk pass. Once an answer about a change passes every check, ken asks the same session once more, before the
-// reader sees it, to check the answer's own risks against the code and to look for what two parts of the change do
-// together, in fixed steps. The agent may rewrite, add and withdraw risks, which go through the same checks, and sends
-// the final order of the risks, heaviest first. A withdrawal carries the lines that rule its risk out. ken merges what
-// passes into one answer. When nothing passes, the first answer stands.
-import type { JsonObject, Tool } from 'aigent/plugin'
-import { type Quote, type QuoteSources, type VerifiedQuote, verifyQuote } from '../../checks/index.ts'
+// The second look. When a reply about a change has sent its risks, ken holds them and asks the same session once more,
+// before the reader sees them, to check those risks against the code and to look for what two parts of the change do
+// together, in fixed steps. The model may rewrite, add and withdraw risks, which go through the same checks, and sends
+// their final order, heaviest first. A withdrawal carries the lines that rule its risk out. When nothing passes, the
+// risks it held show as they were.
+import type { Tool } from 'aigent/plugin'
+import { type NotFollowed, type Quote, type QuoteSources, type VerifiedQuote, verifyQuote } from '../../checks/index.ts'
+import type { Decision } from '../../record/index.ts'
 import type { Commit, CommitHash, Range, Repository } from '../../repo/index.ts'
-import type { Revision } from '../chat-event.ts'
 import { namesText } from '../tools/elsewhere-text.ts'
 import { readArgs, refuse, reply, short } from '../tools/tool-edge.ts'
+import { checkCard, isLater } from './check-card.ts'
+import { allowJsonText, readJsonText } from './json-text.ts'
+import type { Card, Risk } from './reply.ts'
 import {
-	type AnswerRound,
-	accept,
-	checkAdditions,
-	DECISION_SCHEMA,
+	claimOf,
+	contextOf,
 	type Gate,
-	type Held,
 	optionalList,
 	QUOTE,
 	quoteOf,
 	RISK_SCHEMA,
-	sentBack,
+	type Round,
 	WEIGHT_RULE,
 	withoutDescriptions,
-} from './answer-tool.ts'
-import { isLater } from './check-answer.ts'
-import { allowJsonText, readJsonText } from './json-text.ts'
+} from './show-tool.ts'
 
 export const MAX_PASS_REJECTIONS = 2
 const MAX_LATER = 8
@@ -97,16 +95,18 @@ export function laterText({ shown, total }: LaterCommits, head: string): string[
 // parts of the change read together, a behaviour no test covers or a thing outside the repository, and it ordered its
 // risks by who hits them and when. The first step tries to prove each risk false, because a judge found a false risk
 // and an unsettled one that one line of code settled, and the pass had never withdrawn a risk.
+// held is what the reply showed and sent of the change: its risks, its decisions, and the names used elsewhere that no
+// quote of it follows.
+export type Held = { head: CommitHash; risks: Risk[]; decisions: Decision[]; notFollowed: NotFollowed[] }
+
 export function riskPassQuestion(held: Held, later: LaterCommits): string {
-	const { answer, decisions } = held
-	const risks = answer.risks ?? []
-	const notFollowed = answer.change?.usedElsewhere?.notFollowed ?? []
-	const head = answer.change ? short(answer.change.head) : 'HEAD'
+	const { risks, decisions, notFollowed } = held
+	const head = short(held.head)
 	const mark = (checked: boolean | undefined) =>
 		checked === undefined ? '' : checked ? 'quotes code outside the change' : 'quotes only the changed lines'
 	const listed = laterText(later, head)
 	return [
-		`ken checked your answer, and the reader has not seen it yet. Now check it against the code at the head commit ${head}, with the same tools. Take these steps in order:`,
+		`ken checked the risks you sent, and the reader has not seen them yet. Now check them against the code at the head commit ${head}, with the same tools. Take these steps in order:`,
 		`1. Each risk below: find the code that would make it false, and read it: a check that stops the case, a caller that never passes the value. Withdraw the risk when that code shows it does not happen; that is a normal result. A withdrawal quotes the line that makes the risk false, the code at ${head} or a line of a later commit's message below, and ken refuses a withdrawal with no such quote. "This is not new behaviour" and "this costs little" are not reasons to withdraw: such a risk stays, weighed minor. A later commit below that fixed the risk shows it was real: keep it, and say it was fixed since, in which commit. A risk that begins with "if" ends settled: rewrite it without the "if" and quote the line that settles it, or withdraw it. It may stay unsettled only when the code that decides it is not in git, such as a dependency's, and then it says so. Otherwise rewrite the risk with a quote of the place it rests on, or keep it as it is. ken marks a risk "Quotes code outside the change" when a file quote at the head commit holds no changed line, "Quotes only the changed lines" when every file quote holds one, and neither when it quotes no file. A dependency's code is not in git, so ken cannot read it.`,
 		'2. Each pair of decisions that touch the same file, function, record, id or signal, such as one that writes or keeps a thing and one that deletes or skips it: what happens when both apply?',
 		'3. Each early return, refusal, delete or catch in the changed lines: what no longer happens after it, and who relied on it?',
@@ -114,55 +114,51 @@ export function riskPassQuestion(held: Held, later: LaterCommits): string {
 		'5. Each name below that no quote follows: read where it is used. Does the change still fit there?',
 		"6. Each later fix below: what did this change leave open that the fix closed? Send it as a risk as of this change: quote the line of the fixing commit's message that says what was wrong, and say it has been fixed since, in which commit.",
 		'',
-		decisions.length === 0 ? 'Your answer names no decisions.' : 'The decisions in your answer:',
-		...decisions.map((d, at) => `${at + 1}. ${d.question} Chosen: ${d.chosen} Why: ${d.reason.text}`),
+		decisions.length === 0 ? 'Your reply shows no decisions.' : 'The decisions in your reply:',
+		...decisions.map((d, at) => `${at + 1}. ${d.question} Chosen: ${d.chosen} Why: ${d.reason?.text ?? ''}`),
 		'',
-		risks.length === 0 ? 'Your answer names no risks.' : 'The risks in your answer:',
+		'The risks you sent:',
 		...risks.map((risk, at) => {
 			const marks = [risk.weight, mark(risk.checked)].filter(Boolean)
 			return `${at + 1}. ${marks.length > 0 ? `(${marks.join(', ')}) ` : ''}${risk.text}`
 		}),
 		'',
 		...(notFollowed.length === 0
-			? ['Every name ken found used elsewhere has a quote of your answer at one of its places.']
-			: [`Names used elsewhere, at ${head}, that no quote of your answer follows:`, ...namesText(notFollowed)]),
+			? ['Every name ken found used elsewhere has a quote of your reply at one of its places.']
+			: [`Names used elsewhere, at ${head}, that no quote of your reply follows:`, ...namesText(notFollowed)]),
 		...(listed.length === 0 ? [] : ['', ...listed]),
 		'',
-		'Before you call revise_answer, write what you found in steps 2, 3, 4 and 6, one short line each: the two decisions, the line or the behaviour, and what happens. These lines are not part of the answer.',
-		'Then call revise_answer once:',
+		'Before you call revise_risks, write what you found in steps 2, 3, 4 and 6, one short line each: the two decisions, the line or the behaviour, and what happens. The reader sees these lines folded with your other working.',
+		'Then call revise_risks once:',
 		`- risks: each new risk, and each risk above that you rewrite, with replaces set to its number. A risk is one or two sentences: what can happen, who hits it (a host, an operator, a reader of results, a later developer) and when (always, on resume, only for runs made before this change, only under load). Quote the place it rests on, and give it its weight: ${WEIGHT_RULE}. A new risk that needs a rare case and costs little is left out, not sent as minor; ten risks is a sign of padding.`,
 		`- withdraw: each risk above that the code shows does not happen, with what the code shows instead and, in quotes, the lines that show it: code at ${head}, or a line of a later commit's message.`,
-		`- order: the numbers of all the risks the answer keeps, the heaviest first, by who hits each and when. A risk above keeps its number; the risks you send are ${risks.length + 1}, ${risks.length + 2} and on, in the order you send them. A minor or speculative risk goes last. ken shows the reader each risk that quotes a later commit's message, one fixed since, after the open ones.`,
-		'- decisions: a decision your answer missed, with its quotes.',
+		`- order: the numbers of all the risks you keep, the heaviest first, by who hits each and when. A risk above keeps its number; the risks you send are ${risks.length + 1}, ${risks.length + 2} and on, in the order you send them. A minor or speculative risk goes last.`,
 	].join('\n')
 }
 
-export function reviseTool(gate: Gate, round: () => AnswerRound): Tool {
+export function reviseTool(gate: Gate, round: () => Round): Tool {
 	return {
-		name: 'revise_answer',
+		name: 'revise_risks',
 		description:
-			'After ken asks you to check your answer: rewrite, add and withdraw risks, put them in order, and add decisions. ken checks every quote as it checked the answer, then shows the reader one answer.',
+			'After ken asks you to check your risks: rewrite, add and withdraw risks, and put them in order. ken checks every quote as it checked the first risks, then shows the reader the risks you keep.',
 		parameters: allowJsonText(REVISE_SCHEMA),
 		async execute(args, ctx) {
 			const current = round()
-			const { held } = current
-			if (current.answer) {
-				return reply('An answer is already accepted for this question. Write your one or two closing sentences now.')
+			const { scope } = current
+			if (current.step !== 'risks' || !scope) return refuse('ken holds no risks for a second look now.')
+			if (current.passRejections >= MAX_PASS_REJECTIONS) {
+				return refuse('No attempts are left. Your first risks stand. Stop now.')
 			}
-			if (!held) return refuse('Send your answer with the answer tool first. ken asks about risks once it passes.')
-			if (held.rejections >= MAX_PASS_REJECTIONS)
-				return refuse('No attempts are left. Your first answer stands. Stop now.')
 			const read = readJsonText(REVISE_SCHEMA, args)
-			if (read.kind === 'refused') return rejected(current, held, read.problems)
-			const first = optionalList(held.args.risks)
+			if (read.kind === 'refused') return rejected(current, read.problems)
+			const first = current.held
 			const sent = optionalList(read.args.risks).map((raw) => {
 				const { replaces, ...risk } = raw
-				return { risk, replaces: readArgs(raw, 'revise_answer risk').optionalLine('replaces') }
+				return { risk, replaces: readArgs(raw, 'revise_risks risk').optionalLine('replaces') }
 			})
-			const decisions = optionalList(read.args.decisions)
 			const sourceProblems: string[] = []
 			const asked = optionalList(read.args.withdraw).map((each) => {
-				const item = readArgs(each, 'revise_answer withdraw')
+				const item = readArgs(each, 'revise_risks withdraw')
 				const quotes = optionalList(each.quotes).map((quote) => quoteOf(quote, sourceProblems))
 				return { number: item.optionalLine('risk') ?? 0, reason: item.text('reason'), quotes }
 			})
@@ -172,49 +168,61 @@ export function reviseTool(gate: Gate, round: () => AnswerRound): Tool {
 			const replaced = sent.map(({ replaces }) => replaces)
 			const form =
 				given === undefined && first.length + sent.length > 0
-					? ['Send order: the numbers of all the risks the answer keeps, the heaviest first.']
+					? ['Send order: the numbers of all the risks you keep, the heaviest first.']
 					: orderProblems(
 							first.length,
 							replaced,
 							withdrawn.map(({ number }) => number),
 							order,
 						)
-			const head = held.answer.change?.head
-			if (!head) throw new Error('revise_answer: ken holds only an answer about a change, so it has a head commit')
+			const { head } = scope.range
 			const proofForm = await proofProblems(gate.sources.repo, head, withdrawn, ctx.signal)
 			if (form.length + sourceProblems.length + proofForm.length > 0) {
 				return sentBack([...form, ...sourceProblems, ...proofForm])
 			}
-			const risks = sent.map(({ risk }) => risk)
-			const added = await checkAdditions(gate.sources, { risks, decisions }, head, ctx.signal)
-			if (added.kind === 'form') return sentBack(added.problems)
-			if (added.kind === 'rejected') return rejected(current, held, added.problems)
+			const context = contextOf(gate, current)
+			const problems: string[] = []
+			const added: Risk[] = []
+			for (const [at, { risk }] of sent.entries()) {
+				const where = `Risk ${first.length + at + 1}`
+				const draftProblems: string[] = []
+				const draft = claimOf(risk, 'revise_risks risk', (quote) => quoteOf(quote, draftProblems))
+				const checked =
+					draftProblems.length > 0
+						? { kind: 'refused' as const, problems: draftProblems }
+						: await checkCard(context, { kind: 'risk', draft }, where, ctx.signal)
+				if (checked.kind === 'refused') problems.push(...checked.problems)
+				else if (checked.card.kind === 'risk') added.push(checked.card.risk)
+			}
 			const proved = await checkProof(gate.sources, withdrawn, ctx.signal)
-			if (proved.kind === 'rejected') return rejected(current, held, proved.problems)
-			const pick = (number: number) => (number <= first.length ? first[number - 1] : risks[number - first.length - 1])
-			const merged: JsonObject = {
-				...held.args,
-				risks: order.flatMap((number) => pick(number) ?? []),
-				decisions: [...optionalList(held.args.decisions), ...decisions],
-			}
-			const revision: Revision = {
-				risks: order.map((number) => {
-					if (number <= first.length) return { kind: 'kept', was: number }
-					const was = replaced[number - first.length - 1]
-					return was === undefined ? { kind: 'added' } : { kind: 'rewritten', was }
-				}),
-				decisions: decisions.length,
-			}
-			const taken = proved.withdrawn.flatMap(({ number, reason, proof }) => {
-				const risk = held.answer.risks?.[number - 1]
-				return risk ? [{ risk, reason, proof }] : []
+			if (proved.kind === 'rejected') problems.push(...proved.problems)
+			if (problems.length > 0 || proved.kind === 'rejected') return rejected(current, problems)
+			const pick = (number: number) => (number <= first.length ? first[number - 1] : added[number - first.length - 1])
+			const kept: Card[] = order.flatMap((number) => {
+				const risk = pick(number)
+				return risk ? [{ kind: 'risk', risk }] : []
 			})
-			const accepted = await accept(gate, current, merged, { revision, withdrawn: taken }, ctx.signal)
-			if (accepted.kind === 'accepted') return reply(accepted.reply)
-			if (accepted.kind === 'form') return sentBack(accepted.problems)
-			return rejected(current, held, accepted.problems)
+			const out: Card[] = proved.withdrawn.flatMap(({ number, reason, proof }) => {
+				const risk = first[number - 1]
+				return risk ? [{ kind: 'withdrawn', withdrawn: { risk, reason, proof } }] : []
+			})
+			current.pending.push(...kept, ...out)
+			current.held = []
+			return reply(
+				`ken shows the reader ${kept.length} ${kept.length === 1 ? 'risk' : 'risks'}${out.length > 0 ? ` and ${out.length} withdrawn, each with the lines that rule it out` : ''}. Now tell the reader in a sentence or two what the second look found.`,
+			)
 		},
 	}
+}
+
+function sentBack(problems: string[]) {
+	return refuse(
+		[
+			'Revision sent back. This did not use one of your attempts. The reader has not seen the risks yet.',
+			...problems.map((problem) => `- ${problem}`),
+			'Fix this and call revise_risks again.',
+		].join('\n'),
+	)
 }
 
 type Withdrawal = { number: number; reason: string; quotes: Quote[] }
@@ -280,13 +288,13 @@ async function checkProof(
 	return problems.length > 0 ? { kind: 'rejected', problems } : { kind: 'ok', withdrawn: checked }
 }
 
-// A revision's form, which the model fixes without reading code again: each risk of the first answer is kept in order,
+// A revision's form, which the model fixes without reading code again: each risk sent first is kept in order,
 // rewritten or withdrawn, once, and each risk it sends is in order.
 function orderProblems(n: number, replaced: (number | undefined)[], withdrawn: number[], order: number[]): string[] {
 	const problems: string[] = []
 	const last = n + replaced.length
 	for (const number of [...withdrawn, ...replaced.flatMap((each) => each ?? [])]) {
-		if (number > n) problems.push(`Your answer has ${n} risks, so there is no risk ${number} to withdraw or rewrite.`)
+		if (number > n) problems.push(`You sent ${n} risks, so there is no risk ${number} to withdraw or rewrite.`)
 	}
 	for (const [at, number] of order.entries()) {
 		if (number > last) problems.push(`order names risk ${number}, but the last risk is ${last}.`)
@@ -296,14 +304,10 @@ function orderProblems(n: number, replaced: (number | undefined)[], withdrawn: n
 		const fates = [order.includes(number), withdrawn.includes(number), replaced.includes(number)]
 		const count = fates.filter(Boolean).length
 		if (count === 0) {
-			problems.push(
-				`Risk ${number} of your answer is not in order, not withdrawn and not rewritten. Give it one of the three.`,
-			)
+			problems.push(`Risk ${number} is not in order, not withdrawn and not rewritten. Give it one of the three.`)
 		}
 		if (count > 1) {
-			problems.push(
-				`Risk ${number} of your answer is given more than one of: in order, withdrawn, rewritten. Give it one.`,
-			)
+			problems.push(`Risk ${number} is given more than one of: in order, withdrawn, rewritten. Give it one.`)
 		}
 	}
 	for (let number = n + 1; number <= last; number++) {
@@ -313,14 +317,14 @@ function orderProblems(n: number, replaced: (number | undefined)[], withdrawn: n
 	return problems
 }
 
-function rejected(current: AnswerRound, held: Held, problems: string[]) {
-	held.rejections += 1
-	current.emit({ kind: 'rejected', attempt: current.rejections + held.rejections, problems })
+function rejected(current: Round, problems: string[]) {
+	current.passRejections += 1
+	current.emit({ kind: 'step', step: { kind: 'sent-back', what: 'The second look', problems } })
 	const tail =
-		held.rejections >= MAX_PASS_REJECTIONS
-			? 'That was the last attempt, so your first answer stands as ken checked it. Stop now.'
-			: 'Fix these and call revise_answer again. Copy each quote from read_file or diff output.'
-	const head = `Revision rejected, attempt ${held.rejections} of ${MAX_PASS_REJECTIONS}. Your first answer is unchanged.`
+		current.passRejections >= MAX_PASS_REJECTIONS
+			? 'That was the last attempt, so your first risks stand as ken checked them. Stop now.'
+			: 'Fix these and call revise_risks again. Copy each quote from read_file or diff output.'
+	const head = `Revision refused, attempt ${current.passRejections} of ${MAX_PASS_REJECTIONS}. Your first risks are unchanged.`
 	return refuse([head, ...problems.map((problem) => `- ${problem}`), tail].join('\n'))
 }
 
@@ -330,7 +334,7 @@ const REVISE_SCHEMA = {
 	properties: {
 		risks: {
 			type: 'array',
-			description: 'New risks, and risks of your answer rewritten, each with its quotes',
+			description: 'New risks, and risks you sent rewritten, each with its quotes',
 			items: {
 				...RISK,
 				properties: {
@@ -341,7 +345,7 @@ const REVISE_SCHEMA = {
 		},
 		withdraw: {
 			type: 'array',
-			description: 'Risks of your answer that the code shows do not happen',
+			description: 'Risks you sent that the code shows do not happen',
 			items: {
 				type: 'object',
 				properties: {
@@ -360,10 +364,9 @@ const REVISE_SCHEMA = {
 		},
 		order: {
 			type: 'array',
-			description: 'The numbers of every risk the answer keeps, the heaviest first',
+			description: 'The numbers of every risk you keep, the heaviest first',
 			items: { type: 'integer', minimum: 1 },
 		},
-		decisions: { type: 'array', description: 'Decisions to add', items: withoutDescriptions(DECISION_SCHEMA) },
 	},
 	additionalProperties: false,
 } as const

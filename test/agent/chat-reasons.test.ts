@@ -2,7 +2,8 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { type ChatEvent, startChat } from '../../src/agent/index.ts'
 import { buildRepository } from '../fixtures/build-repository.ts'
-import { DRAFT, scriptedModel, type Turn, toolResults } from '../fixtures/scripted-model.ts'
+import { replyIn, sentBackIn } from '../fixtures/chat-events.ts'
+import { scriptedModel, type Turn, toolResults } from '../fixtures/scripted-model.ts'
 
 // A branch of two commits with bodies, merged in. The first commit's message gives the reason for its choice and
 // leaves another to the owner; the merge's message is the merging tool's.
@@ -38,14 +39,13 @@ const DECISION = {
 	quotes: [SLEEP],
 }
 
-function answer(decisions: unknown, statementQuote = SLEEP): Turn {
+function show(decisions: unknown, claimQuote = SLEEP): Turn {
 	return {
-		tool: 'ken__answer',
+		tool: 'ken__show',
+		text: 'Retries now wait 100 ms.',
 		args: {
 			scope: { base, head: merge },
-			summary: 'Retries now wait 100 ms.',
-			statements: [{ text: 'The loop sleeps after each attempt.', label: 'inferred', quotes: [statementQuote] }],
-			risks: [],
+			claims: [{ text: 'The loop sleeps after each attempt.', label: 'inferred', quotes: [claimQuote] }],
 			decisions,
 		},
 	}
@@ -65,47 +65,36 @@ async function ask(script: Turn[]) {
 	return { events, requests: model.requests }
 }
 
-function outcomes(events: ChatEvent[]) {
-	return events.filter((event) => event.kind === 'rejected' || event.kind === 'accepted').map((event) => event.kind)
-}
-
-function accepted(events: ChatEvent[]) {
-	const event = events.find((each) => each.kind === 'accepted')
-	return event?.kind === 'accepted' ? event : assert.fail(`no answer was accepted: ${JSON.stringify(events)}`)
-}
-
 test('a reason quoted from a commit message is checked like a file quote: half a line comes back with words to fix it, a label the model sends is refused, and the whole line makes the decision recorded', async () => {
 	const half = { ...DECISION, reason_quotes: [{ commit: waits, text: 'keeps the retry simple.' }] }
 	const labelled = { ...DECISION, reason_quotes: [], label: 'recorded' }
 	const { events, requests } = await ask([
-		DRAFT,
-		answer([half]),
-		answer(JSON.stringify([labelled])),
-		answer([DECISION]),
-		{ text: 'Done.' },
+		show([half]),
+		show(JSON.stringify([labelled])),
+		show([DECISION]),
+		{ text: '' },
 	])
 
-	assert.deepEqual(outcomes(events), ['rejected', 'rejected', 'accepted'])
-	const fix = toolResults(requests[2])[0] ?? ''
+	assert.deepEqual(
+		sentBackIn(events).map((step) => step.what),
+		['Decision 1'],
+	)
+	const fix = toolResults(requests[1])[0] ?? ''
 	assert.ok(fix.includes(`the message of commit ${waits}`), `the model is told which message: ${fix}`)
 	assert.ok(fix.includes(JSON.stringify(REASON)), `the model is shown the whole line: ${fix}`)
-	assert.match(toolResults(requests[3]).at(-1) ?? '', /"label", which it does not take/)
-	const stored = accepted(events).recorded.find((entry) => entry.kind === 'decision')
+	assert.match(toolResults(requests[2]).at(-1) ?? '', /"label", which it does not take/)
+	const stored = replyIn(events).recorded.find((entry) => entry.kind === 'decision')
 	assert.deepEqual(stored?.kind === 'decision' && [stored.label, stored.reason], [
 		'recorded',
 		{ text: DECISION.reason, quotes: [{ path: null, commit: waits, startLine: 3, endLine: 3, text: REASON }] },
 	])
 })
 
-test('an accepted answer counts every quote it shows: a decision covers the hunk it quotes, and the model is told which commit messages no quote cites, leaving out the merge', async () => {
+test('a reply counts every quote its cards show: a decision covers the hunk it quotes, and the merge is no commit message to cite', async () => {
 	const readme = { path: 'README.md', commit: merge, text: 'Waits.' }
-	const { events, requests } = await ask([DRAFT, answer([DECISION], readme), { text: 'I left out the README commit.' }])
+	const { events } = await ask([show([DECISION], readme), { text: '' }])
 
-	const change = accepted(events).answer.change
+	const { change } = replyIn(events)
 	assert.deepEqual(change?.uncovered, [], 'the sleep line is quoted only in the decision')
 	assert.deepEqual(change?.messages, { quoted: [waits], unquoted: [docs] })
-	const told = toolResults(requests[2])[0] ?? ''
-	assert.match(told, /cite 1 of 2 commit messages/)
-	assert.ok(told.includes(`- ${docs.slice(0, 7)} docs: say how long`), `the model is told which one: ${told}`)
-	assert.ok(!told.includes(merge.slice(0, 7)), `the merge is not listed: ${told}`)
 })

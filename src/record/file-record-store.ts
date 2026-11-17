@@ -14,6 +14,7 @@ const FILES: Record<Kind, string> = {
 	decision: 'decisions.jsonl',
 	topic: 'topics.jsonl',
 	note: 'notes.jsonl',
+	layout: 'layouts.jsonl',
 }
 // Two people who each append to the same file then merge keep both sets of lines instead of a conflict.
 const GITATTRIBUTES = 'record/*.jsonl merge=union\n'
