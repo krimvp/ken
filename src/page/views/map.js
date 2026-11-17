@@ -1,6 +1,7 @@
 // The reader's understanding map on the page: the line under an answer that says which topics its buttons update, the
 // line that says ken hid the cards of a topic the reader knows, and the "Your map" view. ken works out each topic's state from the map
 // file and the code at HEAD; the page only shows it.
+import { partClass } from '../project/part-colours.js'
 import { day, esc, list, WHO, withCost } from './format.js'
 
 // A map line holds a day and no time: "on 16 Nov", or "earlier today". Its twin is onDay in src/follow-up/when.ts.
@@ -88,7 +89,7 @@ const SAID = {
 // The three buttons under a reply, on one quiet line, which act on the topics it names. t is the reply's turn in the thread.
 export function mapBarHtml(q, t, ui, running) {
 	const names = q.reply.topics ?? []
-	const named = list(names.map((name) => `<strong>${esc(name)}</strong>`))
+	const named = list(names.map((name) => `<strong class="part-name ${partClass(name)}">${esc(name)}</strong>`))
 	const saved = ui.mapSaid?.turn === t ? ui.mapSaid.signal : null
 	const said = saved ? `<p class="map-said" role="status">${SAID[saved](names.map(esc))}</p>` : ''
 	const button = (act, text, means, off = false) =>

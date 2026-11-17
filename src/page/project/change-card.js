@@ -3,6 +3,7 @@
 // the reply, so it needs no quote and cannot be wrong about what changed. A part on it opens the Project view there,
 // with the same change laid over it.
 import { count, esc, list, short } from '../views/format.js'
+import { partClass } from './part-colours.js'
 import { pictureHtml } from './parts-picture.js'
 
 // Commits the card lists before it says how many more there are.
@@ -32,11 +33,11 @@ function partsHtml(look, t) {
 			? `<span class="cc-touched">${count(box.touched.files, 'file', 'files')}: ${count(box.touched.added, 'line', 'lines')} added, ${box.touched.removed} removed</span>`
 			: '<span class="cc-quiet">Not touched</span>'
 		const body = `<span class="pv-name">${esc(box.name)}</span>${said}`
-		const classes = `pv-box cc-box${box.touched ? ' is-touched' : ''}`
+		const classes = `pv-box cc-box${box.touched ? ' is-touched' : ''} ${partClass(box.name)}`
 		const html = box.opens
 			? `<button class="${classes}" data-act="cc-open" data-turn="${t}" data-index="${i}" data-key="cc-${t}-${i}">${body}</button>`
 			: `<div class="${classes}">${body}</div>`
-		return { html, classes: `pv-cell${box.touched ? '' : ' cc-untouched'}` }
+		return { html, classes: `pv-cell${box.touched ? '' : ' cc-untouched is-faded'}` }
 	})
 	const untouched = look.boxes.filter((box) => !box.touched).map((box) => box.name)
 	const outside = look.change?.outside ?? []

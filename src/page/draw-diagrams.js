@@ -35,8 +35,9 @@ function config(actor) {
 	const text = token('--color-text')
 	const box = token('--color-label-bg')
 	const edge = token('--color-accent')
-	const line = token('--color-muted')
+	const line = token('--color-edge')
 	const card = token('--color-card')
+	const canvas = token('--color-canvas')
 	return {
 		startOnLoad: false,
 		securityLevel: 'strict',
@@ -48,7 +49,7 @@ function config(actor) {
 			darkMode: dark(),
 			fontFamily: token('--font-text'),
 			fontSize: '16px',
-			background: card,
+			background: canvas,
 			textColor: text,
 			primaryColor: box,
 			primaryTextColor: text,
@@ -59,17 +60,17 @@ function config(actor) {
 			mainBkg: box,
 			nodeBorder: edge,
 			nodeTextColor: text,
-			clusterBkg: token('--color-bg'),
+			clusterBkg: card,
 			clusterBorder: token('--color-border'),
 			titleColor: text,
-			edgeLabelBackground: card,
+			edgeLabelBackground: canvas,
 			actorBkg: box,
 			actorBorder: edge,
 			actorTextColor: text,
-			actorLineColor: token('--color-border'),
+			actorLineColor: line,
 			signalColor: line,
 			signalTextColor: text,
-			labelBoxBkgColor: box,
+			labelBoxBkgColor: card,
 			labelBoxBorderColor: edge,
 			labelTextColor: text,
 			attributeBackgroundColorOdd: card,
