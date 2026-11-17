@@ -6,7 +6,7 @@ import { liveLook, liveViewHtml } from './live/live-view.js'
 import { allQuotesHtml, checksHtml, quoteCardHtml } from './views/checks.js'
 import { decisionsViewHtml } from './views/decisions.js'
 import { elementKey } from './views/diagram.js'
-import { count, duration, esc, folderHtml, prose, short, when, withCost } from './views/format.js'
+import { count, duration, esc, folderHtml, prose, short, when } from './views/format.js'
 import { changedLine, changedTopics, lensHtml, mapViewHtml } from './views/map.js'
 import { openCount, openViewHtml } from './views/open.js'
 import { cardsOf, chipQuestion, isMoved, itemsOf, LEGEND, replyHtml } from './views/reply.js'
@@ -446,7 +446,7 @@ function movedHtml(q, t) {
 	if (!isMoved(q)) return ''
 	const again =
 		state.model?.kind === 'ok' && !state.running
-			? ` ${withCost(`<button class="link" data-act="again" data-turn="${t}" data-key="moved-again-${t}">Ask again</button>`)}`
+			? ` <button class="link" data-act="again" data-turn="${t}" data-key="moved-again-${t}">Ask again</button>`
 			: ''
 	const changed = q.reply ? changedTopics(q) : []
 	const lines = changed.map(changedLine)

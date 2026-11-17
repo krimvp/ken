@@ -94,8 +94,7 @@ function modelProblem(error) {
 
 // Each way a question ends with no reply to show, with what it means and what the reader can do next.
 export function endedHtml(q, t) {
-	const button = `<button class="primary" data-act="again" data-turn="${t}" data-key="again-${t}">Ask again</button>`
-	const again = withCost(button)
+	const again = `<button class="primary" data-act="again" data-turn="${t}" data-key="again-${t}">Ask again</button>`
 	if (q.outcome === 'error') {
 		return `<div class="notice" role="alert">
 			<h3>ken's model did not reply</h3>
@@ -107,7 +106,7 @@ export function endedHtml(q, t) {
 				failsAgain(q.error)
 					? withCost(
 							`<button class="quiet-button" data-act="again" data-turn="${t}" data-key="again-${t}">Ask again</button>`,
-							'One model run. It fails the same way until you fix the setting and restart <code>ken open</code>.',
+							'It fails the same way until you fix the setting and restart <code>ken open</code>.',
 						)
 					: again
 			}</p>
@@ -117,7 +116,7 @@ export function endedHtml(q, t) {
 		return `<div class="notice" role="status"><h3>ken did not ask its model</h3><p>${esc(q.error)}</p></div>`
 	}
 	const said = {
-		stopped: ['You stopped this question', 'ken shows nothing for a question you stopped.'],
+		stopped: ['You stopped this question', ''],
 		'no-answer': ["ken's model stopped without a reply", 'It read the project but wrote nothing back.'],
 		'out-of-turns': [
 			"ken's model ran out of turns",
@@ -126,7 +125,7 @@ export function endedHtml(q, t) {
 	}[q.outcome] ?? ['This question has no reply', '']
 	return `<div class="notice" role="status">
 		<h3>${said[0]}</h3>
-		<p>${said[1]}</p>
+		${said[1] === '' ? '' : `<p>${said[1]}</p>`}
 		<p class="actions">${again}</p>
 	</div>`
 }

@@ -115,7 +115,7 @@ export function replyHtml(q, t, ui, { running, inThread }) {
 					.filter((kind) => !shown.has(kind.slice(0, -1)))
 					.map(
 						(kind) =>
-							`<button class="chip" data-act="chip" data-chip="${kind}" data-turn="${t}" data-key="chip-${t}-${kind}"${running ? ' disabled' : ''}>${kind === 'risks' ? 'Risks' : 'Decisions'}</button>`,
+							`<button class="chip" data-act="chip" data-chip="${kind}" data-turn="${t}" data-key="chip-${t}-${kind}"${running ? ' disabled' : ''}>${kind === 'risks' ? 'Ask what could go wrong' : 'Ask what it decided'}</button>`,
 					)
 			: []
 	const checks =
@@ -124,7 +124,7 @@ export function replyHtml(q, t, ui, { running, inThread }) {
 			: `<section class="checks-inline narrow-only" aria-label="What ken checked">${ui.wide ? '' : checksHtml(q, ui)}</section>`
 	return `${knownHtml(q, ui, named, isMoved(q))}
 		<div class="reply">${parts.join('')}</div>
-		${asks.length > 0 ? `<p class="chips"><span class="small muted">Ask for</span> ${asks.join(' ')}</p>` : ''}
+		${asks.length > 0 ? `<p class="chips">${asks.join(' ')}</p>` : ''}
 		${inThread && (q.reply.topics ?? []).length > 0 ? mapBarHtml(q, t, ui, running) : ''}
 		${checks}`
 }
@@ -180,7 +180,7 @@ const CARD_RENDERERS = {
 	withdrawn: (card, key, rows) => {
 		const { risk, reason, proof } = card.withdrawn
 		return `<p class="card-text"><span class="card-kind">Withdrawn risk</span> ${prose(risk.text)}</p>
-			<p class="small"><span class="d-field">Ruled out by the second look</span> ${prose(reason)}</p>
+			<p class="small"><span class="d-field">Why it was withdrawn</span> ${prose(reason)}</p>
 			${quoteRows(proof, key, rows)}`
 	},
 }
