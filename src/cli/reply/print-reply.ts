@@ -7,7 +7,7 @@ import { formatDiagram, formatQuote } from './print-diagram.ts'
 export type Paint = (format: Parameters<typeof styleText>[0], text: string) => string
 
 // Said once, at the top of a chat, so no card has to say it again.
-export const LEGEND = "Plain text is ken's model talking. A part marked [checked] was checked against git."
+export const LEGEND = "Plain text is what ken's model says. A part marked [checked] is what ken checked against git."
 
 // Prints one question's events as they arrive: the model's working steps dim, then its reply, words and cards in the
 // order it gave them. Colour only reaches a terminal: styleText leaves it out for a pipe.

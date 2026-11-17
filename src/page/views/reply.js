@@ -21,7 +21,7 @@ import {
 } from './format.js'
 import { foldedTopics, knownHtml, mapBarHtml } from './map.js'
 
-export const LEGEND = "Plain text is ken's model talking. A boxed card was checked against git."
+export const LEGEND = "Plain text is what ken's model says. A boxed card is what ken checked against git."
 
 // What the chips under a reply about a change ask, in the reader's words. They name the commits, so the question stands
 // on its own in a chat that never saw the change.
