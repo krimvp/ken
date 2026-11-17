@@ -1,5 +1,5 @@
 // The plan's rule for an answer: ken accepts it only when every quote passes verifyQuote, every statement and every risk
-// carries a label its quotes allow, and every diagram passes checkDiagrams. One bad quote rejects the whole answer.
+// carries a label its quotes allow, and every diagram passes checkDiagram. One bad quote rejects the whole answer.
 // Only then does ken read the change facts from git.
 import {
 	type Absence,
@@ -17,7 +17,7 @@ import {
 	type VerifiedQuote,
 	verifyQuote,
 } from '../../checks/index.ts'
-import { checkDiagrams, type DiagramDraft, diagramElements } from '../../diagram/index.ts'
+import { checkDiagram, type Diagram, type DiagramDraft, diagramElements } from '../../diagram/index.ts'
 import type { Undo } from '../../record/index.ts'
 import { type CommitHash, type Repository, resolveRange } from '../../repo/index.ts'
 import { scopeProblem } from '../tools/exploration-tools.ts'
@@ -93,10 +93,13 @@ export async function checkAnswer(
 		const absent = await search(where, sought)
 		decisions.push({ ...rest, reason: { text: decision.reason.text, quotes: reasonQuotes }, quotes, ...absent })
 	}
-	const checked = await checkDiagrams(repo, draft.diagrams, signal)
-	if (checked.kind === 'refused') problems.push(...checked.problems)
-	if (problems.length > 0 || checked.kind === 'refused') return { kind: 'rejected', problems }
-	const { diagrams } = checked
+	const diagrams: Diagram[] = []
+	for (const [index, each] of draft.diagrams.entries()) {
+		const checked = await checkDiagram(repo, each, `Diagram ${index + 1}`, signal)
+		if (checked.kind === 'refused') problems.push(...checked.problems)
+		else diagrams.push(checked.diagram)
+	}
+	if (problems.length > 0) return { kind: 'rejected', problems }
 	const answer = { summary: draft.summary, statements, risks, diagrams }
 	if (scope === null) return { kind: 'accepted', answer: { ...answer, change: null }, decisions }
 

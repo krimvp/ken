@@ -14,7 +14,7 @@ import {
 	verifyGitQuote,
 	verifyQuote,
 } from '../checks/index.ts'
-import { checkDiagrams, type DiagramDraft } from '../diagram/index.ts'
+import { checkDiagram, type Diagram, type DiagramDraft } from '../diagram/index.ts'
 import { type CommitHash, type Repository, resolveRange } from '../repo/index.ts'
 import {
 	type Decision,
@@ -147,8 +147,12 @@ export async function checkEntry(
 			}
 			const statements = await claims('statement', draft.statements)
 			const risks = draft.risks === undefined ? null : await claims('risk', draft.risks)
-			const diagrams = await checkDiagrams(repo, draft.diagrams ?? [], signal)
-			if (diagrams.kind === 'refused') problems.push(...diagrams.problems)
+			const diagrams: Diagram[] = []
+			for (const [index, each] of (draft.diagrams ?? []).entries()) {
+				const checked = await checkDiagram(repo, each, `Diagram ${index + 1}`, signal)
+				if (checked.kind === 'refused') problems.push(...checked.problems)
+				else diagrams.push(checked.diagram)
+			}
 			if (work.kind === 'refused') return { kind: 'refused', problems }
 			entry = {
 				kind: 'work',
@@ -157,7 +161,7 @@ export async function checkEntry(
 				...work.facts,
 				statements,
 				risks,
-				diagrams: diagrams.kind === 'ok' ? diagrams.diagrams : [],
+				diagrams,
 			} satisfies Work
 			break
 		}

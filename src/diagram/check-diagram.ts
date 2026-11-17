@@ -1,8 +1,7 @@
-// The gate in front of the reader for diagrams. A writer hands in drafts, and this turns them into diagrams or says what
-// to fix: each diagram is small, its lists fit its kind, it has at least two edges, every edge joins two of its nodes
-// and every node has an edge, every label is allowed, and every quote passes checkQuote. One problem refuses all the
-// diagrams, the same way one bad quote refuses an answer. Only new answers pass through here: ken reads a stored
-// diagram as it was accepted.
+// The gate in front of the reader for a diagram. A writer hands in a draft, and this turns it into a diagram or says
+// what to fix: the diagram is small, its lists fit its kind, it has at least two edges, every edge joins two of its
+// nodes and every node has an edge, every label is allowed, and every quote passes checkQuote. A problem refuses this
+// diagram alone. Only new diagrams pass through here: ken reads a stored diagram as it was accepted.
 import {
 	checkLabel,
 	type GitQuote,
@@ -18,7 +17,6 @@ import type { Arrow, Diagram, DiagramDraft, DiagramKind } from './diagram.ts'
 // A basic diagram supports an answer, so it stays small enough to read at a glance. More than this is a map of
 // everything, and the reader is better served by two diagrams or by prose.
 export const DIAGRAM_BOUNDS = {
-	diagrams: 3,
 	nodes: 6,
 	edges: 8,
 	fields: 6,
@@ -39,24 +37,18 @@ const LISTS = {
 	{ node: string; nodes: keyof DiagramDraft; edge: string; edges: keyof DiagramDraft }
 >
 
-export type DiagramCheck = { kind: 'ok'; diagrams: Diagram[] } | { kind: 'refused'; problems: string[] }
+export type DiagramCheck = { kind: 'ok'; diagram: Diagram } | { kind: 'refused'; problems: string[] }
 
-export async function checkDiagrams(
+// where names the diagram in each problem, such as "Diagram 2".
+export async function checkDiagram(
 	repo: Repository,
-	drafts: DiagramDraft[],
+	draft: DiagramDraft,
+	where: string,
 	signal?: AbortSignal,
 ): Promise<DiagramCheck> {
 	const problems: string[] = []
-	if (drafts.length > DIAGRAM_BOUNDS.diagrams) {
-		problems.push(
-			`The answer has ${drafts.length} diagrams; send at most ${DIAGRAM_BOUNDS.diagrams}, the ones that answer the question.`,
-		)
-	}
-	const diagrams: Diagram[] = []
-	for (const [index, draft] of drafts.entries()) {
-		diagrams.push(await checkOne(repo, draft, `Diagram ${index + 1}`, problems, signal))
-	}
-	return problems.length > 0 ? { kind: 'refused', problems } : { kind: 'ok', diagrams }
+	const diagram = await checkOne(repo, draft, where, problems, signal)
+	return problems.length > 0 ? { kind: 'refused', problems } : { kind: 'ok', diagram }
 }
 
 // The draft that checks back to the same diagram, so the project record can check a stored diagram again.

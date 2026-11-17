@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { checkDiagrams, type DiagramDraft, diagramElements, mermaidText } from '../../src/diagram/index.ts'
+import { checkDiagram, type DiagramDraft, diagramElements, mermaidText } from '../../src/diagram/index.ts'
 import { gitRepository } from '../../src/repo/index.ts'
 import { buildRepository } from '../fixtures/build-repository.ts'
 
@@ -26,7 +26,7 @@ function component(boxes: string[], arrows: { from: string; to: string; quotes?:
 }
 
 async function refusal(draft: DiagramDraft): Promise<string> {
-	const checked = await checkDiagrams(repo, [draft])
+	const checked = await checkDiagram(repo, draft, 'Diagram 1')
 	return checked.kind === 'refused' ? checked.problems.join('\n') : assert.fail('the diagram was accepted')
 }
 
@@ -36,10 +36,10 @@ const BOTH_WAYS = [
 ]
 
 test('a diagram within the rules is accepted and numbered; one over the bounds, with fewer than two arrows, with a box no arrow joins, with an unknown box, without a quote or with a later label is refused with the reason', async () => {
-	const accepted = await checkDiagrams(repo, [component(['app', 'store'], BOTH_WAYS)])
+	const accepted = await checkDiagram(repo, component(['app', 'store'], BOTH_WAYS), 'Diagram 1')
 	assert.ok(accepted.kind === 'ok', JSON.stringify(accepted))
-	const [diagram] = accepted.diagrams
-	assert.ok(diagram?.kind === 'component')
+	const { diagram } = accepted
+	assert.ok(diagram.kind === 'component')
 	assert.deepEqual(
 		[...diagram.boxes, ...diagram.arrows].map((element) => element.number),
 		[1, 2, 3, 4],
@@ -138,10 +138,9 @@ const SHAPES: Record<DiagramDraft['kind'], RegExp[]> = {
 
 test('the Mermaid text of each kind has one line per element with its number, and no name can end a label or start a directive', async () => {
 	for (const kind of ['component', 'sequence', 'entity-relationship'] as const) {
-		const checked = await checkDiagrams(repo, [hostile(kind)])
+		const checked = await checkDiagram(repo, hostile(kind), 'Diagram 1')
 		assert.ok(checked.kind === 'ok', JSON.stringify(checked))
-		const [diagram] = checked.diagrams
-		assert.ok(diagram)
+		const { diagram } = checked
 		const text = mermaidText(diagram)
 
 		const labels: string[] = []
@@ -173,12 +172,13 @@ test('an arrow whose text ends on a word such as "to" drops it, under the drawin
 		],
 	)
 	const texts = ['appends each question to', 'to']
-	const checked = await checkDiagrams(repo, [
+	const checked = await checkDiagram(
+		repo,
 		{ ...draft, arrows: draft.arrows.map((arrow, i) => ({ ...arrow, text: texts[i] ?? '' })) },
-	])
+		'Diagram 1',
+	)
 	assert.ok(checked.kind === 'ok', JSON.stringify(checked))
-	const [diagram] = checked.diagrams
-	assert.ok(diagram)
+	const { diagram } = checked
 
 	const lines = diagramElements(diagram).flatMap((element) => (element.label === null ? [] : [element.text]))
 	assert.deepEqual(lines, ['From app to store: appends each question', 'From store to app: to'])
