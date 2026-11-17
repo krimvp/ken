@@ -2,6 +2,7 @@ import { homedir } from 'node:os'
 import path from 'node:path'
 import { type Chat, type ModelFlags, type ModelUnset, readModelConfig, startChat } from '../agent/index.ts'
 import { type History, kenHome, openHistory } from '../history/index.ts'
+import type { LayoutSources } from '../layout/index.ts'
 import { openSnapshots } from '../live/index.ts'
 import { openMap, type UnderstandingMap } from '../map/index.ts'
 import { fileRecordStore, type RecordStore } from '../record/index.ts'
@@ -10,9 +11,9 @@ import { projectSessions } from '../transcripts/index.ts'
 import { type LiveRunner, liveRunner } from './live-runner.ts'
 import { questionDesk } from './question-desk.ts'
 
-// What "ken open" and "ken live" share for one project: its git, the reader's history and map, the record, the chat
-// when a model is set, the desk that runs one model call at a time, and live mode, which writes its notes in a chat of
-// its own. live is null without a model.
+// What "ken open" and "ken live" share for one project: its git, the reader's history and map, the record, what the
+// layout reads, the chat when a model is set, the desk that runs one model call at a time, and live mode, which writes
+// its notes in a chat of its own. live is null without a model.
 export type KenProject = {
 	root: string
 	shown: string
@@ -20,6 +21,7 @@ export type KenProject = {
 	history: History
 	record: RecordStore
 	map: UnderstandingMap
+	layout: LayoutSources
 	model: { kind: 'ok'; chat: Chat; name: string } | ModelUnset
 	desk: ReturnType<typeof questionDesk>
 	live: LiveRunner | null
@@ -73,5 +75,6 @@ export async function openProject(options: {
 		await notes?.close()
 	}
 
-	return { kind: 'ok', project: { root, shown, repo, history, record, map, model, desk, live, close } }
+	const layout = { root, repo: withSnapshots, snapshots: store, record, map }
+	return { kind: 'ok', project: { root, shown, repo, history, record, map, layout, model, desk, live, close } }
 }

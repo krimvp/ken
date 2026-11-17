@@ -1,6 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { MODEL_EXAMPLE, type ModelFlags } from '../agent/index.ts'
 import { authorsOf, decide, openItems, timeRange } from '../follow-up/index.ts'
+import { changeChoices, lookAtLayout, readLayoutAsk } from '../layout/index.ts'
 import type { MapSignal } from '../map/index.ts'
 import { MERMAID_FILE, PAGE_FOLDER } from '../page/index.ts'
 import { OUTCOMES } from '../record/index.ts'
@@ -40,7 +41,7 @@ export async function openServer(options: {
 	const opened = await openProject(options)
 	if (opened.kind !== 'ok') return opened
 	const { project } = opened
-	const { root, shown, repo, record, map, model, desk, live } = project
+	const { root, shown, repo, record, map, layout, model, desk, live } = project
 	if (options.live && !live) {
 		await project.close()
 		return {
@@ -92,6 +93,18 @@ export async function openServer(options: {
 			return sendJson(response, 200, { states })
 		}
 		if (where === 'GET /api/open') return sendJson(response, 200, await openNow())
+		if (where === 'GET /api/layout') {
+			const { searchParams: query } = url
+			const raw = {
+				at: query.get('at') ?? undefined,
+				within: query.getAll('within'),
+				change: query.get('change') ?? undefined,
+			}
+			const ask = await readLayoutAsk(layout, raw)
+			if (ask.kind !== 'ok') return sendJson(response, 400, { message: ask.message })
+			const [look, changes] = await Promise.all([lookAtLayout(layout, ask.ask, new Date()), changeChoices(layout)])
+			return sendJson(response, 200, { look, changes })
+		}
 		if (where === 'GET /api/authors') {
 			const recent = await timeRange(repo, { kind: 'days', days: RECENT_DAYS }, new Date())
 			const commits = recent.kind === 'ok' ? recent.range.commits : []

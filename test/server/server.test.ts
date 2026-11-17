@@ -626,3 +626,15 @@ test('"I have decided" through the server reads only the decision and a note, so
 	)
 	assert.notEqual(decision.answer?.at, forged.answer.at, 'ken sets when the owner answered')
 })
+
+test('the layout comes from git with no model: the query picks the commit, and a commit the project does not have is refused', async () => {
+	const server = await open(tempFolder('ken-home-'), null)
+
+	const { look, changes } = await json(server, `/api/layout?at=${base}&within=src`)
+	assert.deepEqual(
+		look.boxes.map((box: { name: string; state: string }) => [box.name, box.state]),
+		[['retry.ts', 'changed']],
+	)
+	assert.equal(changes[0].name, 'Uncommitted work')
+	assert.equal((await send(server, '/api/layout?at=nope').response).status, 400)
+})
