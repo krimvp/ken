@@ -236,19 +236,29 @@ test('the risks of a change are held for one second look: the model gets them an
 	)
 })
 
-test('the risks of a change the record already explains show at once, with no second look', async () => {
+test('risks asked for after the record already explains the change still get the second look before the reader sees them', async () => {
 	const own = buildRepository(COMMITS).root
-	await ask([show({ ...ABOUT_THE_CHANGE, risks: [FIRST_RISK] }), { text: '' }, ...nothingToRevise(1)], 'question', own)
-	const again = await ask(
-		[show({ scope: { base, head }, risks: [SECOND_RISK] }), { text: '' }, { text: 'A second look gets this.' }],
+	await ask([show({ ...ABOUT_THE_CHANGE }), { text: '' }], 'question', own)
+	const withdraw = [{ risk: 1, reason: 'Only requests slower than 100 ms fail.', quotes: [LIMIT] }]
+	const asked = await ask(
+		[
+			show({ scope: { base, head }, risks: [FIRST_RISK] }),
+			{ text: '' },
+			{ tool: 'ken__revise_risks', args: { withdraw, order: [] } },
+			{ text: '' },
+		],
 		'question',
 		own,
 	)
 
-	assert.equal(again.requests.length, 2, 'the reply and the end of its turn, no second look')
+	assert.ok(
+		userTexts(asked.requests.at(-1)).some((text) => text.includes(SECOND_LOOK)),
+		'ken asks about the risk again',
+	)
+	assert.deepEqual(risks(asked.events), [], 'the withdrawn risk is not among the risks')
 	assert.deepEqual(
-		risks(again.events).map((risk) => risk.text),
-		[SECOND_RISK.text],
+		withdrawn(asked.events).map(({ risk }) => risk.text),
+		[FIRST_RISK.text],
 	)
 })
 

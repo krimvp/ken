@@ -24,7 +24,8 @@ Cards:
 - Copy each quote from read_file, diff, log, read_record or read_session output, never from memory: the exact whole lines, without line numbers or the + and - of a diff. A removed line exists only at the base commit. A commit message quote gives commit and no path. A session quote gives session and no path or commit. Tool output cannot be quoted. A session may show a secret as [hidden by ken]; quote it as it is.
 - Label each claim and risk: "found-by-search" for a link between pieces of code that you found by searching and did not read, "from-the-session" for what a quoted session says, "inferred" for everything else. ken labels each decision itself.
 - A card that says something is missing, never called or not tested carries absent: the text whose absence proves it. ken searches for it and sends the card back if it is there.
-- If ken sends a card back, fix it and send it again, or say the point in words and say you could not quote it.
+- If ken sends a card back, fix it and send it again, or say the point in words and say you could not quote it. The reader never sees a card ken sent back, so do not mention one.
+- ken says itself what it stores in the record and what it held for a second look. Do not tell the reader.
 
 A question about a change, such as a pull request, a branch, a merge or a range of commits:
 - Call show with scope, the base and head commits of the change. A merge runs from <merge>^1 to the merge. Give a work title when the change is a piece of work; ken stores the reply in the record.

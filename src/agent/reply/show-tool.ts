@@ -29,8 +29,7 @@ export type Gate = {
 }
 
 // What one question has seen of show. asked is false for a note ken writes by itself in live mode: it tells the
-// reader's map nothing and gets no second look. scope is the change the reply is about; explained says the record
-// already holds a piece of work for it, so the second look could change nothing it stores. Cards that passed wait in
+// reader's map nothing and gets no second look. scope is the change the reply is about. Cards that passed wait in
 // pending until their turn ends, so they follow that turn's words. held is the risks of a change that passed, waiting
 // for the second look. shown holds a hash of each card the reader has, so the same card twice shows once. step is
 // "risks" while the second look runs, and passRejections counts the revisions it refused.
@@ -38,7 +37,7 @@ export type Round = {
 	asked: boolean
 	step: 'talk' | 'risks'
 	passRejections: number
-	scope: { range: Range; work: string | null; explained: boolean; hunks: Promise<ChangedHunk[]> | null } | null
+	scope: { range: Range; work: string | null; hunks: Promise<ChangedHunk[]> | null } | null
 	items: Item[]
 	pending: Card[]
 	held: Risk[]
@@ -125,7 +124,9 @@ export function showTool(gate: Gate, round: () => Round): Tool {
 					continue
 				}
 				current.shown.add(id)
-				if (card.kind === 'risk' && current.asked && current.scope && !current.scope.explained) {
+				// Risks of a change come when the reader asks for them, most often after the record already holds the change,
+				// so they get the second look whatever the record holds.
+				if (card.kind === 'risk' && current.asked && current.scope) {
 					current.held.push(card.risk)
 					held.push(where)
 				} else {
@@ -166,10 +167,7 @@ async function setScope(gate: Gate, current: Round, raw: JsonObject, signal: Abo
 		const now = `${short(current.scope.range.base)}..${short(current.scope.range.head)}`
 		return same ? null : `This reply is about ${now}. One reply explains one change: leave out scope.`
 	}
-	const explained = (await gate.store.read()).current.some(
-		(entry) => entry.kind === 'work' && entry.range.base === range.base && entry.range.head === range.head,
-	)
-	current.scope = { range, work: null, explained, hunks: null }
+	current.scope = { range, work: null, hunks: null }
 	return null
 }
 
