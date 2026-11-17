@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { after, test } from 'node:test'
@@ -229,7 +229,7 @@ test('at an old commit the view shows the version of a named level that fit the 
 	assert.deepEqual(box(now, 'Rest')?.job, 'does b and c')
 })
 
-test('a commit inside one named part marks that part changed and its arrows possibly stale, and a new folder in no part says the drawing no longer fits', async () => {
+test('a commit inside one named part marks that part changed and its arrows possibly stale, and a new folder beside the parts says the drawing no longer fits', async () => {
 	const { root } = buildRepository([
 		{
 			message: 'feat: start',
@@ -289,10 +289,11 @@ test('a commit inside one named part marks that part changed and its arrows poss
 	)
 	assert.equal(after.named?.stale, true)
 
-	writeFileSync(path.join(root, 'tools.ts'), 'tool\n')
-	git(root, ['add', 'tools.ts'])
+	mkdirSync(path.join(root, 'src/tools'))
+	writeFileSync(path.join(root, 'src/tools/t.ts'), 'tool\n')
+	git(root, ['add', 'src/tools/t.ts'])
 	git(root, ['commit', '--quiet', '--message', 'feat: a tool'])
-	assert.deepEqual((await look(sources, {})).named?.added, ['tools.ts'])
+	assert.deepEqual((await look(sources, {})).named?.added, ['src/tools'], 'the new folder, not src, which holds parts')
 })
 
 test('a named part opens to the level named for its paths, or to the folders inside it', async () => {

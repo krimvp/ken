@@ -200,13 +200,18 @@ async function projectFiles(repo: Repository, commit: CommitHash, signal?: Abort
 	return listed.paths.filter((file) => !under(file, RECORD))
 }
 
-// The entries of the scope, as its next path segment names them, that hold files and sit in no box.
+// What sits in the scope in no box, each as the shortest path that holds no box: a folder beside the boxes, such as
+// src/extra beside the parts src/agent and src/checks, not src.
 function looseIn(files: string[], within: Scope, places: string[]): string[] {
 	const entryOf = (file: string): string | null => {
-		if (within.length === 0) return file.split('/')[0] ?? file
-		const scope = within.find((place) => under(file, place))
+		const scope = within.length === 0 ? '' : within.find((place) => under(file, place))
 		if (scope === undefined) return null
-		return file === scope ? file : `${scope}/${file.slice(scope.length + 1).split('/')[0]}`
+		const segments = file.split('/')
+		for (let depth = scope === '' ? 1 : scope.split('/').length + 1; depth <= segments.length; depth++) {
+			const entry = segments.slice(0, depth).join('/')
+			if (!places.some((place) => place.startsWith(`${entry}/`))) return entry
+		}
+		return file
 	}
 	const loose = files
 		.filter((file) => !places.some((place) => under(file, place)))

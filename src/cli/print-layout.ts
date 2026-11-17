@@ -33,10 +33,10 @@ function refuse(message: string): number {
 }
 
 // A folder is compared with HEAD, a part ken's model named with the commit it was named at.
-const STATES: Record<LookBox['state'], [string | null, string | null]> = {
-	same: [null, null],
-	changed: ['different at this commit', 'changed since it was named'],
-	gone: ['not there at this commit', 'not there at this commit'],
+const STATES: Record<LookBox['state'], [string | null, string | null, string | null]> = {
+	same: [null, null, null],
+	changed: ['different at this commit', 'changed since it was named', 'different from when it was named'],
+	gone: ['not there at this commit', 'not there at this commit', 'not there at this commit'],
 }
 
 const MARKS: Record<Mark, string> = {
@@ -51,7 +51,9 @@ function layoutText(look: LayoutLook): string {
 	const at =
 		look.at === look.head
 			? `${short(look.at)} (HEAD)`
-			: `${short(look.at)}, in the folders of HEAD (${short(look.head)})`
+			: look.named
+				? short(look.at)
+				: `${short(look.at)}, in the folders of HEAD (${short(look.head)})`
 	const change = look.change && `Change: ${look.change.name}, ${count(look.change.files, 'file')} changed.`
 	const by = look.named
 		? `Parts named by ken's model at ${short(look.named.drawnAt)}.`
@@ -63,7 +65,7 @@ function layoutText(look: LayoutLook): string {
 			box.paths.length === 1 && only?.split('/').at(-1) === box.name ? only : `${box.name} (${box.paths.join(', ')})`
 		lines.push(`  ${named}, ${count(box.files, 'file')}`)
 		if (box.job) lines.push(`    ${box.job}`)
-		const state = STATES[box.state][look.named ? 1 : 0]
+		const state = STATES[box.state][look.named ? (look.at === look.head ? 1 : 2) : 0]
 		if (state) lines.push(`    ${state}`)
 		if (box.touched) {
 			const { files, added, removed } = box.touched
