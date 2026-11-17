@@ -85,7 +85,7 @@ export function formatCard(card: Card, paint: Paint): string {
 			return [checked, ...formatDiagram(card.diagram, paint)].join('\n')
 		case 'topic':
 			return [
-				`${checked} Topic saved in the project record: ${card.topic.name}`,
+				`${checked} Topic: ${card.topic.name}`,
 				paint('dim', `   ${card.topic.note}`),
 				...card.topic.quotes.flatMap((quote) => formatQuote(quote, paint)),
 			].join('\n')

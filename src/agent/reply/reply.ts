@@ -27,8 +27,9 @@ export type Item = { kind: 'words'; text: string } | { kind: 'card'; card: Card 
 export const CARD_KINDS = ['claim', 'risk', 'decision', 'diagram', 'topic', 'withdrawn'] as const
 export type CardKind = (typeof CARD_KINDS)[number]
 
-// A topic card says ken saved a part of the project in the record, with the lines it rests on and the model's note.
-// replaces is the id of the record's topic it updates, or null.
+// A topic card names a part of the project, with the lines it rests on and the model's note. The reply adds it to the
+// record when it ends, unless the record refuses it or the reply quotes uncommitted work. replaces is the id of the
+// record's topic it updates, or null.
 // A withdrawn card is a risk the second look took out, with the lines that rule it out.
 export type Card =
 	| { kind: 'claim'; claim: Claim }

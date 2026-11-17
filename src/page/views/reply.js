@@ -176,7 +176,7 @@ const CARD_RENDERERS = {
 	decision: (card, key, rows) => decisionCardHtml(card.decision, key, rows),
 	diagram: (card, _key, rows, id) => diagramHtml(card.diagram, id, rows),
 	topic: (card, key, rows) =>
-		`<p class="card-text"><span class="card-kind">Topic</span> ken keeps <strong>${prose(card.topic.name)}</strong> in the project record, on these lines.</p>${quoteRows(card.topic.quotes, key, rows)}`,
+		`<p class="card-text"><span class="card-kind">Topic</span> <strong>${prose(card.topic.name)}</strong> rests on these lines.</p>${quoteRows(card.topic.quotes, key, rows)}`,
 	withdrawn: (card, key, rows) => {
 		const { risk, reason, proof } = card.withdrawn
 		return `<p class="card-text"><span class="card-kind">Withdrawn risk</span> ${prose(risk.text)}</p>
