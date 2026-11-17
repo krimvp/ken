@@ -1,11 +1,15 @@
 import { createServer } from 'node:http'
 import { after } from 'node:test'
 
-// One scripted reply per chat request: text, one tool call with the text the model writes before it, or no reply at
-// all. hang is called when that request arrives, and the request then stays open until the caller gives up on it. A
+// One scripted reply per chat request: text, one tool call with the text the model writes before it, several tool
+// calls in one turn, or no reply at all. hang is called when that request arrives, and the request then stays open until the caller gives up on it. A
 // reply with held waits for that promise before it is sent, so a test can keep a model call running.
 export type Turn =
-	| (({ text: string } | { tool: string; args: Record<string, unknown>; text?: string }) & { held?: Promise<unknown> })
+	| ((
+			| { text: string }
+			| { tool: string; args: Record<string, unknown>; text?: string }
+			| { calls: { tool: string; args: Record<string, unknown> }[] }
+	  ) & { held?: Promise<unknown> })
 	| { hang: () => void }
 
 export type ChatRequest = { messages: { role: string; content: unknown }[] }
@@ -39,24 +43,26 @@ export async function scriptedModel(script: Turn[]): Promise<{ baseUrl: string; 
 		requests.push(JSON.parse(raw))
 		if ('hang' in turn) return turn.hang()
 		await turn.held
-		const delta = !('tool' in turn)
-			? { role: 'assistant', content: turn.text }
-			: {
-					role: 'assistant',
-					...(turn.text === undefined ? {} : { content: turn.text }),
-					tool_calls: [
-						{
-							index: 0,
-							id: `call_${requests.length}`,
+		const calls = 'calls' in turn ? turn.calls : 'tool' in turn ? [turn] : []
+		const text = 'text' in turn && turn.text !== undefined ? { content: turn.text } : {}
+		const delta = {
+			role: 'assistant',
+			...text,
+			...(calls.length === 0
+				? {}
+				: {
+						tool_calls: calls.map((call, index) => ({
+							index,
+							id: `call_${requests.length}_${index}`,
 							type: 'function',
-							function: { name: turn.tool, arguments: JSON.stringify(turn.args) },
-						},
-					],
-				}
+							function: { name: call.tool, arguments: JSON.stringify(call.args) },
+						})),
+					}),
+		}
 		res.writeHead(200, { 'content-type': 'text/event-stream' })
 		res.end(
 			chunk({ choices: [{ index: 0, delta, finish_reason: null }] }) +
-				chunk({ choices: [{ index: 0, delta: {}, finish_reason: 'tool' in turn ? 'tool_calls' : 'stop' }] }) +
+				chunk({ choices: [{ index: 0, delta: {}, finish_reason: calls.length > 0 ? 'tool_calls' : 'stop' }] }) +
 				chunk({ choices: [], usage: USAGE_PER_REPLY }) +
 				'data: [DONE]\n\n',
 		)

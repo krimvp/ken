@@ -293,3 +293,41 @@ test('eight risks reach the reader in the order the second look gave', async () 
 		order.map((number) => `load waits too long, case ${number}.`),
 	)
 })
+
+test('a risk sent in the same turn as the scope, before it, still gets the second look', async () => {
+	const { events, requests } = await ask([
+		{
+			calls: [
+				{ tool: 'ken__show', args: { risks: [FIRST_RISK] } },
+				{ tool: 'ken__show', args: { scope: { base, head }, claims: [STATEMENT] } },
+			],
+		},
+		{ text: '' },
+		...nothingToRevise(1),
+	])
+
+	assert.ok(
+		userTexts(requests.at(-1)).some((text) => text.includes(SECOND_LOOK) && text.includes(FIRST_RISK.text)),
+		'ken asks about the risk again',
+	)
+	assert.deepEqual(
+		risks(events).map((risk) => risk.text),
+		[FIRST_RISK.text],
+	)
+})
+
+test('a risk shown during the second look shows as it is and leaves the numbers of the held risks alone', async () => {
+	const { events, requests } = await ask([
+		show({ scope: { base, head }, risks: [FIRST_RISK] }),
+		{ text: '' },
+		{ tool: 'ken__show', args: { risks: [CALLER_RISK] } },
+		{ tool: 'ken__revise_risks', args: { order: [1] } },
+		{ text: '' },
+	])
+
+	assert.match(toolResults(requests[4]).at(-1) ?? '', /ken shows the reader 1 risk/)
+	assert.deepEqual(
+		risks(events).map((risk) => risk.text),
+		[CALLER_RISK.text, FIRST_RISK.text],
+	)
+})

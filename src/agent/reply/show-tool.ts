@@ -139,8 +139,8 @@ export function showTool(gate: Gate, round: () => Round): Tool {
 				if (!card) continue
 				const where = drafts[at]?.where ?? ''
 				// Risks of a change come when the reader asks for them, most often after the record already holds the change,
-				// so they get the second look whatever the record holds.
-				if (card.kind === 'risk' && current.asked && current.scope) {
+				// so they get the second look whatever the record holds. One sent during that look shows as it is.
+				if (card.kind === 'risk' && current.asked && current.scope && current.step === 'talk') {
 					current.held.push(card.risk)
 					held.push(where)
 				} else {
@@ -187,6 +187,12 @@ async function setScope(gate: Gate, current: Round, raw: JsonObject, signal: Abo
 		return same ? null : `This reply is about ${now}. One reply explains one change: leave out scope.`
 	}
 	current.scope = { range, work: null, hunks: null }
+	// A risk shown in the same turn, before the scope came, is about the change too.
+	if (current.asked && current.step === 'talk') {
+		const risks = current.pending.flatMap((card) => (card.kind === 'risk' ? [card.risk] : []))
+		current.pending = current.pending.filter((card) => card.kind !== 'risk')
+		current.held.push(...risks)
+	}
 	return null
 }
 
