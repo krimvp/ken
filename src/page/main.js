@@ -221,7 +221,7 @@ async function send(body) {
 		state.ui = freshUi()
 	}
 	state.thread = [...state.thread, q]
-	state.open = q
+	state.open = picked = q
 	state.menuOpen = false
 	state.view = 'question'
 	if (!body.lens) $('#question').value = ''
@@ -420,7 +420,7 @@ function turnHtml(q, t, ui) {
 	} else if (q.live) body = working
 	else body = runLine(q, t, ui) + endedHtml(q, t)
 	return `<article class="turn" id="turn-${t}">
-		<p class="asked">You asked ${when(q.askedAt)}</p>
+		<p class="asked">You asked ${when(q.askedAt)}<span class="described-note">What ken checked for this reply is on the right.</span></p>
 		${questionHtml(q.question, ui)}
 		${movedHtml(q, t)}
 		${body}
@@ -543,7 +543,64 @@ function render() {
 		: ''
 	panel.innerHTML = panelHtml()
 	panel.scrollTop = scroll
+	watchTurns()
 	if (focused) document.querySelector(`[data-key="${CSS.escape(focused)}"]`)?.focus({ preventScroll: true })
+}
+
+// On a wide screen the panel follows the reader down the thread: it shows the checks of the reply most in view. A reply
+// the reader picked, by asking it, opening it from the menu or opening one of its quotes, keeps the panel while any of
+// it is on screen, and an open quote keeps it until it closes. The turn the panel describes is marked.
+let picked = null
+let watcher = null
+const turnsInView = new Set()
+
+function watchTurns() {
+	watcher?.disconnect()
+	turnsInView.clear()
+	markDescribed()
+	if (!state.ui.wide || state.view !== 'question' || state.thread.length < 2) return
+	const margin = `${-$('.top').offsetHeight}px 0px ${-$('#ask').offsetHeight}px 0px`
+	const threshold = Array.from({ length: 101 }, (_, i) => i / 100)
+	watcher = new IntersectionObserver(
+		(entries) => {
+			for (const { target, isIntersecting } of entries) {
+				if (isIntersecting) turnsInView.add(target)
+				else turnsInView.delete(target)
+			}
+			follow()
+		},
+		{ rootMargin: margin, threshold },
+	)
+	for (const turn of document.querySelectorAll('#thread .turn')) watcher.observe(turn)
+}
+
+function follow() {
+	if (state.ui.panel.kind !== 'checks') return
+	const top = $('.top').offsetHeight
+	const bottom = innerHeight - $('#ask').offsetHeight
+	const seen = (turn) => {
+		const box = turn.getBoundingClientRect()
+		return Math.min(box.bottom, bottom) - Math.max(box.top, top)
+	}
+	const turns = [...turnsInView]
+	if (turns.some((turn) => state.thread[turnIndex(turn)] === picked)) return
+	picked = null
+	const most = turns.reduce((best, turn) => (best && seen(best) >= seen(turn) ? best : turn), null)
+	const q = most && state.thread[turnIndex(most)]
+	if (!q || q === state.open) return
+	state.open = q
+	$('#panel').innerHTML = panelHtml()
+	$('#panel').scrollTop = 0
+	markDescribed()
+}
+
+const turnIndex = (turn) => Number(turn.id.slice('turn-'.length))
+
+function markDescribed() {
+	const marked = state.ui.wide && state.view === 'question' && state.thread.length > 1
+	for (const turn of document.querySelectorAll('#thread .turn')) {
+		turn.classList.toggle('described', marked && state.thread[turnIndex(turn)] === state.open)
+	}
 }
 
 function tick() {
@@ -841,6 +898,7 @@ const actions = {
 	async open(el) {
 		state.menuOpen = false
 		await openQuestion(el.dataset.id)
+		picked = state.open
 		render()
 		const turn = `#turn-${state.thread.indexOf(state.open)}`
 		$(turn)?.scrollIntoView({ block: 'start' })
@@ -850,7 +908,7 @@ const actions = {
 		state.menuOpen = false
 		const { q } = state.running
 		if (!state.thread.includes(q)) state.thread = [...(await threadOf(q.thread)), q]
-		state.open = q
+		state.open = picked = q
 		state.ui = freshUi()
 		render()
 	},
@@ -858,7 +916,7 @@ const actions = {
 		const key = el.dataset.item
 		const quote = Number(el.dataset.quote)
 		const owner = itemsOf(state.thread).find((each) => each.key === key)?.q
-		if (owner && state.view === 'question') state.open = owner
+		if (owner && state.view === 'question') state.open = picked = owner
 		if (uiNow().wide) return choose(key, quote)
 		toggle(uiNow().openQuotes, `${key}-q${quote}`)
 		render()

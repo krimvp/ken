@@ -373,6 +373,32 @@ html {
 	font-size: var(--text-note);
 }
 
+/* On a wide screen with more than one reply, the turn the panel describes has a bar at its left and says so. */
+.turn.described {
+	position: relative;
+}
+
+.turn.described::before {
+	content: "";
+	position: absolute;
+	top: var(--space-6);
+	bottom: var(--space-6);
+	left: calc(-1 * var(--space-4));
+	width: 3px;
+	border-radius: 2px;
+	background: var(--color-accent);
+}
+
+.described-note {
+	display: none;
+}
+
+.turn.described .described-note {
+	display: inline;
+	margin-left: var(--space-3);
+	color: var(--color-accent);
+}
+
 .question {
 	font-size: var(--text-h2);
 	font-weight: 650;
