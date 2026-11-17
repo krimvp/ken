@@ -12,6 +12,7 @@ import {
 	isSession,
 	label,
 	list,
+	markHtml,
 	prose,
 	quoteRows,
 	RISK_MARKS,
@@ -179,7 +180,7 @@ const CARD_RENDERERS = {
 		`<p class="card-text"><span class="card-kind">Topic</span> <strong>${prose(card.topic.name)}</strong> rests on these lines.</p>${quoteRows(card.topic.quotes, key, rows)}`,
 	withdrawn: (card, key, rows) => {
 		const { risk, reason, proof } = card.withdrawn
-		return `<p class="card-text"><span class="card-kind">Withdrawn risk</span> ${prose(risk.text)}</p>
+		return `<p class="card-marks">${markHtml('card-kind', 'Withdrawn risk', RISK_MARKS.withdrawnMeans)}</p><p class="card-text">${prose(risk.text)}</p>
 			<p class="small"><span class="d-field">Why it was withdrawn</span> ${prose(reason)}</p>
 			${quoteRows(proof, key, rows)}`
 	},
@@ -194,12 +195,13 @@ function cardHtml(card, t, j, rows) {
 	return `<div class="card card-${esc(card.kind)}" id="item-${key}"><span class="card-check" title="Checked against git" aria-label="Checked against git">✓</span><div class="card-body">${body}</div></div>`
 }
 
-// A claim or a risk: its marks, its text, ken's search for what it says is missing, and its quote rows. "Inferred" is
-// the label of most claims, so only another label is shown; the panel's key says what each means.
+// A claim or a risk: its marks on a line of their own, its text, ken's search for what it says is missing, and its quote
+// rows. "Inferred" is the label of most claims, so only another label is shown.
 function claimHtml(claim, key, rows, kind) {
-	const tag = kind ? `<span class="card-kind">${kind}</span> ` : ''
-	const marked = claim.label && claim.label !== 'inferred' ? label(claim.label) : ''
-	return `<p class="card-text">${tag}${marked}${fixedHtml(claim)}${unreviewedHtml(claim)}${checkedHtml(claim)}${weightHtml(claim)}${prose(claim.text)}</p>
+	const tag = kind ? `<span class="card-kind">${kind}</span>` : ''
+	const marked = claim.label && claim.label !== 'inferred' ? label(claim.label, true) : ''
+	const marks = `${tag}${marked}${fixedHtml(claim)}${unreviewedHtml(claim)}${checkedHtml(claim)}${weightHtml(claim)}`
+	return `${marks === '' ? '' : `<p class="card-marks">${marks}</p>`}<p class="card-text">${prose(claim.text)}</p>
 		${searchedHtml(claim.absent)}
 		${quoteRows(claim.quotes, key, rows)}`
 }
@@ -217,7 +219,7 @@ function decisionCardHtml(d, key, rows) {
 	const more = open
 		? `<div class="d-card">${fromHtml(d)}${factsHtml(d, false)}${answerIt}${quoteRows(quotes, key, rows)}</div>`
 		: ''
-	return `<p class="card-text"><span class="card-kind">Decision</span> ${call}${label(d.label)} <span class="d-q">${prose(d.question)}</span> <span class="d-chosen"><span class="d-field">Chosen</span> ${prose(d.chosen)}</span></p>
+	return `<p class="card-text"><span class="card-kind">Decision</span> ${call}${label(d.label, true)} <span class="d-q">${prose(d.question)}</span> <span class="d-chosen"><span class="d-field">Chosen</span> ${prose(d.chosen)}</span></p>
 		${why}
 		${searchedHtml(d.absent)}
 		<button class="link small d-more" data-act="decision" data-item="${key}" data-key="${key}-row" aria-expanded="${open}">${what}</button>
@@ -237,25 +239,25 @@ function checkedHtml({ checked }) {
 	const [style, name, means] = checked
 		? ['recorded', RISK_MARKS.outside, RISK_MARKS.outsideMeans]
 		: ['inferred', RISK_MARKS.inside, RISK_MARKS.insideMeans]
-	return `<span class="label label-${style}" title="${esc(means)}">${name}</span>`
+	return markHtml(`label label-${style}`, name, means)
 }
 
 // ken's mark on a risk the second look held and never settled.
 function unreviewedHtml({ unreviewed }) {
 	if (!unreviewed) return ''
-	return `<span class="label label-inferred" title="${esc(RISK_MARKS.unreviewedMeans)}">${RISK_MARKS.unreviewed}</span>`
+	return markHtml('label label-inferred', RISK_MARKS.unreviewed, RISK_MARKS.unreviewedMeans)
 }
 
 // ken's mark on a risk that quotes the message of a commit made after the change: the project fixed it since.
 function fixedHtml({ fixedIn }) {
 	if (fixedIn === undefined) return ''
-	return `<span class="label label-recorded" title="${esc(RISK_MARKS.fixedMeans)}">${RISK_MARKS.fixed} <code>${short(fixedIn)}</code></span>`
+	return markHtml('label label-recorded', `${RISK_MARKS.fixed} <code>${short(fixedIn)}</code>`, RISK_MARKS.fixedMeans)
 }
 
 // The model's weight on a risk. ken does not judge it.
 function weightHtml({ weight }) {
 	if (weight === undefined) return ''
-	return `<span class="label label-inferred" title="${esc(WEIGHT_MEANS[weight])}">${weight === 'serious' ? 'Serious' : 'Minor'}</span>`
+	return markHtml('label label-inferred', weight === 'serious' ? 'Serious' : 'Minor', WEIGHT_MEANS[weight])
 }
 
 // A decision in a list: its question and the option the code took, a row that opens it in place.

@@ -2536,6 +2536,35 @@ q.subject {
 	line-height: 1.6;
 }
 
+/* A card's kind and its marks, on a line above its text, with room between them. */
+.card-marks {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-2);
+	margin-bottom: var(--space-2);
+}
+
+[data-tip] {
+	cursor: help;
+}
+
+/* The one tooltip of the page, placed by main.js inside the screen next to the mark it explains. */
+#tip {
+	position: fixed;
+	z-index: 50;
+	max-width: min(22rem, calc(100vw - 2 * var(--gutter)));
+	padding: var(--space-2) var(--space-3);
+	border: 1px solid var(--color-border);
+	border-radius: var(--radius-sm);
+	background: var(--color-card);
+	box-shadow: 0 4px 16px rgb(0 0 0 / 0.15);
+	color: var(--color-text);
+	font-size: var(--text-note);
+	line-height: 1.5;
+	pointer-events: none;
+}
+
 .card-kind {
 	margin-right: 0.35em;
 	color: var(--color-note);

@@ -485,6 +485,7 @@ function panelHtml() {
 }
 
 function render() {
+	hideTip()
 	const ui = state.ui
 	ui.wide = wideQuery.matches
 	const focused = document.activeElement?.dataset?.key
@@ -952,6 +953,7 @@ document.addEventListener(
 
 document.addEventListener('keydown', (event) => {
 	if (event.key !== 'Escape') return
+	if (!$('#tip').hidden) return hideTip()
 	const ui = state.ui
 	if (state.menuOpen) {
 		state.menuOpen = false
@@ -1025,6 +1027,37 @@ $('#question').addEventListener('keydown', (event) => {
 		void send({ question: $('#question').value })
 	}
 })
+
+// A mark on a card says what it means when the reader points at it, moves to it with the keyboard, or taps it. The one
+// tooltip is fixed to the screen, so it never widens the page; it stays inside the screen and follows its mark on scroll.
+let tipFor = null
+
+function showTip(mark) {
+	const tip = $('#tip')
+	tipFor = mark
+	tip.textContent = mark.dataset.tip
+	tip.hidden = false
+	const box = mark.getBoundingClientRect()
+	const left = Math.max(8, Math.min(box.left, innerWidth - tip.offsetWidth - 8))
+	const below = box.bottom + 6
+	tip.style.left = `${left}px`
+	tip.style.top = `${below + tip.offsetHeight > innerHeight - 8 ? box.top - tip.offsetHeight - 6 : below}px`
+}
+
+function hideTip() {
+	tipFor = null
+	$('#tip').hidden = true
+}
+
+for (const kind of ['mouseover', 'focusin']) {
+	document.addEventListener(kind, (event) => {
+		const mark = event.target.closest?.('[data-tip]')
+		if (mark) showTip(mark)
+		else hideTip()
+	})
+}
+document.addEventListener('focusout', hideTip)
+document.addEventListener('scroll', () => tipFor?.isConnected && showTip(tipFor), true)
 
 $('#question').addEventListener('input', resizeBox)
 wideQuery.addEventListener('change', render)

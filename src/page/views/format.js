@@ -209,32 +209,45 @@ export const LABELS = {
 	},
 }
 
-// ken's own marks on a risk of a change, which it sets from git, and what each means. The label key
-// and each mark's tooltip say the meaning, so the note under the risks stays short.
+// ken's own marks on a risk of a change, which it sets from git, and what each means. Each mark says its meaning when
+// the reader points at it or moves to it with the keyboard.
 export const RISK_MARKS = {
 	outside: 'Quotes code outside the change',
 	outsideMeans:
-		'A quote of the risk lies wholly outside the lines the change touched, at its last commit. ken checks where the quote is, not whether the risk is true.',
+		'At least one quote of this risk is from code the change did not touch. ken checked where the quote is, not whether the risk is real.',
 	inside: 'Quotes only the changed lines',
 	insideMeans:
-		'Every quote of a file in the risk holds a line the change touched. A risk that quotes no file, only commit messages, has neither mark.',
+		'Every file this risk quotes is quoted at a line the change touched. ken checked where the quotes are, not whether the risk is real.',
 	unreviewed: 'No second look',
 	unreviewedMeans:
-		"ken's second look at the risks did not finish, so this risk shows as ken first checked it, not checked against the code a second time.",
+		"ken's second look at the risks did not finish. This risk was checked against git once, not read against the code a second time.",
 	fixed: 'Fixed since, in',
 	fixedMeans:
-		'The risk quotes the message of a commit made after the change, the one named, which says what was wrong. ken shows these risks after the open ones.',
+		'A later commit, the one named, fixed this risk. The card quotes its message. ken lists these after the open risks.',
+	withdrawnMeans:
+		"ken's model took a second look at the risks and found code that rules this one out. The quote below is that code.",
 }
 
 // The weight ken's model gives a risk, and what each means. ken does not judge it.
 export const WEIGHT_MEANS = {
 	serious:
-		"ken's model weighs it serious: someone who uses the code in the normal way loses work, gets a wrong result or a failure, or finds refused what worked before. ken does not judge the weight.",
-	minor: "ken's model weighs it minor: it needs a rare case or costs little. ken does not judge the weight.",
+		"ken's model rates this risk serious. Someone who uses the code the normal way loses work, gets a wrong result or a failure, or finds that something that worked is now refused. ken does not judge the rating.",
+	minor: "ken's model rates this risk minor. It needs a rare case, or it costs little. ken does not judge the rating.",
 }
 
-export function label(name) {
-	return `<span class="label label-${esc(name)}">${esc(LABELS[name]?.name ?? name)}</span>`
+// A mark on a card. Pointing at it, moving to it with the keyboard, or tapping it shows what it means in the page's one
+// tooltip, #tip.
+export function markHtml(className, text, means) {
+	return `<span class="${className}" tabindex="0" data-tip="${esc(means)}" aria-describedby="tip">${text}</span>`
+}
+
+// A label, and on a card one that says what it means.
+export function label(name, onCard = false) {
+	const text = esc(LABELS[name]?.name ?? name)
+	const className = `label label-${esc(name)}`
+	return onCard && LABELS[name]
+		? markHtml(className, text, LABELS[name].means.replaceAll('`', ''))
+		: `<span class="${className}">${text}</span>`
 }
 
 // The owner's answer to a decision, said back to them. An answer saved before ken asked for an outcome has none.
