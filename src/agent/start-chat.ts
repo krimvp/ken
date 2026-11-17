@@ -139,6 +139,19 @@ export async function startChat(options: {
 				events.push(event)
 			}
 		}
+		// A turn that shows cards again after ken sent one back mostly says so: "sending it again without them". Its words
+		// wait. A later turn that writes words makes them a step; else they are the reply's, before that turn's cards.
+		let sentBackBefore = 0
+		let retry: { text: string; at: number } | null = null
+		const settleRetry = (as: 'step' | 'reply') => {
+			if (!retry) return
+			const { text, at } = retry
+			retry = null
+			if (as === 'step') return events.push({ kind: 'step', step: { kind: 'text', text } })
+			const words: Item = { kind: 'words', text }
+			current.items.splice(at, 0, words)
+			events.push({ kind: 'item', item: words })
+		}
 		const unsubscribe = session.subscribe((event) => {
 			if (event.type === 'text') events.push({ kind: 'text', delta: event.delta })
 			if (event.type === 'tool_start') {
@@ -152,10 +165,18 @@ export async function startChat(options: {
 			}
 			if (event.type === 'turn_end') {
 				turnsEnded += 1
-				for (const filed of fileTurn(event.turn, current.pending.splice(0))) {
+				const { calls } = event.turn
+				const text = event.turn.text.trim()
+				const showOnly = calls.length > 0 && calls.every(({ call }) => call.tool === 'show')
+				const writes = text !== '' && calls.every(({ call }) => call.tool === 'show')
+				if (writes) settleRetry('step')
+				const again = showOnly && writes && sentBackBefore > 0 && current.step === 'talk'
+				if (again) retry = { text, at: current.items.length }
+				for (const filed of fileTurn(again ? { text: '', calls } : event.turn, current.pending.splice(0))) {
 					if (filed.kind === 'item') current.items.push(filed.item)
 					events.push(filed)
 				}
+				sentBackBefore = current.sentBack
 				// aigent stops the first step at its turns; the second look has fewer, so ken stops it.
 				if (current.step === 'risks' && turnsEnded >= STEPS.risks.turns) stops.risks.abort()
 			}
@@ -173,6 +194,7 @@ export async function startChat(options: {
 				.catch((error: unknown): RunResult => ({ stop: 'error', message: String(error), turns: 0 }))
 		const talk = async () => {
 			const result = await prompt(`${index}${reader}\n\nThe question: ${question}`, stops.talk)
+			settleRetry('reply')
 			let secondLook: Cost | null = null
 			const { scope } = current
 			// A model that failed while it talked would fail the second look too, so the risks it sent stand.

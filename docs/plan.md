@@ -141,7 +141,7 @@ The agent explores freely, but three things are never left to the model. None of
 
 ### A reply, as built
 
-The model reads the project, then replies in its own words. It calls one tool, `show`, with the cards that need proof: claims, decisions, risks, diagrams and topics. ken checks each card alone. A turn in which the model called a reading tool is its working, and the page folds it into the steps. A turn in which it only wrote, or wrote and showed cards, is the reply, its cards after its words.
+The model reads the project, then replies in its own words. It calls one tool, `show`, with the cards that need proof: claims, decisions, risks, diagrams and topics. ken checks each card alone. A turn in which the model called a reading tool is its working, and the page folds it into the steps. A turn in which it only wrote, or wrote and showed cards, is the reply, its cards after its words. A turn that shows cards again after ken sent one back mostly says so ("sending it again without them"), so its words are a step too, unless no later turn writes words.
 
 A reply about a change tells the story in a few sentences and backs the main point with a card. It says in one line whether there are decisions or risks worth a look. The reader asks for them, with two chips under the reply or in words. When risks of a change arrive, ken holds them for a second look: in the same session, the model checks each risk against the code and the later commits on the same files. It may withdraw a risk only with a quote of the line that rules it out, and the reader still sees the withdrawn risk with that line.
 

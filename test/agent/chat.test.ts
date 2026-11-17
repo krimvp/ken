@@ -143,6 +143,26 @@ test('after six cards sent back, show checks nothing more and says so, and the w
 	])
 })
 
+test('the words of a turn that shows a card again after one was sent back are a step, unless no later turn writes', async () => {
+	const firstTry: Turn = { tool: 'ken__show', text: 'Each retry now waits.', args: { claims: [claim(FALSE_QUOTE)] } }
+	const again: Turn = { tool: 'ken__show', text: 'Sending it again with tabs.', args: { claims: [claim(TRUE_QUOTE)] } }
+	const said = (events: ChatEvent[]) =>
+		replyIn(events).items.map((item) => (item.kind === 'words' ? item.text : item.card.kind))
+
+	const closed = await ask([firstTry, again, { text: 'The wait is 100 ms.' }])
+	assert.deepEqual(said(closed.events), ['Each retry now waits.', 'claim', 'The wait is 100 ms.'])
+	assert.ok(
+		closed.events.some(
+			(event) =>
+				event.kind === 'step' && event.step.kind === 'text' && event.step.text === 'Sending it again with tabs.',
+		),
+		'the retry words are in the steps',
+	)
+
+	const last = await ask([firstTry, { ...again, text: 'The loop sleeps 100 ms after each attempt.' }, { text: '' }])
+	assert.deepEqual(said(last.events), ['Each retry now waits.', 'The loop sleeps 100 ms after each attempt.', 'claim'])
+})
+
 test('a ref or path that starts with "-" or leaves the repository is refused and never reaches git', async () => {
 	const outside = path.join(path.dirname(root), `ken-outside-${path.basename(root)}.txt`)
 	writeFileSync(outside, 'outside secret\n')
