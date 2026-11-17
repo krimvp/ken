@@ -161,9 +161,13 @@ export function tagHtml(tag) {
 	return tag ? `<span class="q-then" title="${TAG_MEANS[tag]}">${tag}</span>` : ''
 }
 
-// At rest a quote is one row: the file, the lines, and the first quoted line, with the commit when the reply quotes
-// more than one. Opened, it shows all its lines: in place, or in the panel on a wide screen, where the row whose quote
-// the panel shows says so.
+// A card shows a short quote whole, and a long one by its first lines.
+const SHOWN_LINES = 4
+const WHOLE_UP_TO = 6
+
+// A quote is a row that names the file, the lines and the commit when the reply quotes more than one, over the quoted
+// lines as code. A long quote shows its first lines and a button for the rest. Opened, it shows all its lines: in
+// place, or in the panel on a wide screen, where the row whose quote the panel shows says so.
 export function quoteRows(quotes, key, { ui, commits, head = null, copies = NONE, change = null }) {
 	const tags = quoteTags(quotes, { head, copies, change })
 	return `<ul class="quotes">${quotes
@@ -172,19 +176,27 @@ export function quoteRows(quotes, key, { ui, commits, head = null, copies = NONE
 			const id = `${key}-q${j}`
 			const chosen = ui.wide && ui.panel.kind === 'quote' && ui.panel.key === key && ui.panel.quote === j
 			const open = !ui.wide && ui.openQuotes.has(id)
-			const first = quote.text.split('\n').find((line) => line.trim() !== '') ?? ''
 			const at =
 				commits && !isSession(quote) && quote.path !== null
 					? `<span class="q-commit">${copies.has(quote.commit) ? "in ken's copy" : `at <code>${short(quote.commit)}</code>`}</span>`
 					: ''
+			const act = `data-act="quote" data-item="${key}" data-quote="${j}"`
 			return `<li class="q${chosen ? ' chosen' : ''}">
-				<button class="q-row" data-act="quote" data-item="${key}" data-quote="${j}" data-key="${id}" aria-expanded="${ui.wide ? chosen : open}"${ui.wide ? ' aria-controls="panel"' : ''}>
-					<span class="q-path">${quoteSource(quote)}</span><span class="q-lines">${then}<span class="nowrap">${quoteLines(quote)}</span>${at}</span>${chosen ? '<span class="q-there">Shown in the panel on the right</span>' : first ? `<span class="q-first">${esc(first.trim())}</span>` : ''}
+				<button class="q-row" ${act} data-key="${id}" aria-expanded="${ui.wide ? chosen : open}"${ui.wide ? ' aria-controls="panel"' : ''}>
+					<span class="q-path">${quoteSource(quote)}</span><span class="q-lines">${then}<span class="nowrap">${quoteLines(quote)}</span>${at}</span>${chosen ? '<span class="q-there">Shown in the panel on the right</span>' : ''}
 				</button>
-				${open ? quoteBody(quote, '', commits, copies) : ''}
+				${open ? quoteBody(quote, '', commits, copies) : firstLinesHtml(quote, `${act} data-key="${id}-all"`)}
 			</li>`
 		})
 		.join('')}</ul>`
+}
+
+function firstLinesHtml(quote, act) {
+	const lines = quote.text.split('\n')
+	const numbers = lines.map((_, k) => quote.startLine + k)
+	if (lines.length <= WHOLE_UP_TO) return `<pre class="code"><code>${codeLines(lines, numbers)}</code></pre>`
+	const all = `<button class="link q-all" ${act}>Show all ${lines.length} lines</button>`
+	return `<pre class="code"><code>${codeLines(lines.slice(0, SHOWN_LINES), numbers)}${all}</code></pre>`
 }
 
 export const LABELS = {

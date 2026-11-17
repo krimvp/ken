@@ -765,7 +765,7 @@ span.label-from-the-session {
 	color: var(--color-note);
 }
 
-/* Quote rows: at rest they show the file, the lines and the first quoted line */
+/* Quote rows: the file and the lines over the quoted code, or its first lines when it is long */
 .quotes {
 	display: grid;
 	grid-template-columns: minmax(0, 1fr);
@@ -834,19 +834,6 @@ span.label-from-the-session {
 	white-space: nowrap;
 }
 
-.q-first {
-	overflow: hidden;
-	color: var(--color-code-text);
-	font-family: var(--font-code);
-	font-size: var(--text-code);
-	white-space: pre;
-	text-overflow: ellipsis;
-}
-
-.q-row[aria-expanded="true"] .q-first {
-	display: none;
-}
-
 .q-there {
 	color: var(--color-note);
 }
@@ -862,7 +849,8 @@ span.label-from-the-session {
 	color: var(--color-code-text);
 }
 
-/* Code: a gutter of line numbers, and lines that wrap under their own number so a long line stays one line */
+/* Code: a gutter of line numbers, and lines that wrap under their own number. The rest of a wrapped line sits two
+   characters further in, so it never reads as a line of its own. */
 .code {
 	overflow-x: auto;
 	margin: 0;
@@ -891,6 +879,8 @@ span.label-from-the-session {
 
 .code .lc {
 	min-width: 0;
+	padding-left: 2ch;
+	text-indent: -2ch;
 	white-space: pre-wrap;
 	overflow-wrap: anywhere;
 }
@@ -907,6 +897,15 @@ span.label-from-the-session {
 	grid-column: 2;
 	white-space: normal;
 	color: var(--color-note);
+	font-family: var(--font-text);
+	font-size: var(--text-note);
+}
+
+/* Under the first lines of a long quote on a card, the button that shows them all */
+.code .q-all {
+	grid-column: 2;
+	justify-self: start;
+	margin-top: var(--space-1);
 	font-family: var(--font-text);
 	font-size: var(--text-note);
 }
@@ -1631,10 +1630,6 @@ ul.left-out {
 
 	.q-path {
 		min-width: 0;
-	}
-
-	.q-first {
-		flex-basis: 100%;
 	}
 
 	.drawing {

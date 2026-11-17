@@ -862,6 +862,8 @@ const actions = {
 		if (uiNow().wide) return choose(key, quote)
 		toggle(uiNow().openQuotes, `${key}-q${quote}`)
 		render()
+		// "Show all" goes away once the lines are open, so the quote's own row takes the focus.
+		if (el.matches('.q-all')) document.querySelector(`[data-key="${key}-q${quote}"]`)?.focus({ preventScroll: true })
 	},
 	'all-quotes'() {
 		const ui = state.ui
