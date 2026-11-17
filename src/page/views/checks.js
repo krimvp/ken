@@ -1,6 +1,6 @@
-// What ken checked for one reply, all of it read from git and none of it from the model: the quotes of its cards, the
-// changed blocks no quote covers, and the commits. On a wide screen it fills the panel; on a narrow one it follows the
-// reply. The panel also shows the quotes the reader opened, one item at a time or all of them.
+// What ken checked for one reply, all of it read from git and none of it from the model: where it found the quotes of
+// the cards, the changed code no quote shows, and the commits. On a wide screen it fills the panel; on a narrow one it
+// follows the reply. The panel also shows the quotes the reader opened, one item at a time or all of them.
 import {
 	codeLines,
 	copiesOf,
@@ -15,10 +15,8 @@ import {
 	quoteBody,
 	quoteSource,
 	quoteTags,
-	RISK_MARKS,
 	short,
 	tagHtml,
-	WEIGHT_MEANS,
 	when,
 } from './format.js'
 import { itemsOf } from './reply.js'
@@ -26,26 +24,8 @@ import { itemsOf } from './reply.js'
 const MAX_DIFF_LINES = 60
 const FILES_NAMED = 3
 
-function cards(q, kind) {
-	return (q.reply?.items ?? []).flatMap((item) => (item.kind === 'card' && item.card.kind === kind ? [item.card] : []))
-}
-
 function quotesOf(q) {
 	return itemsOf([q]).flatMap(({ item }) => item.quotes)
-}
-
-function diagramsOf(q) {
-	return cards(q, 'diagram').map((card) => card.diagram)
-}
-
-function risksOf(q) {
-	return cards(q, 'risk').map((card) => card.risk)
-}
-
-function limit(q) {
-	const what = diagramsOf(q).length > 0 ? 'the words or the arrows' : 'the words'
-	const where = quotesOf(q).some(isSession) ? ', or in its saved session' : ''
-	return `ken checks that each quote is in its file, or in its commit's message, at its commit${where}. It does not check ${what}.`
 }
 
 function sentBack(q) {
@@ -60,91 +40,98 @@ function blocks(n) {
 	return count(n, 'changed block', 'changed blocks')
 }
 
-// ofMany: the thread holds more than one question, so the panel names the one it checked.
-export function checksHtml(q, ui, ofMany = false) {
+// asked: when the question was asked, or null when the panel's reply is the last one in the thread, which needs no name.
+// The panel leads with what ken found and what no quote shows; the rest waits behind Details.
+export function checksHtml(q, ui, asked = null) {
+	const which = asked === null ? '' : `<p class="panel-for">For the question you asked at ${asked}.</p>`
+	const details = detailsHtml(q)
+	return `<div class="panel-head"><h2>What ken checked</h2></div>
+		${which}
+		<div class="verdict">${verdictHtml(q)}${coverageHtml(q, ui)}${elsewhereHtml(q)}</div>
+		${
+			details === ''
+				? ''
+				: `<p class="details-toggle"><button class="link small" data-act="details" data-key="details" aria-expanded="${ui.detailsOpen}">${ui.detailsOpen ? 'Hide details' : 'Details'}</button></p>
+		${ui.detailsOpen ? details : ''}`
+		}`
+}
+
+// Where ken found the quotes, said once.
+function verdictHtml(q) {
+	const all = quotesOf(q)
+	if (all.length === 0) return ''
+	const quotes = all.filter((quote) => !isSession(quote))
+	const copies = copiesOf(q)
+	const inGit = quotes.filter((quote) => !copies.has(quote.commit)).length
+	const places = [
+		[inGit, 'in git'],
+		[quotes.length - inGit, "in ken's copy of your uncommitted work"],
+		[all.length - quotes.length, 'in a saved session of your coding agent'],
+	].filter(([n]) => n > 0)
+	const what = all.length === 1 ? 'the quote' : all.length === 2 ? 'both quotes' : `all ${all.length} quotes`
+	const found =
+		places.length === 1
+			? `ken found ${what} ${places[0][1]}.`
+			: `ken found ${what}: ${list(places.map(([n, where]) => `${n} ${where}`))}.`
+	return `<p class="verdict-line">${found}</p>`
+}
+
+// Behind Details: where the quotes are, the commits, and what ken found complete.
+function detailsHtml(q) {
 	const all = quotesOf(q)
 	const quotes = all.filter((quote) => !isSession(quote))
 	const copies = copiesOf(q)
-	const inGit = quotes.filter((quote) => !copies.has(quote.commit))
-	const inCopy = quotes.length - inGit.length
-	const commits = [...new Set(inGit.map((quote) => short(quote.commit)))]
-	const at = commits.length === 1 ? `at <code>${commits[0]}</code>` : `across ${commits.length} commits`
-	const fromSessions = all.length - quotes.length
-	const places = [
-		[inGit.length, `in git ${at}`],
-		[inCopy, "in ken's copy of your uncommitted work"],
-		[fromSessions, 'in a saved session of your coding agent'],
-	].filter(([n]) => n > 0)
-	const match =
-		places.length > 1
-			? `ken found all ${all.length} quotes: ${list(places.map(([n, where]) => `${n} ${where}`))}.`
-			: inGit.length === 0
-				? `ken found ${inCopy === 1 ? 'the quote' : `all ${inCopy} quotes`} in its copy of your uncommitted work.`
-				: inGit.length === 1
-					? `ken found the quote in git, ${at}.`
-					: inGit.length === 2
-						? `ken found both quotes in git, ${at}.`
-						: `ken found all ${inGit.length} quotes in git, ${at}.`
-	const gitLine = quotes.length === 0 ? '' : `<p>${match}</p>`
+	// A reply about a change names its commits and their messages below, so the quotes need no word on them here.
+	const change = q.reply.change
+	const commits = [...new Set(quotes.filter((quote) => !copies.has(quote.commit)).map((quote) => short(quote.commit)))]
+	const at =
+		change || commits.length === 0
+			? ''
+			: commits.length === 1
+				? `<p>The git quotes are at commit <code>${commits[0]}</code>.</p>`
+				: `<p>The git quotes are at ${commits.length} commits.</p>`
 	const fromMessages = quotes.filter((quote) => quote.path === null).length
-	const messageLine =
-		fromMessages === 0
+	const messages =
+		change || fromMessages === 0
 			? ''
-			: `<p class="muted small">${fromMessages === quotes.length ? 'All' : fromMessages} of the git quotes ${fromMessages === 1 ? 'is from a commit message' : 'are from commit messages'}.</p>`
-	const sessionLine =
-		fromSessions === 0
+			: fromMessages === quotes.length
+				? `<p>${quotes.length === 1 ? 'The quote is from a commit message' : `All ${quotes.length} quotes are from commit messages`}.</p>`
+				: `<p>${fromMessages} of the ${quotes.length} git quotes ${fromMessages === 1 ? 'is from a commit message' : 'are from commit messages'}.</p>`
+	const sessions =
+		all.length === quotes.length
 			? ''
-			: `<p>${quotes.length === 0 ? `${fromSessions === 1 ? 'The quote is' : `All ${fromSessions} quotes are`} from a saved session of your coding agent. ` : ''}ken found the lines in the saved session. It did not check that they give the true reason.</p>`
+			: '<p>ken found the session quotes in the saved session. It did not check that they give the true reason.</p>'
 	const back = sentBack(q)
-	const backLine =
+	const refused =
 		back === 0
 			? ''
-			: `<p class="muted">ken sent ${count(back, 'card', 'cards')} back to its model first. The steps say why.</p>`
-	const which = ofMany ? `<p class="panel-for">For "${prose(q.question.split('\n')[0])}"</p>` : ''
-	return `<div class="panel-head"><h2>What ken checked</h2></div>
-		${which}
-		<p class="panel-limit">${limit(q)}</p>
-		<section class="check" id="check-quotes">
-			<h3>Quotes</h3>
-			${gitLine}
-			${messageLine}
-			${sessionLine}
-			${backLine}
-			<p><button class="link small" data-act="key" data-key="key" aria-expanded="${ui.keyOpen}">${ui.keyOpen ? 'Hide what the labels and marks mean' : 'What the labels and marks mean'}</button></p>
-			${ui.keyOpen ? labelKey(labelsOf(q)) + marksKey(q) : ''}
-		</section>
-		${coverageSection(q, ui)}
-		${elsewhereSection(q)}
-		${commitsSection(q)}`
+			: `<p>ken's checks refused ${count(back, 'card', 'cards')}, so you do not see ${back === 1 ? 'it' : 'them'}. The steps say why.</p>`
+	const quoteFacts = `${at}${messages}${sessions}${refused}`
+	return [
+		quoteFacts === '' ? '' : `<section class="check" id="check-quotes"><h3>Cards</h3>${quoteFacts}</section>`,
+		coveredSection(q),
+		followedSection(q),
+		commitsSection(q),
+	].join('')
 }
 
-// The names the change touched that ken found used elsewhere, by search, and those no quote of the reply follows.
-function elsewhereSection(q) {
+// A name the change touched that other code uses, where no quote of the reply goes.
+function elsewhereHtml(q) {
+	const missed = q.reply.change?.usedElsewhere?.notFollowed ?? []
+	if (missed.length === 0) return ''
+	const [first, ...rest] = missed
+	const uses = (name, full) =>
+		`<code>${esc(name.name)}</code>${full ? ' is used' : ''} in ${count(name.places, 'other place', 'other places')}`
+	const said = [uses(first, true), ...rest.map((name) => uses(name, false))]
+	return `<p class="gap">${list(said)}. No quote shows ${first.places === 1 && rest.length === 0 ? 'it' : 'them'}.</p>`
+}
+
+// The names a quote follows to a place that uses them, when no name is missed: the gap line says the rest.
+function followedSection(q) {
 	const used = q.reply.change?.usedElsewhere
-	const total = used ? used.followed.length + used.notFollowed.length : 0
-	if (total === 0) return ''
-	const missed = used.notFollowed.map(
-		(name) => `<code>${esc(name.name)}</code> (${count(name.places, 'place', 'places')})`,
-	)
-	const names = total === 1 ? 'the name' : `${missed.length === 0 ? 'each' : 'any'} of the ${total} names`
-	const said =
-		missed.length === 0
-			? `A quote follows ${names} to a place that uses it.`
-			: missed.length === total
-				? `No quote follows ${names} to a place that uses it: ${list(missed)}.`
-				: `No quote follows ${missed.length} of the ${total} names to a place that uses it: ${list(missed)}.`
-	return `<section class="check" id="check-elsewhere">
-		<h3>Used elsewhere</h3>
-		<p>${said}</p>
-		<p class="muted small">ken found the names the change touched, and the other lines that hold them, by search. It can miss a use or find a different thing with the same name.</p>
-	</section>`
-}
-
-// The labels this reply's cards use, in the order of LABELS.
-function labelsOf(q) {
-	const used = new Set(itemsOf([q]).map(({ item }) => item.label))
-	for (const diagram of diagramsOf(q)) used.add(diagram.label)
-	return Object.keys(LABELS).filter((name) => used.has(name))
+	if (!used || used.followed.length === 0 || used.notFollowed.length > 0) return ''
+	const n = used.followed.length
+	return `<section class="check" id="check-elsewhere"><h3>Used elsewhere</h3><p>${n === 1 ? 'The change touched one name that other code uses. A quote shows where.' : `The change touched ${n} names that other code uses. For each, a quote shows where.`}</p></section>`
 }
 
 // Each label in use, with one plain line of what it means.
@@ -152,31 +139,6 @@ export function labelKey(names) {
 	return `<dl class="label-key">${names
 		.map((name) => `<div><dt>${label(name)}</dt><dd>${prose(LABELS[name].means)}</dd></div>`)
 		.join('')}</dl>`
-}
-
-// The marks ken sets on a risk and the weights its model gives, those this reply's risks carry.
-function marksKey(q) {
-	const risks = risksOf(q)
-	const rows = [
-		risks.some((risk) => risk.checked === true)
-			? `<div><dt><span class="label label-recorded">${RISK_MARKS.outside}</span></dt><dd>${RISK_MARKS.outsideMeans}</dd></div>`
-			: '',
-		risks.some((risk) => risk.checked === false)
-			? `<div><dt><span class="label label-inferred">${RISK_MARKS.inside}</span></dt><dd>${RISK_MARKS.insideMeans}</dd></div>`
-			: '',
-		risks.some((risk) => risk.unreviewed)
-			? `<div><dt><span class="label label-inferred">${RISK_MARKS.unreviewed}</span></dt><dd>${esc(RISK_MARKS.unreviewedMeans)}</dd></div>`
-			: '',
-		risks.some((risk) => risk.fixedIn !== undefined)
-			? `<div><dt><span class="label label-recorded">Fixed since</span></dt><dd>${RISK_MARKS.fixedMeans}</dd></div>`
-			: '',
-		...['serious', 'minor'].map((weight) =>
-			risks.some((risk) => risk.weight === weight)
-				? `<div><dt><span class="label label-inferred">${weight === 'serious' ? 'Serious' : 'Minor'}</span></dt><dd>${esc(WEIGHT_MEANS[weight])}</dd></div>`
-				: '',
-		),
-	].join('')
-	return rows === '' ? '' : `<dl class="label-key marks">${rows}</dl>`
 }
 
 // The changed blocks no quote covers, by file, the files with the most uncovered lines first.
@@ -192,37 +154,41 @@ function uncoveredFiles(change) {
 	return [...files.values()].sort((a, b) => b.lines - a.lines || a.path.localeCompare(b.path))
 }
 
-function coverageSection(q, ui) {
+// The changed blocks no quote covers, with the button that shows them. The reply may quote these files elsewhere, so
+// this names the blocks, not the files, as unquoted.
+function coverageHtml(q, ui) {
 	const change = q.reply.change
-	if (!change) return ''
-	const total = change.covered.length + change.uncovered.length
-	const uncovered = change.uncovered.length
-	const binary =
-		change.binary.length === 0
-			? ''
-			: `<p class="muted small">Binary files, which no quote can cover: ${list(change.binary.map((path) => `<code>${esc(path)}</code>`))}.</p>`
-	if (uncovered === 0) {
-		return `<section class="check" id="check-coverage"><h3>Changed code</h3><p>${change.covered.length} of ${blocks(total)} quoted.</p>${binary}</section>`
-	}
+	const uncovered = change?.uncovered.length ?? 0
+	if (uncovered === 0) return ''
+	const total = change.covered.length + uncovered
 	const files = uncoveredFiles(change)
 	const named = files.slice(0, FILES_NAMED).map((file) => `<code>${esc(file.path)}</code>`)
 	const more = files.length > FILES_NAMED ? [count(files.length - FILES_NAMED, 'more file', 'more files')] : []
-	// The reply may quote these files elsewhere, so this names the blocks, not the files, as unquoted.
-	const where =
-		uncovered === 1
-			? `One changed block in ${named[0]} is not quoted.`
-			: `${blocks(uncovered)} are not quoted, in ${list([...named, ...more])}.`
+	const said =
+		uncovered === total
+			? `No quote shows the ${blocks(total)}, in ${list([...named, ...more])}.`
+			: uncovered === 1
+				? `${change.covered.length} of the ${blocks(total)} have a quote. The one in ${named[0]} has none.`
+				: `${change.covered.length} of the ${blocks(total)} have a quote. The ${uncovered} without one are in ${list([...named, ...more])}.`
 	const button = ui.coverageOpen
 		? ''
-		: `<p><button class="quiet-button" data-act="coverage" data-key="coverage" aria-expanded="false">Show the ${uncovered === 1 ? 'unquoted block' : `${uncovered} unquoted blocks`}</button></p>`
-	return `<section class="check" id="check-coverage">
-		<h3>Changed code</h3>
-		<p>${change.covered.length} of ${blocks(total)} quoted.</p>
-		<p class="muted">${where}</p>
-		${button}
-		${binary}
-		${ui.coverageOpen ? uncoveredHtml(change, files, ui) : ''}
-	</section>`
+		: ` <button class="link" data-act="coverage" data-key="coverage" aria-expanded="false">Show ${uncovered === 1 ? 'it' : 'them'}</button>`
+	return `<div id="check-coverage"><p class="gap">${said}${button}</p>${ui.coverageOpen ? uncoveredHtml(change, files, ui) : ''}</div>`
+}
+
+// Behind Details when every changed block has a quote, and the binary files no quote can cover.
+function coveredSection(q) {
+	const change = q.reply.change
+	if (!change) return ''
+	const binary =
+		change.binary.length === 0
+			? ''
+			: `<p>No quote can show a binary file: ${list(change.binary.map((path) => `<code>${esc(path)}</code>`))}.</p>`
+	const all =
+		change.uncovered.length > 0
+			? ''
+			: `<p>${change.covered.length === 1 ? 'The one changed block has a quote.' : `All ${blocks(change.covered.length)} have a quote.`}</p>`
+	return all === '' && binary === '' ? '' : `<section class="check"><h3>Changed code</h3>${all}${binary}</section>`
 }
 
 // A file's diff is drawn only once the reader opens it, because one block of a lock file can hold thousands of lines.

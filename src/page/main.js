@@ -36,7 +36,7 @@ const freshUi = () => ({
 	openFiles: new Set(),
 	// The turns of the thread whose steps the reader opened.
 	openSteps: new Set(),
-	keyOpen: false,
+	detailsOpen: false,
 	coverageOpen: false,
 	addedOpen: false,
 	paceOpen: false,
@@ -481,7 +481,7 @@ function panelHtml() {
 	if (ui.panel.kind === 'quote') return quoteCardHtml(ui, items)
 	if (ui.panel.kind === 'all') return allQuotesHtml(items)
 	if (!q.reply || cardsOf(q, 0).length === 0) return noChecksPanelHtml(q.live)
-	return checksHtml(q, ui, state.thread.length > 1)
+	return checksHtml(q, ui, state.thread.at(-1) === q ? null : when(q.askedAt))
 }
 
 function render() {
@@ -910,8 +910,8 @@ const actions = {
 		toggle(state.ui.openSteps, Number(el.dataset.turn))
 		render()
 	},
-	key() {
-		state.ui.keyOpen = !state.ui.keyOpen
+	details() {
+		state.ui.detailsOpen = !state.ui.detailsOpen
 		render()
 	},
 	coverage() {
@@ -964,8 +964,14 @@ document.addEventListener('keydown', (event) => {
 	if (state.view === 'live') return closeLive()
 	if (state.view === 'follow-up') return closeFollowUp()
 	if (closePanel()) return
-	if (ui.coverageOpen || ui.openSteps.size > 0 || ui.keyOpen || ui.openQuotes.size > 0 || ui.openDecisions.size > 0) {
-		ui.coverageOpen = ui.keyOpen = false
+	if (
+		ui.coverageOpen ||
+		ui.openSteps.size > 0 ||
+		ui.detailsOpen ||
+		ui.openQuotes.size > 0 ||
+		ui.openDecisions.size > 0
+	) {
+		ui.coverageOpen = ui.detailsOpen = false
 		ui.openSteps = new Set()
 		ui.openQuotes = new Set()
 		ui.openDecisions = new Set()

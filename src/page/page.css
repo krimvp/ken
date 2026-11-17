@@ -765,12 +765,6 @@ span.label-from-the-session {
 	color: var(--color-note);
 }
 
-/* A risk mark's name is longer than the label column, so its meaning goes below it */
-.marks div {
-	grid-template-columns: minmax(0, 1fr);
-	gap: var(--space-1);
-}
-
 /* Quote rows: at rest they show the file, the lines and the first quoted line */
 .quotes {
 	display: grid;
@@ -1160,10 +1154,26 @@ ul.left-out {
 	line-height: 1.5;
 }
 
-.panel-limit {
-	margin-top: var(--space-2);
-	color: var(--color-note);
-	font-size: var(--text-note);
+/* What ken found, and each thing no quote shows, read before any detail. */
+.verdict {
+	margin-top: var(--space-3);
+}
+
+.verdict > * + * {
+	margin-top: var(--space-3);
+}
+
+.verdict-line {
+	font-weight: 600;
+}
+
+.gap {
+	padding-left: var(--space-3);
+	border-left: 3px solid var(--color-border);
+}
+
+.details-toggle {
+	margin-top: var(--space-4);
 }
 
 .panel-nav {
