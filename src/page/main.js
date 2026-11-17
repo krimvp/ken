@@ -3,6 +3,7 @@
 // place. The page talks only to the server that sent it.
 import { fillDrawings, markPart } from './draw-diagrams.js'
 import { liveLook, liveViewHtml } from './live/live-view.js'
+import { projectViewHtml } from './project/project-view.js'
 import { allQuotesHtml, checksHtml, quoteCardHtml } from './views/checks.js'
 import { decisionsViewHtml } from './views/decisions.js'
 import { elementKey } from './views/diagram.js'
@@ -23,6 +24,8 @@ import {
 const $ = (selector) => document.querySelector(selector)
 const wideQuery = matchMedia('(min-width: 1100px)')
 const darkQuery = matchMedia('(prefers-color-scheme: dark)')
+
+const WHOLE = { name: 'Whole project', within: [] }
 
 // panel is what the right column shows on a wide screen: what ken checked, the quotes of one item, or all quotes.
 const CHECKS = { kind: 'checks' }
@@ -63,13 +66,16 @@ const state = {
 	menuOpen: false,
 	lensesOpen: false,
 	problem: null,
-	// "map" shows the reader's understanding map in place of the question, "decisions" the record's decisions, and
-	// "follow-up" what is open.
+	// "map" shows the reader's understanding map in place of the question, "decisions" the record's decisions,
+	// "follow-up" what is open, and "project" the project's layout.
 	view: 'question',
 	map: null,
 	mapSaid: '',
 	decisions: null,
 	decisionsKey: false,
+	// The level of the layout on screen, the changes it can lay over the boxes, the boxes the reader opened to get here,
+	// and the commit and change in the form, as typed or picked.
+	layout: { look: null, changes: [], trail: [WHOLE], at: '', change: '', problem: null },
 	ui: freshUi(),
 	// What is open, with its own open decisions and quotes, the line that says what the last button saved, and the
 	// decisions the reader answered on this visit.
@@ -370,7 +376,7 @@ function menuHtml() {
 		state.model?.kind === 'ok'
 			? `<button class="link" data-act="live" data-key="live"${current('live')} aria-label="Live${said}">${mark}Live</button>`
 			: ''
-	const views = `${live}<button class="link" data-act="decisions" data-key="decisions"${current('decisions')}>Decisions</button><button class="link" data-act="map" data-key="map"${current('map')}>Your map</button>`
+	const views = `<button class="link" data-act="project" data-key="project"${current('project')}>Project</button>${live}<button class="link" data-act="decisions" data-key="decisions"${current('decisions')}>Decisions</button><button class="link" data-act="map" data-key="map"${current('map')}>Your map</button>`
 	const questions =
 		n === 0
 			? ''
@@ -457,6 +463,7 @@ function movedHtml(q, t) {
 function threadHtml() {
 	if (state.view === 'map') return mapViewHtml(state.map, state.model?.kind === 'ok' && !state.running, state.mapSaid)
 	if (state.view === 'decisions') return decisionsViewHtml(state.decisions, state.decisionsKey)
+	if (state.view === 'project') return projectViewHtml(state.layout)
 	if (state.view === 'live') {
 		const canAsk = state.model?.kind === 'ok' && !state.running
 		const seen = { seen: state.liveSeen, hideAsk: state.hideAsk }
@@ -736,6 +743,45 @@ function closeDecisions() {
 	$('[data-key="decisions"]')?.focus({ preventScroll: true })
 }
 
+// The Project view asks the server for one level each time the reader opens a box, goes back up, or picks a commit or
+// a change. A level the server refuses leaves the last one on screen, under the reason.
+async function loadLayout() {
+	const { trail, at, change } = state.layout
+	const query = new URLSearchParams()
+	if (at.trim() !== '') query.set('at', at.trim())
+	for (const path of trail.at(-1).within) query.append('within', path)
+	if (change !== '') query.set('change', change)
+	try {
+		const { look, changes } = await getJson(`/api/layout?${query}`)
+		state.layout = { ...state.layout, look, changes, problem: null }
+	} catch (error) {
+		state.layout = { ...state.layout, problem: error.message }
+	}
+	render()
+}
+
+async function showProject() {
+	state.view = 'project'
+	state.menuOpen = false
+	render()
+	await loadLayout()
+	window.scrollTo({ top: 0 })
+}
+
+function closeProject() {
+	state.view = 'question'
+	render()
+	$('[data-key="project"]')?.focus({ preventScroll: true })
+}
+
+// The level changes under the reader's focus, so focus goes to the level's heading, which names where they are now.
+async function moveTo(trail) {
+	state.layout = { ...state.layout, trail }
+	await loadLayout()
+	$('#pv-level')?.focus({ preventScroll: true })
+	$('.pv-trail')?.scrollIntoView({ block: 'nearest' })
+}
+
 // The Live view reads the server every few seconds, and the header's mark follows whether live mode is on.
 async function loadLive() {
 	try {
@@ -835,6 +881,12 @@ async function followUpSaved(save, said) {
 const actions = {
 	map: () => (state.view === 'map' ? closeMap() : showMap()),
 	decisions: () => (state.view === 'decisions' ? closeDecisions() : showDecisions()),
+	project: () => (state.view === 'project' ? closeProject() : showProject()),
+	'pv-open'(el) {
+		const box = state.layout.look.boxes[Number(el.dataset.index)]
+		return moveTo([...state.layout.trail, { name: box.name, within: box.paths }])
+	},
+	'pv-crumb': (el) => moveTo(state.layout.trail.slice(0, Number(el.dataset.index) + 1)),
 	'dv-key'() {
 		state.decisionsKey = !state.decisionsKey
 		render()
@@ -1023,6 +1075,7 @@ document.addEventListener('keydown', (event) => {
 	}
 	if (state.view === 'map') return closeMap()
 	if (state.view === 'decisions') return closeDecisions()
+	if (state.view === 'project') return closeProject()
 	if (state.view === 'live') return closeLive()
 	if (state.view === 'follow-up') return closeFollowUp()
 	if (closePanel()) return
@@ -1053,6 +1106,11 @@ $('#ask').addEventListener('submit', (event) => {
 })
 
 document.addEventListener('submit', (event) => {
+	if (event.target.closest('.pv-form')) {
+		event.preventDefault()
+		void loadLayout()
+		return
+	}
 	const form = event.target.closest('.area-form, .change-form, .decide-form')
 	if (!form) return
 	event.preventDefault()
@@ -1072,6 +1130,12 @@ document.addEventListener('submit', (event) => {
 	}
 	const path = form.elements.path.value.trim()
 	if (path !== '') void send({ lens: { kind: 'area', path } })
+})
+
+// The commit and the change in the Project view's form are drawn again with the rest, so they are kept here as typed.
+document.addEventListener('input', (event) => {
+	const form = event.target.closest('.pv-form')
+	if (form) state.layout = { ...state.layout, at: form.elements.at.value, change: form.elements.change.value }
 })
 
 // The lens forms are drawn again with the rest, so the person and the span the reader picked are kept here.
