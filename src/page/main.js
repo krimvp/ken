@@ -3,6 +3,7 @@
 // place. The page talks only to the server that sent it.
 import { fillDrawings, markPart } from './draw-diagrams.js'
 import { liveLook, liveViewHtml } from './live/live-view.js'
+import { drawPictures } from './project/parts-picture.js'
 import { projectViewHtml } from './project/project-view.js'
 import { allQuotesHtml, checksHtml, quoteCardHtml } from './views/checks.js'
 import { decisionsViewHtml } from './views/decisions.js'
@@ -521,6 +522,7 @@ function render() {
 	for (const index of tooWide) ui.tooWide.add(index)
 	if (tooWide.length > 0) schedule()
 	for (const [i, box] of document.querySelectorAll('.drawing').entries()) box.scrollLeft = across[i] ?? 0
+	drawPictures($('#thread'))
 	const part = ui.wide && ui.panel.kind === 'quote' && ui.panel.key.match(/^g([\w-]+)n(\d+)$/)
 	if (part) markPart($('#thread'), part[1], part[2])
 	const canAsk = state.model?.kind === 'ok'
@@ -889,9 +891,11 @@ const actions = {
 		return moveTo([...state.layout.trail, { name: box.name, within: box.paths }])
 	},
 	'pv-crumb': (el) => moveTo(state.layout.trail.slice(0, Number(el.dataset.index) + 1)),
+	// An arrow picked in the picture opens in the list beside it, and focus goes there, where the line now shows.
 	'pv-arrow'(el) {
 		toggle(state.layout.openArrows, Number(el.dataset.index))
 		render()
+		if (el.closest('svg')) $(`[data-key="pv-arrow-${el.dataset.index}"]`)?.focus({ preventScroll: true })
 	},
 	'pv-name'() {
 		const { trail } = state.layout
@@ -1218,6 +1222,7 @@ document.addEventListener('scroll', () => tipFor?.isConnected && showTip(tipFor)
 
 $('#question').addEventListener('input', resizeBox)
 wideQuery.addEventListener('change', render)
+window.addEventListener('resize', () => drawPictures($('#thread')))
 darkQuery.addEventListener('change', render)
 setInterval(tick, 1000)
 setInterval(async () => {

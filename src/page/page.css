@@ -2046,14 +2046,115 @@ ul.left-out {
 	font-size: var(--text-note);
 }
 
+/* On a narrow screen the boxes are one list. From 760 pixels they are a picture: a grid with room between the boxes for
+   the arrows, which parts-picture.js draws once the boxes are laid out. --draw tells it whether to draw. */
+.pv-level-body {
+	margin-top: var(--space-5);
+}
+
+.pv-picture {
+	--draw: 0;
+	position: relative;
+}
+
 .pv-boxes {
 	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
-	align-items: start;
 	gap: var(--space-3);
-	margin-top: var(--space-5);
 	padding: 0;
 	list-style: none;
+}
+
+.pv-cell {
+	display: flex;
+	min-width: 0;
+}
+
+@media (min-width: 760px) {
+	.pv-picture {
+		--draw: 1;
+	}
+
+	.pv-picture .pv-boxes {
+		grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
+		/* Every row as tall as the tallest box, so the boxes line up. */
+		grid-template-rows: repeat(var(--rows), 1fr);
+		gap: 6rem var(--space-8);
+	}
+
+	.pv-picture .pv-cell {
+		position: relative;
+		z-index: 1;
+		grid-row: var(--row);
+		grid-column: var(--col);
+	}
+}
+
+@media (min-width: 1100px) {
+	.pv-level-body.has-arrows {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) 22rem;
+		align-items: start;
+		gap: var(--space-7);
+	}
+
+	.pv-level-body.has-arrows .pv-sub {
+		margin-top: 0;
+	}
+}
+
+.pv-lines {
+	position: absolute;
+	inset: 0;
+	z-index: 0;
+	overflow: visible;
+}
+
+.pv-line {
+	stroke: var(--color-muted);
+	stroke-width: 1.5;
+}
+
+.pv-head {
+	fill: var(--color-muted);
+}
+
+.pv-head.is-open {
+	fill: var(--color-accent);
+}
+
+.pv-hit {
+	stroke: transparent;
+	stroke-width: 16;
+}
+
+.pv-link[data-act] {
+	cursor: pointer;
+}
+
+.pv-link.is-open .pv-line,
+.pv-link[data-act]:hover .pv-line {
+	stroke: var(--color-accent);
+	stroke-width: 2.5;
+}
+
+.pv-badge {
+	fill: var(--color-card);
+	stroke: var(--color-muted);
+	stroke-width: 1.5;
+}
+
+.pv-link.is-open .pv-badge,
+.pv-link[data-act]:hover .pv-badge {
+	stroke: var(--color-accent);
+	stroke-width: 2.5;
+}
+
+.pv-badge-text {
+	fill: var(--color-text);
+	font-size: 14px;
+	font-weight: 650;
+	text-anchor: middle;
+	dominant-baseline: central;
 }
 
 .pv-box {
@@ -2092,6 +2193,24 @@ button.pv-box:hover {
 .pv-name {
 	font-size: var(--text-md);
 	font-weight: 650;
+}
+
+/* A box that opens says so in the accent colour, as a link does. */
+.pv-inside {
+	color: var(--color-accent);
+	font-size: var(--text-note);
+	font-weight: 600;
+	margin-top: auto;
+	padding-top: var(--space-2);
+}
+
+.pv-inside::after {
+	content: " \203A";
+}
+
+button.pv-box:hover .pv-inside {
+	text-decoration: underline;
+	text-underline-offset: 0.18em;
 }
 
 .pv-job {
@@ -2147,8 +2266,7 @@ button.pv-box:hover {
 
 .pv-arrow {
 	display: flex;
-	flex-wrap: wrap;
-	align-items: baseline;
+	align-items: center;
 	gap: var(--space-1) var(--space-4);
 	width: 100%;
 	min-height: 2.75rem;
@@ -2161,11 +2279,23 @@ button.pv-box:hover {
 	cursor: pointer;
 }
 
-.pv-arrow-go {
-	color: var(--color-accent);
+/* The arrow's number, as the picture shows it on the arrow. */
+.pv-num {
+	display: inline-grid;
+	flex: none;
+	place-items: center;
+	width: 1.625rem;
+	height: 1.625rem;
+	border: 1.5px solid var(--color-muted);
+	border-radius: 50%;
 	font-size: var(--text-note);
-	text-decoration: underline;
-	text-underline-offset: 0.18em;
+	font-weight: 650;
+}
+
+.pv-arrow[aria-expanded="true"] .pv-num,
+.pv-arrow:hover .pv-num {
+	border-color: var(--color-accent);
+	color: var(--color-accent);
 }
 
 .pv-stale {

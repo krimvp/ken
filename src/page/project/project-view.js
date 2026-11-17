@@ -1,9 +1,11 @@
 // The "Project" view: one level of the project's layout, at a commit the reader picks, with a change laid over it and
 // the reader's map on each box. A level is the parts ken's model named, with their jobs and the arrows between them, or
-// the folders when nobody named them. Plain HTML, not a Mermaid drawing: at 390 pixels Mermaid shrinks a level of six
-// parts to about 62 percent, so its labels fall near 10 pixels, while a grid of cards and a list of arrows keep the
-// page's own text size. Each box is one button, and each state on it is one line of words.
+// the folders when nobody named them. On a wide screen the boxes are a picture with the arrows drawn between them, and
+// the numbered list of arrows sits beside it. Plain HTML with SVG lines, not a Mermaid drawing: at 390 pixels Mermaid
+// shrinks a level of six parts to about 62 percent, so its labels fall near 10 pixels. On a narrow screen the boxes
+// and the arrows are two lists at the page's own text size. Each box is one button, and each state on it is one line.
 import { count, esc, prose, quoteBody } from '../views/format.js'
+import { pictureHtml } from './parts-picture.js'
 
 const GROUPS = [
 	['uncommitted', 'Your work'],
@@ -63,13 +65,23 @@ function boxHtml(box, i, look) {
 		${pathsLine(box)}
 		${stateLine(box, look)}
 		${touched}
-		${mapLine(box.topics)}`
+		${mapLine(box.topics)}
+		${box.opens ? '<span class="pv-inside" aria-hidden="true">Look inside</span>' : ''}`
 	const classes = `pv-box is-${box.state}${box.touched ? ' is-touched' : ''}`
-	if (!box.opens) return `<li class="pv-cell"><div class="${classes}">${body}</div></li>`
-	return `<li class="pv-cell"><button class="${classes}" data-act="pv-open" data-index="${i}" data-key="pv-box-${i}">${body}</button></li>`
+	const html = box.opens
+		? `<button class="${classes}" data-act="pv-open" data-index="${i}" data-key="pv-box-${i}">${body}</button>`
+		: `<div class="${classes}">${body}</div>`
+	return { html, classes: 'pv-cell' }
 }
 
-// Each arrow names the part that uses the other, a verb, and the part it uses, and opens the line it rests on.
+// The arrows as box indexes, for the picture.
+function linksOf(look) {
+	const at = (name) => look.boxes.findIndex((box) => box.name === name)
+	return look.arrows.map((arrow) => ({ from: at(arrow.from), to: at(arrow.to) }))
+}
+
+// Each arrow names the part that uses the other, a verb, and the part it uses, under the number the picture shows on
+// it. A row opens the line the arrow rests on.
 function arrowsHtml(look, open) {
 	if (look.arrows.length === 0) return ''
 	const items = look.arrows.map((arrow, i) => {
@@ -84,16 +96,18 @@ function arrowsHtml(look, open) {
 			: ''
 		return `<li class="pv-arrow-item">
 			<button class="pv-arrow" data-act="pv-arrow" data-index="${i}" data-key="pv-arrow-${i}" aria-expanded="${shown}">
+				<span class="pv-num" aria-hidden="true">${i + 1}</span>
 				<span class="pv-arrow-text"><strong>${esc(arrow.from)}</strong> ${esc(arrow.text)} <strong>${esc(arrow.to)}</strong></span>
-				<span class="pv-arrow-go">${shown ? 'Hide the line' : 'Show the line'}</span>
 			</button>
 			${stale}
 			${quotes}
 		</li>`
 	})
-	return `<h2 class="pv-sub">How the parts use each other</h2>
-		<p class="pv-note">Each arrow rests on a line of code ken found in the part it starts at.</p>
-		<ul class="pv-arrows">${items.join('')}</ul>`
+	return `<section class="pv-side" aria-labelledby="pv-uses">
+		<h2 class="pv-sub" id="pv-uses">How the parts use each other</h2>
+		<p class="pv-note">Each arrow is a line of code, such as an import, in the part it starts from. Pick an arrow to see its line.</p>
+		<ol class="pv-arrows">${items.join('')}</ol>
+	</section>`
 }
 
 function trailHtml(trail) {
@@ -203,18 +217,22 @@ export function projectViewHtml(view, canAsk) {
 		</section>`
 	}
 	const { look } = view
+	const open = view.openArrows ?? new Set()
 	const boxes =
 		look.boxes.length === 0
 			? '<p class="t-empty">Nothing is here at the commit checked out now.</p>'
-			: `<ul class="pv-boxes">${look.boxes.map((box, i) => boxHtml(box, i, look)).join('')}</ul>`
+			: pictureHtml(
+					look.boxes.map((box, i) => boxHtml(box, i, look)),
+					linksOf(look),
+					{ numbered: true, open },
+				)
 	return `<section class="project-view">
 		${trail}${heading}
 		${byHtml(look, canAsk)}
 		<p class="lead pv-next">${esc(look.next.line)}</p>
 		${formHtml(view)}
 		${atLine(look, view.changes)}
-		${boxes}
-		${arrowsHtml(look, view.openArrows ?? new Set())}
+		<div class="pv-level-body${look.arrows.length > 0 ? ' has-arrows' : ''}">${boxes}${arrowsHtml(look, open)}</div>
 		${moreHtml(look)}
 	</section>`
 }
