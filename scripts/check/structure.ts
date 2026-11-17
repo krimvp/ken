@@ -46,7 +46,7 @@ export const MODULES: Record<string, Module> = {
 		packages: [],
 	},
 	agent: {
-		job: 'Runs a chat with a model that explores the project and its saved sessions with read-only tools, and answers only with checked quotes.',
+		job: 'Runs a chat with a model that explores the project and its saved sessions with read-only tools, and replies in its own words with cards whose quotes passed the check.',
 		imports: ['repo', 'checks', 'diagram', 'live', 'map', 'record', 'transcripts'],
 		packages: ['aigent'],
 	},
@@ -56,7 +56,7 @@ export const MODULES: Record<string, Module> = {
 		packages: [],
 	},
 	page: {
-		job: 'The page in the browser: plain HTML, CSS and JavaScript that shows a question, its steps and its checked answer.',
+		job: 'The page in the browser: plain HTML, CSS and JavaScript that shows a thread of replies, their steps and their checked cards.',
 		imports: [],
 		packages: ['mermaid'],
 	},

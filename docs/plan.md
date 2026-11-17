@@ -8,7 +8,7 @@ The companion is a local tool that explains a software project to the one develo
 
 It is built for projects where AI agents write most of the code. The developer comes back after hours or weeks, or works beside someone else, and needs to understand the project again without reading every diff.
 
-The developer talks to it in a chat. Each answer also lands on a page as a card with the quoted code, so the page becomes the record of what the developer now understands.
+The developer talks to it in a chat. The model replies in its own words, as a colleague would, and shows a card with the quoted code for each claim that needs proof. The page keeps the chat as a thread, so it becomes the record of what the developer now understands.
 
 It is a new repository. The only code it reuses is `aigent`, the owner's agent engine, which runs the chat. It has no parser and no code index: an agent explores the code with read, search and git, and three small deterministic checks keep its claims honest.
 
@@ -116,15 +116,19 @@ When many topics have changed at once, such as after weeks away, the answer star
 
 The agent explores freely, but three things are never left to the model. None of them needs a parser.
 
-1. **Quotes are checked.** Every claim about code cites a file, a commit and the exact lines it relies on. A checker confirms that this text exists in that file at that commit. An answer with a bad quote is rejected and the agent tries again.
+1. **Quotes are checked.** Every claim about code cites a file, a commit and the exact lines it relies on. A checker confirms that this text exists in that file at that commit. A card with a bad quote goes back to the model alone, and the reader never sees it. The rest of the reply stands. The model's own words are not checked, and the page says so once, at the top of the thread.
 2. **Change facts come from git.** What changed, who changed it and when are read from git, never recalled by the model. The tool also computes whether every changed hunk in scope is covered by the explanation, and lists the ones that are not.
 3. **The stores are append-only and written through tools.** The model adds a decision, a topic or an understanding entry by calling a tool that validates it. It never rewrites a store as free text. A correction is a new entry that replaces an old one, and the old one stays readable.
 
-### An answer about a change, as built
+### A reply, as built
 
-ken asks the model in three steps, in one session. First the model explores and writes a free draft. A model that sends its answer at once skips this step. Then it turns the draft into the answer: each decision and risk carries the lines it rests on, and each point with no line to quote is left out and named for the reader. Last, a second look checks each risk against the code and the later commits on the same files. It may withdraw a risk only with a quote of the line that rules it out, and the reader still sees the withdrawn risk with that line.
+The model reads the project, then replies in its own words. It calls one tool, `show`, with the cards that need proof: claims, decisions, risks, diagrams and topics. ken checks each card alone. A turn in which the model called a reading tool is its working, and the page folds it into the steps. A turn in which it only wrote, or wrote and showed cards, is the reply, its cards after its words.
 
-Besides the quote check, ken runs these checks. An entry that says something is missing or untested names the text that would be there, and ken searches the head commit for it and refuses the entry if it finds the text. A risk that quotes the message of a commit made after the change is marked "Fixed since", and open risks come first.
+A reply about a change tells the story in a few sentences and backs the main point with a card. It says in one line whether there are decisions or risks worth a look. The reader asks for them, with two chips under the reply or in words. When risks of a change arrive, ken holds them for a second look: in the same session, the model checks each risk against the code and the later commits on the same files. It may withdraw a risk only with a quote of the line that rules it out, and the reader still sees the withdrawn risk with that line.
+
+Live notes run in a chat of their own, so a note never sits in the thread the reader talks in.
+
+Besides the quote check, ken runs these checks. An entry that says something is missing or untested names the text that would be there, and ken searches the head commit for it and refuses the entry if it finds the text. A risk that quotes the message of a commit made after the change is marked "Fixed since".
 
 ### Labels on every statement
 
@@ -257,11 +261,18 @@ The owner answered these on 2026-11-16, after the sixth round of the test.
 
 | Question                           | Answer                                                               |
 | ---------------------------------- | -------------------------------------------------------------------- |
-| The second look at risks           | It stays on by default for an answer about a change.                 |
+| The second look at risks           | It stays on by default for an answer about a change. Changed on 2026-11-17, below. |
 | Leading indentation in a quote     | The quote check stays strict about it.                               |
 | Reading saved sessions             | On by default. `KEN_SESSIONS=off` turns it off.                      |
 | own-your-diff in ken               | Not set up.                                                          |
 | The public page                    | Not published for now.                                               |
+
+The owner chose these on 2026-11-17, after saying the answers felt scripted and lacked the high level.
+
+| Question                    | Answer                                                                                                     |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| How ken replies             | Talk first. The model replies in its own words and shows a checked card only where a claim needs proof.   |
+| Decisions and risks         | Risks on ask. A reply about a change gives the story and a one-line hint; the reader asks for the rest. The second look runs on the risks when they come. |
 
 ## Out of scope for the first version
 

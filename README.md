@@ -1,16 +1,16 @@
 # ken
 
-ken explains a software project to the developer who owns it. Ask what changed, why, or how a part works now. Every decision, risk and statement in the answer comes with the exact lines it rests on, and ken looks up each quote before you see the answer. ken is built for projects where AI agents write most of the code.
+ken explains a software project to the developer who owns it. Ask what changed, why, or how a part works now. ken's model replies in its own words, and backs each claim that needs proof with a card: the exact lines it rests on, which ken looks up before you see the card. ken is built for projects where AI agents write most of the code.
 
 <img src="site/images/ken-risk-with-quotes-wide.png" width="440" alt="The question What did the last commit do, and why? Name the decisions it made and any risk I should know about. Under it, the summary from ken's model, not checked, tells the story: before a32ffb8, retry waited a fixed 200 ms between tries, so it kept hitting the API while the API was down. Now the wait doubles after each failed try, 200, 400, then 800 ms. The thing to watch is that retry still waits after the last try. Then come the line 3 risks, 1 of them serious, and the risks, heaviest first. Risk 1 is marked Quotes code outside the change and Serious: every fetchUser call where all 3 tries fail now waits about 1.4 s before it throws, up from 0.6 s. Its first quote is open and shows line 8 of src/user.ts at a32ffb8, where fetchUser calls retry. Two more quotes of src/retry.ts are folded.">
 
-Screenshot of the first view of an answer on ken's local page, about a commit in a small made-up project. The model was Claude Opus.
+Screenshot of an answer on ken's local page, about a commit in a small made-up project, taken before ken replied in its own words. The model was Claude Opus.
 
 ## What ken gives you
 
-- **Claims you can look up.** Each decision, risk and statement quotes lines of code, a commit message, or a saved session of your coding agent. ken finds every quoted line where the quote says it is. If a quote is not there, the model tries again, up to three times, and you never see the failed answer. ken checks where a quote is, not whether a sentence is true. It does not check the summary.
-- **Answers about a change.** ken asks its model for a free draft first, then for an answer that backs each decision and risk with quoted lines and lists the points it found no line for. A second look tries to rule each risk out. It can withdraw a risk only with a quote of the line that rules it out, which ken looks up, and the withdrawn risk stays in view with that line. A claim that something is missing or untested must name the missing text, and ken searches the code for it and shows the search. A risk that a later commit fixed is marked "Fixed since, in" that commit, from git, after the open ones.
-- **The first view.** An answer about a change opens on the model's story of the change, which ken does not check, then a diagram, the first three risks and up to three decisions with their reasons. The rest is one click away. Every arrow in a diagram quotes its lines.
+- **A colleague who shows the lines.** The model's words are its own, and ken does not check them. A boxed card is a claim, a decision, a risk, a diagram or a topic, with the lines of code, the commit message or the saved session it quotes. ken finds every quoted line where the quote says it is. A card with a quote that is not there goes back to the model alone, and you never see it; the rest of the reply stands. ken checks where a quote is, not whether a sentence is true. Every arrow in a diagram quotes its lines.
+- **Answers about a change.** The model tells the story of the change in a few sentences and says whether it saw decisions or risks worth a look. Ask for them with the Decisions and Risks chips under the reply. Before you see the risks, a second look tries to rule each one out. It can withdraw a risk only with a quote of the line that rules it out, which ken looks up, and the withdrawn risk stays in view with that line. A claim that something is missing or untested must name the missing text, and ken searches the code for it and shows the search. A risk that a later commit fixed is marked "Fixed since, in" that commit, from git.
+- **One thread.** The page shows your questions to one chat as one thread, and the model remembers what it said earlier in it.
 - **Answers you can find again.** Your questions and ken's answers stay on your machine, in `~/.ken/projects/<first commit>/`. The decisions, their reasons and what each piece of work did go into the project record, in `.ken/record/`, as JSON Lines files that ken only adds to. You commit the record, so a collaborator and their coding agents can read it.
 - **Where each reason comes from.** ken labels each decision from its quotes, so a model cannot mark its own guess as recorded. "Recorded" means written down at the time, in a commit message or with `ken decide`. "From the session" means quoted from a saved session. "Inferred" means the model worked it out. "Found by search" marks a link between pieces of code that rests on a text search.
 - **What waits on you.** "Waiting on you" lists the decisions a coding agent left for you, and the topics you marked as known whose code has changed since, with who changed them. Answer a decision with "Keep what was chosen" or "I want it changed". ken saves your answer and changes no code.
@@ -44,7 +44,7 @@ npm run ken -- chat
 npm run ken -- ask "What did this branch do?" --repo ../my-project --json
 ```
 
-`ask` prints the answer and exits with code 0 when the answer passed the checks. `--json` prints it as one JSON object for scripts, with the entries it added to the record under `recorded`.
+`ask` prints the reply, its words and cards in order, and exits with code 0 when there is one. `--json` prints it as one JSON object for scripts: the reply's items under `reply`, and the entries it added to the record under `recorded`.
 
 `record` shows the project record and needs no model. It lists pieces of work and decisions first. Give an id to see one entry in full, with its quotes; for a topic it also says whether the note still matches the code.
 
@@ -97,7 +97,7 @@ npm run ken -- who bo@example.com --since 14d --repo ../my-project
 npm run ken -- since 2026-11-01 --repo ../my-project
 ```
 
-`open` starts the page for the repository in the current folder, or the one you name, and opens it in your browser. It prints the address too, in case no browser opens. Press Ctrl-C to stop it. With no model set, the page still opens: it shows your earlier answers and says what to set. The page draws diagrams with Mermaid, which ken serves from its own address. Under each answer, "I know this", "Too much" and "Go deeper" update your map. The header links to "Decisions" and "Your map", to "Live" when a model is set, and to "Waiting on you" when something waits on you. The lenses sit under the question box: catch up, an area, and what changed, by one person or by everyone, in a span you pick.
+`open` starts the page for the repository in the current folder, or the one you name, and opens it in your browser. It prints the address too, in case no browser opens. Press Ctrl-C to stop it. With no model set, the page still opens: it shows your earlier answers and says what to set. The page draws diagrams with Mermaid, which ken serves from its own address. Under each reply that names a topic, "I know this", "Too much" and "Go deeper" update your map. The header links to "Decisions" and "Your map", to "Live" when a model is set, and to "Waiting on you" when something waits on you. The lenses sit under the question box: catch up, an area, and what changed, by one person or by everyone, in a span you pick.
 
 ```sh
 npm run ken -- open
@@ -160,7 +160,7 @@ flowchart LR
   agent -->|sends the code and session text it reads to| provider
   agent -->|reads| repo
   agent -->|reads| sessions
-  agent -->|sends the answer to| checks
+  agent -->|sends each card to| checks
   checks -->|adds what passed to| record
   record -->|is read before each question by| agent
 ```
