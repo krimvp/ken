@@ -68,12 +68,13 @@ function stepOf(step: unknown): Step {
 
 // The page's old order: the summary, the diagrams, then for a change the risks, the decisions and what it did, and
 // for any other question the decisions, the risks and the statements, then the withdrawn risks, the points left out,
-// and the note.
+// and the note. The decisions that need the owner come first.
 function replyOf(old: OldAnswer, note: string, decisions: Decision[]): Reply {
 	const card = (each: Card): Item => ({ kind: 'card', card: each })
 	const words = (text: string): Item[] => (text.trim() === '' ? [] : [{ kind: 'words', text: text.trim() }])
 	const risks = (old.risks ?? []).map((risk) => card({ kind: 'risk', risk: unmarked(risk) }))
-	const decided = decisions.map((decision) => card({ kind: 'decision', decision }))
+	const ordered = [...decisions.filter((each) => each.needsOwner), ...decisions.filter((each) => !each.needsOwner)]
+	const decided = ordered.map((decision) => card({ kind: 'decision', decision }))
 	const claims = old.statements.map((claim) => card({ kind: 'claim', claim }))
 	const left = old.leftOutPoints ?? []
 	const items = [
