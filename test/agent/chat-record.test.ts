@@ -183,3 +183,19 @@ test('a decision may name a topic the same call sends, and goes back with it whe
 		[[waits.question, TOPIC.name]],
 	)
 })
+
+test('work sent with no claim tells the model that the piece of work needs one, and a claim sent after stores it', async () => {
+	const directory = freshRepository()
+	const { events, requests } = await ask(
+		[
+			{ tool: 'ken__show', args: { scope: { base, head }, work: { title: 'Retries wait' }, decisions: [DECISION] } },
+			{ tool: 'ken__show', args: { claims: [STATEMENT] } },
+			{ text: 'Retries wait.' },
+		],
+		directory,
+	)
+
+	assert.match(toolResults(requests[1])[0] ?? '', /at least one claim/)
+	const work = replyIn(events).recorded.find((entry) => entry.kind === 'work')
+	assert.equal(work?.kind === 'work' && work.title, 'Retries wait')
+})

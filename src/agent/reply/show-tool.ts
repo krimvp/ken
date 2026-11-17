@@ -89,7 +89,10 @@ export function showTool(gate: Gate, round: () => Round): Tool {
 			}
 			const context = contextOf(gate, current)
 			// Topics are checked first, so a card may name a topic of this call only once that topic has passed.
-			const known = [...(await topicNames(gate.store)), ...topicsShown(current)]
+			const known = [
+				...(await topicNames(gate.store)),
+				...cardsShown(current).flatMap((card) => (card.kind === 'topic' ? [card.topic.name] : [])),
+			]
 			const drafts = draftsOf(raw).map((draft, at) => ({ ...draft, at }))
 			const topicsFirst = [...drafts].sort((a, b) => Number(b.kind === 'topic') - Number(a.kind === 'topic'))
 			const passed: Card[] = []
@@ -154,6 +157,11 @@ export function showTool(gate: Gate, round: () => Round): Tool {
 					? [`The reply is about ${short(current.scope.range.base)}..${short(current.scope.range.head)}.`]
 					: []),
 			]
+			if (current.scope?.work && !cardsShown(current).some((card) => card.kind === 'claim')) {
+				lines.push(
+					`ken stores the piece of work "${current.scope.work}" only with at least one claim, and this reply shows none yet.`,
+				)
+			}
 			const fix = lines.some((line) => line.includes('sent back'))
 				? ['Fix a card that came back and send it again, or say the point in words and say you could not quote it.']
 				: []
@@ -196,9 +204,8 @@ async function topicNames(store: RecordStore): Promise<string[]> {
 	return (await store.read()).current.flatMap((entry) => (entry.kind === 'topic' ? [entry.name] : []))
 }
 
-function topicsShown(current: Round): string[] {
-	const cards = [...current.items.flatMap((item) => (item.kind === 'card' ? [item.card] : [])), ...current.pending]
-	return cards.flatMap((card) => (card.kind === 'topic' ? [card.topic.name] : []))
+function cardsShown(current: Round): Card[] {
+	return [...current.items.flatMap((item) => (item.kind === 'card' ? [item.card] : [])), ...current.pending]
 }
 
 type ReadQuote = (raw: JsonObject) => Quote
