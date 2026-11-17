@@ -5,7 +5,14 @@
 import { createHash } from 'node:crypto'
 import type { JsonObject, JsonValue, Tool } from 'aigent/plugin'
 import type { ChangedHunk, Quote, QuoteSources } from '../../checks/index.ts'
-import { CARDINALITIES, DIAGRAM_BOUNDS, DIAGRAM_KINDS, type DiagramDraft } from '../../diagram/index.ts'
+import {
+	CARDINALITIES,
+	DIAGRAM_BOUNDS,
+	DIAGRAM_KINDS,
+	type DiagramDraft,
+	LAYOUT_BOUNDS,
+	type LayoutDraft,
+} from '../../diagram/index.ts'
 import type { UnderstandingMap } from '../../map/index.ts'
 import { RECORD_LIMITS, type RecordStore, sameName, textProblem, UNDO } from '../../record/index.ts'
 import { type Range, type Repository, resolveRange } from '../../repo/index.ts'
@@ -67,7 +74,7 @@ export function showTool(gate: Gate, round: () => Round): Tool {
 	return {
 		name: 'show',
 		description:
-			'Show the reader cards that prove what you say: claims, decisions, risks, diagrams and topics, each with the exact lines it rests on. ken checks each card alone against git and shows it after the words you write in this turn. A card that fails comes back with its problems, and the reader sees nothing of it. Every field is optional.',
+			'Show the reader cards that prove what you say: claims, decisions, risks, diagrams, topics and the parts of the project, each with the exact lines it rests on. ken checks each card alone against git and shows it after the words you write in this turn. A card that fails comes back with its problems, and the reader sees nothing of it. Every field is optional.',
 		parameters: PARAMETERS,
 		async execute(args, ctx) {
 			const current = round()
@@ -238,7 +245,42 @@ function draftsOf(
 		...each('decisions', 'Decision', 'decision', (one, quote) => ({ kind: 'decision', draft: decisionOf(one, quote) })),
 		...each('risks', 'Risk', 'risk', (one, quote) => ({ kind: 'risk', draft: claimOf(one, 'show risk', quote) })),
 		...each('topics', 'Topic', 'topic', (one, quote) => ({ kind: 'topic', draft: topicOf(one, quote) })),
+		...(raw.layout === undefined
+			? []
+			: [
+					{
+						kind: 'layout' as const,
+						where: 'The layout',
+						parse: (problems: string[]) => ({
+							kind: 'layout' as const,
+							draft: layoutOf(objectOf(raw.layout), (quote) => quoteOf(quote, problems), problems),
+						}),
+					},
+				]),
 	]
+}
+
+function layoutOf(raw: JsonObject, quoteOf: ReadQuote, problems: string[]): LayoutDraft {
+	const layout = readArgs(raw, 'show layout')
+	const texts = (value: JsonValue | undefined) => (isList(value) ? value.map(String) : [])
+	return {
+		within: texts(raw.within),
+		at: layout.optionalText('at'),
+		parts: listOf(raw.parts).map((each) => {
+			const part = readArgs(each, 'show part')
+			return { name: part.text('name'), job: part.text('job'), paths: texts(each.paths) }
+		}),
+		arrows: optionalList(raw.arrows).map((each) => {
+			const arrow = readArgs(each, 'show arrow')
+			const quotes = listOf(each.quotes).flatMap((one) => {
+				const quote = quoteOf(one)
+				if (!('session' in quote)) return [quote]
+				problems.push('An arrow between parts quotes a file of the project, never a saved session.')
+				return []
+			})
+			return { from: arrow.text('from'), to: arrow.text('to'), text: arrow.text('text'), quotes }
+		}),
+	}
 }
 
 function topicOf(raw: JsonObject, quoteOf: ReadQuote) {
@@ -653,6 +695,61 @@ const DIAGRAM_SCHEMA = {
 	additionalProperties: false,
 } as const
 
+const LAYOUT_SCHEMA = {
+	type: 'object',
+	description:
+		"Give it when the reader asks for the main parts of the project or of one folder. One level of the project's layout: the parts the reader would name, what each does, and which part uses which. ken checks every path and arrow, keeps the level, and shows it in the Project view.",
+	properties: {
+		within: {
+			type: 'array',
+			description: 'The paths this level shows the inside of, as ken gave them. An empty list for the whole project.',
+			items: { type: 'string' },
+		},
+		at: { type: 'string', description: 'The commit you read. HEAD when left out.' },
+		parts: {
+			type: 'array',
+			description: `${LAYOUT_BOUNDS.fewest} to ${LAYOUT_BOUNDS.parts} parts. No two share a file.`,
+			items: {
+				type: 'object',
+				properties: {
+					name: {
+						type: 'string',
+						description: `What the reader would call it, such as "Chat engine", at most ${LAYOUT_BOUNDS.name} characters`,
+					},
+					job: {
+						type: 'string',
+						description: `What it does, in one line of at most ${LAYOUT_BOUNDS.job} characters`,
+					},
+					paths: {
+						type: 'array',
+						description: 'The folders and files it holds, each inside within',
+						items: { type: 'string' },
+					},
+				},
+				required: ['name', 'job', 'paths'],
+				additionalProperties: false,
+			},
+		},
+		arrows: {
+			type: 'array',
+			description: `At most ${LAYOUT_BOUNDS.arrows}: which part uses which. Each rests on lines from a file of the part it starts at that name a folder or file of the part it ends at, as an import line does. Leave out an arrow you cannot quote that way.`,
+			items: {
+				type: 'object',
+				properties: {
+					from: { type: 'string', description: 'The name of the part that uses the other' },
+					to: { type: 'string', description: 'The name of the part it uses' },
+					text: { type: 'string', description: 'A short verb, such as "calls", "reads" or "serves"' },
+					quotes: { type: 'array', items: QUOTE },
+				},
+				required: ['from', 'to', 'text', 'quotes'],
+				additionalProperties: false,
+			},
+		},
+	},
+	required: ['within', 'parts'],
+	additionalProperties: false,
+} as const
+
 const SHOW_SCHEMA = {
 	type: 'object',
 	properties: {
@@ -685,6 +782,7 @@ const SHOW_SCHEMA = {
 			items: DIAGRAM_SCHEMA,
 		},
 		topics: { type: 'array', description: 'Parts of the project the reply explains', items: TOPIC_SCHEMA },
+		layout: LAYOUT_SCHEMA,
 	},
 	additionalProperties: false,
 } as const

@@ -19,7 +19,7 @@ import {
 	type VerifiedQuote,
 	verifyQuote,
 } from '../../checks/index.ts'
-import { checkDiagram, type DiagramDraft, diagramElements } from '../../diagram/index.ts'
+import { checkDiagram, checkLayout, type DiagramDraft, diagramElements, type LayoutDraft } from '../../diagram/index.ts'
 import { RECORD_LIMITS, textProblem, type Undo } from '../../record/index.ts'
 import type { CommitHash, Range, Repository } from '../../repo/index.ts'
 import type { Card, Change, Item, Weight } from './reply.ts'
@@ -51,6 +51,7 @@ export type CardDraft =
 	| { kind: 'claim' | 'risk'; draft: ClaimDraft }
 	| { kind: 'decision'; draft: DecisionDraft }
 	| { kind: 'diagram'; draft: DiagramDraft }
+	| { kind: 'layout'; draft: LayoutDraft }
 	| { kind: 'topic'; draft: TopicDraft }
 
 // What a card is checked against. change is the range the reply is about, or null. hunks are all the hunks it changed,
@@ -120,6 +121,11 @@ export async function checkCard(
 			if (checked.kind === 'refused') return checked
 			return { kind: 'ok', card: { kind: 'diagram', diagram: checked.diagram } }
 		}
+		case 'layout': {
+			const checked = await checkLayout(sources.repo, draft, where, signal)
+			if (checked.kind === 'refused') return checked
+			return { kind: 'ok', card: { kind: 'layout', layout: checked.layout } }
+		}
 		case 'topic': {
 			if (draft.quotes.some((quote) => 'session' in quote || quote.path === null)) {
 				problems.push(`${where}: a topic rests on lines of files. Give each quote its path and commit.`)
@@ -165,6 +171,7 @@ function limitProblems(card: CardDraft): string[] {
 			counts.push(['', card.draft.quotes.length])
 			break
 		case 'diagram':
+		case 'layout':
 			break
 		default:
 			return card satisfies never
@@ -190,6 +197,8 @@ export function quotesOf(items: Item[]): VerifiedGitQuote[] {
 				return gitQuotes([...card.decision.quotes, ...(card.decision.reason?.quotes ?? [])])
 			case 'diagram':
 				return diagramElements(card.diagram).flatMap((element) => element.quotes)
+			case 'layout':
+				return card.layout.arrows.flatMap((arrow) => arrow.quotes)
 			case 'topic':
 				return card.topic.quotes
 			case 'withdrawn':

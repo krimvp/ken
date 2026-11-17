@@ -71,6 +71,13 @@ export function itemsOf(thread) {
 					return [{ key, kind: 'topic', item: { text: card.topic.name, quotes: card.topic.quotes }, q }]
 				case 'withdrawn':
 					return [{ key, kind: 'withdrawn', item: { text: card.withdrawn.risk.text, quotes: card.withdrawn.proof }, q }]
+				case 'layout':
+					return card.layout.arrows.map((arrow, n) => ({
+						key: `${key}a${n}`,
+						kind: 'arrow',
+						item: arrowItem(arrow),
+						q,
+					}))
 				case 'diagram':
 					return card.diagram.elements
 						.filter((element) => element.quotes.length > 0)
@@ -176,6 +183,7 @@ const CARD_RENDERERS = {
 	risk: (card, key, rows) => claimHtml(card.risk, key, rows, 'Risk'),
 	decision: (card, key, rows) => decisionCardHtml(card.decision, key, rows),
 	diagram: (card, _key, rows, id) => diagramHtml(card.diagram, id, rows),
+	layout: (card, key, rows) => layoutCardHtml(card.layout, key, rows),
 	topic: (card, key, rows) =>
 		`<p class="card-text"><span class="card-kind">Topic</span> <strong>${prose(card.topic.name)}</strong> rests on these lines.</p>${quoteRows(card.topic.quotes, key, rows)}`,
 	withdrawn: (card, key, rows) => {
@@ -184,6 +192,27 @@ const CARD_RENDERERS = {
 			<p class="small"><span class="d-field">Why it was withdrawn</span> ${prose(reason)}</p>
 			${quoteRows(proof, key, rows)}`
 	},
+}
+
+export function arrowItem(arrow) {
+	return { text: `${arrow.from} ${arrow.text} ${arrow.to}`, quotes: arrow.quotes }
+}
+
+// A level of the project's parts that the model named: each part and its job, then each arrow with the lines it rests
+// on. The Project view shows the same level as boxes.
+function layoutCardHtml(layout, key, rows) {
+	const where =
+		layout.within.length === 0 ? 'the whole project' : list(layout.within.map((p) => `<code>${esc(p)}</code>`))
+	const parts = layout.parts.map((part) => `<li><strong>${prose(part.name)}</strong> ${prose(part.job)}</li>`).join('')
+	const arrows = layout.arrows
+		.map(
+			(arrow, n) =>
+				`<li><p class="card-text">${prose(arrowItem(arrow).text)}</p>${quoteRows(arrow.quotes, `${key}a${n}`, rows)}</li>`,
+		)
+		.join('')
+	return `<p class="card-text"><span class="card-kind">Parts</span> The parts of ${where}, as ken's model named them. ken keeps them for the Project view.</p>
+		<ul class="layout-parts">${parts}</ul>
+		${arrows === '' ? '' : `<ul class="layout-arrows">${arrows}</ul>`}`
 }
 
 function cardHtml(card, t, j, rows) {

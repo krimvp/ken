@@ -8,7 +8,7 @@
 // a reply that cites a commit the project's own git cannot find adds nothing to the project record. The reader's
 // history keeps it, decisions and all.
 import type { Quote, VerifiedQuote } from '../../checks/index.ts'
-import { diagramDraft } from '../../diagram/index.ts'
+import { diagramDraft, layoutDraft } from '../../diagram/index.ts'
 import {
 	type EntryDraft,
 	type EntryId,
@@ -41,7 +41,12 @@ export async function recordReply(
 	signal: AbortSignal,
 ): Promise<Recorded> {
 	const cards = items.flatMap((item) => (item.kind === 'card' ? [item.card] : []))
-	const commits = new Set([...quotesOf(items).map((quote) => quote.commit), ...(scope ? [scope.range.head] : [])])
+	const named = cards.flatMap((card) => (card.kind === 'layout' ? [card.layout.drawnAt] : []))
+	const commits = new Set([
+		...quotesOf(items).map((quote) => quote.commit),
+		...(scope ? [scope.range.head] : []),
+		...named,
+	])
 	for (const commit of commits) {
 		if ((await project.resolve(commit, signal)).kind !== 'ok') return { kind: 'draft' }
 	}
@@ -107,6 +112,15 @@ export async function recordReply(
 			topic: decision.topic ?? undefined,
 			...(decision.absent && { absent: decision.absent }),
 		})
+	}
+	// A new level of the same paths replaces the one before. The record keeps both, so an old commit can still use it.
+	for (const card of cards) {
+		if (card.kind !== 'layout') continue
+		const { within } = card.layout
+		const before = [...(await store.read()).current, ...pending].findLast(
+			(entry) => entry.kind === 'layout' && entry.within.join('\n') === within.join('\n'),
+		)
+		await add('The layout', { kind: 'layout', ...layoutDraft(card.layout), replaces: before?.id })
 	}
 	if (drafts.length === 0) return { kind: 'recorded', entries: [], problems }
 	const appended = await store.append(drafts, signal)
@@ -176,6 +190,7 @@ function topicsOf(item: Item): string[] {
 		case 'topic':
 			return [card.topic.name]
 		case 'diagram':
+		case 'layout':
 		case 'withdrawn':
 			return []
 		default:

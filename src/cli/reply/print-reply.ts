@@ -83,6 +83,17 @@ export function formatCard(card: Card, paint: Paint): string {
 			return [`${checked} Decision: ${decisionLines(card.decision, paint).join('\n')}`].join('\n')
 		case 'diagram':
 			return [checked, ...formatDiagram(card.diagram, paint)].join('\n')
+		case 'layout': {
+			const { within, parts, arrows } = card.layout
+			return [
+				`${checked} The parts of ${within.length === 0 ? 'the whole project' : within.join(', ')}, named by ken's model:`,
+				...parts.map((part) => `   ${part.name} (${part.places.map((place) => place.path).join(', ')}): ${part.job}`),
+				...arrows.flatMap((arrow) => [
+					`   ${arrow.from} ${arrow.text} ${arrow.to}`,
+					...arrow.quotes.flatMap((quote) => formatQuote(quote, paint)),
+				]),
+			].join('\n')
+		}
 		case 'topic':
 			return [
 				`${checked} Topic: ${card.topic.name}`,

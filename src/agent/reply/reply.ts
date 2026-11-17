@@ -10,7 +10,7 @@ import type {
 	VerifiedGitQuote,
 	VerifiedQuote,
 } from '../../checks/index.ts'
-import type { Diagram } from '../../diagram/index.ts'
+import type { Diagram, Layout } from '../../diagram/index.ts'
 import type { Decision, Statement } from '../../record/index.ts'
 import type { Commit, CommitHash } from '../../repo/index.ts'
 
@@ -24,18 +24,20 @@ export type Reply = {
 export type Item = { kind: 'words'; text: string } | { kind: 'card'; card: Card }
 
 // Every kind of card, listed once. The page has a renderer for each, and a test holds it to this list.
-export const CARD_KINDS = ['claim', 'risk', 'decision', 'diagram', 'topic', 'withdrawn'] as const
+export const CARD_KINDS = ['claim', 'risk', 'decision', 'diagram', 'layout', 'topic', 'withdrawn'] as const
 export type CardKind = (typeof CARD_KINDS)[number]
 
 // A topic card names a part of the project, with the lines it rests on and the model's note. The reply adds it to the
 // record when it ends, unless the record refuses it or the reply quotes uncommitted work. replaces is the id of the
 // record's topic it updates, or null.
+// A layout card is a level of the project's parts, which the reply adds to the record when it ends, as it does a topic.
 // A withdrawn card is a risk the second look took out, with the lines that rule it out.
 export type Card =
 	| { kind: 'claim'; claim: Claim }
 	| { kind: 'risk'; risk: Risk }
 	| { kind: 'decision'; decision: Decision }
 	| { kind: 'diagram'; diagram: Diagram }
+	| { kind: 'layout'; layout: Layout }
 	| { kind: 'topic'; topic: { name: string; note: string; quotes: VerifiedGitQuote[]; replaces: string | null } }
 	| { kind: 'withdrawn'; withdrawn: Withdrawn }
 

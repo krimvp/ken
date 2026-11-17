@@ -290,6 +290,7 @@ const TITLES = {
 	decision: 'A decision',
 	topic: 'A topic',
 	withdrawn: 'A withdrawn risk',
+	arrow: 'An arrow between parts',
 }
 
 function titleOf({ kind, item }) {

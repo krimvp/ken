@@ -62,6 +62,22 @@ const SAMPLES: { [K in CardKind]: { card: Extract<Card, { kind: K }>; text: stri
 		},
 		text: 'What retry does between attempts',
 	},
+	layout: {
+		card: {
+			kind: 'layout',
+			layout: {
+				kind: 'layout',
+				within: [],
+				drawnAt: quote.commit,
+				parts: [
+					{ name: 'Retry loop', job: 'tries a call again after a wait', places: [] },
+					{ name: 'Clock', job: 'waits', places: [] },
+				],
+				arrows: [{ from: 'Retry loop', to: 'Clock', text: 'sleeps on', quotes: [quote] }],
+			},
+		},
+		text: 'tries a call again after a wait',
+	},
 	topic: {
 		card: { kind: 'topic', topic: { name: 'retry logic', note: 'retry sleeps.', quotes: [quote], replaces: null } },
 		text: 'retry logic',
