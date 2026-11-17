@@ -6,6 +6,8 @@ export {
 	type LensFacts,
 	type LensQuestion,
 	openQuestion,
+	type PartsLevel,
+	partsQuestion,
 	personLens,
 	rangeLens,
 	rangeQuestion,

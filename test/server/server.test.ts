@@ -638,3 +638,55 @@ test('the layout comes from git with no model: the query picks the commit, and a
 	assert.equal(changes[0].name, 'Uncommitted work')
 	assert.equal((await send(server, '/api/layout?at=nope').response).status, 400)
 })
+
+test('"Ask ken to name these parts" sends the folder split to the model, and the parts it names then show in the layout with no model', async () => {
+	const { root: repo } = buildRepository([
+		{
+			message: 'feat: start',
+			files: {
+				'src/server/serve.ts': "import { answer } from '../agent/answer.ts'\n",
+				'src/agent/answer.ts': 'export function answer() {}\n',
+			},
+		},
+	])
+	const layout = {
+		within: ['src'],
+		parts: [
+			{ name: 'Server', job: 'serves the page', paths: ['src/server'] },
+			{ name: 'Chat engine', job: 'answers questions', paths: ['src/agent'] },
+		],
+		arrows: [
+			{
+				from: 'Server',
+				to: 'Chat engine',
+				text: 'asks',
+				quotes: [{ path: 'src/server/serve.ts', commit: 'HEAD', text: "import { answer } from '../agent/answer.ts'" }],
+			},
+		],
+	}
+	const model = await scriptedModel([{ tool: 'ken__show', text: 'Two parts.', args: { layout } }, { text: '' }])
+	const server = await open(tempFolder('ken-home-'), model.baseUrl, repo)
+	const before = (await json(server, '/api/layout?within=src')).look
+	assert.equal(before.named, null)
+
+	const { status, text } = await send(server, '/api/questions', { body: { lens: { kind: 'parts', within: ['src'] } } })
+		.response
+	assert.equal(status, 200, text)
+	const toModel = questionPrompt(model.requests[0])
+	for (const shown of ['agent (src/agent, 1 file)', 'server (src/server, 1 file)', '["src"]']) {
+		assert.ok(toModel.includes(shown), `the model starts from ${shown}: ${toModel}`)
+	}
+
+	const { look } = await json(server, '/api/layout?within=src')
+	assert.deepEqual(
+		look.boxes.map((box: { name: string; job: string }) => [box.name, box.job]),
+		[
+			['Server', 'serves the page'],
+			['Chat engine', 'answers questions'],
+		],
+	)
+	assert.deepEqual(
+		look.arrows.map((arrow: { from: string; text: string; to: string }) => [arrow.from, arrow.text, arrow.to]),
+		[['Server', 'asks', 'Chat engine']],
+	)
+})

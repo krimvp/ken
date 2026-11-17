@@ -150,6 +150,49 @@ export function rangeQuestion(range: TimeRange, record: RecordRead, userEmail: s
 	}
 }
 
+// "Ask ken to name these parts" and "Name them again" in the Project view. The level as the reader sees it now is the
+// starting point, and the rules are those show's layout is checked against, so the model can pass the check first time.
+export type PartsLevel = {
+	within: string[]
+	head: string
+	bounds: { fewest: number; parts: number; arrows: number }
+	boxes: { name: string; paths: string[]; files: number; job: string | null; state: 'same' | 'changed' | 'gone' }[]
+	named: { drawnAt: string; added: string[] } | null
+	loose: string[]
+}
+
+export function partsQuestion(level: PartsLevel): LensQuestion {
+	const { within, head, bounds, boxes, named } = level
+	const where = within.length === 0 ? 'this project' : within.join(', ')
+	const box = (each: PartsLevel['boxes'][number]) =>
+		`${each.name} (${each.paths.join(', ')}, ${each.files === 1 ? '1 file' : `${each.files} files`})${each.job ? `: ${each.job}` : ''}`
+	const changed = boxes.filter((each) => each.state !== 'same').map((each) => each.name)
+	const moved = [
+		...(changed.length > 0 ? [`${changed.join(', ')} changed since then`] : []),
+		...(named && named.added.length > 0 ? [`${named.added.join(', ')} is new and in no part`] : []),
+	]
+	const shown = named
+		? [
+				`- ken's model named these parts at ${short(named.drawnAt)}: ${boxes.map(box).join('; ')}.`,
+				...(moved.length > 0 ? [`- Since then: ${moved.join('; ')}.`] : []),
+			]
+		: [`- ken splits it by folder now: ${boxes.map(box).join('; ')}.`]
+	return {
+		text: [
+			`${named ? 'Name again' : 'Name'} the main parts of ${where}`,
+			LIST_SAID,
+			...shown,
+			...(level.loose.length > 0 ? [`- In no part now: ${level.loose.join(', ')}.`] : []),
+			'',
+			`Read the code at HEAD (${head}), then call show with layout, and within set to ${JSON.stringify(within)}.`,
+			`Group the paths into ${bounds.fewest} to ${bounds.parts} parts the owner would name. Give each a short name, one line on its job, and the folders or files it holds, each inside within. No two parts share a file. Leave out what is not code if it does not help, such as docs; ken lists it as in no part.`,
+			`Add at most ${bounds.arrows} arrows for which part uses which, each with a short verb. Each arrow quotes lines from a file of the part it starts at that name a folder or file of the part it ends at: an import line does. Leave out an arrow you cannot quote that way.`,
+			'Then say in two or three sentences how the parts fit together.',
+		].join('\n'),
+		empty: false,
+	}
+}
+
 export function sinceWords(since: Since): string {
 	if (since.kind === 'days') return since.days === 1 ? 'in the last day' : `in the last ${since.days} days`
 	if (since.kind === 'day') return `since ${since.day}`

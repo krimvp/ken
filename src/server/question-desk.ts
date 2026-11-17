@@ -1,8 +1,17 @@
 import { randomUUID } from 'node:crypto'
 import { type Chat, type ChatEvent, firstWords, type Item, type Reply } from '../agent/index.ts'
-import { drawn } from '../diagram/index.ts'
-import { type LensFacts, onDay, openItems, personLens, rangeLens, topicQuestion } from '../follow-up/index.ts'
+import { drawn, LAYOUT_BOUNDS } from '../diagram/index.ts'
+import {
+	type LensFacts,
+	onDay,
+	openItems,
+	partsQuestion,
+	personLens,
+	rangeLens,
+	topicQuestion,
+} from '../follow-up/index.ts'
 import { entryFrom, type History, type HistoryEntry, whyNoNote } from '../history/index.ts'
+import { type LayoutSources, lookAtLayout, readLayoutAsk } from '../layout/index.ts'
 import type { About } from '../live/index.ts'
 import { areaQuestion, catchUpQuestion, deeperQuestion, type TopicState, type UnderstandingMap } from '../map/index.ts'
 import { type RecordStore, sameName } from '../record/index.ts'
@@ -56,7 +65,13 @@ export type QuestionLine =
 
 // Runs the page's questions and live mode's notes one model run at a time, and keeps each in the reader's history,
 // together with what it ended in. A question asked while a note runs waits for it; a second question is refused.
-export function questionDesk(history: History, record: RecordStore, repo: Repository, map: UnderstandingMap) {
+export function questionDesk(
+	history: History,
+	record: RecordStore,
+	repo: Repository,
+	map: UnderstandingMap,
+	layout: LayoutSources,
+) {
 	let running: { stop: AbortSignal; done: Promise<void> } | null = null
 	let questions = 0
 	let holder: 'question' | 'note' | null = null
@@ -269,6 +284,18 @@ export function questionDesk(history: History, record: RecordStore, repo: Reposi
 			const said = firstWords(note.reply.items, NOTE_CHARS)
 			return { kind: 'ok', text: deeperOnNote(note.about, note.askedAt, said, commits) }
 		}
+		if (kind === 'parts') {
+			const within = fieldOf(lens, 'within')
+			const paths = Array.isArray(within) ? within.map(String) : []
+			// The model names parts at HEAD, so the starting point is the level at HEAD whatever commit the page shows.
+			const ask = await readLayoutAsk(layout, { within: paths })
+			if (ask.kind !== 'ok') return { kind: 'refused', problem: ask.message }
+			const look = await lookAtLayout(layout, ask.ask, new Date())
+			return {
+				kind: 'ok',
+				text: partsQuestion({ ...look, within: ask.ask.within, bounds: LAYOUT_BOUNDS }).text,
+			}
+		}
 		if (kind === 'topic') {
 			const { record: read, states } = await lensFacts()
 			const open = (await openItems(repo, read, states)).topics.find(({ state }) =>
@@ -283,7 +310,7 @@ export function questionDesk(history: History, record: RecordStore, repo: Reposi
 		if (kind !== 'deeper' || names.length === 0 || names.length > MAX_TOPICS || typeof asked !== 'string') {
 			return {
 				kind: 'refused',
-				problem: 'Send a question, or a lens: catch-up, area with a path, deeper, person, range, topic or note.',
+				problem: 'Send a question, or a lens: catch-up, area with a path, deeper, parts, person, range, topic or note.',
 			}
 		}
 		await map.learn('deeper', names, new Date())

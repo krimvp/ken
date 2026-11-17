@@ -63,8 +63,9 @@ export async function openProject(options: {
 	} else {
 		model = config
 	}
-	const desk = questionDesk(history, record, repo, map)
 	const withSnapshots = gitRepository(root, { alternate: store.objects })
+	const layout = { root, repo: withSnapshots, snapshots: store, record, map }
+	const desk = questionDesk(history, record, repo, map, layout)
 	const live = notes && liveRunner({ root, project: repo, withSnapshots, store, sessions, desk, chat: notes })
 	const shown = root.startsWith(`${homedir()}${path.sep}`) ? `~${root.slice(homedir().length)}` : root
 
@@ -75,6 +76,5 @@ export async function openProject(options: {
 		await notes?.close()
 	}
 
-	const layout = { root, repo: withSnapshots, snapshots: store, record, map }
 	return { kind: 'ok', project: { root, shown, repo, history, record, map, layout, model, desk, live, close } }
 }
