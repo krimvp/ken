@@ -2781,7 +2781,7 @@ button.pv-box:hover .pv-inside {
 
 @media (min-width: 760px) {
 	.change-card .pv-picture {
-		padding: var(--space-5) var(--space-5) var(--space-7);
+		padding: var(--space-7) var(--space-5);
 	}
 
 	.change-card .pv-picture .pv-boxes {
