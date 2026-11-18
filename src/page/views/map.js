@@ -128,7 +128,7 @@ function topicHtml(t, canAsk) {
 		...(understood ? [] : [button('map-topic-know', 'I know this')]),
 		...(changed && canAsk ? [withCost(button('explain-topic', 'Explain what changed'))] : []),
 	]
-	return `<li class="t-row t-${t.kind}">
+	return `<li class="t-row c-card t-${t.kind} ${partClass(t.topic)}">
 		<p class="t-head"><span class="t-name part-name ${partClass(t.topic)}">${topic}</span> <span class="t-state">${STATE[t.kind]}</span></p>
 		<p class="t-how small">${how}</p>
 		${lines}
@@ -154,7 +154,10 @@ export function mapViewHtml(map, canAsk, said) {
 		${met.length === 0 ? '<p class="t-empty">You have not met any topic yet. Ask how a part of the project works, then press "I know this" under the answer.</p>' : `<ul class="t-list">${met.map((t) => topicHtml(t, canAsk)).join('')}</ul>`}
 		${unmet.length === 0 ? '' : `<p class="t-unmet"><strong>Not met yet:</strong> ${list(unmet.map((t) => esc(t.topic)))}.</p>`}
 		${problems}
-		<p class="map-foot small muted">The map is a plain file on this computer, outside the project: <code>${esc(map.file)}</code>. Each button adds a line to it, and you can add one by hand: ken reads the newest line for each topic. Run <code>ken map</code> in a terminal to see each topic's id and an example line.</p>
+		<details class="map-foot small">
+			<summary class="map-foot-toggle">Where ken keeps your map</summary>
+			<p class="map-foot-text muted">The map is a plain file on this computer, outside the project: <code>${esc(map.file)}</code>. Each button adds a line to it, and you can add one by hand: ken reads the newest line for each topic. Run <code>ken map</code> in a terminal to see each topic's id and an example line.</p>
+		</details>
 	</section>`
 }
 
