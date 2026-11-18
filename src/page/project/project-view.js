@@ -171,10 +171,10 @@ function byHtml(look, canAsk) {
 function tourHtml(look, trail, canAsk) {
 	if (!look.tour || look.at !== look.head || !canAsk) return ''
 	const first = look.tour[0]?.name
-	const where = trail.length === 1 ? 'the project' : 'this part'
+	const where = trail.length === 1 ? 'the project' : esc(trail.at(-1).name)
 	return `<div class="pv-tour">
 		<button class="primary" data-act="tour" data-key="pv-tour">Show me around</button>
-		<p class="pv-tour-line">ken's model explains ${where} one part at a time, in ${look.tour.length} stops, starting at ${esc(first)}.</p>
+		<p class="pv-tour-line">ken's model walks you through the parts of ${where} one at a time, in ${look.tour.length} stops, starting at ${esc(first)}.</p>
 	</div>`
 }
 
