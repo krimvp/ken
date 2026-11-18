@@ -39,12 +39,26 @@ function costOf(cells, links, degree, middle) {
 	for (const [i, cell] of cells.entries()) {
 		cost += COST.offCenter * degree[i] * (Math.abs(cell.col - middle.col) + 0.5 * Math.abs(cell.row - middle.row))
 	}
-	const segments = links.map(([a, b]) => [center(cells[a]), center(cells[b]), a, b])
-	for (const [p, q, a, b] of segments) {
-		cost += Math.hypot(q.x - p.x, q.y - p.y)
+	// An arrow between two boxes of one row with a box between them goes around the outside of the picture, so it
+	// crosses nothing and pays its length and one step more.
+	const around = ([a, b]) =>
+		cells[a].row === cells[b].row &&
+		cells.some(
+			(cell, k) => k !== a && k !== b && cell.row === cells[a].row && between(cell.col, cells[a].col, cells[b].col),
+		)
+	const segments = []
+	for (const [a, b] of links) {
+		const [p, q] = [center(cells[a]), center(cells[b])]
+		const length = Math.hypot(q.x - p.x, q.y - p.y)
+		if (around([a, b])) {
+			cost += length + 1
+			continue
+		}
+		cost += length
 		for (const [k, cell] of cells.entries()) {
 			if (k !== a && k !== b && crossesBox(p, q, cell)) cost += COST.through
 		}
+		segments.push([p, q, a, b])
 	}
 	for (const [i, [p, q, a, b]] of segments.entries()) {
 		for (const [r, s, c, d] of segments.slice(i + 1)) {
@@ -52,6 +66,10 @@ function costOf(cells, links, degree, middle) {
 		}
 	}
 	return cost
+}
+
+function between(x, a, b) {
+	return x > Math.min(a, b) && x < Math.max(a, b)
 }
 
 function center(cell) {
@@ -69,9 +87,13 @@ function crossesBox(p, q, cell) {
 	return false
 }
 
+// Two segments cross when each has the other's ends on its two sides. One that runs through the other's end counts too,
+// as a diagonal through the middle of a vertical does.
 function crosses(p, q, r, s) {
 	const turn = (a, b, c) => Math.sign((b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x))
-	return turn(p, q, r) * turn(p, q, s) < 0 && turn(r, s, p) * turn(r, s, q) < 0
+	const [t1, t2, t3, t4] = [turn(p, q, r), turn(p, q, s), turn(r, s, p), turn(r, s, q)]
+	if (t1 === 0 && t2 === 0) return false
+	return t1 * t2 <= 0 && t3 * t4 <= 0
 }
 
 // cells are the boxes, each as the HTML inside its list item and the classes of the item. links are the arrows as
@@ -143,7 +165,8 @@ function head(kind) {
 }
 
 // Each arrow leaves its box on the side that faces the other box and meets the other box on the side facing back. Two
-// boxes in one row with a box between them are joined under the row instead, so no arrow runs over a box. The arrows on
+// boxes in one row with a box between them are joined around the outside instead: over the top row, under the bottom
+// one. So no arrow runs over a box, and none crosses the arrows between the rows. The arrows on
 // one side of a box share it out, in the order of the boxes they go to, so they neither start at one point nor cross
 // as they leave.
 function routes(links, rects) {
@@ -155,7 +178,8 @@ function routes(links, rects) {
 		const cb = mid(b)
 		const sameRow = Math.abs(cb.y - ca.y) < (a.h + b.h) / 4
 		if (sameRow && rects.some((r) => r !== a && r !== b && between1d(r, a, b) && Math.abs(mid(r).y - ca.y) < r.h / 2)) {
-			return { from: 'bottom', to: 'bottom', far: true }
+			const side = rects.some((r) => mid(r).y > ca.y + a.h / 2) ? 'top' : 'bottom'
+			return { from: side, to: side, far: true }
 		}
 		if (sameRow) return cb.x > ca.x ? { from: 'right', to: 'left' } : { from: 'left', to: 'right' }
 		return cb.y > ca.y ? { from: 'bottom', to: 'top' } : { from: 'top', to: 'bottom' }

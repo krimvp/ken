@@ -2275,7 +2275,7 @@ ul.left-out {
 @media (min-width: 760px) {
 	.pv-picture {
 		--draw: 1;
-		padding: var(--space-7) var(--space-6) var(--space-8);
+		padding: var(--space-8) var(--space-6);
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-lg);
 		background-color: var(--color-canvas);
