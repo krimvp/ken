@@ -7,10 +7,17 @@
 const COLOURS = 8
 
 let order = new Map()
+let places = []
 
-// names are the top level's part names in order.
-export function learnParts(names) {
-	order = new Map(names.map((name, i) => [name, i]))
+// parts are the top level's parts in order, each its name and its paths.
+export function learnParts(parts) {
+	order = new Map(parts.map((part, i) => [part.name, i]))
+	places = parts.flatMap((part) => part.paths.map((place) => [place, part.name]))
+}
+
+// The name of the top-level part that holds a file, or null.
+export function partOfFile(file) {
+	return places.find(([place]) => file === place || file.startsWith(`${place}/`))?.[1] ?? null
 }
 
 // The class that gives an element its part's colour, or '' for a name that is not a part of the top level.

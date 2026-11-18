@@ -128,11 +128,12 @@ function crosses(p, q, r, s) {
 // cells are the boxes, each as the HTML inside its list item and the classes of the item. links are the arrows as
 // { from, to, text } box indexes and verb. numbered draws each arrow's number and verb on it, which opens the arrow in
 // the list of arrows; open holds the arrows open there. lit holds the boxes that stay lit when nothing is pointed at,
-// such as the parts of the walkthrough step the reader is on.
-export function pictureHtml(cells, links, { numbered, open, lit = new Set() }) {
+// such as the parts of the walkthrough step the reader is on. column, when given, is the order of the boxes in one
+// column, such as a tour's stops, in place of the order that crosses the fewest arrows.
+export function pictureHtml(cells, links, { numbered, open, lit = new Set(), column: order = null }) {
 	const pairs = links.map((link) => [link.from, link.to])
 	const place = placeParts(cells.length, pairs)
-	const column = placeColumn(cells.length, pairs)
+	const column = order ?? placeColumn(cells.length, pairs)
 	const items = cells.map(({ html, classes }, i) => {
 		const at = place.cells[i]
 		const near = lit.has(i) ? ' is-near' : ''

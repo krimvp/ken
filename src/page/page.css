@@ -857,15 +857,17 @@ a.strip {
 	overflow-wrap: anywhere;
 }
 
-/* Labels. A dashed outline and a hollow dot: the agent's own reading, not something written down at the time. Recorded
-   is solid and filled: written down when the work was done. From the session sits between them, solid with a hollow
-   dot: quoted, but read afterwards. A span, because Mermaid names its own label groups "label" inside every drawing. */
+/* Labels. A grey pill with a hollow dot: the agent's own reading, not something written down at the time. Recorded is
+   outlined with a filled dot: written down when the work was done. From the session sits between them, outlined with a
+   hollow dot: quoted, but read afterwards. No dashed outline, which reads as a slot still to fill. A span, because
+   Mermaid names its own label groups "label" inside every drawing. */
 span.label {
 	display: inline-flex;
 	align-items: center;
 	gap: 0.4em;
 	padding: 0 0.6em;
-	border: 1.5px dashed var(--color-text);
+	border: 1.5px solid transparent;
+	background: var(--color-code-bg);
 	border-radius: 999px;
 	color: var(--color-text);
 	font-size: var(--text-note);
@@ -885,7 +887,8 @@ span.label::before {
 
 span.label-recorded,
 span.label-from-the-session {
-	border-style: solid;
+	border-color: var(--color-text);
+	background: var(--color-card);
 }
 
 .label-recorded::before {
@@ -893,7 +896,6 @@ span.label-from-the-session {
 }
 
 .label-found-by-search {
-	border-style: dotted;
 	background: var(--color-label-bg);
 	color: var(--color-label-text);
 }
@@ -1947,7 +1949,7 @@ ul.left-out {
 	min-width: 0;
 	min-height: 2.75rem;
 	padding: var(--space-2) var(--space-3);
-	border: 1px solid var(--color-muted);
+	border: 1px solid var(--color-box-border);
 	border-radius: var(--radius-sm);
 	background: var(--color-card);
 	color: var(--color-text);
@@ -2141,14 +2143,14 @@ ul.left-out {
 	line-height: var(--leading-tight);
 }
 
+/* Inside a part, a solid bar in its colour. A hollow square read as a box still to tick. */
 .pv-level:is(.pc-0, .pc-1, .pc-2, .pc-3, .pc-4, .pc-5, .pc-6, .pc-7)::before {
 	content: "";
 	flex: none;
-	width: 1.1rem;
-	height: 1.1rem;
-	border: 2px solid var(--part-line);
-	border-radius: 5px;
-	background: var(--part-fill);
+	align-self: stretch;
+	width: 0.4rem;
+	border-radius: 999px;
+	background: var(--part-line);
 }
 
 .pv-other {
@@ -2802,10 +2804,13 @@ button.pv-box:hover .pv-inside {
 	min-width: 0;
 }
 
+/* A box is as tall as what it says, so a short part leaves no empty space under its words. The arrows meet the box
+   itself, since the cell is no taller than the box. */
 .pv-picture .pv-cell {
 	position: relative;
 	z-index: 1;
 	order: var(--order);
+	align-self: center;
 }
 
 /* Following up: the lens "What changed" and the open list */
@@ -2821,7 +2826,7 @@ button.pv-box:hover .pv-inside {
 	max-width: 100%;
 	min-height: 2.75rem;
 	padding: var(--space-2) var(--space-3);
-	border: 1px solid var(--color-muted);
+	border: 1px solid var(--color-box-border);
 	border-radius: var(--radius-sm);
 	background: var(--color-card);
 	color: var(--color-text);
@@ -3695,5 +3700,137 @@ q.subject {
 		order: var(--order);
 		grid-row: auto;
 		grid-column: auto;
+	}
+}
+
+/* A tour: the way in from the Project view and the first visit, its stops, and what the map says on each. */
+.pv-tour,
+.welcome-tour {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-2) var(--space-4);
+	margin-top: var(--space-4);
+}
+
+.pv-tour-line,
+.welcome-tour-line {
+	flex: 1 1 18rem;
+	color: var(--color-note);
+	font-size: var(--text-note);
+}
+
+.walk-step.is-met .walk-n,
+.walk-step.is-known .walk-n {
+	border: 2px solid var(--color-text);
+	background: var(--color-card);
+	color: var(--color-text);
+}
+
+.walk-step.is-on.is-met .walk-n,
+.walk-step.is-on.is-known .walk-n {
+	border-color: var(--color-accent);
+	color: var(--color-accent);
+}
+
+.walk-know {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-2) var(--space-3);
+	margin-top: var(--space-3);
+	padding: 0 var(--space-3) var(--space-3);
+	font-size: var(--text-note);
+}
+
+#panel .walk-know {
+	padding: 0;
+}
+
+.walk-start:not([disabled]) {
+	border-color: var(--color-accent);
+	background: var(--color-accent);
+	color: var(--color-card);
+}
+
+.tc-stop {
+	color: var(--color-note);
+	font-size: var(--text-note);
+}
+
+.tc-box.is-met .tc-stop,
+.tc-box.is-known .tc-stop {
+	color: var(--color-text);
+	font-weight: 600;
+}
+
+/* Live: a heading that says what the view is for, and an empty state that says what will come. */
+.live-title {
+	font-size: 2rem;
+	font-weight: 650;
+	letter-spacing: -0.02em;
+	line-height: var(--leading-tight);
+}
+
+.live-lead {
+	margin: var(--space-2) 0 var(--space-4);
+	color: var(--color-note);
+}
+
+.live-empty {
+	margin-top: var(--space-5);
+	padding: var(--space-5);
+	border: 1px solid var(--color-box-border);
+	border-radius: var(--radius-lg);
+	background: var(--color-card);
+	box-shadow: var(--shadow-sm);
+}
+
+.live-empty h2 {
+	font-size: var(--text-md);
+	font-weight: 650;
+}
+
+.live-empty-text {
+	max-width: 38rem;
+	margin-top: var(--space-2);
+	color: var(--color-note);
+}
+
+/* A decision or a topic as a part's box is drawn: its part's colour across the top when it sits in a named part, a
+   firmer edge and shadow than a plain card, so the list reads as the same things the Project view shows. */
+.c-card {
+	--part-fill: var(--color-code-bg);
+	--part-line: var(--color-muted);
+	border-color: color-mix(in srgb, var(--part-line) 40%, var(--color-box-border));
+	background: linear-gradient(to bottom, var(--part-fill), var(--color-card) 4.5rem) var(--color-card);
+	box-shadow: var(--shadow-md);
+}
+
+.c-card:is(.pc-0, .pc-1, .pc-2, .pc-3, .pc-4, .pc-5, .pc-6, .pc-7) {
+	--part-fill: hsl(var(--hue) var(--part-s) var(--part-fill-l));
+	--part-line: hsl(var(--hue) var(--part-s) var(--part-line-l));
+	border-top: 3px solid var(--part-line);
+}
+
+.dv-part {
+	margin-bottom: var(--space-2);
+	font-size: var(--text-note);
+	font-weight: 600;
+}
+
+.map-foot-toggle {
+	color: var(--color-note);
+	cursor: pointer;
+}
+
+.map-foot-text {
+	margin-top: var(--space-2);
+}
+
+/* On a phone a stop's cards sit under it at nearly the full width, so quoted code keeps its lines. */
+@media (max-width: 759px) {
+	.walk-step .walk-cards {
+		padding: 0 var(--space-1) var(--space-2);
 	}
 }

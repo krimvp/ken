@@ -642,8 +642,8 @@ test('the layout comes from git with no model: the query picks the commit, a com
 	const { parts } = await json(server, '/api/state')
 	assert.deepEqual(
 		parts,
-		['src'],
-		"the page knows the top level's parts, and so their colours, before it lays them out",
+		[{ name: 'src', paths: ['src'] }],
+		"the page knows the top level's parts, with their paths, so it can colour them and what sits in them before it lays them out",
 	)
 })
 

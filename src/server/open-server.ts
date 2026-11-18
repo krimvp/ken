@@ -64,11 +64,11 @@ export async function openServer(options: {
 				model.kind === 'ok'
 					? { kind: 'ok', name: model.name, thread: model.chat.thread }
 					: { kind: 'unset', message: model.message, missing: model.missing, example: MODEL_EXAMPLE }
-			// parts are the names of the top level's parts in order, so the page colours each part from its first paint.
-			// named says ken's model named them, so the first visit can offer a tour.
+			// parts are the top level's parts in order with their paths, so the page colours each part, and the things in
+			// it, from its first paint. named says ken's model named them, so the first visit can offer a tour.
 			const top = await readLayoutAsk(layout, { change: 'none' })
 			const look = top.kind === 'ok' ? await lookAtLayout(layout, top.ask, new Date()) : null
-			const parts = look?.boxes.map((box) => box.name) ?? []
+			const parts = look?.boxes.map(({ name, paths }) => ({ name, paths })) ?? []
 			const named = Boolean(look?.named)
 			return sendJson(response, 200, { project: shown, model: state, live: live?.on() ?? false, parts, named })
 		}

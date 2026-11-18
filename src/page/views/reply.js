@@ -3,7 +3,8 @@
 // says so, once. A reply about a change opens on the change card, before the model's words, and under it two chips
 // ask for the change's decisions and its risks.
 import { changeCardHtml, changeKey } from '../project/change-card.js'
-import { walkHtml, walkOf } from '../project/walk.js'
+import { tourCardHtml, tourKey } from '../project/tour-card.js'
+import { stopState, stopTopics, walkHtml, walkOf } from '../project/walk.js'
 import { checksHtml } from './checks.js'
 import { diagramHtml, elementKey } from './diagram.js'
 import {
@@ -140,6 +141,7 @@ export function replyHtml(q, t, ui, { running, inThread }) {
 			? ''
 			: `<section class="checks-inline narrow-only" aria-label="What ken checked">${ui.wide ? '' : checksHtml(q, ui)}</section>`
 	const change = q.reply.change ?? q.liveChange
+	const { tour } = q.reply
 	const walk =
 		inThread && steps.length > 0
 			? {
@@ -147,20 +149,39 @@ export function replyHtml(q, t, ui, { running, inThread }) {
 					at: ui.walkAt?.get(t) ?? null,
 					cardHtml: (card, j) => cardHtml(card, t, j, rows),
 					under: !ui.wide,
+					states: q.topics,
+					knowHtml: (step) => knowPartHtml(q, t, step),
 				}
 			: null
 	const look = change ? (ui.changeLooks?.get(changeKey(change)) ?? null) : null
 	const card =
 		inThread && change
 			? changeCardHtml(change, look, t, walk)
-			: walk
-				? walkHtml(steps, t, { ...walk, boxes: null, change: null })
-				: ''
-	return `${knownHtml(q, ui, named, isMoved(q))}
+			: walk && tour
+				? tourCardHtml(tour, ui.changeLooks?.get(tourKey(tour)) ?? null, t, walk)
+				: walk
+					? walkHtml(steps, t, { ...walk, boxes: null, change: null, tour: Boolean(tour) })
+					: ''
+	// On a tour each stop says what the reader's map holds, so the lines and buttons for the whole reply stay away.
+	const mapped = inThread && !tour && (q.reply.topics ?? []).length > 0
+	return `${tour ? '' : knownHtml(q, ui, named, isMoved(q))}
 		<div class="reply">${card}${parts.join('')}</div>
 		${asks.length > 0 ? `<p class="chips">${asks.join(' ')}</p>` : ''}
-		${inThread && (q.reply.topics ?? []).length > 0 ? mapBarHtml(q, t, ui, running) : ''}
+		${mapped ? mapBarHtml(q, t, ui, running) : ''}
 		${checks}`
+}
+
+// What the reader's map says about the part of a tour stop, and the button that says they know it.
+export function knowPartHtml(q, t, step) {
+	const names = stopTopics(step).map((name) => name.toLowerCase())
+	if (!(q.topics ?? []).some((state) => names.includes(state.topic.toLowerCase()))) {
+		return '<p class="walk-know muted">ken cannot keep this stop on your map: it quotes no code of the part.</p>'
+	}
+	const stood = stopState(step, q.topics)
+	const part = esc(step.part)
+	if (stood === 'known') return `<p class="walk-know">Your map says you know ${part}.</p>`
+	const said = stood === 'met' ? `Your map says you have seen ${part}. ` : ''
+	return `<p class="walk-know">${said}<button class="quiet-button" data-act="tour-know" data-turn="${t}" data-step="${step.number}" data-key="tour-know-${t}-${step.number}">I know this part</button></p>`
 }
 
 // The cards that prove a step, for the panel. Their quotes open in place, so the panel keeps the step.

@@ -9,10 +9,19 @@ const EXAMPLES = [
 	'Why is the code laid out the way it is?',
 ]
 
-export function emptyHtml(project, canAsk) {
+// named says ken's model named the project's parts, so someone new can take a tour of them first.
+export function emptyHtml(project, canAsk, named) {
+	const tour =
+		canAsk && named
+			? `<div class="welcome-tour">
+		<button class="primary" data-act="tour" data-level="top" data-key="welcome-tour">Show me around</button>
+		<p class="welcome-tour-line">New here? ken's model walks you through the project one part at a time, with the code of each.</p>
+	</div>`
+			: ''
 	return `<section class="welcome">
 		<h1>${canAsk ? 'Ask about this project.' : 'ken has no model to ask.'}</h1>
 		<p class="lead">ken reads the code and the git history of ${folderHtml(project)}. ken's model answers as a colleague would. When a claim needs proof, it shows a card with the code it rests on, quoted from git.</p>
+		${tour}
 	</section>`
 }
 

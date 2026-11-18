@@ -166,6 +166,18 @@ function byHtml(look, canAsk) {
 	return `<div class="pv-by">${by}<p class="pv-by-line pv-stale-line">${esc(why.join(' '))}</p>${ask('Name them again')}</div>`
 }
 
+// The way in for someone new: a tour of this level, part by part, in the order its arrows give. Only a level ken's
+// model named has a tour, and only at the commit checked out, since the model reads the code there.
+function tourHtml(look, trail, canAsk) {
+	if (!look.tour || look.at !== look.head || !canAsk) return ''
+	const first = look.tour[0]?.name
+	const where = trail.length === 1 ? 'the project' : 'this part'
+	return `<div class="pv-tour">
+		<button class="primary" data-act="tour" data-key="pv-tour">Show me around</button>
+		<p class="pv-tour-line">ken's model explains ${where} one part at a time, in ${look.tour.length} stops, starting at ${esc(first)}.</p>
+	</div>`
+}
+
 function names(list) {
 	return list.length === 1 ? list[0] : `${list.slice(0, -1).join(', ')} and ${list.at(-1)}`
 }
@@ -245,6 +257,7 @@ export function projectViewHtml(view, canAsk) {
 				)
 	return `<section class="project-view">
 		${trail}${heading}
+		${tourHtml(look, view.trail, canAsk)}
 		${atLine(look, view.changes)}
 		${byHtml(look, canAsk)}
 		${look.next.line === '' ? '' : `<p class="lead pv-next">${esc(look.next.line)}</p>`}
