@@ -162,11 +162,11 @@ After a session, commit the record in the project: `git add .ken && git commit -
 
 If you have no hosted model to hand, ken can use the Claude Code CLI on your machine. A small endpoint in `scripts/claude-endpoint/` speaks the chat-completions protocol to ken and answers each request by running `claude -p` once. It needs `claude` on the PATH and signed in. It needs no API key.
 
-1. In one terminal, start the endpoint. It listens on 127.0.0.1, port 4141 unless you give `--port`:
+1. In one terminal, start the endpoint. It listens on 127.0.0.1, port 4141 unless you give `--port`. From a checkout, use `npm run claude-endpoint` instead:
 
    ```sh
-   npm run claude-endpoint
-   npm run claude-endpoint -- --port 4242
+   ken-claude-endpoint
+   ken-claude-endpoint --port 4242
    ```
 
 2. In another terminal, set these four variables, in the environment or in `.env`, and use ken as usual:
