@@ -19,11 +19,13 @@ import {
 } from '../../record/index.ts'
 import type { Range, Repository } from '../../repo/index.ts'
 import { changeOf, quotesOf } from './check-card.ts'
-import { firstWords, type Item, type Reply } from './reply.ts'
+import { firstWords, type Item, type Reply, type Tour } from './reply.ts'
 import type { Gate, Round } from './show-tool.ts'
 
 // Long enough for the story of a change, short enough for the record's limit on a summary.
 const MAX_SUMMARY_CHARS = 1000
+// The quotes of a stop's step that the topic of its part rests on.
+const TOUR_QUOTES = 3
 
 // problems says why the record refused the entries it left out.
 export type Recorded =
@@ -38,6 +40,7 @@ export async function recordReply(
 	project: Repository,
 	items: Item[],
 	scope: { range: Range; work: string | null } | null,
+	tour: Tour | null,
 	signal: AbortSignal,
 ): Promise<Recorded> {
 	const cards = items.flatMap((item) => (item.kind === 'card' ? [item.card] : []))
@@ -96,6 +99,18 @@ export async function recordReply(
 		const entry = await add(where, { kind: 'topic', name, quotes: quotes.map(raw), replaces: replaces ?? undefined })
 		if (entry) await add(`${where}, its note`, { kind: 'note', topic: entry.id, text: note })
 	}
+	// Each stop of a tour is the topic of its part, resting on the lines its step quotes, so the map can follow it. A
+	// part the record already has as a topic keeps that topic.
+	for (const [k, stop] of (tour?.stops ?? []).entries()) {
+		const known = [...(await store.read()).current, ...pending].some(
+			(entry) => entry.kind === 'topic' && sameName(entry.name, stop.name),
+		)
+		const quotes = quotesOf(items.filter((item) => item.kind === 'card' && item.step === k + 1))
+			.filter(({ path }) => path !== null && stop.paths.some((place) => path === place || path.startsWith(`${place}/`)))
+			.slice(0, TOUR_QUOTES)
+		if (known || quotes.length === 0) continue
+		await add(`Topic "${stop.name}"`, { kind: 'topic', name: stop.name, quotes: quotes.map(raw) })
+	}
 	for (const card of cards) {
 		if (card.kind !== 'decision') continue
 		const { decision } = card
@@ -144,15 +159,16 @@ export async function endReply(
 ): Promise<{ reply: Reply; recorded: RecordEntry[]; problems: string[] }> {
 	const { scope } = round
 	const change = scope && (await changeOf(gate.sources.repo, scope.range, round.items, signal))
-	const recorded = await recordReply(gate.store, gate.project, round.items, scope, signal)
+	const recorded = await recordReply(gate.store, gate.project, round.items, scope, round.tour, signal)
 	// Every topic is in the record now, so each card names it as the record spells it.
 	const names = (await gate.store.read()).current.flatMap((entry) => (entry.kind === 'topic' ? [entry.name] : []))
 	const canonical = (name: string) => names.find((other) => sameName(other, name)) ?? name
 	const items = round.items.map((item) => spelled(item, canonical))
-	const topics = [...new Set(items.flatMap(topicsOf))]
+	const stops = (round.tour?.stops ?? []).map((stop) => canonical(stop.name)).filter((name) => names.includes(name))
+	const topics = [...new Set([...stops, ...items.flatMap(topicsOf)])]
 	if (round.asked) await gate.map?.learn('asked', topics, new Date(), signal)
 	return {
-		reply: { items, change, topics },
+		reply: { items, change, topics, ...(round.tour ? { tour: round.tour } : {}) },
 		recorded: recorded.kind === 'recorded' ? recorded.entries : [],
 		problems: recorded.kind === 'draft' ? [] : recorded.problems,
 	}

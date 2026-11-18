@@ -213,6 +213,7 @@ test('a question streams its steps, the words and the cards in order, a diagram 
 			calls: 1,
 			risks: 1,
 			hunks: { uncovered: 0, total: 1 },
+			tour: null,
 		},
 	])
 	const reopened = await json(later, `/api/questions/${saved.entry.id}`)

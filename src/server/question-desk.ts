@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { type Chat, type ChatEvent, firstWords, type Item, type Reply } from '../agent/index.ts'
+import { type Chat, type ChatEvent, firstWords, type Item, type Reply, type Tour } from '../agent/index.ts'
 import { drawn, LAYOUT_BOUNDS } from '../diagram/index.ts'
 import {
 	type LensFacts,
@@ -9,6 +9,7 @@ import {
 	personLens,
 	rangeLens,
 	topicQuestion,
+	tourQuestion,
 } from '../follow-up/index.ts'
 import { entryFrom, type History, type HistoryEntry, whyNoNote } from '../history/index.ts'
 import { type LayoutSources, lookAtLayout, readLayoutAsk } from '../layout/index.ts'
@@ -24,7 +25,8 @@ const NOTE_CHARS = 400
 
 // One row in the page's list of questions. cards counts the checked cards of the reply, calls the decisions the model
 // wants the reader to decide, and risks its risks. hunks is null when the reply was not about a range of commits.
-// thread groups the rows the page shows as one thread.
+// thread groups the rows the page shows as one thread. tour names the level and the stops of a tour, so the page can
+// open a tour it has already instead of asking again.
 export type QuestionRow = {
 	id: string
 	question: string
@@ -35,6 +37,7 @@ export type QuestionRow = {
 	calls: number
 	risks: number
 	hunks: { uncovered: number; total: number } | null
+	tour: { within: string[]; stops: string[] } | null
 }
 
 // An entry from the history, its diagrams with their drawings. head is the project's HEAD now, which the page
@@ -103,14 +106,20 @@ export function questionDesk(
 		return questions > 0
 	}
 
-	async function ask(chat: Chat, question: string, stop: AbortSignal, send: (line: QuestionLine) => void) {
+	async function ask(
+		chat: Chat,
+		question: string,
+		stop: AbortSignal,
+		send: (line: QuestionLine) => void,
+		tour: Tour | null = null,
+	) {
 		let finish = () => {}
 		questions += 1
 		running = { stop, done: new Promise((resolve) => (finish = resolve)) }
 		try {
 			await inTurn(
 				'question',
-				() => run(chat, question, stop, send),
+				() => run(chat, question, stop, send, tour),
 				() => send({ kind: 'waiting' }),
 			)
 		} finally {
@@ -120,7 +129,13 @@ export function questionDesk(
 		}
 	}
 
-	async function run(chat: Chat, question: string, stop: AbortSignal, send: (line: QuestionLine) => void) {
+	async function run(
+		chat: Chat,
+		question: string,
+		stop: AbortSignal,
+		send: (line: QuestionLine) => void,
+		tour: Tour | null,
+	) {
 		const asked = {
 			id: randomUUID(),
 			question,
@@ -130,7 +145,7 @@ export function questionDesk(
 		}
 		send({ kind: 'asked', question })
 		const events: ChatEvent[] = []
-		for await (const event of chat.ask(question, stop)) {
+		for await (const event of chat.ask(question, stop, tour ? { tour } : 'question')) {
 			events.push(event)
 			if (event.kind === 'item') send({ ...event, item: drawnItem(event.item) })
 			else if (event.kind === 'replied') {
@@ -210,8 +225,8 @@ export function questionDesk(
 			.map((entry) => {
 				const { id, question, askedAt, thread, outcome } = entry
 				const row = { id, question, askedAt, thread, outcome }
-				if (entry.outcome !== 'answered') return { ...row, cards: 0, calls: 0, risks: 0, hunks: null }
-				const { items, change } = entry.reply
+				if (entry.outcome !== 'answered') return { ...row, cards: 0, calls: 0, risks: 0, hunks: null, tour: null }
+				const { items, change, tour } = entry.reply
 				const cards = items.flatMap((item) => (item.kind === 'card' ? [item.card] : []))
 				const total = change ? change.covered.length + change.uncovered.length : 0
 				return {
@@ -220,6 +235,7 @@ export function questionDesk(
 					calls: cards.filter((card) => card.kind === 'decision' && card.decision.needsOwner).length,
 					risks: cards.filter((card) => card.kind === 'risk').length,
 					hunks: change && { uncovered: change.uncovered.length, total },
+					tour: tour ? { within: tour.within, stops: tour.stops.map((each) => each.name) } : null,
 				}
 			})
 	}
@@ -239,7 +255,7 @@ export function questionDesk(
 	// what changed" on a topic of the open list. "empty" is a lens whose list holds nothing to explain.
 	async function questionOf(
 		body: unknown,
-	): Promise<{ kind: 'ok' | 'empty'; text: string } | { kind: 'refused'; problem: string }> {
+	): Promise<{ kind: 'ok' | 'empty'; text: string; tour?: Tour } | { kind: 'refused'; problem: string }> {
 		const lens = fieldOf(body, 'lens')
 		const kind = fieldOf(lens, 'kind')
 		if (lens === undefined) {
@@ -300,6 +316,24 @@ export function questionDesk(
 			}
 			return { kind: 'ok', text: partsQuestion(level).text }
 		}
+		if (kind === 'tour') {
+			const within = fieldOf(lens, 'within')
+			const ask = await readLayoutAsk(layout, { within: Array.isArray(within) ? within.map(String) : [] })
+			if (ask.kind !== 'ok') return { kind: 'refused', problem: ask.message }
+			const look = await lookAtLayout(layout, ask.ask, new Date())
+			if (!look.tour) {
+				return { kind: 'refused', problem: "ken's model has not named the parts here yet. Name them first." }
+			}
+			const name = fieldOf(lens, 'name')
+			const stops = look.tour.map(({ name, job, paths }) => ({ name, job, paths }))
+			const text = tourQuestion({
+				name: typeof name === 'string' && name.trim() !== '' ? name.trim().slice(0, 80) : null,
+				head: look.head,
+				stops,
+				arrows: look.arrows,
+			}).text
+			return { kind: 'ok', text, tour: { within: ask.ask.within, stops } }
+		}
 		if (kind === 'topic') {
 			const { record: read, states } = await lensFacts()
 			const open = (await openItems(repo, read, states)).topics.find(({ state }) =>
@@ -314,7 +348,8 @@ export function questionDesk(
 		if (kind !== 'deeper' || names.length === 0 || names.length > MAX_TOPICS || typeof asked !== 'string') {
 			return {
 				kind: 'refused',
-				problem: 'Send a question, or a lens: catch-up, area with a path, deeper, parts, person, range, topic or note.',
+				problem:
+					'Send a question, or a lens: catch-up, area with a path, deeper, parts, person, range, topic, tour or note.',
 			}
 		}
 		await map.learn('deeper', names, new Date())

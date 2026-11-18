@@ -65,10 +65,12 @@ export async function openServer(options: {
 					? { kind: 'ok', name: model.name, thread: model.chat.thread }
 					: { kind: 'unset', message: model.message, missing: model.missing, example: MODEL_EXAMPLE }
 			// parts are the names of the top level's parts in order, so the page colours each part from its first paint.
+			// named says ken's model named them, so the first visit can offer a tour.
 			const top = await readLayoutAsk(layout, { change: 'none' })
-			const parts =
-				top.kind === 'ok' ? (await lookAtLayout(layout, top.ask, new Date())).boxes.map((box) => box.name) : []
-			return sendJson(response, 200, { project: shown, model: state, live: live?.on() ?? false, parts })
+			const look = top.kind === 'ok' ? await lookAtLayout(layout, top.ask, new Date()) : null
+			const parts = look?.boxes.map((box) => box.name) ?? []
+			const named = Boolean(look?.named)
+			return sendJson(response, 200, { project: shown, model: state, live: live?.on() ?? false, parts, named })
 		}
 		if (where === 'GET /api/questions') return sendJson(response, 200, { questions: await desk.rows() })
 		if (where === 'GET /api/live') {
@@ -158,7 +160,7 @@ export async function openServer(options: {
 			if (request.socket.destroyed) stop.abort()
 			response.writeHead(200, { ...HEADERS, 'content-type': 'application/x-ndjson; charset=utf-8' })
 			response.flushHeaders()
-			await desk.ask(model.chat, question.text, stop.signal, (line) => writeLine(response, line))
+			await desk.ask(model.chat, question.text, stop.signal, (line) => writeLine(response, line), asked.tour)
 			return response.end()
 		}
 		const file = request.method === 'GET' ? files.get(url.pathname) : undefined
@@ -220,9 +222,10 @@ async function readJson(
 	}
 }
 
-// Two of the three buttons under an answer, and "I do not know this any more" on the map. "Go deeper" asks a question,
-// so it comes as a lens, and a question marks its topics itself, so the page never sends "asked".
-const BUTTONS: MapSignal[] = ['know', 'too-much', 'forgot']
+// Two of the three buttons under an answer, "I do not know this any more" on the map, and a tour stop the reader
+// reached. "Go deeper" asks a question, so it comes as a lens, and a question marks its topics itself, so the page
+// never sends "asked".
+const BUTTONS: MapSignal[] = ['know', 'too-much', 'forgot', 'toured']
 
 function mapSignalOf(
 	body: unknown,

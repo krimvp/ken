@@ -20,6 +20,8 @@ export {
 	type Item,
 	type Reply,
 	type Risk,
+	type Tour,
+	type TourStop,
 	type Withdrawn,
 } from './reply/reply.ts'
-export { type Chat, startChat } from './start-chat.ts'
+export { type Asking, type Chat, startChat } from './start-chat.ts'

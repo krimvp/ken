@@ -26,6 +26,7 @@ const EVIDENCE = {
 	said: 'You said you know this',
 	wrote: 'You wrote it by hand',
 	forgot: 'You said you do not know it any more',
+	toured: 'You met it on a tour of the project',
 }
 
 export function linesText(lines) {

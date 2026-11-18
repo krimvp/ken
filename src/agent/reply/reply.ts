@@ -14,12 +14,20 @@ import type { Diagram, Layout } from '../../diagram/index.ts'
 import type { Decision, Statement } from '../../record/index.ts'
 import type { Commit, CommitHash } from '../../repo/index.ts'
 
+// tour is there only on a tour of the project's parts.
 export type Reply = {
 	items: Item[]
 	change: Change | null
-	// Every topic a card names. The reader's three map buttons act on these.
+	// Every topic a card names, and on a tour the topic of each stop. The reader's map buttons act on these.
 	topics: string[]
+	tour?: Tour
 }
+
+// A tour of one named level of the project's parts. Plain code picked the stops and their order, and step n of the
+// reply is stop n, in the model's words. Each stop's part is a topic in the record, so the reader's map can say which
+// stops the reader reached. within is the level's scope, empty for the whole project.
+export type Tour = { within: string[]; stops: TourStop[] }
+export type TourStop = { name: string; job: string; paths: string[] }
 
 // A step of a walkthrough: the model explains a change as a few numbered steps, in the order a reviewer should read
 // them, each in a sentence or two of its own words. A card that proves a step carries the step's number. Plain code
