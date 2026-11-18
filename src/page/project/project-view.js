@@ -18,9 +18,11 @@ const GROUPS = [
 // Paths a box lists before it says how many more it holds.
 const SHOWN_PATHS = 3
 
-// The map's word on the box, written by the server from the same standing as the line over the level.
+// The map's word on the box, written by the server from the same standing as the line over the level. That line
+// already names every box the reader has not asked about or not finished, so only a box whose code changed since the
+// reader understood it, or one they understand, says so on the box.
 function mapLine(map) {
-	if (map.line === '') return ''
+	if (map.line === '' || map.standing === 'unmet' || map.standing === 'open') return ''
 	const strong = map.standing === 'changed' ? ' pv-strong' : ''
 	return `<span class="pv-map${strong}">${esc(map.line)}</span>`
 }
