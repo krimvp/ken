@@ -13,3 +13,4 @@ export {
 	type Touched,
 } from './layout-look.ts'
 export type { BoxMap, BoxTopic, Mark, Next, Standing } from './reader-marks.ts'
+export { type TourPart, type TourStop, tourOrder } from './tour-order.ts'
