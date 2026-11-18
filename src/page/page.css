@@ -3551,10 +3551,11 @@ q.subject {
 
 .walk-head {
 	display: grid;
-	grid-template-columns: auto minmax(0, 1fr);
-	gap: var(--space-1) var(--space-3);
+	grid-template-columns: auto minmax(0, 1fr) auto;
+	align-items: center;
+	gap: var(--space-3);
 	width: 100%;
-	padding: var(--space-3);
+	padding: var(--space-2) var(--space-3);
 	border: 0;
 	background: none;
 	color: var(--color-text);
@@ -3565,7 +3566,6 @@ q.subject {
 
 .walk-n {
 	display: inline-grid;
-	grid-row: span 2;
 	place-items: center;
 	width: 1.75rem;
 	height: 1.75rem;
@@ -3581,14 +3581,23 @@ q.subject {
 	background: var(--color-accent);
 }
 
-.walk-meta {
-	color: var(--color-note);
-	font-size: var(--text-note);
+.walk-name {
+	font-weight: 600;
 }
 
-.walk-cards,
-.walk-diff-under {
+.walk-mark {
+	color: var(--color-text);
+	font-size: var(--text-note);
+	font-weight: 600;
+	white-space: nowrap;
+}
+
+.walk-open {
 	padding: 0 var(--space-3) var(--space-3);
+}
+
+.walk-open .walk-text {
+	margin-bottom: var(--space-3);
 }
 
 .walk-cards .card {
@@ -3714,31 +3723,13 @@ q.subject {
 	font-size: var(--text-note);
 }
 
-.walk-step.is-met .walk-n,
-.walk-step.is-known .walk-n {
-	border: 2px solid var(--color-text);
-	background: var(--color-card);
-	color: var(--color-text);
-}
-
-.walk-step.is-on.is-met .walk-n,
-.walk-step.is-on.is-known .walk-n {
-	border-color: var(--color-accent);
-	color: var(--color-accent);
-}
-
 .walk-know {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
 	gap: var(--space-2) var(--space-3);
 	margin-top: var(--space-3);
-	padding: 0 var(--space-3) var(--space-3);
 	font-size: var(--text-note);
-}
-
-#panel .walk-know {
-	padding: 0;
 }
 
 .walk-start:not([disabled]) {
@@ -3824,7 +3815,7 @@ q.subject {
 
 /* On a phone a stop's cards sit under it at nearly the full width, so quoted code keeps its lines. */
 @media (max-width: 759px) {
-	.walk-step .walk-cards {
+	.walk-open {
 		padding: 0 var(--space-1) var(--space-2);
 	}
 }

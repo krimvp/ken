@@ -107,7 +107,9 @@ test('the step the reader is on lights the parts its quotes fall in and opens it
 		[...text.matchAll(/class="pv-cell[^"]*is-near[^>]*>.*?pv-name">([^<]+)</gs)].map((m) => m[1])
 
 	const first = html(1)
-	assert.ok(first.indexOf('The loop sleeps.') < first.indexOf('An old helper changed too.'), 'steps go by number')
+	assert.ok(first.indexOf('The loop sleeps') < first.indexOf('An old helper changed too'), 'steps go by number')
+	assert.match(first, /The loop sleeps\./, "the step's text shows under it")
+	assert.doesNotMatch(first, /An old helper changed too\./, 'the other steps show only their title')
 	assert.deepEqual(litBoxes(first), [nameOf('src/retry')], 'step 1 lights the part of src/retry/loop.ts')
 	assert.match(first, /src\/retry\/loop\.ts<\/code>, line 2 after the change/)
 	assert.match(first, /<span class="ln"><\/span><span class="ln">2<\/span><span class="lc add">.*sleep\(100\)/)

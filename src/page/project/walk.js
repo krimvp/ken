@@ -85,33 +85,51 @@ export function stepParts(step, boxes) {
 	)
 }
 
-// The steps as a list the reader moves through. at is the number of the step the reader is on, or null. cardHtml draws
-// a card of the reply. under puts the step's cards and changed lines under it, on a screen with no panel beside the
-// thread; with the panel they open there, so every step stays in view beside the picture. states is the reader's map
-// on the reply's topics, for a tour, and knowHtml draws a stop's "I know this part" under it.
+// A step's title in the list: on a tour its stop's part, else the first clause of its text, cut at a word near
+// TITLE_LENGTH characters. The full text shows only where the step opens.
+const TITLE_LENGTH = 64
+
+export function stepTitle(step) {
+	if (step.part !== null) return step.part
+	const clause = step.text
+		.replaceAll('`', '')
+		.split(/(?<=[^\s])[.:;?!](?=\s|$)|\s[\u2014-]\s/)[0]
+		.trim()
+	if (clause.length <= TITLE_LENGTH) return clause
+	const cut = clause.slice(0, TITLE_LENGTH)
+	return `${cut.slice(0, cut.lastIndexOf(' ')).replace(/[,\s]+$/, '')}...`
+}
+
+// The steps as a list the reader moves through, one line each: the step's number, its title and, on a tour, whether
+// the reader saw it. at is the number of the step the reader is on, or null. cardHtml draws a card of the reply. under
+// opens the step under its line, on a screen with no panel beside the thread: its text, changed lines and cards. With
+// the panel they open there. states is the reader's map on the reply's topics, for a tour, and knowHtml draws a
+// stop's "I know this part".
 export function walkHtml(steps, t, { at, boxes, cardHtml, under, change, tour = false, states = [], knowHtml }) {
 	const where = steps.findIndex((step) => step.number === at)
 	const word = tour ? 'stop' : 'step'
 	const items = steps.map((step, k) => {
 		const on = step.number === at
 		const parts = boxes ? [...stepParts(step, boxes)] : []
-		const named = parts.map((i) => boxes[i].name)
 		const stood = tour ? stopState(step, states) : 'new'
-		const meta = tour
-			? [step.part, STOP_SAID[stood]].filter(Boolean).join('. ')
-			: `${named.length > 0 ? `${named.join(', ')}. ` : ''}${step.hunks.length === 0 ? 'No changed lines' : count(step.hunks.length, 'changed block', 'changed blocks')}`
+		const mark =
+			stood === 'new'
+				? ''
+				: `<span class="walk-mark"><span aria-hidden="true">&#10003;</span> ${STOP_SAID[stood]}<span class="visually-hidden">. Done.</span></span>`
 		const cards = `<div class="walk-cards">${step.cards.map(({ card, j }) => cardHtml(card, j)).join('')}</div>`
 		const opened =
 			!on || !under
 				? ''
-				: tour
-					? `${cards}${knowHtml(step, t)}`
-					: `<div class="walk-diff-under">${stepDiffHtml(step, change)}</div>${cards}`
+				: `<div class="walk-open"><p class="walk-text">${prose(step.text)}</p>${
+						tour
+							? `${cards}${knowHtml(step, t)}`
+							: `<div class="walk-diff-under">${stepDiffHtml(step, change)}</div>${cards}`
+					}</div>`
 		return `<li class="walk-step${on ? ' is-on' : ''} is-${stood}" data-parts="${parts.join(' ')}" data-step="${step.number}">
 			<button class="walk-head" data-act="walk-step" data-turn="${t}" data-step="${step.number}" data-key="walk-${t}-${step.number}" aria-expanded="${on}">
-				<span class="walk-n" aria-hidden="true">${stood === 'new' ? k + 1 : '&#10003;'}</span>
-				<span class="walk-text">${prose(step.text)}</span>
-				<span class="walk-meta">${esc(meta)}.${stood === 'new' ? '' : '<span class="visually-hidden"> Done.</span>'}</span>
+				<span class="walk-n">${k + 1}</span>
+				<span class="walk-name">${esc(stepTitle(step))}</span>
+				${mark}
 			</button>
 			${opened}
 		</li>`
