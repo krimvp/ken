@@ -1,6 +1,6 @@
 // A tour opens on a picture of the level it tours: each part with its stop's number, a mark once the reader reached
 // it, and the stop the reader is on lit. A part opens its stop. Plain code picked the order from the arrows, so the
-// card says once how. The stops sit beside the picture, as the steps of a change do.
+// card says once how. The stops sit under the picture, as the steps of a change do, and the picture places the parts as the Project view does.
 import { count, esc } from '../views/format.js'
 import { partClass } from './part-colours.js'
 import { pictureHtml } from './parts-picture.js'
@@ -26,7 +26,8 @@ export function tourCardHtml(tour, look, t, walk) {
 	return `<section class="change-card tour-card has-walk" aria-labelledby="tc-${t}">
 		<h3 class="cc-title" id="tc-${t}">A tour of ${level}</h3>
 		<p class="cc-line">${said} ken picked the order from the arrows: it starts at the part nothing else uses and goes inward. Tests, build and vendored parts come last.</p>
-		<div class="cc-walk"><div class="cc-walk-picture">${pictureOf(look, t, walk, lit)}</div>${walkHtml(walk.steps, t, { ...walk, boxes, change: null, tour: true })}</div>
+		${pictureOf(look, t, walk, lit)}
+		${walkHtml(walk.steps, t, { ...walk, boxes, change: null, tour: true })}
 	</section>`
 }
 
@@ -47,11 +48,5 @@ function pictureOf(look, t, walk, lit) {
 			: `<div class="${classes}">${body}</div>`
 		return { html, classes: 'pv-cell' }
 	})
-	// In one column the parts stand in the tour's order, so the picture reads from the first stop down.
-	const stop = (box) => walk.steps.findIndex((step) => step.part === box.name)
-	const column = look.boxes
-		.map((box, i) => [stop(box) < 0 ? look.boxes.length + i : stop(box), i])
-		.sort((a, b) => a[0] - b[0])
-		.map(([, i]) => i)
-	return pictureHtml(cells, links, { numbered: false, open: new Set(), lit, column, still: true })
+	return pictureHtml(cells, links, { numbered: false, open: new Set(), lit, still: true })
 }

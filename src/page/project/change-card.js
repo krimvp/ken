@@ -23,9 +23,7 @@ export function changeCardHtml(change, look, t, walk = null) {
 	const on = walk?.steps.find((step) => step.number === walk.at)
 	const lit = on && boxes ? stepParts(on, boxes) : new Set()
 	const parts = partsHtml(look, t, lit, Boolean(walk))
-	const body = walk
-		? `<div class="cc-walk"><div class="cc-walk-picture">${parts}</div>${walkHtml(walk.steps, t, { ...walk, boxes, change })}</div>`
-		: parts
+	const body = walk ? `${parts}${walkHtml(walk.steps, t, { ...walk, boxes, change })}` : parts
 	return `<section class="change-card${walk ? ' has-walk' : ''}" aria-labelledby="cc-${t}">
 		<h3 class="cc-title" id="cc-${t}">What this change touched</h3>
 		${body}

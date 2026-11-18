@@ -2759,6 +2759,10 @@ button.pv-box:hover .pv-inside {
 	.change-card .pv-picture .pv-boxes {
 		gap: var(--space-7) var(--space-8);
 	}
+
+	.change-card.has-walk .pv-picture {
+		padding: var(--space-4) var(--space-5);
+	}
 }
 
 /* Pointing at a box lights it, its arrows and the boxes they join, each ringed in its colour. The rest lose their
@@ -2780,6 +2784,15 @@ button.pv-box:hover .pv-inside {
 
 .pv-picture.is-lit .pv-link:not(.is-hot) {
 	opacity: 0.55;
+}
+
+/* Beside a walkthrough the picture shows only the arrows of the lit part, and the others faintly. */
+.pv-picture[data-still="true"]:not(.is-lit) .pv-link {
+	opacity: 0;
+}
+
+.pv-picture[data-still="true"].is-lit .pv-link:not(.is-hot) {
+	opacity: 0.12;
 }
 
 .pv-picture.is-lit .pv-label:not(.is-hot) {
@@ -3544,6 +3557,21 @@ q.subject {
 	background: var(--color-card);
 }
 
+/* With the panel beside the thread no step opens in the list, so the lines fill two columns, read down, and the list
+   fits under the picture on one screen. */
+@media (min-width: 1100px) {
+	.walk-steps {
+		display: block;
+		columns: 2;
+		column-gap: var(--space-2);
+	}
+
+	.walk-step {
+		margin-bottom: var(--space-2);
+		break-inside: avoid;
+	}
+}
+
 .walk-step.is-on {
 	border-color: var(--color-accent);
 	box-shadow: 0 0 0 1px var(--color-accent);
@@ -3669,41 +3697,6 @@ q.subject {
 	background: var(--color-accent);
 	color: var(--color-card);
 	text-decoration: underline;
-}
-
-@media (min-width: 1100px) {
-	.cc-walk {
-		display: grid;
-		grid-template-columns: 19rem minmax(0, 1fr);
-		gap: var(--space-5);
-		align-items: start;
-	}
-
-	.cc-walk-picture {
-		position: sticky;
-		top: calc(var(--top) + var(--space-4));
-	}
-
-	.walk {
-		margin-top: 0;
-	}
-
-	/* Beside the steps the picture takes the phone's form: one column, with the arrows bent out to its right. */
-	.change-card.has-walk .pv-picture {
-		--draw: column;
-		padding: var(--space-4) 6rem var(--space-4) var(--space-3);
-	}
-
-	.change-card.has-walk .pv-picture .pv-boxes {
-		grid-template-columns: minmax(0, 1fr);
-		gap: var(--space-3);
-	}
-
-	.change-card.has-walk .pv-picture .pv-cell {
-		order: var(--order);
-		grid-row: auto;
-		grid-column: auto;
-	}
 }
 
 /* A tour: the way in from the Project view and the first visit, its stops, and what the map says on each. */

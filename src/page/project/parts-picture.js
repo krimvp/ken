@@ -128,13 +128,13 @@ function crosses(p, q, r, s) {
 // cells are the boxes, each as the HTML inside its list item and the classes of the item. links are the arrows as
 // { from, to, text } box indexes and verb. numbered draws each arrow's number and verb on it, which opens the arrow in
 // the list of arrows; open holds the arrows open there. lit holds the boxes that stay lit when nothing is pointed at,
-// such as the parts of the walkthrough step the reader is on. column, when given, is the order of the boxes in one
-// column, such as a tour's stops, in place of the order that crosses the fewest arrows. still keeps the lit boxes lit
-// while the reader points, as beside a walkthrough, where the lit part is always the step the reader is on.
-export function pictureHtml(cells, links, { numbered, open, lit = new Set(), column: order = null, still = false }) {
+// such as the parts of the walkthrough step the reader is on. still keeps the lit boxes lit while the reader points, as
+// beside a walkthrough, where the lit part is always the step the reader is on; it shows only the arrows that touch a
+// lit box, and none while no box is lit.
+export function pictureHtml(cells, links, { numbered, open, lit = new Set(), still = false }) {
 	const pairs = links.map((link) => [link.from, link.to])
 	const place = placeParts(cells.length, pairs)
-	const column = order ?? placeColumn(cells.length, pairs)
+	const column = placeColumn(cells.length, pairs)
 	const items = cells.map(({ html, classes }, i) => {
 		const at = place.cells[i]
 		const near = lit.has(i) ? ' is-near' : ''
@@ -386,11 +386,15 @@ function restOf(picture) {
 	return new Set((picture.dataset.lit ?? '').split(' ').filter(Boolean).map(Number))
 }
 
-// Lights the boxes given and the arrows hot gives, by default those between two of them. The other boxes lose their
-// colour and their arrows fade. An empty set puts the picture back as it was drawn.
+// Lights the boxes given and the arrows hot gives, by default those between two of them, or on a still picture those
+// that touch one. The other boxes lose their colour and their arrows fade. An empty set puts the picture back as it
+// was drawn.
 export function lightPicture(picture, boxes, hot = null) {
 	const links = JSON.parse(picture.dataset.links)
-	const lit = hot ?? new Set(links.flatMap((link, i) => (boxes.has(link.from) && boxes.has(link.to) ? [i] : [])))
+	const still = picture.dataset.still === 'true'
+	const touches = (link) =>
+		still ? boxes.has(link.from) || boxes.has(link.to) : boxes.has(link.from) && boxes.has(link.to)
+	const lit = hot ?? new Set(links.flatMap((link, i) => (touches(link) ? [i] : [])))
 	picture.classList.toggle('is-lit', boxes.size > 0)
 	for (const [i, each] of picture.querySelectorAll(':scope > .pv-boxes > li').entries()) {
 		each.classList.toggle('is-near', boxes.has(i))
