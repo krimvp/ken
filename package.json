@@ -9,6 +9,7 @@
 	"scripts": {
 		"ken": "node --env-file-if-exists=.env src/cli/main.ts",
 		"claude-endpoint": "node scripts/claude-endpoint/claude-endpoint.ts",
+		"prepack": "node scripts/check-bundle.ts",
 		"typecheck": "tsc --noEmit",
 		"lint": "biome check --error-on-warnings .",
 		"format": "biome check --write .",
