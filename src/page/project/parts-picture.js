@@ -1,7 +1,8 @@
 // A level of parts as a picture: the boxes in a grid, the part with the most arrows in the middle, and the arrows drawn
 // between them once the page has laid the boxes out. The boxes stay a list in the page, so on a narrow screen and to a
-// screen reader the picture is the list of boxes and the numbered list of arrows under it. A level holds at most 6
-// parts and 8 arrows, so trying every place for every box is cheap.
+// screen reader the picture is the list of boxes and the numbered list of arrows under it. On a phone the boxes stand
+// in one column and the arrows bend out to its right. A level holds at most 6 parts and 8 arrows, so trying every
+// place for every box is cheap.
 
 const SVG = 'http://www.w3.org/2000/svg'
 
@@ -32,6 +33,34 @@ export function placeParts(count, links) {
 	}
 	tryFrom([], all)
 	return { rows, cols, cells: best?.cells ?? [] }
+}
+
+// The order of the boxes in one column, for a phone: the arrows bend out to the right of the column, so the order
+// pays for each arrow's length and for two arrows whose ends interleave, since those cross.
+export function placeColumn(count, links) {
+	let best = null
+	const tryFrom = (order, free) => {
+		if (order.length === count) {
+			const at = new Map(order.map((box, k) => [box, k]))
+			const spans = links.map(([a, b]) => [Math.min(at.get(a), at.get(b)), Math.max(at.get(a), at.get(b))])
+			let cost = spans.reduce((sum, [lo, hi]) => sum + hi - lo, 0)
+			for (const [i, [a, b]] of spans.entries()) {
+				for (const [c, d] of spans.slice(i + 1)) if ((a < c && c < b && b < d) || (c < a && a < d && d < b)) cost += 3
+			}
+			if (!best || cost < best.cost) best = { cost, order: [...order] }
+			return
+		}
+		for (const [i, box] of free.entries()) {
+			order.push(box)
+			tryFrom(order, [...free.slice(0, i), ...free.slice(i + 1)])
+			order.pop()
+		}
+	}
+	tryFrom(
+		[],
+		Array.from({ length: count }, (_, i) => i),
+	)
+	return best?.order ?? []
 }
 
 function costOf(cells, links, degree, middle) {
@@ -98,20 +127,22 @@ function crosses(p, q, r, s) {
 
 // cells are the boxes, each as the HTML inside its list item and the classes of the item. links are the arrows as
 // { from, to, text } box indexes and verb. numbered draws each arrow's number and verb on it, which opens the arrow in
-// the list of arrows; open holds the arrows open there.
-export function pictureHtml(cells, links, { numbered, open }) {
-	const place = placeParts(
-		cells.length,
-		links.map((link) => [link.from, link.to]),
-	)
+// the list of arrows; open holds the arrows open there. lit holds the boxes that stay lit when nothing is pointed at,
+// such as the parts of the walkthrough step the reader is on.
+export function pictureHtml(cells, links, { numbered, open, lit = new Set() }) {
+	const pairs = links.map((link) => [link.from, link.to])
+	const place = placeParts(cells.length, pairs)
+	const column = placeColumn(cells.length, pairs)
 	const items = cells.map(({ html, classes }, i) => {
 		const at = place.cells[i]
-		return `<li class="${classes}" style="--row:${at.row + 1};--col:${at.col + 1}">${html}</li>`
+		const near = lit.has(i) ? ' is-near' : ''
+		return `<li class="${classes}${near}" style="--row:${at.row + 1};--col:${at.col + 1};--order:${column.indexOf(i)}">${html}</li>`
 	})
 	const data = JSON.stringify(
 		links.map((link, i) => ({ from: link.from, to: link.to, text: link.text, open: open.has(i) })),
 	)
-	return `<div class="pv-picture" style="--rows:${place.rows};--cols:${place.cols}" data-links="${escAttr(data)}" data-numbered="${numbered}">
+	const rest = [...lit].join(' ')
+	return `<div class="pv-picture${lit.size > 0 ? ' is-lit' : ''}" style="--rows:${place.rows};--cols:${place.cols}" data-links="${escAttr(data)}" data-numbered="${numbered}" data-lit="${rest}">
 		<ul class="pv-boxes">${items.join('')}</ul>
 	</div>`
 }
@@ -126,7 +157,8 @@ export function drawPictures(root) {
 	for (const picture of root.querySelectorAll('.pv-picture')) {
 		picture.querySelector(':scope > svg')?.remove()
 		picture.querySelector(':scope > .pv-labels')?.remove()
-		if (getComputedStyle(picture).getPropertyValue('--draw').trim() !== '1') continue
+		const draw = getComputedStyle(picture).getPropertyValue('--draw').trim()
+		if (draw !== '1' && draw !== 'column') continue
 		const boxes = [...picture.querySelectorAll(':scope > .pv-boxes > li')]
 		const links = JSON.parse(picture.dataset.links)
 		const frame = picture.getBoundingClientRect()
@@ -134,7 +166,7 @@ export function drawPictures(root) {
 			const r = box.getBoundingClientRect()
 			return { x: r.left - frame.left, y: r.top - frame.top, w: r.width, h: r.height }
 		})
-		const curves = routes(links, rects)
+		const curves = draw === 'column' ? arcs(links, rects) : routes(links, rects)
 		const svg = document.createElementNS(SVG, 'svg')
 		svg.setAttribute('class', 'pv-lines')
 		svg.setAttribute('aria-hidden', 'true')
@@ -154,14 +186,15 @@ export function drawPictures(root) {
 			svg.append(group)
 		}
 		picture.prepend(svg)
-		if (picture.dataset.numbered === 'true') placeLabels(picture, links, curves, rects)
+		if (picture.dataset.numbered === 'true') placeLabels(picture, links, curves, rects, frame, draw === 'column')
 		wire(picture, links)
+		lightPicture(picture, restOf(picture))
 	}
 }
 
 function head(kind) {
 	const id = kind === '' ? 'pv-head' : `pv-head-${kind}`
-	return `<marker id="${id}" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" class="pv-head ${kind}"/></marker>`
+	return `<marker id="${id}" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="12" markerHeight="12" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1 L11,6 L0,11 L3,6 z" class="pv-head ${kind}"/></marker>`
 }
 
 // Each arrow leaves its box on the side that faces the other box and meets the other box on the side facing back. Two
@@ -219,6 +252,48 @@ function routes(links, rects) {
 	})
 }
 
+// On a phone the boxes stand in one column and every arrow leaves the right side of its box and bends out to the right
+// before it comes back to the other box. A short arrow bends less than a long one around it, so arrows nest and do not
+// cross unless their ends interleave.
+function arcs(links, rects) {
+	const lanes = []
+	const laneOf = new Map()
+	const spans = links.map((link, i) => {
+		const [a, b] = [mid(rects[link.from]).y, mid(rects[link.to]).y]
+		return { i, lo: Math.min(a, b), hi: Math.max(a, b) }
+	})
+	for (const span of [...spans].sort((p, q) => p.hi - p.lo - (q.hi - q.lo))) {
+		let lane = 0
+		while ((lanes[lane] ?? []).some((other) => other.lo < span.hi && span.lo < other.hi)) lane++
+		lanes[lane] = [...(lanes[lane] ?? []), span]
+		laneOf.set(span.i, lane)
+	}
+	const ports = new Map()
+	for (const [i, link] of links.entries()) {
+		for (const [box, other] of [
+			[link.from, link.to],
+			[link.to, link.from],
+		]) {
+			if (!ports.has(box)) ports.set(box, [])
+			ports.get(box).push({ link: i, other })
+		}
+	}
+	const at = new Map()
+	for (const [box, list] of ports) {
+		list.sort((p, q) => mid(rects[p.other]).y - mid(rects[q.other]).y || p.link - q.link)
+		for (const [k, port] of list.entries()) {
+			const share = list.length === 1 ? 0.5 : 0.25 + (0.5 * k) / (list.length - 1)
+			at.set(`${port.link}:${box}`, pointOn(rects[box], 'right', share))
+		}
+	}
+	return links.map((link, i) => {
+		const start = step(at.get(`${i}:${link.from}`), 'right', 3)
+		const stop = step(at.get(`${i}:${link.to}`), 'right', 4)
+		const out = 26 + 16 * laneOf.get(i)
+		return [start, step(start, 'right', out), step(stop, 'right', out), stop]
+	})
+}
+
 function mid(r) {
 	return { x: r.x + r.w / 2, y: r.y + r.h / 2 }
 }
@@ -247,8 +322,9 @@ function bezier([p0, p1, p2, p3], t) {
 }
 
 // Each arrow's number and verb sit on its line: at the middle, or the point along it where the label covers the least
-// of the boxes and of the labels already placed.
-function placeLabels(picture, links, curves, rects) {
+// of the boxes, of the labels already placed and of the other lines, inside the picture. On a phone a label is the
+// number alone, and the list under the picture gives the verb.
+function placeLabels(picture, links, curves, rects, frame, compact) {
 	const layer = document.createElement('div')
 	layer.className = 'pv-labels'
 	layer.setAttribute('aria-hidden', 'true')
@@ -257,16 +333,18 @@ function placeLabels(picture, links, curves, rects) {
 	for (const [i, link] of links.entries()) {
 		if (!curves[i]) continue
 		const label = document.createElement('span')
-		label.className = `pv-label${link.open ? ' is-open' : ''}`
+		label.className = `pv-label${link.open ? ' is-open' : ''}${compact ? ' is-compact' : ''}`
 		label.dataset.act = 'pv-arrow'
 		label.dataset.index = `${i}`
 		label.innerHTML = `<span class="pv-label-n">${i + 1}</span><span class="pv-label-text"></span>`
 		label.lastChild.textContent = link.text ?? ''
 		layer.append(label)
 		// A label that finds no free spot on one line tries again folded to a narrow column.
-		const wide = spotFor(label, curves[i], taken)
+		const lines = curves.flatMap((curve, k) => (k === i || !curve ? [] : samples(curve)))
+		const area = { w: frame.width, h: frame.height }
+		const wide = spotFor(label, curves[i], taken, lines, area)
 		label.classList.add('is-narrow')
-		const narrow = wide.cover === 0 ? wide : spotFor(label, curves[i], taken)
+		const narrow = wide.cover === 0 || compact ? wide : spotFor(label, curves[i], taken, lines, area)
 		const best = narrow.cover < wide.cover ? narrow : wide
 		label.classList.toggle('is-narrow', best === narrow && best !== wide)
 		label.style.left = `${round(best.box.x)}px`
@@ -275,15 +353,24 @@ function placeLabels(picture, links, curves, rects) {
 	}
 }
 
-function spotFor(label, curve, taken) {
+// A label that sits over another arrow's line hides that line, so a point of another line under it costs as much as
+// a large overlap. A label past the picture's edge is cut off, so that costs more still.
+function spotFor(label, curve, taken, lines, area) {
 	const w = label.offsetWidth
 	const h = label.offsetHeight
-	const spots = [0.5, 0.42, 0.58, 0.34, 0.66, 0.26, 0.74].map((t) => {
+	const spots = [0.5, 0.42, 0.58, 0.34, 0.66, 0.26, 0.74, 0.2, 0.8].map((t) => {
 		const p = bezier(curve, t)
 		const box = { x: p.x - w / 2, y: p.y - h / 2, w, h }
-		return { box, cover: taken.reduce((sum, r) => sum + overlap(box, r), 0) }
+		const under = lines.filter((q) => q.x > box.x - 2 && q.x < box.x + w + 2 && q.y > box.y - 2 && q.y < box.y + h + 2)
+		const outside = box.x < 0 || box.y < 0 || box.x + w > area.w || box.y + h > area.h ? 1e6 : 0
+		const cover = taken.reduce((sum, r) => sum + overlap(box, r), 0) + 400 * under.length + outside
+		return { box, cover }
 	})
 	return spots.find((spot) => spot.cover === 0) ?? spots.reduce((a, b) => (b.cover < a.cover ? b : a))
+}
+
+function samples(curve) {
+	return Array.from({ length: 41 }, (_, k) => bezier(curve, k / 40))
 }
 
 function overlap(a, b) {
@@ -292,8 +379,27 @@ function overlap(a, b) {
 	return x > 0 && y > 0 ? x * y : 0
 }
 
+// The boxes a picture keeps lit when nothing is pointed at.
+function restOf(picture) {
+	return new Set((picture.dataset.lit ?? '').split(' ').filter(Boolean).map(Number))
+}
+
+// Lights the boxes given and the arrows hot gives, by default those between two of them. The other boxes lose their
+// colour and their arrows fade. An empty set puts the picture back as it was drawn.
+export function lightPicture(picture, boxes, hot = null) {
+	const links = JSON.parse(picture.dataset.links)
+	const lit = hot ?? new Set(links.flatMap((link, i) => (boxes.has(link.from) && boxes.has(link.to) ? [i] : [])))
+	picture.classList.toggle('is-lit', boxes.size > 0)
+	for (const [i, each] of picture.querySelectorAll(':scope > .pv-boxes > li').entries()) {
+		each.classList.toggle('is-near', boxes.has(i))
+	}
+	for (const each of picture.querySelectorAll('.pv-link, .pv-label')) {
+		each.classList.toggle('is-hot', lit.has(Number(each.dataset.index)))
+	}
+}
+
 // Pointing at a box, or moving focus to it, lights its arrows and the boxes at their other ends. Pointing at a label
-// lights its arrow and the two boxes it joins.
+// lights its arrow and the two boxes it joins. Leaving the picture puts back the boxes it keeps lit.
 function wire(picture, links) {
 	if (picture.dataset.wired) return
 	picture.dataset.wired = 'true'
@@ -302,16 +408,13 @@ function wire(picture, links) {
 		const cell = event.target.closest?.('.pv-boxes > li')
 		const cells = [...picture.querySelectorAll(':scope > .pv-boxes > li')]
 		const box = cell ? cells.indexOf(cell) : -1
-		const hot = label
-			? new Set([Number(label.dataset.index)])
-			: new Set(links.flatMap((link, i) => (link.from === box || link.to === box ? [i] : [])))
-		const near = new Set([...hot].flatMap((i) => [links[i].from, links[i].to]))
-		if (box >= 0) near.add(box)
-		picture.classList.toggle('is-lit', near.size > 0)
-		for (const [i, each] of cells.entries()) each.classList.toggle('is-near', near.has(i))
-		for (const each of picture.querySelectorAll('.pv-link, .pv-label')) {
-			each.classList.toggle('is-hot', hot.has(Number(each.dataset.index)))
-		}
+		if (label) {
+			const i = Number(label.dataset.index)
+			lightPicture(picture, new Set([links[i].from, links[i].to]), new Set([i]))
+		} else if (box >= 0) {
+			const hot = new Set(links.flatMap((link, i) => (link.from === box || link.to === box ? [i] : [])))
+			lightPicture(picture, new Set([box, ...[...hot].flatMap((i) => [links[i].from, links[i].to])]), hot)
+		} else lightPicture(picture, restOf(picture))
 	}
 	picture.addEventListener('pointerover', light)
 	picture.addEventListener('focusin', light)

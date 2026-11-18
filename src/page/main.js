@@ -5,15 +5,16 @@ import { fillDrawings, markPart } from './draw-diagrams.js'
 import { liveLook, liveViewHtml } from './live/live-view.js'
 import { changeKey } from './project/change-card.js'
 import { learnParts } from './project/part-colours.js'
-import { drawPictures } from './project/parts-picture.js'
+import { drawPictures, lightPicture } from './project/parts-picture.js'
 import { projectViewHtml } from './project/project-view.js'
+import { partOf, stepDiffHtml, walkOf } from './project/walk.js'
 import { allQuotesHtml, checksHtml, quoteCardHtml } from './views/checks.js'
 import { decisionsViewHtml } from './views/decisions.js'
 import { elementKey } from './views/diagram.js'
 import { count, duration, esc, folderHtml, prose, short, when } from './views/format.js'
 import { changedLine, changedTopics, lensHtml, mapViewHtml } from './views/map.js'
 import { openCount, openViewHtml } from './views/open.js'
-import { cardsOf, chipQuestion, isMoved, itemsOf, LEGEND, replyHtml } from './views/reply.js'
+import { cardsOf, chipQuestion, isMoved, itemsOf, LEGEND, replyHtml, stepCardsHtml } from './views/reply.js'
 import {
 	emptyAfterHtml,
 	emptyHtml,
@@ -56,6 +57,8 @@ const freshUi = () => ({
 	mapSaid: null,
 	// Each change a reply is about, by changeKey, with the project's top level laid over by it: null while ken reads it.
 	changeLooks: new Map(),
+	// The walkthrough step the reader is on, by the turn of its reply.
+	walkAt: new Map(),
 	wide: wideQuery.matches,
 })
 
@@ -508,6 +511,7 @@ function panelHtml() {
 	const items = itemsOf(state.thread)
 	if (ui.panel.kind === 'quote') return quoteCardHtml(ui, items)
 	if (ui.panel.kind === 'all') return allQuotesHtml(items)
+	if (ui.panel.kind === 'walk') return walkPanelHtml(ui.panel.t, ui.walkAt.get(ui.panel.t))
 	if (!q.reply || cardsOf(q, 0).length === 0) return noChecksPanelHtml(q.live)
 	return checksHtml(q, ui, state.thread.at(-1) === q ? null : when(q.askedAt))
 }
@@ -673,10 +677,68 @@ function chooseInDrawing(target) {
 	}
 }
 
+// The panel when the reader is on a step of a walkthrough: the step's own words, the changed lines it is about as a
+// diff, and the cards that prove it.
+function walkPanelHtml(t, number) {
+	const q = state.thread[t]
+	const steps = walkOf(q?.reply)
+	const k = steps.findIndex((step) => step.number === number)
+	const step = steps[k]
+	if (!step) return ''
+	return `<div class="panel-head"><h2>Step ${k + 1} of ${steps.length}</h2>
+			<div class="panel-nav">
+				<button class="quiet-button" data-act="walk-by" data-by="-1" data-turn="${t}" data-key="walk-panel-prev"${k === 0 ? ' disabled' : ''}>Previous</button>
+				<button class="quiet-button" data-act="walk-by" data-by="1" data-turn="${t}" data-key="walk-panel-next"${k === steps.length - 1 ? ' disabled' : ''}>Next</button>
+				<button class="quiet-button" data-act="close" data-key="close">Close</button>
+			</div></div>
+		<p class="walk-panel-text">${prose(step.text)}</p>
+		<h3 class="walk-panel-sub">The changed lines</h3>
+		${stepDiffHtml(step, q.reply.change)}
+		<h3 class="walk-panel-sub">What proves it</h3>
+		<div class="walk-cards">${stepCardsHtml(q, t, step, state.ui)}</div>`
+}
+
+// The reader moves to a step, or off it with null. On a wide screen its changed lines open in the panel; on a narrow
+// one, under the step.
+function walkTo(t, number) {
+	const ui = state.ui
+	if (number === null) ui.walkAt.delete(t)
+	else ui.walkAt.set(t, number)
+	if (ui.panel.kind === 'walk' || number !== null) ui.panel = number === null ? CHECKS : { kind: 'walk', t }
+	render()
+	if (number !== null) {
+		$('#panel').scrollTop = 0
+		document.querySelector(`[data-key="walk-${t}-${number}"]`)?.focus({ preventScroll: true })
+		document.querySelector(`.walk-step[data-step="${number}"]`)?.scrollIntoView({ block: 'nearest' })
+	}
+}
+
+function walkBy(t, by) {
+	const steps = walkOf(state.thread[t]?.reply)
+	const k = steps.findIndex((step) => step.number === state.ui.walkAt.get(t))
+	const next = steps[k < 0 ? 0 : k + by]
+	if (next) walkTo(t, next.number)
+}
+
+// The turn whose walkthrough the arrow keys move: the one the focus is in, else the one in the panel.
+function walkTurn() {
+	const walk = document.activeElement?.closest?.('.walk, #panel')
+	if (walk?.matches('.walk')) return Number(walk.dataset.turn)
+	if (walk && state.ui.panel.kind === 'walk') return state.ui.panel.t
+	return null
+}
+
 function closePanel() {
 	const shown = state.ui.panel
 	if (shown.kind === 'checks') return false
 	state.ui.panel = CHECKS
+	if (shown.kind === 'walk') {
+		const number = state.ui.walkAt.get(shown.t)
+		state.ui.walkAt.delete(shown.t)
+		render()
+		document.querySelector(`[data-key="walk-${shown.t}-${number}"]`)?.focus({ preventScroll: true })
+		return true
+	}
 	render()
 	const back = shown.kind === 'quote' ? `${shown.key}-q${shown.quote}` : 'all-quotes'
 	document.querySelector(`[data-key="${back}"]`)?.focus({ preventScroll: true })
@@ -1058,7 +1120,8 @@ const actions = {
 		const quote = Number(el.dataset.quote)
 		const owner = itemsOf(state.thread).find((each) => each.key === key)?.q
 		if (owner && state.view === 'question') state.open = picked = owner
-		if (uiNow().wide) return choose(key, quote)
+		// A card of a walkthrough step in the panel opens its quote in place, so the panel keeps the step.
+		if (uiNow().wide && !el.closest('#panel')) return choose(key, quote)
 		toggle(uiNow().openQuotes, `${key}-q${quote}`)
 		render()
 		// "Show all" goes away once the lines are open, so the quote's own row takes the focus.
@@ -1104,6 +1167,12 @@ const actions = {
 		if (items[at]) choose(items[at].key, 0)
 	},
 	close: closePanel,
+	'walk-step'(el) {
+		const t = Number(el.dataset.turn)
+		const number = Number(el.dataset.step)
+		walkTo(t, state.ui.walkAt.get(t) === number ? null : number)
+	},
+	'walk-by': (el) => walkBy(Number(el.dataset.turn), Number(el.dataset.by)),
 	added() {
 		state.ui.addedOpen = !state.ui.addedOpen
 		render()
@@ -1154,6 +1223,13 @@ document.addEventListener(
 )
 
 document.addEventListener('keydown', (event) => {
+	if ((event.key === 'ArrowLeft' || event.key === 'ArrowRight') && state.view === 'question') {
+		const t = walkTurn()
+		if (t === null) return
+		event.preventDefault()
+		walkBy(t, event.key === 'ArrowLeft' ? -1 : 1)
+		return
+	}
 	if (event.key !== 'Escape') return
 	if (!$('#tip').hidden) return hideTip()
 	const ui = state.ui
@@ -1169,6 +1245,12 @@ document.addEventListener('keydown', (event) => {
 	if (state.view === 'live') return closeLive()
 	if (state.view === 'follow-up') return closeFollowUp()
 	if (closePanel()) return
+	if (state.ui.walkAt.size > 0) {
+		const [t, number] = [...state.ui.walkAt].at(-1)
+		walkTo(t, null)
+		document.querySelector(`[data-key="walk-${t}-${number}"]`)?.focus({ preventScroll: true })
+		return
+	}
 	if (
 		ui.coverageOpen ||
 		ui.openSteps.size > 0 ||
@@ -1289,6 +1371,34 @@ for (const kind of ['mouseover', 'focusin']) {
 }
 document.addEventListener('focusout', hideTip)
 document.addEventListener('scroll', () => tipFor?.isConnected && showTip(tipFor), true)
+
+// A walkthrough, its change card and its cards light each other while the reader points: a step lights its parts, a
+// part lights the steps that touch it, and a quote lights the part its file sits in. Leaving puts back the step the
+// reader is on. This only sets classes, so nothing is drawn again.
+function lightWalk(event) {
+	const inPanel = event.target.closest?.('#panel') && state.ui.panel.kind === 'walk'
+	const turn = inPanel ? $(`#turn-${state.ui.panel.t}`) : event.target.closest?.('.turn')
+	const picture = turn?.querySelector('.change-card .pv-picture')
+	if (!picture) return
+	const t = Number(turn.id.slice('turn-'.length))
+	const change = state.thread[t]?.reply?.change ?? state.thread[t]?.liveChange
+	const boxes = (change && state.ui.changeLooks.get(changeKey(change))?.boxes) ?? []
+	const steps = [...turn.querySelectorAll('.walk-step')]
+	const rest = () => new Set((picture.dataset.lit ?? '').split(' ').filter(Boolean).map(Number))
+	const step = event.target.closest('.walk-step')
+	const quote = event.target.closest('.q[data-path]')
+	const cell = event.target.closest('.change-card .pv-boxes > li')
+	let parts = null
+	if (quote) parts = new Set([partOf(quote.dataset.path, boxes)].filter((i) => i >= 0))
+	else if (step) parts = new Set(step.dataset.parts.split(' ').filter(Boolean).map(Number))
+	if (parts) lightPicture(picture, parts.size > 0 ? parts : rest())
+	else if (!cell) lightPicture(picture, rest())
+	const box = cell ? [...picture.querySelectorAll(':scope > .pv-boxes > li')].indexOf(cell) : -1
+	for (const each of steps)
+		each.classList.toggle('is-touching', box >= 0 && each.dataset.parts.split(' ').includes(`${box}`))
+}
+document.addEventListener('pointerover', lightWalk)
+document.addEventListener('focusin', lightWalk)
 
 $('#question').addEventListener('input', resizeBox)
 wideQuery.addEventListener('change', render)

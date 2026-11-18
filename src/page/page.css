@@ -17,6 +17,9 @@
 	--color-canvas: #fbfbfd;
 	--color-bar: rgb(246 247 249 / 0.88);
 	--color-add-bg: #e3f3ea;
+	--color-del-bg: #fbe9e6;
+	--color-add-ink: #135f3d;
+	--color-del-ink: #8f2a1b;
 	--color-dot: #d5d9e1;
 	--color-edge: #8b93a3;
 	/* A part's colour, set by its .pc-N class: a soft fill, a line, and text that reads on the fill. */
@@ -41,6 +44,9 @@
 		--color-canvas: #12161c;
 		--color-bar: rgb(15 18 23 / 0.88);
 		--color-add-bg: #173326;
+		--color-del-bg: #3a1f1b;
+		--color-add-ink: #8fe0b6;
+		--color-del-ink: #f6b8ad;
 		--color-dot: #2a303b;
 		--color-edge: #7a8394;
 		--part-s: 45%;
@@ -2257,28 +2263,24 @@ ul.left-out {
 	max-width: var(--measure);
 }
 
-/* On a narrow screen the boxes are one list. From 760 pixels they are a picture on a dotted canvas, with room between
-   the boxes for the arrows and their verbs, which parts-picture.js draws once the boxes are laid out. --draw tells it
-   whether to draw. */
+/* On a narrow screen the boxes stand in one column, and the arrows bend out to its right with their numbers on them.
+   From 760 pixels the boxes are a grid on a dotted canvas, with room between them for the arrows and their verbs.
+   parts-picture.js draws the arrows once the boxes are laid out, and --draw tells it how: 1 for the grid, column for
+   the column. */
 .pv-level-body {
 	margin-top: var(--space-5);
 }
 
 .pv-picture {
-	--draw: 0;
+	--draw: column;
 	position: relative;
-}
-
-.pv-boxes {
-	display: grid;
-	gap: var(--space-3);
-	padding: 0;
-	list-style: none;
-}
-
-.pv-cell {
-	display: flex;
-	min-width: 0;
+	padding: var(--space-4) 6rem var(--space-4) var(--space-3);
+	border: 1px solid var(--color-border);
+	border-radius: var(--radius-lg);
+	background-color: var(--color-canvas);
+	background-image: radial-gradient(var(--color-dot) 1.2px, transparent 1.4px);
+	background-size: 22px 22px;
+	background-position: 11px 11px;
 }
 
 @media (min-width: 760px) {
@@ -2304,42 +2306,9 @@ ul.left-out {
 	}
 
 	.pv-picture .pv-cell {
-		position: relative;
-		z-index: 1;
+		order: 0;
 		grid-row: var(--row);
 		grid-column: var(--col);
-	}
-
-	/* Pointing at a box lights it, its arrows and the boxes they join, each ringed in its colour. The rest lose their
-	   colour, ring and shadow, and their arrows fade, but every word keeps its full contrast. */
-	.pv-picture.is-lit .pv-cell.is-near .pv-box {
-		border-color: var(--part-line);
-		box-shadow:
-			0 0 0 1px var(--part-line),
-			var(--shadow-lg);
-	}
-
-	.pv-picture.is-lit .pv-cell:not(.is-near) .pv-box {
-		--part-fill: var(--color-card);
-		--part-line: var(--color-box-border);
-		--part-ink: var(--color-note);
-		border-color: var(--color-box-border);
-		box-shadow: none;
-	}
-
-	.pv-picture.is-lit .pv-link:not(.is-hot) {
-		opacity: 0.25;
-	}
-
-	.pv-picture.is-lit .pv-label:not(.is-hot) {
-		border-color: transparent;
-		box-shadow: none;
-	}
-
-	.pv-picture.is-lit .pv-label:not(.is-hot) .pv-label-n {
-		background: none;
-		box-shadow: inset 0 0 0 1px var(--color-box-border);
-		color: var(--color-note);
 	}
 }
 
@@ -2422,7 +2391,15 @@ ul.left-out {
 }
 
 .pv-label.is-narrow {
-	max-width: 8.75rem;
+	max-width: 10.5rem;
+}
+
+.pv-label.is-compact {
+	padding: 2px;
+}
+
+.pv-label.is-compact .pv-label-text {
+	display: none;
 }
 
 .pv-label-n,
@@ -2772,13 +2749,6 @@ button.pv-box:hover .pv-inside {
 	background: var(--color-code-bg);
 }
 
-/* On a narrow screen the card lists only the parts the change touched, and names the others in one line. */
-@media (max-width: 759px) {
-	.change-card .cc-untouched {
-		display: none;
-	}
-}
-
 @media (min-width: 760px) {
 	.change-card .pv-picture {
 		padding: var(--space-7) var(--space-5);
@@ -2787,10 +2757,55 @@ button.pv-box:hover .pv-inside {
 	.change-card .pv-picture .pv-boxes {
 		gap: var(--space-7) var(--space-8);
 	}
+}
 
-	.cc-narrow {
-		display: none;
-	}
+/* Pointing at a box lights it, its arrows and the boxes they join, each ringed in its colour. The rest lose their
+   colour, ring and shadow, and their arrows fade but stay easy to follow. Every word keeps its full contrast. */
+.pv-picture.is-lit .pv-cell.is-near .pv-box {
+	border-color: var(--part-line);
+	box-shadow:
+		0 0 0 1px var(--part-line),
+		var(--shadow-lg);
+}
+
+.pv-picture.is-lit .pv-cell:not(.is-near) .pv-box {
+	--part-fill: var(--color-card);
+	--part-line: var(--color-box-border);
+	--part-ink: var(--color-note);
+	border-color: var(--color-box-border);
+	box-shadow: none;
+}
+
+.pv-picture.is-lit .pv-link:not(.is-hot) {
+	opacity: 0.55;
+}
+
+.pv-picture.is-lit .pv-label:not(.is-hot) {
+	box-shadow: none;
+}
+
+.pv-picture.is-lit .pv-label:not(.is-hot) .pv-label-n {
+	background: none;
+	box-shadow: inset 0 0 0 1px var(--color-box-border);
+	color: var(--color-note);
+}
+
+.pv-boxes {
+	display: grid;
+	gap: var(--space-3);
+	padding: 0;
+	list-style: none;
+}
+
+.pv-cell {
+	display: flex;
+	min-width: 0;
+}
+
+.pv-picture .pv-cell {
+	position: relative;
+	z-index: 1;
+	order: var(--order);
 }
 
 /* Following up: the lens "What changed" and the open list */
@@ -3497,4 +3512,188 @@ q.subject {
 
 .working {
 	margin-top: var(--space-4);
+}
+
+/* A walkthrough: the change's steps beside the change card's picture. With the panel beside the thread the picture
+   stands in one column beside the steps and stays in view while they scroll, and a step's diff opens in the panel.
+   Narrower, the picture sits above the steps and a step's diff opens under it. */
+.walk {
+	margin-top: var(--space-5);
+}
+
+.walk-title {
+	margin-top: 0;
+}
+
+.walk-steps {
+	display: grid;
+	gap: var(--space-2);
+	margin-top: var(--space-3);
+	padding: 0;
+	list-style: none;
+}
+
+.walk-step {
+	border: 1px solid var(--color-box-border);
+	border-radius: var(--radius-md);
+	background: var(--color-card);
+}
+
+.walk-step.is-on {
+	border-color: var(--color-accent);
+	box-shadow: 0 0 0 1px var(--color-accent);
+}
+
+.walk-step.is-touching {
+	border-color: var(--color-accent);
+	background: var(--color-label-bg);
+}
+
+.walk-head {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr);
+	gap: var(--space-1) var(--space-3);
+	width: 100%;
+	padding: var(--space-3);
+	border: 0;
+	background: none;
+	color: var(--color-text);
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+.walk-n {
+	display: inline-grid;
+	grid-row: span 2;
+	place-items: center;
+	width: 1.75rem;
+	height: 1.75rem;
+	border-radius: 50%;
+	background: var(--color-text);
+	color: var(--color-card);
+	font-size: var(--text-sm);
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+}
+
+.walk-step.is-on .walk-n,
+.walk-step.is-touching .walk-n {
+	background: var(--color-accent);
+}
+
+.walk-meta {
+	color: var(--color-note);
+	font-size: var(--text-note);
+}
+
+.walk-cards,
+.walk-diff-under {
+	padding: 0 var(--space-3) var(--space-3);
+}
+
+.walk-cards .card {
+	margin-top: 0;
+}
+
+.walk-nav {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-3);
+	margin-top: var(--space-3);
+}
+
+.walk-where {
+	color: var(--color-note);
+	font-size: var(--text-note);
+}
+
+.walk-panel-text {
+	margin-top: var(--space-3);
+}
+
+.walk-panel-sub {
+	margin-top: var(--space-5);
+	font-size: var(--text-note);
+	font-weight: 700;
+}
+
+.walk-hunk {
+	margin-top: var(--space-4);
+	border: 1px solid var(--color-border);
+	border-radius: var(--radius-md);
+	overflow: hidden;
+	background: var(--color-card);
+}
+
+.walk-file {
+	padding: var(--space-2) var(--space-3);
+	font-size: var(--text-note);
+	overflow-wrap: anywhere;
+}
+
+.code.diff > code {
+	grid-template-columns: auto auto minmax(0, 1fr);
+}
+
+.code.diff .lc.add {
+	background: var(--color-add-bg);
+	color: var(--color-add-ink);
+}
+
+.code.diff .lc.del {
+	background: var(--color-del-bg);
+	color: var(--color-del-ink);
+}
+
+.code.diff .more {
+	grid-column: 3;
+}
+
+.chip-main {
+	border-color: var(--color-accent);
+	background: var(--color-accent);
+	color: var(--color-card);
+}
+
+.chip-main:hover:not(:disabled) {
+	background: var(--color-accent);
+	color: var(--color-card);
+	text-decoration: underline;
+}
+
+@media (min-width: 1100px) {
+	.cc-walk {
+		display: grid;
+		grid-template-columns: 19rem minmax(0, 1fr);
+		gap: var(--space-5);
+		align-items: start;
+	}
+
+	.cc-walk-picture {
+		position: sticky;
+		top: calc(var(--top) + var(--space-4));
+	}
+
+	.walk {
+		margin-top: 0;
+	}
+
+	/* Beside the steps the picture takes the phone's form: one column, with the arrows bent out to its right. */
+	.change-card.has-walk .pv-picture {
+		--draw: column;
+		padding: var(--space-4) 6rem var(--space-4) var(--space-3);
+	}
+
+	.change-card.has-walk .pv-picture .pv-boxes {
+		grid-template-columns: minmax(0, 1fr);
+		gap: var(--space-3);
+	}
+
+	.change-card.has-walk .pv-picture .pv-cell {
+		order: var(--order);
+		grid-row: auto;
+		grid-column: auto;
+	}
 }
