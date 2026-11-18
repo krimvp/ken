@@ -64,7 +64,11 @@ export async function openServer(options: {
 				model.kind === 'ok'
 					? { kind: 'ok', name: model.name, thread: model.chat.thread }
 					: { kind: 'unset', message: model.message, missing: model.missing, example: MODEL_EXAMPLE }
-			return sendJson(response, 200, { project: shown, model: state, live: live?.on() ?? false })
+			// parts are the names of the top level's parts in order, so the page colours each part from its first paint.
+			const top = await readLayoutAsk(layout, { change: 'none' })
+			const parts =
+				top.kind === 'ok' ? (await lookAtLayout(layout, top.ask, new Date())).boxes.map((box) => box.name) : []
+			return sendJson(response, 200, { project: shown, model: state, live: live?.on() ?? false, parts })
 		}
 		if (where === 'GET /api/questions') return sendJson(response, 200, { questions: await desk.rows() })
 		if (where === 'GET /api/live') {

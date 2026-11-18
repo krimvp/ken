@@ -628,7 +628,7 @@ test('"I have decided" through the server reads only the decision and a note, so
 	assert.notEqual(decision.answer?.at, forged.answer.at, 'ken sets when the owner answered')
 })
 
-test('the layout comes from git with no model: the query picks the commit, and a commit the project does not have is refused', async () => {
+test('the layout comes from git with no model: the query picks the commit, a commit the project does not have is refused, and the state names the top-level parts', async () => {
 	const server = await open(tempFolder('ken-home-'), null)
 
 	const { look, changes } = await json(server, `/api/layout?at=${base}&within=src`)
@@ -638,6 +638,12 @@ test('the layout comes from git with no model: the query picks the commit, and a
 	)
 	assert.equal(changes[0].name, 'Uncommitted work')
 	assert.equal((await send(server, '/api/layout?at=nope').response).status, 400)
+	const { parts } = await json(server, '/api/state')
+	assert.deepEqual(
+		parts,
+		['src'],
+		"the page knows the top level's parts, and so their colours, before it lays them out",
+	)
 })
 
 test('"Ask ken to name these parts" sends the folder split to the model, and the parts it names then show in the layout with no model', async () => {
