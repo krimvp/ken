@@ -6,6 +6,40 @@ ken explains a software project to the developer who owns it. Ask what changed, 
 
 Screenshot of an answer on ken's local page, about a commit in a small made-up project, taken before ken replied in its own words. The model was Claude Opus.
 
+## Install
+
+You need Node 22.19 or later and access to the private repository krimvp/ken. ken has no package registry, so you build its package once from a checkout and install that:
+
+```sh
+git clone https://github.com/krimvp/ken.git
+cd ken
+npm ci
+npm pack
+npm install -g ./ken-0.0.0.tgz
+```
+
+This puts two commands on your PATH: `ken`, and `ken-claude-endpoint`, which runs ken on Claude through Claude Code. You can delete the checkout afterwards. To install ken for someone else, give them `ken-0.0.0.tgz`, and they run only the last line. `npm install -g github:krimvp/ken` does not work yet, because npm leaves out aigent, the agent engine ken bundles.
+
+## Quick start
+
+1. Name the model ken asks. For Ollama Cloud, add these lines to your shell startup file, such as `~/.zshrc` or `~/.bashrc`, and open a new terminal:
+
+   ```sh
+   export OLLAMA_API_KEY=<your key>
+   export KEN_MODEL=glm-5.3 KEN_BASE_URL=https://ollama.com/v1 KEN_API_KEY_ENV=OLLAMA_API_KEY
+   ```
+
+   With no model set, any ken command that needs one prints the line to copy for each common setup: Ollama Cloud, an OpenAI-compatible proxy such as LiteLLM, and Claude through Claude Code.
+
+2. Open the page for your project:
+
+   ```sh
+   cd your-project
+   ken open
+   ```
+
+   ken serves the page on 127.0.0.1 and opens it in your browser. Every command reads the project in the current folder, and `--repo <path>` names another. The examples below run ken from a checkout with `npm run ken --`. An installed `ken` takes the same arguments.
+
 ## What ken gives you
 
 - **A colleague who shows the lines.** The model's words are its own, and ken does not check them. A boxed card is a claim, a decision, a risk, a diagram or a topic, with the lines of code, the commit message or the saved session it quotes. ken finds every quoted line where the quote says it is. A card with a quote that is not there goes back to the model alone, and you never see it; the rest of the reply stands. ken checks where a quote is, not whether a sentence is true. Every arrow in a diagram quotes its lines.
@@ -21,7 +55,7 @@ In ken's last two test rounds, on pull requests it had never seen, fresh AI judg
 
 ## Status
 
-Early work, not released. Nothing to install, no license, private repository. You run ken from a checkout. [site/](site/index.html) holds a public page about it, not yet published.
+Early work, not released. No package registry, no license, private repository. [site/](site/index.html) holds a public page about it, not yet published.
 
 - ken runs on your machine and only reads. It never edits your code, commits or pushes, and it writes only in `.ken/` in the project and in `~/.ken/`. It works with git repositories, Claude Code sessions and one developer.
 - It talks to an OpenAI-compatible endpoint, and the code and session text it reads go to that provider. It has been run on glm-5.3 and kimi-k3.1-pro through Ollama Cloud, and on Claude Opus through ken's local adapter for the Claude Code command.
