@@ -12,7 +12,7 @@
 		"typecheck": "tsc --noEmit",
 		"lint": "biome check --error-on-warnings .",
 		"format": "biome check --write .",
-		"test": "node --test 'test/**/*.test.ts'",
+		"test": "node --import ./test/fixtures/git-identity.ts --test 'test/**/*.test.ts'",
 		"check:structure": "node scripts/check/structure.ts",
 		"check:prose": "node scripts/check/prose.ts",
 		"check": "npm run typecheck && npm run lint && npm test && npm run check:structure && npm run check:prose"
