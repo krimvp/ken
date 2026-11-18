@@ -3,25 +3,111 @@
 	--text-md: 1rem;
 	/* Small grey notes: a step larger and darker than the shared small text, so they stay easy to read. */
 	--text-note: 0.9375rem;
-	--color-note: #474c53;
-	--top: 3.25rem;
-	--color-add: #1f6b3a;
-	--color-del: #8c2b1c;
-	--color-warn-bg: #fbf3e4;
-	--color-warn-border: #b8913f;
+	--color-note: #4a5160;
+	--top: 3.5rem;
+	--color-add: #18794e;
+	--color-del: #a3301f;
+	--color-warn-bg: #fdf6e7;
+	--color-warn-border: #c08a2d;
 	--color-box-border: var(--color-border);
+	--radius-lg: 18px;
+	--shadow-sm: 0 1px 2px rgb(20 26 40 / 0.06);
+	--shadow-md: 0 1px 2px rgb(20 26 40 / 0.05), 0 6px 18px -6px rgb(20 26 40 / 0.12);
+	--shadow-lg: 0 2px 4px rgb(20 26 40 / 0.05), 0 14px 32px -10px rgb(20 26 40 / 0.2);
+	--color-canvas: #fbfbfd;
+	--color-bar: rgb(246 247 249);
+	--color-add-bg: #e3f3ea;
+	--color-del-bg: #fbe9e6;
+	--color-add-ink: #135f3d;
+	--color-del-ink: #8f2a1b;
+	--color-dot: #d5d9e1;
+	--color-edge: #8b93a3;
+	/* A part's colour, set by its .pc-N class: a soft fill, a line, and text that reads on the fill. */
+	--part-s: 62%;
+	--part-fill-l: 95.5%;
+	--part-line-l: 58%;
+	--part-ink-l: 30%;
 }
 
 @media (prefers-color-scheme: dark) {
 	:root {
-		--color-note: #bcc1c8;
-		--color-add: #7fc79a;
-		--color-del: #eda497;
-		--color-warn-bg: #2a2418;
-		--color-warn-border: #9c7f42;
+		--color-note: #b9c0cc;
+		--color-add: #6fd3a0;
+		--color-del: #f2a598;
+		--color-warn-bg: #2a2216;
+		--color-warn-border: #b98d3f;
 		/* The shared border is too faint on a dark card for a box the reader must see. */
-		--color-box-border: #4d545e;
+		--color-box-border: #353c48;
+		--shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+		--shadow-md: 0 1px 2px rgb(0 0 0 / 0.35), 0 8px 20px -8px rgb(0 0 0 / 0.6);
+		--shadow-lg: 0 2px 4px rgb(0 0 0 / 0.35), 0 16px 36px -12px rgb(0 0 0 / 0.7);
+		--color-canvas: #12161c;
+		--color-bar: rgb(15 18 23);
+		--color-add-bg: #173326;
+		--color-del-bg: #3a1f1b;
+		--color-add-ink: #8fe0b6;
+		--color-del-ink: #f6b8ad;
+		--color-dot: #2a303b;
+		--color-edge: #7a8394;
+		--part-s: 45%;
+		--part-fill-l: 17%;
+		--part-line-l: 62%;
+		--part-ink-l: 80%;
 	}
+}
+
+/* Eight part colours, far apart on the colour wheel, so neighbours in a picture never look alike. */
+.pc-0 {
+	--hue: 222;
+}
+.pc-1 {
+	--hue: 24;
+}
+.pc-2 {
+	--hue: 160;
+}
+.pc-3 {
+	--hue: 270;
+}
+.pc-4 {
+	--hue: 44;
+}
+.pc-5 {
+	--hue: 192;
+}
+.pc-6 {
+	--hue: 338;
+}
+.pc-7 {
+	--hue: 96;
+}
+
+:where(.pc-0, .pc-1, .pc-2, .pc-3, .pc-4, .pc-5, .pc-6, .pc-7) {
+	--part-fill: hsl(var(--hue) var(--part-s) var(--part-fill-l));
+	--part-line: hsl(var(--hue) var(--part-s) var(--part-line-l));
+	--part-ink: hsl(var(--hue) var(--part-s) var(--part-ink-l));
+}
+
+/* A part's name in a sentence: its colour as a dot, and its name in the colour's ink. */
+.part-name:is(.pc-0, .pc-1, .pc-2, .pc-3, .pc-4, .pc-5, .pc-6, .pc-7) {
+	display: inline-flex;
+	align-items: baseline;
+	gap: 0.35em;
+	padding: 0 0.45em;
+	border-radius: var(--radius-sm);
+	background: var(--part-fill);
+	color: var(--part-ink);
+	white-space: nowrap;
+}
+
+.part-name:is(.pc-0, .pc-1, .pc-2, .pc-3, .pc-4, .pc-5, .pc-6, .pc-7)::before {
+	content: "";
+	flex: none;
+	width: 0.55em;
+	height: 0.55em;
+	border-radius: 50%;
+	background: var(--part-line);
+	transform: translateY(-0.05em);
 }
 
 *,
@@ -89,9 +175,11 @@ button {
 	outline-offset: -3px;
 }
 
-/* Keyboard focus never lands under the pinned question box. */
+/* Keyboard focus and a step moved to never land under the pinned header or question box. main.js keeps --composer at
+   the box's height, which grows with the question. */
 html {
-	scroll-padding-bottom: 6rem;
+	scroll-padding-top: calc(var(--top) + var(--space-2));
+	scroll-padding-bottom: calc(var(--composer, 6rem) + var(--space-2));
 }
 
 .muted {
@@ -124,16 +212,21 @@ html {
 .primary {
 	padding: var(--space-2) var(--space-4);
 	color: var(--color-text);
-	border: 1px solid var(--color-border);
-	border-radius: var(--radius-sm);
+	border: 1px solid var(--color-box-border);
+	border-radius: 10px;
 	background: var(--color-card);
+	box-shadow: var(--shadow-sm);
 	font-size: var(--text-note);
 	font-weight: 600;
 	line-height: 1.5;
+	transition:
+		background-color 0.15s,
+		border-color 0.15s;
 }
 
 .quiet-button:hover {
-	border-color: var(--color-muted);
+	border-color: var(--color-accent);
+	background: var(--color-label-bg);
 }
 
 .primary {
@@ -141,6 +234,13 @@ html {
 	background: var(--color-accent);
 	color: var(--color-bg);
 	font-size: var(--text-md);
+	box-shadow:
+		var(--shadow-sm),
+		inset 0 1px 0 rgb(255 255 255 / 0.18);
+}
+
+.primary:hover:not([disabled]) {
+	filter: brightness(1.08);
 }
 
 /* A button that cannot act now keeps its label readable. */
@@ -169,13 +269,28 @@ html {
 	min-height: var(--top);
 	padding: var(--space-2) var(--space-6);
 	border-bottom: 1px solid var(--color-border);
-	background: var(--color-bg);
+	background: var(--color-bar);
 }
 
+/* ken's mark: three part colours in one tile, the way the picture shows a project. */
 .brand {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-2);
 	font-size: var(--text-base);
-	font-weight: 700;
-	letter-spacing: -0.01em;
+	font-weight: 750;
+	letter-spacing: -0.02em;
+}
+
+.brand::before {
+	content: "";
+	width: 1.25rem;
+	height: 1.25rem;
+	border-radius: 6px;
+	background:
+		radial-gradient(circle at 30% 30%, hsl(222 70% 62%) 0 28%, transparent 30%),
+		radial-gradient(circle at 72% 40%, hsl(24 80% 60%) 0 22%, transparent 24%),
+		radial-gradient(circle at 45% 76%, hsl(160 55% 48%) 0 22%, transparent 24%), var(--color-label-bg);
 }
 
 .project {
@@ -204,10 +319,10 @@ html {
 	overflow-y: auto;
 	padding: var(--space-4) var(--space-5) var(--space-2);
 	border: 1px solid var(--color-border);
-	border-radius: var(--radius-md);
+	border-radius: var(--radius-lg);
 	background: var(--color-card);
 	font-size: var(--text-md);
-	box-shadow: 0 6px 24px rgb(0 0 0 / 0.14);
+	box-shadow: var(--shadow-lg);
 }
 
 .menu-head {
@@ -236,7 +351,7 @@ html {
 
 /* The Project view lays its boxes side by side, so it takes a wider column on a wide screen. */
 .page.single.wide-view {
-	max-width: calc(76rem + 2 * var(--space-6));
+	max-width: calc(88rem + 2 * var(--space-6));
 }
 
 .chat {
@@ -262,7 +377,7 @@ html {
 	height: calc(100vh - var(--top));
 	min-width: 0;
 	overflow-y: auto;
-	padding: var(--space-6) 0 var(--space-7) var(--space-6);
+	padding: var(--space-6) var(--space-2) var(--space-7) var(--space-6);
 	border-left: 1px solid var(--color-border);
 }
 
@@ -310,12 +425,19 @@ html {
 	min-width: 0;
 	min-height: 2.75rem;
 	max-height: 10rem;
-	padding: var(--space-2) var(--space-3);
-	border: 1px solid var(--color-muted);
-	border-radius: var(--radius-sm);
+	padding: var(--space-2) var(--space-4);
+	border: 1px solid var(--color-box-border);
+	border-radius: var(--radius-md);
 	background: var(--color-card);
+	box-shadow: var(--shadow-sm);
 	line-height: 1.5;
 	resize: none;
+}
+
+.composer textarea:focus-visible {
+	border-color: var(--color-accent);
+	outline: 3px solid color-mix(in srgb, var(--color-accent) 35%, transparent);
+	outline-offset: 0;
 }
 
 .composer textarea::placeholder {
@@ -325,6 +447,8 @@ html {
 
 .composer .primary {
 	min-height: 2.75rem;
+	border-radius: var(--radius-md);
+	padding-inline: var(--space-5);
 }
 
 .composer-hint {
@@ -408,10 +532,11 @@ html {
 }
 
 .question {
-	font-size: var(--text-h2);
-	font-weight: 650;
+	margin-top: var(--space-1);
+	font-size: 1.5rem;
+	font-weight: 700;
 	line-height: var(--leading-tight);
-	letter-spacing: -0.01em;
+	letter-spacing: -0.02em;
 	overflow-wrap: anywhere;
 }
 
@@ -419,6 +544,7 @@ html {
 	margin-top: var(--space-2);
 	padding: var(--space-2) var(--space-3);
 	border-left: 3px solid var(--color-warn-border);
+	border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
 	background: var(--color-warn-bg);
 	font-size: var(--text-note);
 }
@@ -541,12 +667,16 @@ html {
 	display: block;
 }
 
+/* A drawing sits on the same dotted canvas as the picture of the parts. */
 .drawing {
-	padding: var(--space-4);
+	padding: var(--space-5);
 	overflow-x: auto;
 	border: 1px solid var(--color-border);
-	border-radius: var(--radius-md);
-	background: var(--color-card);
+	border-radius: var(--radius-lg);
+	background-color: var(--color-canvas);
+	background-image: radial-gradient(var(--color-dot) 1.2px, transparent 1.4px);
+	background-size: 22px 22px;
+	background-position: 11px 11px;
 	text-align: center;
 }
 
@@ -581,16 +711,17 @@ html {
 }
 
 #thread .drawing svg .label-back {
-	fill: var(--color-card);
+	fill: var(--color-canvas);
 }
 
-#thread .drawing svg rect.actor {
-	rx: 0;
-	ry: 0;
+#thread .drawing svg :is(rect.actor, .node rect) {
+	rx: 10px;
+	ry: 10px;
 }
 
 #thread .drawing svg :is(rect.actor, .node rect, .node .outer-path path) {
-	stroke-width: 1px;
+	stroke-width: 1.5px;
+	filter: drop-shadow(0 1px 1.5px rgb(20 26 40 / 0.1));
 }
 
 #thread .drawing svg .actor-line {
@@ -727,16 +858,18 @@ a.strip {
 	overflow-wrap: anywhere;
 }
 
-/* Labels. A dashed outline and a hollow dot: the agent's own reading, not something written down at the time. Recorded
-   is solid and filled: written down when the work was done. From the session sits between them, solid with a hollow
-   dot: quoted, but read afterwards. A span, because Mermaid names its own label groups "label" inside every drawing. */
+/* Labels. A grey pill with a hollow dot: the agent's own reading, not something written down at the time. Recorded is
+   outlined with a filled dot: written down when the work was done. From the session sits between them, outlined with a
+   hollow dot: quoted, but read afterwards. No dashed outline, which reads as a slot still to fill. A span, because
+   Mermaid names its own label groups "label" inside every drawing. */
 span.label {
 	display: inline-flex;
 	align-items: center;
 	gap: 0.4em;
-	padding: 0 0.5em;
-	border: 1.5px dashed var(--color-text);
-	border-radius: var(--radius-sm);
+	padding: 0 0.6em;
+	border: 1.5px solid transparent;
+	background: var(--color-code-bg);
+	border-radius: 999px;
 	color: var(--color-text);
 	font-size: var(--text-note);
 	font-weight: 600;
@@ -755,7 +888,8 @@ span.label::before {
 
 span.label-recorded,
 span.label-from-the-session {
-	border-style: solid;
+	border-color: var(--color-text);
+	background: var(--color-card);
 }
 
 .label-recorded::before {
@@ -763,7 +897,6 @@ span.label-from-the-session {
 }
 
 .label-found-by-search {
-	border-style: dotted;
 	background: var(--color-label-bg);
 	color: var(--color-label-text);
 }
@@ -808,8 +941,9 @@ span.label-from-the-session {
 }
 
 .q {
+	overflow: hidden;
 	border: 1px solid var(--color-border);
-	border-radius: var(--radius-sm);
+	border-radius: 10px;
 	background: var(--color-code-bg);
 }
 
@@ -1686,14 +1820,35 @@ ul.left-out {
 .top-menu {
 	display: flex;
 	flex-wrap: wrap;
-	gap: var(--space-2) var(--space-5);
+	gap: var(--space-1);
 	justify-content: flex-end;
 }
 
-.top-menu .link[aria-current="page"] {
+/* The views are tabs in the bar: plain words, a soft pill under the pointer, and a filled pill for the view open now. */
+.top-views {
+	display: flex;
+	gap: var(--space-1);
+}
+
+.top-menu > .link,
+.top-views .link {
+	padding: var(--space-1) var(--space-3);
+	border-radius: 999px;
 	color: var(--color-text);
+	font-weight: 550;
 	text-decoration: none;
-	font-weight: 600;
+}
+
+.top-menu > .link:hover,
+.top-views .link:hover {
+	background: var(--color-code-bg);
+}
+
+.top-menu .link[aria-current="page"] {
+	background: var(--color-label-bg);
+	color: var(--color-label-text);
+	text-decoration: none;
+	font-weight: 650;
 }
 
 .asked-list {
@@ -1795,7 +1950,7 @@ ul.left-out {
 	min-width: 0;
 	min-height: 2.75rem;
 	padding: var(--space-2) var(--space-3);
-	border: 1px solid var(--color-muted);
+	border: 1px solid var(--color-box-border);
 	border-radius: var(--radius-sm);
 	background: var(--color-card);
 	color: var(--color-text);
@@ -1836,15 +1991,30 @@ ul.left-out {
 
 .dv-list {
 	margin-top: var(--space-5);
-	border-top: 1px solid var(--color-border);
 }
 
 .dv-row {
 	display: grid;
 	gap: var(--space-1);
-	padding: var(--space-4) 0;
-	border-bottom: 1px solid var(--color-border);
 	overflow-wrap: anywhere;
+}
+
+/* Each decision, topic and thing waiting on the reader is a card, as a checked card in a reply is. */
+.dv-list,
+.t-list,
+.o-list {
+	display: grid;
+	gap: var(--space-3);
+}
+
+.dv-row,
+.t-row,
+.o-decision {
+	padding: var(--space-4);
+	border: 1px solid var(--color-border);
+	border-radius: 14px;
+	background: var(--color-card);
+	box-shadow: var(--shadow-sm);
 }
 
 .dv-head {
@@ -1881,12 +2051,6 @@ ul.left-out {
 
 .t-list {
 	margin-top: var(--space-5);
-	border-top: 1px solid var(--color-border);
-}
-
-.t-row {
-	padding: var(--space-3) 0;
-	border-bottom: 1px solid var(--color-border);
 }
 
 .t-name {
@@ -1951,6 +2115,7 @@ ul.left-out {
 .pv-trail ol {
 	display: flex;
 	flex-wrap: wrap;
+	align-items: center;
 	gap: var(--space-1) var(--space-2);
 	margin-bottom: var(--space-2);
 	padding: 0;
@@ -1959,7 +2124,7 @@ ul.left-out {
 }
 
 .pv-trail li + li::before {
-	content: "/";
+	content: "\203A";
 	margin-right: var(--space-2);
 	color: var(--color-note);
 }
@@ -1968,8 +2133,29 @@ ul.left-out {
 	font-weight: 600;
 }
 
+/* Inside a part, the heading carries the part's colour, as its boxes do. */
+.pv-level {
+	display: flex;
+	align-items: center;
+	gap: var(--space-3);
+	font-size: 2rem;
+	font-weight: 700;
+	letter-spacing: -0.02em;
+	line-height: var(--leading-tight);
+}
+
+/* Inside a part, a solid bar in its colour. A hollow square read as a box still to tick. */
+.pv-level:is(.pc-0, .pc-1, .pc-2, .pc-3, .pc-4, .pc-5, .pc-6, .pc-7)::before {
+	content: "";
+	flex: none;
+	align-self: stretch;
+	width: 0.4rem;
+	border-radius: 999px;
+	background: var(--part-line);
+}
+
 .pv-other {
-	margin-top: var(--space-5);
+	margin-top: var(--space-4);
 }
 
 .pv-other-toggle {
@@ -1977,9 +2163,13 @@ ul.left-out {
 	min-height: 2.75rem;
 	padding: var(--space-2) 0;
 	color: var(--color-accent);
+	font-size: var(--text-note);
+	font-weight: 600;
 	cursor: pointer;
+}
+
+.pv-other-toggle:hover {
 	text-decoration: underline;
-	text-decoration-thickness: 1px;
 	text-underline-offset: 0.18em;
 }
 
@@ -1999,6 +2189,11 @@ ul.left-out {
 	align-items: flex-start;
 	gap: var(--space-3);
 	margin-top: var(--space-2);
+	padding: var(--space-4);
+	border: 1px solid var(--color-border);
+	border-radius: var(--radius-md);
+	background: var(--color-card);
+	box-shadow: var(--shadow-sm);
 }
 
 .pv-field {
@@ -2019,7 +2214,7 @@ ul.left-out {
 	min-width: 0;
 	min-height: 2.75rem;
 	padding: var(--space-2) var(--space-3);
-	border: 1px solid var(--color-muted);
+	border: 1px solid var(--color-box-border);
 	border-radius: var(--radius-sm);
 	background: var(--color-card);
 	color: var(--color-text);
@@ -2071,59 +2266,52 @@ ul.left-out {
 	max-width: var(--measure);
 }
 
-/* On a narrow screen the boxes are one list. From 760 pixels they are a picture: a grid with room between the boxes for
-   the arrows, which parts-picture.js draws once the boxes are laid out. --draw tells it whether to draw. */
+/* On a narrow screen the boxes stand in one column, and the arrows bend out to its right with their numbers on them.
+   From 760 pixels the boxes are a grid on a dotted canvas, with room between them for the arrows and their verbs.
+   parts-picture.js draws the arrows once the boxes are laid out, and --draw tells it how: 1 for the grid, column for
+   the column. */
 .pv-level-body {
 	margin-top: var(--space-5);
 }
 
 .pv-picture {
-	--draw: 0;
+	--draw: column;
 	position: relative;
-}
-
-.pv-boxes {
-	display: grid;
-	gap: var(--space-3);
-	padding: 0;
-	list-style: none;
-}
-
-.pv-cell {
-	display: flex;
-	min-width: 0;
+	padding: var(--space-4) 6rem var(--space-4) var(--space-3);
+	border: 1px solid var(--color-border);
+	border-radius: var(--radius-lg);
+	background-color: var(--color-canvas);
+	background-image: radial-gradient(var(--color-dot) 1.2px, transparent 1.4px);
+	background-size: 22px 22px;
+	background-position: 11px 11px;
 }
 
 @media (min-width: 760px) {
 	.pv-picture {
 		--draw: 1;
+		padding: var(--space-8) var(--space-6);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		background-color: var(--color-canvas);
+		background-image: radial-gradient(var(--color-dot) 1.2px, transparent 1.4px);
+		background-size: 22px 22px;
+		background-position: 11px 11px;
 	}
 
 	.pv-picture .pv-boxes {
 		grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
-		/* Every row as tall as the tallest box, so the boxes line up. */
-		grid-template-rows: repeat(var(--rows), 1fr);
-		gap: 6rem var(--space-8);
+		gap: 7.5rem 9.5rem;
+	}
+
+	/* With no arrows to draw, the boxes need no room between them for lines. */
+	.pv-level-body:not(.has-arrows) .pv-picture .pv-boxes {
+		gap: var(--space-5);
 	}
 
 	.pv-picture .pv-cell {
-		position: relative;
-		z-index: 1;
+		order: 0;
 		grid-row: var(--row);
 		grid-column: var(--col);
-	}
-}
-
-@media (min-width: 1100px) {
-	.pv-level-body.has-arrows {
-		display: grid;
-		grid-template-columns: minmax(0, 1fr) 22rem;
-		align-items: start;
-		gap: var(--space-7);
-	}
-
-	.pv-level-body.has-arrows .pv-sub {
-		margin-top: 0;
 	}
 }
 
@@ -2132,69 +2320,150 @@ ul.left-out {
 	inset: 0;
 	z-index: 0;
 	overflow: visible;
+	pointer-events: none;
+}
+
+.pv-line,
+.pv-line-hot {
+	fill: none;
+	stroke-linecap: round;
 }
 
 .pv-line {
-	stroke: var(--color-muted);
-	stroke-width: 1.5;
+	stroke: var(--color-edge);
+	stroke-width: 1.75;
+}
+
+.pv-line-hot {
+	stroke: none;
+	stroke-width: 2.75;
+}
+
+.pv-link.is-open .pv-line-hot,
+.pv-link.is-hot .pv-line-hot {
+	stroke: var(--color-accent);
+}
+
+.pv-link.is-faded .pv-line {
+	stroke: var(--color-box-border);
+	stroke-dasharray: 4 5;
 }
 
 .pv-head {
-	fill: var(--color-muted);
+	fill: var(--color-edge);
 }
 
-.pv-head.is-open {
+.pv-head.hot {
 	fill: var(--color-accent);
 }
 
-.pv-hit {
-	stroke: transparent;
-	stroke-width: 16;
+.pv-head.faded {
+	fill: var(--color-box-border);
 }
 
-.pv-link[data-act] {
+.pv-link:not(.is-open, .is-hot) .pv-line-hot {
+	marker-end: none;
+}
+
+/* An arrow's number and verb, on its line. The list under the picture says the same to a screen reader. */
+.pv-labels {
+	position: absolute;
+	inset: 0;
+	z-index: 2;
+	pointer-events: none;
+}
+
+.pv-label {
+	position: absolute;
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-2);
+	width: max-content;
+	max-width: 13rem;
+	padding: 3px var(--space-3) 3px 3px;
+	border: 1px solid var(--color-box-border);
+	border-radius: 14px;
+	background: var(--color-card);
+	box-shadow: var(--shadow-sm);
+	color: var(--color-note);
+	font-size: var(--text-sm);
+	font-weight: 500;
+	line-height: 1.3;
+	pointer-events: auto;
 	cursor: pointer;
 }
 
-.pv-link.is-open .pv-line,
-.pv-link[data-act]:hover .pv-line {
-	stroke: var(--color-accent);
-	stroke-width: 2.5;
+.pv-label.is-narrow {
+	max-width: 10.5rem;
 }
 
-.pv-badge {
-	fill: var(--color-card);
-	stroke: var(--color-muted);
-	stroke-width: 1.5;
+.pv-label.is-compact {
+	padding: 2px;
 }
 
-.pv-link.is-open .pv-badge,
-.pv-link[data-act]:hover .pv-badge {
-	stroke: var(--color-accent);
-	stroke-width: 2.5;
+.pv-label.is-compact .pv-label-text {
+	display: none;
 }
 
-.pv-badge-text {
-	fill: var(--color-text);
-	font-size: 14px;
-	font-weight: 650;
-	text-anchor: middle;
-	dominant-baseline: central;
+.pv-label-n,
+.pv-num {
+	display: inline-grid;
+	flex: none;
+	place-items: center;
+	width: 1.5rem;
+	height: 1.5rem;
+	border-radius: 50%;
+	background: var(--color-text);
+	color: var(--color-card);
+	font-size: var(--text-sm);
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
 }
 
+.pv-label.is-open,
+.pv-label.is-hot,
+.pv-label:hover {
+	border-color: var(--color-accent);
+	color: var(--color-text);
+}
+
+.pv-label.is-open .pv-label-n,
+.pv-label.is-hot .pv-label-n,
+.pv-label:hover .pv-label-n,
+.pv-arrow[aria-expanded="true"] .pv-num,
+.pv-arrow:hover .pv-num {
+	background: var(--color-accent);
+	color: var(--color-card);
+}
+
+/* A part's box: a card in the part's colour, its name beside a swatch. A box with no colour is a folder ken could not
+   match to a part. */
 .pv-box {
+	--part-fill: var(--color-code-bg);
+	--part-line: var(--color-muted);
+	--part-ink: var(--color-text);
 	display: flex;
 	flex-direction: column;
 	gap: var(--space-1);
 	width: 100%;
 	min-width: 0;
-	padding: var(--space-4);
-	border: 1px solid var(--color-box-border);
-	border-radius: var(--radius-md);
-	background: var(--color-card);
+	padding: var(--space-4) var(--space-4) var(--space-4);
+	border: 1px solid color-mix(in srgb, var(--part-line) 40%, var(--color-box-border));
+	border-radius: 14px;
+	background: linear-gradient(to bottom, var(--part-fill), var(--color-card) 4.5rem) var(--color-card);
+	box-shadow: var(--shadow-md);
 	color: var(--color-text);
 	font: inherit;
 	text-align: left;
+	transition:
+		box-shadow 0.15s,
+		transform 0.15s;
+}
+
+.pv-box:is(.pc-0, .pc-1, .pc-2, .pc-3, .pc-4, .pc-5, .pc-6, .pc-7) {
+	--part-fill: hsl(var(--hue) var(--part-s) var(--part-fill-l));
+	--part-line: hsl(var(--hue) var(--part-s) var(--part-line-l));
+	--part-ink: hsl(var(--hue) var(--part-s) var(--part-ink-l));
 }
 
 button.pv-box {
@@ -2202,22 +2471,52 @@ button.pv-box {
 }
 
 button.pv-box:hover {
-	border-color: var(--color-accent);
+	border-color: var(--part-line);
+	box-shadow: var(--shadow-lg);
+	transform: translateY(-1px);
 }
 
-/* One signal per state: a change's touch is the amber edge, a part not there is the dashed border, and a part that
+@media (prefers-reduced-motion: reduce) {
+	.pv-box {
+		transition: none;
+	}
+
+	button.pv-box:hover {
+		transform: none;
+	}
+}
+
+/* One signal per state: a change's touch is the amber ring, a part not there is the dashed border, and a part that
    changed is its line of words. */
 .pv-box.is-gone {
 	border-style: dashed;
+	box-shadow: none;
 }
 
 .pv-box.is-touched {
-	border-left: 4px solid var(--color-warn-border);
+	border-color: var(--color-warn-border);
+	box-shadow:
+		0 0 0 2px var(--color-warn-border),
+		var(--shadow-lg);
 }
 
 .pv-name {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2);
+	color: var(--part-ink);
 	font-size: var(--text-md);
-	font-weight: 650;
+	font-weight: 700;
+	letter-spacing: -0.005em;
+}
+
+.pv-name::before {
+	content: "";
+	flex: none;
+	width: 0.75rem;
+	height: 0.75rem;
+	border-radius: 4px;
+	background: var(--part-line);
 }
 
 /* A box that opens says so in the accent colour, as a link does. */
@@ -2230,7 +2529,7 @@ button.pv-box:hover {
 }
 
 .pv-inside::after {
-	content: " \203A";
+	content: " \2192";
 }
 
 button.pv-box:hover .pv-inside {
@@ -2240,6 +2539,7 @@ button.pv-box:hover .pv-inside {
 
 .pv-job {
 	font-size: var(--text-md);
+	line-height: 1.5;
 }
 
 .pv-paths,
@@ -2264,10 +2564,18 @@ button.pv-box:hover .pv-inside {
 	font-weight: 600;
 }
 
+.pv-touched {
+	margin: var(--space-1) 0;
+	padding: var(--space-1) var(--space-2);
+	border-radius: var(--radius-sm);
+	background: var(--color-warn-bg);
+}
+
 .pv-sub {
-	margin-top: var(--space-6);
+	margin-top: var(--space-7);
 	font-size: var(--text-h2);
-	font-weight: 650;
+	font-weight: 700;
+	letter-spacing: -0.01em;
 	line-height: var(--leading-tight);
 }
 
@@ -2278,50 +2586,50 @@ button.pv-box:hover .pv-inside {
 	font-size: var(--text-note);
 }
 
+/* The arrows as a list of cards under the picture, two to a row on a wide screen. */
 .pv-arrows {
-	margin-top: var(--space-3);
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	align-items: start;
+	gap: var(--space-2) var(--space-3);
+	margin-top: var(--space-4);
 	padding: 0;
 	list-style: none;
-	border-top: 1px solid var(--color-box-border);
+}
+
+@media (min-width: 1100px) {
+	.pv-arrows {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
 }
 
 .pv-arrow-item {
-	padding: var(--space-2) 0;
-	border-bottom: 1px solid var(--color-box-border);
+	padding: 0 var(--space-4);
+	border: 1px solid var(--color-border);
+	border-radius: var(--radius-md);
+	background: var(--color-card);
+	box-shadow: var(--shadow-sm);
+}
+
+.pv-arrow-item:has([aria-expanded="true"]) {
+	border-color: var(--color-accent);
+	padding-bottom: var(--space-3);
 }
 
 .pv-arrow {
 	display: flex;
 	align-items: center;
-	gap: var(--space-1) var(--space-4);
+	gap: var(--space-1) var(--space-3);
 	width: 100%;
-	min-height: 2.75rem;
+	min-height: 3.25rem;
 	padding: var(--space-2) 0;
 	border: 0;
 	background: none;
 	color: var(--color-text);
 	font: inherit;
+	line-height: 1.8;
 	text-align: left;
 	cursor: pointer;
-}
-
-/* The arrow's number, as the picture shows it on the arrow. */
-.pv-num {
-	display: inline-grid;
-	flex: none;
-	place-items: center;
-	width: 1.625rem;
-	height: 1.625rem;
-	border: 1.5px solid var(--color-muted);
-	border-radius: 50%;
-	font-size: var(--text-note);
-	font-weight: 650;
-}
-
-.pv-arrow[aria-expanded="true"] .pv-num,
-.pv-arrow:hover .pv-num {
-	border-color: var(--color-accent);
-	color: var(--color-accent);
 }
 
 /* One control opens or closes the line under every arrow. */
@@ -2351,42 +2659,71 @@ button.pv-box:hover .pv-inside {
 	cursor: pointer;
 }
 
-/* The change card: what a change touched, over the project's top level of parts, at the top of a reply about it. */
+/* The change card: what a change touched, over the project's top level of parts, at the top of a reply about it. The
+   same picture as the Project view, smaller: the parts the change touched in their colour, the rest faded. */
 .change-card {
 	margin-bottom: var(--space-5);
-	padding: var(--space-4);
-	border: 1px solid var(--color-box-border);
-	border-radius: var(--radius-md);
+	padding: var(--space-5);
+	border: 1px solid var(--color-border);
+	border-radius: var(--radius-lg);
 	background: var(--color-card);
+	box-shadow: var(--shadow-md);
 }
 
 .cc-title {
-	font-size: var(--text-md);
-	font-weight: 650;
+	font-size: var(--text-base);
+	font-weight: 700;
+	letter-spacing: -0.01em;
 }
 
 .cc-sub {
-	margin-top: var(--space-4);
+	margin-top: var(--space-5);
 	font-size: var(--text-note);
-	font-weight: 650;
+	font-weight: 700;
 }
 
 .cc-line {
-	margin-top: var(--space-2);
+	margin-top: var(--space-1);
 	color: var(--color-note);
 	font-size: var(--text-note);
 }
 
 .change-card .pv-picture {
-	margin-top: var(--space-3);
+	margin-top: var(--space-4);
 }
 
 .change-card .pv-box {
+	gap: 0;
 	padding: var(--space-3);
-	background: var(--color-bg);
+	border-radius: var(--radius-md);
+	background: var(--part-fill);
+	box-shadow: var(--shadow-sm);
+}
+
+.change-card .pv-box.is-touched {
+	border-color: var(--part-line);
+	box-shadow:
+		0 0 0 1px var(--part-line),
+		var(--shadow-md);
+}
+
+.change-card .is-faded .pv-box {
+	border-style: dashed;
+	border-color: var(--color-box-border);
+	background: var(--color-card);
+	box-shadow: none;
+}
+
+.change-card .is-faded .pv-name {
+	color: var(--color-note);
+}
+
+.change-card .is-faded .pv-name::before {
+	background: var(--color-box-border);
 }
 
 .cc-touched {
+	color: var(--part-ink);
 	font-size: var(--text-note);
 	font-weight: 600;
 }
@@ -2397,7 +2734,7 @@ button.pv-box:hover .pv-inside {
 }
 
 .cc-commits {
-	margin-top: var(--space-1);
+	margin-top: var(--space-2);
 	padding: 0;
 	list-style: none;
 	font-size: var(--text-note);
@@ -2408,21 +2745,86 @@ button.pv-box:hover .pv-inside {
 	overflow-wrap: anywhere;
 }
 
-/* On a narrow screen the card lists only the parts the change touched, and names the others in one line. */
-@media (max-width: 759px) {
-	.change-card .cc-untouched {
-		display: none;
-	}
+.change-card .cc-commit code {
+	margin-right: var(--space-1);
+	padding: 0 0.4em;
+	border-radius: var(--radius-sm);
+	background: var(--color-code-bg);
 }
 
 @media (min-width: 760px) {
-	.change-card .pv-picture .pv-boxes {
-		gap: var(--space-6) var(--space-7);
+	.change-card .pv-picture {
+		padding: var(--space-7) var(--space-5);
 	}
 
-	.cc-narrow {
-		display: none;
+	.change-card .pv-picture .pv-boxes {
+		gap: var(--space-7) var(--space-8);
 	}
+
+	.change-card.has-walk .pv-picture {
+		padding: var(--space-4) var(--space-5);
+	}
+}
+
+/* Pointing at a box lights it, its arrows and the boxes they join, each ringed in its colour. The rest lose their
+   colour, ring and shadow, and their arrows fade but stay easy to follow. Every word keeps its full contrast. */
+.pv-picture.is-lit .pv-cell.is-near .pv-box {
+	border-color: var(--part-line);
+	box-shadow:
+		0 0 0 1px var(--part-line),
+		var(--shadow-lg);
+}
+
+.pv-picture.is-lit .pv-cell:not(.is-near) .pv-box {
+	--part-fill: var(--color-card);
+	--part-line: var(--color-box-border);
+	--part-ink: var(--color-note);
+	border-color: var(--color-box-border);
+	box-shadow: none;
+}
+
+.pv-picture.is-lit .pv-link:not(.is-hot) {
+	opacity: 0.55;
+}
+
+/* Beside a walkthrough the picture shows only the arrows of the lit part, and the others faintly. */
+.pv-picture[data-still="true"]:not(.is-lit) .pv-link {
+	opacity: 0;
+}
+
+.pv-picture[data-still="true"].is-lit .pv-link:not(.is-hot) {
+	opacity: 0.12;
+}
+
+.pv-picture.is-lit .pv-label:not(.is-hot) {
+	box-shadow: none;
+}
+
+.pv-picture.is-lit .pv-label:not(.is-hot) .pv-label-n {
+	background: none;
+	box-shadow: inset 0 0 0 1px var(--color-box-border);
+	color: var(--color-note);
+}
+
+.pv-boxes {
+	display: grid;
+	gap: var(--space-3);
+	padding: 0;
+	list-style: none;
+}
+
+.pv-cell {
+	display: flex;
+	min-width: 0;
+}
+
+/* A box is as tall as what it says, so a short part leaves no empty space under its words. The arrows meet the box
+   itself, since the cell is no taller than the box. */
+.pv-picture .pv-cell {
+	position: relative;
+	z-index: 1;
+	order: var(--order);
+	align-self: center;
 }
 
 /* Following up: the lens "What changed" and the open list */
@@ -2438,7 +2840,7 @@ button.pv-box:hover .pv-inside {
 	max-width: 100%;
 	min-height: 2.75rem;
 	padding: var(--space-2) var(--space-3);
-	border: 1px solid var(--color-muted);
+	border: 1px solid var(--color-box-border);
 	border-radius: var(--radius-sm);
 	background: var(--color-card);
 	color: var(--color-text);
@@ -2458,12 +2860,6 @@ button.pv-box:hover .pv-inside {
 
 .o-list {
 	margin-top: var(--space-3);
-	border-top: 1px solid var(--color-border);
-}
-
-.o-decision {
-	padding-bottom: var(--space-4);
-	border-bottom: 1px solid var(--color-border);
 }
 
 .o-card .decision {
@@ -2898,13 +3294,18 @@ q.subject {
 		min-height: 2.75rem;
 	}
 
+	/* Tight enough that "Waiting on you" and Menu fit beside the project's name at 390 px. */
 	.top {
-		gap: var(--space-3);
+		gap: var(--space-2);
 	}
 
 	.top-menu {
 		flex-wrap: nowrap;
-		gap: var(--space-4);
+		gap: var(--space-1);
+	}
+
+	.top-menu > .link {
+		padding: var(--space-1) var(--space-2);
 	}
 
 	.project .reads {
@@ -3025,19 +3426,27 @@ q.subject {
 
 .card {
 	display: grid;
-	grid-template-columns: 1.5rem minmax(0, 1fr);
-	padding: var(--space-3) var(--space-4) var(--space-3) var(--space-3);
+	grid-template-columns: 2rem minmax(0, 1fr);
+	padding: var(--space-4) var(--space-5) var(--space-4) var(--space-4);
 	border: 1px solid var(--color-border);
-	border-left: 3px solid var(--color-add);
-	border-radius: var(--radius-md);
+	border-radius: 14px;
 	background: var(--color-card);
+	box-shadow: var(--shadow-sm);
 	scroll-margin-top: var(--top);
 }
 
+/* The tick of a checked card, in a round green badge. */
 .card-check {
+	display: grid;
+	place-items: center;
+	width: 1.5rem;
+	height: 1.5rem;
+	margin-top: 0.05rem;
+	border-radius: 50%;
+	background: var(--color-add-bg);
 	color: var(--color-add);
-	font-weight: 700;
-	line-height: 1.6;
+	font-weight: 800;
+	line-height: 1;
 }
 
 .card-body > :first-child {
@@ -3067,10 +3476,10 @@ q.subject {
 	z-index: 50;
 	max-width: min(22rem, calc(100vw - 2 * var(--gutter)));
 	padding: var(--space-2) var(--space-3);
-	border: 1px solid var(--color-border);
-	border-radius: var(--radius-sm);
+	border: 1px solid var(--color-box-border);
+	border-radius: 10px;
 	background: var(--color-card);
-	box-shadow: 0 4px 16px rgb(0 0 0 / 0.15);
+	box-shadow: var(--shadow-lg);
 	color: var(--color-text);
 	font-size: var(--text-note);
 	line-height: 1.5;
@@ -3100,9 +3509,10 @@ q.subject {
 .chip {
 	min-height: 2.75rem;
 	padding: var(--space-1) var(--space-4);
-	border: 1px solid var(--color-border);
+	border: 1px solid var(--color-box-border);
 	border-radius: 999px;
 	background: var(--color-card);
+	box-shadow: var(--shadow-sm);
 	color: var(--color-accent);
 	font: inherit;
 	font-weight: 600;
@@ -3111,6 +3521,7 @@ q.subject {
 
 .chip:hover:not(:disabled) {
 	border-color: var(--color-accent);
+	background: var(--color-label-bg);
 }
 
 .chip:disabled {
@@ -3120,4 +3531,285 @@ q.subject {
 
 .working {
 	margin-top: var(--space-4);
+}
+
+/* A walkthrough: the change's steps beside the change card's picture. With the panel beside the thread the picture
+   stands in one column beside the steps and stays in view while they scroll, and a step's diff opens in the panel.
+   Narrower, the picture sits above the steps and a step's diff opens under it. */
+.walk {
+	margin-top: var(--space-5);
+}
+
+.walk-title {
+	margin-top: 0;
+}
+
+.walk-steps {
+	display: grid;
+	gap: var(--space-2);
+	margin-top: var(--space-3);
+	padding: 0;
+	list-style: none;
+}
+
+.walk-step {
+	border: 1px solid var(--color-box-border);
+	border-radius: var(--radius-md);
+	background: var(--color-card);
+}
+
+/* With the panel beside the thread no step opens in the list, so the lines fill two columns, read down, and the list
+   fits under the picture on one screen. */
+@media (min-width: 1100px) {
+	.walk-steps {
+		display: block;
+		columns: 2;
+		column-gap: var(--space-2);
+	}
+
+	.walk-step {
+		margin-bottom: var(--space-2);
+		break-inside: avoid;
+	}
+}
+
+.walk-step.is-on {
+	border-color: var(--color-accent);
+	box-shadow: 0 0 0 1px var(--color-accent);
+}
+
+.walk-head {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr) auto;
+	align-items: center;
+	gap: var(--space-3);
+	width: 100%;
+	padding: var(--space-2) var(--space-3);
+	border: 0;
+	background: none;
+	color: var(--color-text);
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+.walk-n {
+	display: inline-grid;
+	place-items: center;
+	width: 1.75rem;
+	height: 1.75rem;
+	border-radius: 50%;
+	background: var(--color-text);
+	color: var(--color-card);
+	font-size: var(--text-sm);
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+}
+
+.walk-step.is-on .walk-n {
+	background: var(--color-accent);
+}
+
+.walk-name {
+	font-weight: 600;
+}
+
+.walk-mark {
+	color: var(--color-text);
+	font-size: var(--text-note);
+	font-weight: 600;
+	white-space: nowrap;
+}
+
+.walk-open {
+	padding: 0 var(--space-3) var(--space-3);
+}
+
+.walk-open .walk-text {
+	margin-bottom: var(--space-3);
+}
+
+.walk-cards .card {
+	margin-top: 0;
+}
+
+.walk-nav {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-3);
+	margin-top: var(--space-3);
+}
+
+.walk-where {
+	color: var(--color-note);
+	font-size: var(--text-note);
+}
+
+.walk-panel-text {
+	margin-top: var(--space-3);
+}
+
+.walk-panel-sub {
+	margin-top: var(--space-5);
+	font-size: var(--text-note);
+	font-weight: 700;
+}
+
+.walk-hunk {
+	margin-top: var(--space-4);
+	border: 1px solid var(--color-border);
+	border-radius: var(--radius-md);
+	overflow: hidden;
+	background: var(--color-card);
+}
+
+.walk-file {
+	padding: var(--space-2) var(--space-3);
+	font-size: var(--text-note);
+	overflow-wrap: anywhere;
+}
+
+.code.diff > code {
+	grid-template-columns: auto auto minmax(0, 1fr);
+}
+
+.code.diff .lc.add {
+	background: var(--color-add-bg);
+	color: var(--color-add-ink);
+}
+
+.code.diff .lc.del {
+	background: var(--color-del-bg);
+	color: var(--color-del-ink);
+}
+
+.code.diff .more {
+	grid-column: 3;
+}
+
+.chip-main {
+	border-color: var(--color-accent);
+	background: var(--color-accent);
+	color: var(--color-card);
+}
+
+.chip-main:hover:not(:disabled) {
+	background: var(--color-accent);
+	color: var(--color-card);
+	text-decoration: underline;
+}
+
+/* A tour: the way in from the Project view and the first visit, its stops, and what the map says on each. */
+.pv-tour,
+.welcome-tour {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-2) var(--space-4);
+	margin-top: var(--space-4);
+}
+
+.pv-tour-line,
+.welcome-tour-line {
+	flex: 1 1 18rem;
+	color: var(--color-note);
+	font-size: var(--text-note);
+}
+
+.walk-know {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-2) var(--space-3);
+	margin-top: var(--space-3);
+	font-size: var(--text-note);
+}
+
+.walk-start:not([disabled]) {
+	border-color: var(--color-accent);
+	background: var(--color-accent);
+	color: var(--color-card);
+}
+
+.tc-stop {
+	color: var(--color-note);
+	font-size: var(--text-note);
+}
+
+.tc-box.is-met .tc-stop,
+.tc-box.is-known .tc-stop {
+	color: var(--color-text);
+	font-weight: 600;
+}
+
+/* Live: a heading that says what the view is for, and an empty state that says what will come. */
+.live-title {
+	font-size: 2rem;
+	font-weight: 650;
+	letter-spacing: -0.02em;
+	line-height: var(--leading-tight);
+}
+
+.live-lead {
+	margin: var(--space-2) 0 var(--space-4);
+	color: var(--color-note);
+}
+
+.live-empty {
+	margin-top: var(--space-5);
+	padding: var(--space-5);
+	border: 1px solid var(--color-box-border);
+	border-radius: var(--radius-lg);
+	background: var(--color-card);
+	box-shadow: var(--shadow-sm);
+}
+
+.live-empty h2 {
+	font-size: var(--text-md);
+	font-weight: 650;
+}
+
+.live-empty-text {
+	max-width: 38rem;
+	margin-top: var(--space-2);
+	color: var(--color-note);
+}
+
+/* A decision or a topic as a part's box is drawn: its part's colour across the top when it sits in a named part, a
+   firmer edge and shadow than a plain card, so the list reads as the same things the Project view shows. */
+.c-card {
+	--part-fill: var(--color-code-bg);
+	--part-line: var(--color-muted);
+	border-color: color-mix(in srgb, var(--part-line) 40%, var(--color-box-border));
+	background: linear-gradient(to bottom, var(--part-fill), var(--color-card) 4.5rem) var(--color-card);
+	box-shadow: var(--shadow-md);
+}
+
+.c-card:is(.pc-0, .pc-1, .pc-2, .pc-3, .pc-4, .pc-5, .pc-6, .pc-7) {
+	--part-fill: hsl(var(--hue) var(--part-s) var(--part-fill-l));
+	--part-line: hsl(var(--hue) var(--part-s) var(--part-line-l));
+	border-top: 3px solid var(--part-line);
+}
+
+.dv-part {
+	margin-bottom: var(--space-2);
+	font-size: var(--text-note);
+	font-weight: 600;
+}
+
+.map-foot-toggle {
+	color: var(--color-note);
+	cursor: pointer;
+}
+
+.map-foot-text {
+	margin-top: var(--space-2);
+}
+
+/* On a phone a stop's cards sit under it at nearly the full width, so quoted code keeps its lines. */
+@media (max-width: 759px) {
+	.walk-open {
+		padding: 0 var(--space-1) var(--space-2);
+	}
 }

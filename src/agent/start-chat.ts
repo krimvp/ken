@@ -12,7 +12,7 @@ import { readerIndex } from './reader-index.ts'
 import { quotesOf } from './reply/check-card.ts'
 import { fileTurn } from './reply/file-turn.ts'
 import { endReply } from './reply/record-reply.ts'
-import type { Item } from './reply/reply.ts'
+import type { Item, Tour } from './reply/reply.ts'
 import { laterCommits, laterText, MAX_PASS_REJECTIONS, reviseTool, riskPassQuestion } from './reply/risk-pass.ts'
 import { freshRound, type Round, showTool } from './reply/show-tool.ts'
 import { SYSTEM_PROMPT } from './system-prompt.ts'
@@ -28,10 +28,13 @@ export type Chat = {
 	// This chat's thread. A new Chat is a new thread: its model remembers what was asked of this one alone.
 	thread: string
 	// One question at a time. Breaking out of the loop early stops the question. as 'note' is a note ken writes by
-	// itself in live mode, which tells the reader's map nothing.
-	ask(question: string, signal?: AbortSignal, as?: 'question' | 'note'): AsyncGenerator<ChatEvent>
+	// itself in live mode, which tells the reader's map nothing. A tour tells it nothing either: the page marks each stop
+	// as the reader reaches it.
+	ask(question: string, signal?: AbortSignal, as?: Asking): AsyncGenerator<ChatEvent>
 	close(): Promise<void>
 }
+
+export type Asking = 'question' | 'note' | { tour: Tour }
 
 const PLUGIN = 'ken'
 // Each step of a question has its own turns, counted from 0, and a notice when few are left: a model that runs out of
@@ -124,9 +127,9 @@ export async function startChat(options: {
 		systemPrompt: SYSTEM_PROMPT,
 	})
 
-	async function* ask(question: string, signal?: AbortSignal, as = 'question'): AsyncGenerator<ChatEvent> {
+	async function* ask(question: string, signal?: AbortSignal, as: Asking = 'question'): AsyncGenerator<ChatEvent> {
 		const events = eventQueue()
-		const current = freshRound(as === 'question', events.push)
+		const current = freshRound(as === 'question', events.push, typeof as === 'object' ? as.tour : null)
 		round = current
 		turnsEnded = 0
 		shown.clear()
@@ -219,7 +222,7 @@ export async function startChat(options: {
 				secondLook = costSince(before, tokens)
 			}
 			// Cards of a turn that never ended, and risks the second look did not settle, show as ken first checked them.
-			const unreviewed = current.held.splice(0).map((risk) => riskItem({ ...risk, unreviewed: true }).card)
+			const unreviewed = current.held.splice(0).map((risk) => riskItem({ ...risk, unreviewed: true }))
 			file([...current.pending.splice(0), ...unreviewed])
 			if (current.items.length > 0 && !signal?.aborted) {
 				// Past this check the reply is whole, so a stop that comes while it is saved does not lose it.

@@ -21,9 +21,11 @@ import { scopeProblem } from '../tools/exploration-tools.ts'
 import { readArgs, refuse, reply, short } from '../tools/tool-edge.ts'
 import { type CardContext, type CardDraft, changedHunks, checkCard } from './check-card.ts'
 import { allowJsonText, readJsonText } from './json-text.ts'
-import { type Card, type Item, type Risk, WEIGHTS } from './reply.ts'
+import { type Card, type Item, type Risk, type Tour, WEIGHTS } from './reply.ts'
 
 export const MAX_SENT_BACK = 6
+// The most words the step of a walkthrough or a tour asks for. Longer steps pushed the picture off the screen.
+export const STEP_WORDS = 40
 
 // What show checks against and what the end of a reply writes to. map is the reader's understanding map: a reply marks
 // the topics it names as asked there. project reads the project's own git, without ken's snapshots, for the draft rule
@@ -39,23 +41,26 @@ export type Gate = {
 // reader's map nothing and gets no second look. scope is the change the reply is about. Cards that passed wait in
 // pending until their turn ends, so they follow that turn's words. held is the risks of a change that passed, waiting
 // for the second look. shown holds a hash of each card the reader has, so the same card twice shows once. step is
-// "risks" while the second look runs, and passRejections counts the revisions it refused.
+// "risks" while the second look runs, and passRejections counts the revisions it refused. tour is the tour the
+// question asks for, whose stops the reader's map learns from the page as the reader reaches them.
 export type Round = {
 	asked: boolean
+	tour: Tour | null
 	step: 'talk' | 'risks'
 	passRejections: number
 	scope: { range: Range; work: string | null; hunks: Promise<ChangedHunk[]> | null } | null
 	items: Item[]
-	pending: Card[]
+	pending: Item[]
 	held: Risk[]
 	sentBack: number
 	shown: Set<string>
 	emit: (event: ChatEvent) => void
 }
 
-export function freshRound(asked: boolean, emit: Round['emit']): Round {
+export function freshRound(asked: boolean, emit: Round['emit'], tour: Tour | null = null): Round {
 	return {
 		asked,
+		tour,
 		step: 'talk',
 		passRejections: 0,
 		scope: null,
@@ -87,6 +92,24 @@ export function showTool(gate: Gate, round: () => Round): Tool {
 				if (problem) return refuse(nothingShown([problem]))
 			}
 			const lines: string[] = []
+			const step = raw.step === undefined ? null : stepOf(objectOf(raw.step))
+			if (step) {
+				const long = textProblem('The step text', step.text, RECORD_LIMITS.reason)
+				if (long) return refuse(nothingShown([long]))
+				const stops = current.tour?.stops.length
+				if (stops !== undefined && step.number > stops) {
+					return refuse(nothingShown([`This tour has ${stops} stops, so there is no step ${step.number}.`]))
+				}
+				const steps = [...current.items, ...current.pending].flatMap((item) =>
+					item.kind === 'step' ? [item.number] : [],
+				)
+				if (steps.includes(step.number))
+					lines.push(`Step ${step.number} was shown already. Its cards in this call join it.`)
+				else {
+					current.pending.push({ kind: 'step', ...step })
+					lines.push(`Step ${step.number} shown, with the cards of this call that pass.`)
+				}
+			}
 			if (raw.work !== undefined) {
 				const title = readArgs(objectOf(raw.work), 'show work').text('title')
 				const long = textProblem('The work title', title, RECORD_LIMITS.title)
@@ -151,7 +174,7 @@ export function showTool(gate: Gate, round: () => Round): Tool {
 					current.held.push(card.risk)
 					held.push(where)
 				} else {
-					current.pending.push(card)
+					current.pending.push({ kind: 'card', card, ...(step ? { step: step.number } : {}) })
 					shown.push(where)
 				}
 			}
@@ -203,8 +226,10 @@ async function setScope(gate: Gate, current: Round, raw: JsonObject, signal: Abo
 	current.emit({ kind: 'change', base: range.base, head: range.head, commits: log.kind === 'ok' ? log.commits : [] })
 	// A risk shown in the same turn, before the scope came, is about the change too.
 	if (current.asked && current.step === 'talk') {
-		const risks = current.pending.flatMap((card) => (card.kind === 'risk' ? [card.risk] : []))
-		current.pending = current.pending.filter((card) => card.kind !== 'risk')
+		const risks = current.pending.flatMap((item) =>
+			item.kind === 'card' && item.card.kind === 'risk' ? [item.card.risk] : [],
+		)
+		current.pending = current.pending.filter((item) => item.kind !== 'card' || item.card.kind !== 'risk')
 		current.held.push(...risks)
 	}
 	return null
@@ -225,7 +250,7 @@ async function topicNames(store: RecordStore): Promise<string[]> {
 }
 
 function cardsShown(current: Round): Card[] {
-	return [...current.items.flatMap((item) => (item.kind === 'card' ? [item.card] : [])), ...current.pending]
+	return [...current.items, ...current.pending].flatMap((item) => (item.kind === 'card' ? [item.card] : []))
 }
 
 type ReadQuote = (raw: JsonObject) => Quote
@@ -290,6 +315,13 @@ function layoutOf(raw: JsonObject, quoteOf: ReadQuote, problems: string[]): Layo
 			return { from: arrow.text('from'), to: arrow.text('to'), text: arrow.text('text'), quotes }
 		}),
 	}
+}
+
+function stepOf(raw: JsonObject): { number: number; text: string } {
+	const step = readArgs(raw, 'show step')
+	const number = step.optionalLine('number')
+	if (number === undefined) throw new Error('show: a step has no number, so its schema and its reader disagree')
+	return { number, text: step.text('text') }
 }
 
 function topicOf(raw: JsonObject, quoteOf: ReadQuote) {
@@ -747,7 +779,11 @@ const LAYOUT_SCHEMA = {
 				properties: {
 					from: { type: 'string', description: 'The name of the part that uses the other' },
 					to: { type: 'string', description: 'The name of the part it uses' },
-					text: { type: 'string', description: 'A verb of one to four words, such as "calls", "reads" or "serves"' },
+					text: {
+						type: 'string',
+						description:
+							'A verb of one to four words said from the part the arrow starts at, so "from, verb, to" reads as a sentence: "calls", "reads" or "runs questions in". Never a passive verb such as "is used by"',
+					},
 					quotes: {
 						type: 'array',
 						description: "Each with path and text. A quote with no commit is read at the layout's at.",
@@ -780,6 +816,20 @@ const SHOW_SCHEMA = {
 				'Give it with scope when the reply explains a piece of work, such as a task, a branch or a pull request. ken stores the reply in the record under this title.',
 			properties: { title: { type: 'string', description: 'A short name for the piece of work' } },
 			required: ['title'],
+			additionalProperties: false,
+		},
+		step: {
+			type: 'object',
+			description:
+				'Only when the reader asks you to walk them through a change, or for a tour of the project: one step, with the claims in this call as its proof. Send one show call per step, numbered from 1: in the order a reviewer should read the change, or in the tour order the question gives. ken links each step of a change to the parts and the changed lines its quotes fall in, so quote the changed lines. To fix a card of a step that came back, send it again with the same step.',
+			properties: {
+				number: { type: 'integer', minimum: 1 },
+				text: {
+					type: 'string',
+					description: `At most two short sentences in your own words, ${STEP_WORDS} words in all. The detail goes in the claims.`,
+				},
+			},
+			required: ['number', 'text'],
 			additionalProperties: false,
 		},
 		claims: { type: 'array', description: 'Claims about the code that need proof, one idea each', items: CLAIM_SCHEMA },

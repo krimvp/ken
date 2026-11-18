@@ -14,14 +14,28 @@ import type { Diagram, Layout } from '../../diagram/index.ts'
 import type { Decision, Statement } from '../../record/index.ts'
 import type { Commit, CommitHash } from '../../repo/index.ts'
 
+// tour is there only on a tour of the project's parts.
 export type Reply = {
 	items: Item[]
 	change: Change | null
-	// Every topic a card names. The reader's three map buttons act on these.
+	// Every topic a card names, and on a tour the topic of each stop. The reader's map buttons act on these.
 	topics: string[]
+	tour?: Tour
 }
 
-export type Item = { kind: 'words'; text: string } | { kind: 'card'; card: Card }
+// A tour of one named level of the project's parts. Plain code picked the stops and their order, and step n of the
+// reply is stop n, in the model's words. Each stop's part is a topic in the record, so the reader's map can say which
+// stops the reader reached. within is the level's scope, empty for the whole project.
+export type Tour = { within: string[]; stops: TourStop[] }
+export type TourStop = { name: string; job: string; paths: string[] }
+
+// A step of a walkthrough: the model explains a change as a few numbered steps, in the order a reviewer should read
+// them, each in a sentence or two of its own words. A card that proves a step carries the step's number. Plain code
+// links each step to the change's hunks (Change.stepHunks) and the page links it to the parts its quotes fall in.
+export type Item =
+	| { kind: 'words'; text: string }
+	| { kind: 'card'; card: Card; step?: number }
+	| { kind: 'step'; number: number; text: string }
 
 // Every kind of card, listed once. The page has a renderer for each, and a test holds it to this list.
 export const CARD_KINDS = ['claim', 'risk', 'decision', 'diagram', 'layout', 'topic', 'withdrawn'] as const
@@ -57,6 +71,9 @@ export type Change = {
 	// The names the change touched that ken found used elsewhere by search, split by whether a quote of the reply holds
 	// one of their places. null in a change saved before ken looked, or too large to search.
 	usedElsewhere: Followed | null
+	// Each walkthrough step's number with the hunks its cards' quotes overlap. Empty for a reply with no steps, and
+	// missing in a change saved before ken had steps.
+	stepHunks: { step: number; hunks: ChangedHunk[] }[]
 }
 
 // A claim about the code. topic names the topic it belongs to, as the project record names it. absent is ken's search

@@ -1,6 +1,7 @@
 // The reader's understanding map on the page: the line under an answer that says which topics its buttons update, the
 // line that says ken hid the cards of a topic the reader knows, and the "Your map" view. ken works out each topic's state from the map
 // file and the code at HEAD; the page only shows it.
+import { partClass } from '../project/part-colours.js'
 import { day, esc, list, WHO, withCost } from './format.js'
 
 // A map line holds a day and no time: "on 16 Nov", or "earlier today". Its twin is onDay in src/follow-up/when.ts.
@@ -25,6 +26,7 @@ const EVIDENCE = {
 	said: 'You said you know this',
 	wrote: 'You wrote it by hand',
 	forgot: 'You said you do not know it any more',
+	toured: 'You met it on a tour of the project',
 }
 
 export function linesText(lines) {
@@ -88,7 +90,7 @@ const SAID = {
 // The three buttons under a reply, on one quiet line, which act on the topics it names. t is the reply's turn in the thread.
 export function mapBarHtml(q, t, ui, running) {
 	const names = q.reply.topics ?? []
-	const named = list(names.map((name) => `<strong>${esc(name)}</strong>`))
+	const named = list(names.map((name) => `<strong class="part-name ${partClass(name)}">${esc(name)}</strong>`))
 	const saved = ui.mapSaid?.turn === t ? ui.mapSaid.signal : null
 	const said = saved ? `<p class="map-said" role="status">${SAID[saved](names.map(esc))}</p>` : ''
 	const button = (act, text, means, off = false) =>
@@ -126,8 +128,8 @@ function topicHtml(t, canAsk) {
 		...(understood ? [] : [button('map-topic-know', 'I know this')]),
 		...(changed && canAsk ? [withCost(button('explain-topic', 'Explain what changed'))] : []),
 	]
-	return `<li class="t-row t-${t.kind}">
-		<p class="t-head"><span class="t-name">${topic}</span> <span class="t-state">${STATE[t.kind]}</span></p>
+	return `<li class="t-row c-card t-${t.kind} ${partClass(t.topic)}">
+		<p class="t-head"><span class="t-name part-name ${partClass(t.topic)}">${topic}</span> <span class="t-state">${STATE[t.kind]}</span></p>
 		<p class="t-how small">${how}</p>
 		${lines}
 		<div class="map-buttons">${buttons.join('')}</div>
@@ -152,7 +154,10 @@ export function mapViewHtml(map, canAsk, said) {
 		${met.length === 0 ? '<p class="t-empty">You have not met any topic yet. Ask how a part of the project works, then press "I know this" under the answer.</p>' : `<ul class="t-list">${met.map((t) => topicHtml(t, canAsk)).join('')}</ul>`}
 		${unmet.length === 0 ? '' : `<p class="t-unmet"><strong>Not met yet:</strong> ${list(unmet.map((t) => esc(t.topic)))}.</p>`}
 		${problems}
-		<p class="map-foot small muted">The map is a plain file on this computer, outside the project: <code>${esc(map.file)}</code>. Each button adds a line to it, and you can add one by hand: ken reads the newest line for each topic. Run <code>ken map</code> in a terminal to see each topic's id and an example line.</p>
+		<details class="map-foot small">
+			<summary class="map-foot-toggle">Where ken keeps your map</summary>
+			<p class="map-foot-text muted">The map is a plain file on this computer, outside the project: <code>${esc(map.file)}</code>. Each button adds a line to it, and you can add one by hand: ken reads the newest line for each topic. Run <code>ken map</code> in a terminal to see each topic's id and an example line.</p>
+		</details>
 	</section>`
 }
 

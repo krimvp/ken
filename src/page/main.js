@@ -4,15 +4,27 @@
 import { fillDrawings, markPart } from './draw-diagrams.js'
 import { liveLook, liveViewHtml } from './live/live-view.js'
 import { changeKey } from './project/change-card.js'
-import { drawPictures } from './project/parts-picture.js'
+import { learnParts } from './project/part-colours.js'
+import { drawPictures, lightPicture } from './project/parts-picture.js'
 import { projectViewHtml } from './project/project-view.js'
+import { tourKey } from './project/tour-card.js'
+import { partOf, stepDiffHtml, stopState, stopTopics, tourStart, walkOf } from './project/walk.js'
 import { allQuotesHtml, checksHtml, quoteCardHtml } from './views/checks.js'
 import { decisionsViewHtml } from './views/decisions.js'
 import { elementKey } from './views/diagram.js'
 import { count, duration, esc, folderHtml, prose, short, when } from './views/format.js'
 import { changedLine, changedTopics, lensHtml, mapViewHtml } from './views/map.js'
 import { openCount, openViewHtml } from './views/open.js'
-import { cardsOf, chipQuestion, isMoved, itemsOf, LEGEND, replyHtml } from './views/reply.js'
+import {
+	cardsOf,
+	chipQuestion,
+	isMoved,
+	itemsOf,
+	knowPartHtml,
+	LEGEND,
+	replyHtml,
+	stepCardsHtml,
+} from './views/reply.js'
 import {
 	emptyAfterHtml,
 	emptyHtml,
@@ -55,11 +67,15 @@ const freshUi = () => ({
 	mapSaid: null,
 	// Each change a reply is about, by changeKey, with the project's top level laid over by it: null while ken reads it.
 	changeLooks: new Map(),
+	// The walkthrough step the reader is on, by the turn of its reply.
+	walkAt: new Map(),
 	wide: wideQuery.matches,
 })
 
 const state = {
 	project: '',
+	// The top level holds parts ken's model named, so a tour can start from the first visit.
+	named: false,
 	model: null,
 	rows: [],
 	// The thread on screen, oldest question first: saved ones from the history, and the one running now. open is the
@@ -141,6 +157,7 @@ const LENS_TITLES = {
 	topic: 'What changed since I understood it?',
 	note: 'Go deeper on this note',
 	parts: 'Name the main parts',
+	tour: 'Show me around',
 }
 
 // A saved question as the page shows it: the history entry, and the project's HEAD now, to compare with the HEAD it
@@ -483,7 +500,7 @@ function movedHtml(q, t) {
 function threadHtml() {
 	if (state.view === 'map') return mapViewHtml(state.map, state.model?.kind === 'ok' && !state.running, state.mapSaid)
 	if (state.view === 'decisions') return decisionsViewHtml(state.decisions, state.decisionsKey)
-	if (state.view === 'project') return projectViewHtml(state.layout, state.model?.kind === 'ok')
+	if (state.view === 'project') return projectViewHtml(state.layout, state.model?.kind === 'ok' && !state.running)
 	if (state.view === 'live') {
 		const canAsk = state.model?.kind === 'ok' && !state.running
 		const seen = { seen: state.liveSeen, hideAsk: state.hideAsk }
@@ -496,7 +513,7 @@ function threadHtml() {
 	const q = state.open
 	if (state.problem && !q)
 		return `<div class="notice" role="alert"><h3>ken did not answer</h3><p>${esc(state.problem)}</p></div>`
-	if (!q) return emptyHtml(state.project, state.model?.kind === 'ok')
+	if (!q) return emptyHtml(state.project, state.model?.kind === 'ok', state.named)
 	return `<p class="legend">${LEGEND}</p>${state.thread.map((each, t) => turnHtml(each, t, state.ui)).join('')}`
 }
 
@@ -507,6 +524,7 @@ function panelHtml() {
 	const items = itemsOf(state.thread)
 	if (ui.panel.kind === 'quote') return quoteCardHtml(ui, items)
 	if (ui.panel.kind === 'all') return allQuotesHtml(items)
+	if (ui.panel.kind === 'walk') return walkPanelHtml(ui.panel.t, ui.walkAt.get(ui.panel.t))
 	if (!q.reply || cardsOf(q, 0).length === 0) return noChecksPanelHtml(q.live)
 	return checksHtml(q, ui, state.thread.at(-1) === q ? null : when(q.askedAt))
 }
@@ -672,10 +690,81 @@ function chooseInDrawing(target) {
 	}
 }
 
+// The panel when the reader is on a step of a walkthrough: the step's own words, the changed lines it is about as a
+// diff, and the cards that prove it.
+function walkPanelHtml(t, number) {
+	const q = state.thread[t]
+	const steps = walkOf(q?.reply)
+	const k = steps.findIndex((step) => step.number === number)
+	const step = steps[k]
+	if (!step) return ''
+	const tour = Boolean(q.reply.tour)
+	const sub = tour
+		? `<h3 class="walk-panel-sub">The code</h3>
+		<div class="walk-cards">${stepCardsHtml(q, t, step, state.ui)}</div>
+		${knowPartHtml(q, t, step)}`
+		: `<h3 class="walk-panel-sub">The changed lines</h3>
+		${stepDiffHtml(step, q.reply.change)}
+		<h3 class="walk-panel-sub">What proves it</h3>
+		<div class="walk-cards">${stepCardsHtml(q, t, step, state.ui)}</div>`
+	const title = tour ? `Stop ${k + 1} of ${steps.length}: ${esc(step.part ?? '')}` : `Step ${k + 1} of ${steps.length}`
+	return `<div class="panel-head"><h2>${title}</h2>
+			<div class="panel-nav">
+				<button class="quiet-button" data-act="walk-by" data-by="-1" data-turn="${t}" data-key="walk-panel-prev"${k === 0 ? ' disabled' : ''}>Previous</button>
+				<button class="quiet-button" data-act="walk-by" data-by="1" data-turn="${t}" data-key="walk-panel-next"${k === steps.length - 1 ? ' disabled' : ''}>Next</button>
+				<button class="quiet-button" data-act="close" data-key="close">Close</button>
+			</div></div>
+		<p class="walk-panel-text">${prose(step.text)}</p>
+		${sub}`
+}
+
+// The reader moves to a step, or off it with null. On a wide screen its changed lines open in the panel; on a narrow
+// one, under the step.
+function walkTo(t, number) {
+	const ui = state.ui
+	if (number === null) ui.walkAt.delete(t)
+	else ui.walkAt.set(t, number)
+	if (ui.panel.kind === 'walk' || number !== null) ui.panel = number === null ? CHECKS : { kind: 'walk', t }
+	render()
+	if (number !== null) {
+		$('#panel').scrollTop = 0
+		const head = document.querySelector(`[data-key="walk-${t}-${number}"]`)
+		head?.focus({ preventScroll: true })
+		// On a wide screen the picture and the step's line show together; on a narrow one the step opens under its line.
+		if (ui.wide) $(`#turn-${t} .change-card .pv-picture`)?.scrollIntoView({ block: 'nearest' })
+		head?.scrollIntoView({ block: ui.wide ? 'nearest' : 'start' })
+		void learnStop(t, number, 'toured')
+	}
+}
+
+function walkBy(t, by) {
+	const q = state.thread[t]
+	const steps = walkOf(q?.reply)
+	const k = steps.findIndex((step) => step.number === state.ui.walkAt.get(t))
+	if (k < 0 && q?.reply?.tour) return walkTo(t, tourStart(steps, q.topics))
+	const next = steps[k < 0 ? 0 : k + by]
+	if (next) walkTo(t, next.number)
+}
+
+// The turn whose walkthrough the arrow keys move: the one the focus is in, else the one in the panel.
+function walkTurn() {
+	const walk = document.activeElement?.closest?.('.walk, #panel')
+	if (walk?.matches('.walk')) return Number(walk.dataset.turn)
+	if (walk && state.ui.panel.kind === 'walk') return state.ui.panel.t
+	return null
+}
+
 function closePanel() {
 	const shown = state.ui.panel
 	if (shown.kind === 'checks') return false
 	state.ui.panel = CHECKS
+	if (shown.kind === 'walk') {
+		const number = state.ui.walkAt.get(shown.t)
+		state.ui.walkAt.delete(shown.t)
+		render()
+		document.querySelector(`[data-key="walk-${shown.t}-${number}"]`)?.focus({ preventScroll: true })
+		return true
+	}
 	render()
 	const back = shown.kind === 'quote' ? `${shown.key}-q${shown.quote}` : 'all-quotes'
 	document.querySelector(`[data-key="${back}"]`)?.focus({ preventScroll: true })
@@ -782,6 +871,7 @@ async function loadLayout() {
 		} else {
 			const { look, changes } = body
 			const change = look.change?.asked ?? 'none'
+			if (trail.length === 1 && at.trim() === '') learnParts(look.boxes)
 			state.layout = { ...state.layout, look, changes, change, problem: null, openArrows: new Set() }
 		}
 	} catch (error) {
@@ -812,14 +902,64 @@ function loadChangeLooks() {
 	const looks = state.ui.changeLooks
 	for (const q of state.thread) {
 		const change = q.reply?.change ?? q.liveChange
-		if (!change || looks.has(changeKey(change))) continue
-		const key = changeKey(change)
+		const tour = q.reply?.tour
+		const key = change ? changeKey(change) : tour ? tourKey(tour) : null
+		if (key === null || looks.has(key)) continue
 		looks.set(key, null)
-		getJson(`/api/layout?change=${encodeURIComponent(key)}`)
+		const query = new URLSearchParams(change ? { change: key } : tour.within.map((path) => ['within', path]))
+		getJson(`/api/layout?${query}`)
 			.then(({ look }) => looks.set(key, look))
 			.catch((error) => looks.set(key, { problem: error.message }))
 			.finally(render)
 	}
+}
+
+// "Show me around" on a level whose parts ken's model named. A tour of the same stops the reader took before opens
+// again with no model, at the first stop they have not seen; else ken's model gives a new one.
+async function startTour(within, name) {
+	const look = await getJson(`/api/layout?${new URLSearchParams(within.map((path) => ['within', path]))}`)
+	const stops = look.look.tour?.map((stop) => stop.name) ?? []
+	const same = (row) =>
+		row.outcome === 'answered' &&
+		row.tour?.within.join('\n') === within.join('\n') &&
+		row.tour.stops.join('\n') === stops.join('\n')
+	const saved = [...state.rows].reverse().find(same)
+	if (!saved) {
+		await send({ lens: { kind: 'tour', within, name } })
+		const t = state.thread.length - 1
+		if (state.thread[t]?.reply?.tour) goOnTour(t)
+		return
+	}
+	state.view = 'question'
+	state.menuOpen = false
+	await openQuestion(saved.id)
+	picked = state.open
+	render()
+	goOnTour(state.thread.indexOf(state.open))
+}
+
+function goOnTour(t) {
+	const q = state.thread[t]
+	const start = tourStart(walkOf(q.reply), q.topics)
+	$(`#turn-${t}`)?.scrollIntoView({ block: 'start' })
+	if (start !== null) walkTo(t, start)
+}
+
+// The reader reached a stop of a tour, or said they know its part: the map learns it, and the stop shows it.
+async function learnStop(t, number, signal) {
+	const q = state.thread[t]
+	const step = walkOf(q?.reply).find((each) => each.number === number)
+	if (!step || !q.reply.tour || (signal === 'toured' && stopState(step, q.topics) !== 'new')) return
+	try {
+		const { states } = await post('/api/map', { signal, topics: stopTopics(step) })
+		q.topics = (q.topics ?? []).map((each) => states.find((state) => state.topic === each.topic) ?? each)
+	} catch (error) {
+		state.problem = error.message
+	}
+	await loadFollowUp()
+	render()
+	// "I know this part" goes once the map says so, so the focus moves to the stop it was on.
+	if (signal === 'know') document.querySelector(`[data-key="walk-${t}-${number}"]`)?.focus({ preventScroll: true })
 }
 
 // A part on a change card opens the Project view at that part, with the same change laid over it.
@@ -956,7 +1096,7 @@ const actions = {
 	'pv-arrow'(el) {
 		toggle(state.layout.openArrows, Number(el.dataset.index))
 		render()
-		if (el.closest('svg')) $(`[data-key="pv-arrow-${el.dataset.index}"]`)?.focus({ preventScroll: true })
+		if (el.closest('.pv-picture')) $(`[data-key="pv-arrow-${el.dataset.index}"]`)?.focus({ preventScroll: true })
 	},
 	'pv-all'() {
 		const { look, openArrows } = state.layout
@@ -1056,7 +1196,8 @@ const actions = {
 		const quote = Number(el.dataset.quote)
 		const owner = itemsOf(state.thread).find((each) => each.key === key)?.q
 		if (owner && state.view === 'question') state.open = picked = owner
-		if (uiNow().wide) return choose(key, quote)
+		// A card of a walkthrough step in the panel opens its quote in place, so the panel keeps the step.
+		if (uiNow().wide && !el.closest('#panel')) return choose(key, quote)
 		toggle(uiNow().openQuotes, `${key}-q${quote}`)
 		render()
 		// "Show all" goes away once the lines are open, so the quote's own row takes the focus.
@@ -1102,6 +1243,18 @@ const actions = {
 		if (items[at]) choose(items[at].key, 0)
 	},
 	close: closePanel,
+	'walk-step'(el) {
+		const t = Number(el.dataset.turn)
+		const number = Number(el.dataset.step)
+		walkTo(t, state.ui.walkAt.get(t) === number ? null : number)
+	},
+	'walk-by': (el) => walkBy(Number(el.dataset.turn), Number(el.dataset.by)),
+	tour(el) {
+		const { trail } = state.layout
+		const inside = state.view === 'project' && el.dataset.level !== 'top' && trail.length > 1
+		return startTour(inside ? trail.at(-1).within : [], inside ? trail.at(-1).name : null)
+	},
+	'tour-know': (el) => learnStop(Number(el.dataset.turn), Number(el.dataset.step), 'know'),
 	added() {
 		state.ui.addedOpen = !state.ui.addedOpen
 		render()
@@ -1152,6 +1305,13 @@ document.addEventListener(
 )
 
 document.addEventListener('keydown', (event) => {
+	if ((event.key === 'ArrowLeft' || event.key === 'ArrowRight') && state.view === 'question') {
+		const t = walkTurn()
+		if (t === null) return
+		event.preventDefault()
+		walkBy(t, event.key === 'ArrowLeft' ? -1 : 1)
+		return
+	}
 	if (event.key !== 'Escape') return
 	if (!$('#tip').hidden) return hideTip()
 	const ui = state.ui
@@ -1167,6 +1327,12 @@ document.addEventListener('keydown', (event) => {
 	if (state.view === 'live') return closeLive()
 	if (state.view === 'follow-up') return closeFollowUp()
 	if (closePanel()) return
+	if (state.ui.walkAt.size > 0) {
+		const [t, number] = [...state.ui.walkAt].at(-1)
+		walkTo(t, null)
+		document.querySelector(`[data-key="walk-${t}-${number}"]`)?.focus({ preventScroll: true })
+		return
+	}
 	if (
 		ui.coverageOpen ||
 		ui.openSteps.size > 0 ||
@@ -1288,7 +1454,34 @@ for (const kind of ['mouseover', 'focusin']) {
 document.addEventListener('focusout', hideTip)
 document.addEventListener('scroll', () => tipFor?.isConnected && showTip(tipFor), true)
 
+// Pointing at a quote lights the part its file sits in, on the change or tour card of its reply. Anything else puts
+// back the parts the card keeps lit, which beside a walkthrough are the parts of the step the reader is on.
+let quoteLit = null
+function lightQuote(event) {
+	if (quoteLit) lightPicture(quoteLit, new Set(quoteLit.dataset.lit.split(' ').filter(Boolean).map(Number)))
+	quoteLit = null
+	const quote = event.target.closest?.('.q[data-path]')
+	if (!quote) return
+	const inPanel = quote.closest('#panel') && state.ui.panel.kind === 'walk'
+	const turn = inPanel ? $(`#turn-${state.ui.panel.t}`) : quote.closest('.turn')
+	const picture = turn?.querySelector('.change-card .pv-picture')
+	if (!picture) return
+	const q = state.thread[Number(turn.id.slice('turn-'.length))]
+	const change = q?.reply?.change ?? q?.liveChange
+	const tour = q?.reply?.tour
+	const key = change ? changeKey(change) : tour ? tourKey(tour) : null
+	const part = partOf(quote.dataset.path, state.ui.changeLooks.get(key)?.boxes ?? [])
+	if (part < 0) return
+	lightPicture(picture, new Set([part]))
+	quoteLit = picture
+}
+document.addEventListener('pointerover', lightQuote)
+document.addEventListener('focusin', lightQuote)
+
 $('#question').addEventListener('input', resizeBox)
+new ResizeObserver(([entry]) => {
+	document.documentElement.style.setProperty('--composer', `${entry.target.offsetHeight}px`)
+}).observe($('#ask'))
 wideQuery.addEventListener('change', render)
 window.addEventListener('resize', () => drawPictures($('#thread')))
 darkQuery.addEventListener('change', render)
@@ -1306,6 +1499,8 @@ try {
 		loadFollowUp(),
 	])
 	state.project = server.project
+	state.named = server.named === true
+	learnParts(server.parts)
 	state.model = server.model
 	if (server.live === true) await loadLive()
 	state.authors = recent.authors

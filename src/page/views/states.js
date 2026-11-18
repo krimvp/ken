@@ -9,10 +9,19 @@ const EXAMPLES = [
 	'Why is the code laid out the way it is?',
 ]
 
-export function emptyHtml(project, canAsk) {
+// named says ken's model named the project's parts, so someone new can take a tour of them first.
+export function emptyHtml(project, canAsk, named) {
+	const tour =
+		canAsk && named
+			? `<div class="welcome-tour">
+		<button class="primary" data-act="tour" data-level="top" data-key="welcome-tour">Show me around</button>
+		<p class="welcome-tour-line">New here? ken's model shows you each part of the project in turn, with its code.</p>
+	</div>`
+			: ''
 	return `<section class="welcome">
 		<h1>${canAsk ? 'Ask about this project.' : 'ken has no model to ask.'}</h1>
 		<p class="lead">ken reads the code and the git history of ${folderHtml(project)}. ken's model answers as a colleague would. When a claim needs proof, it shows a card with the code it rests on, quoted from git.</p>
+		${tour}
 	</section>`
 }
 
@@ -149,7 +158,7 @@ export function noModelHtml(model, hasHistory, heading) {
 			: `<li>Set these:
 				<dl class="settings">${model.missing.map((s) => `<div><dt><code>${esc(s.name)}</code></dt><dd>${esc(s.means)}. Or give <code class="nowrap">${esc(s.flag)}</code>.</dd></div>`).join('')}</dl></li>
 				<li>Start it again. For example:
-				<pre class="command">${[...model.example.split(' ').map((part) => `${part} \\`), 'npm run ken -- open'].map((line) => `<span>${esc(line)}</span>`).join('')}</pre></li>`
+				<pre class="command">${[...model.example.split(' ').map((part) => `${part} \\`), 'ken open'].map((line) => `<span>${esc(line)}</span>`).join('')}</pre></li>`
 	return `<div class="notice" role="alert" id="no-model">
 		${heading ? '<h3>ken has no model to ask</h3>' : ''}
 		<p>ken sends your project's code to the model you choose, so it has no default model.</p>

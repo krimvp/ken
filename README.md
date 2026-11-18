@@ -2,14 +2,60 @@
 
 ken explains a software project to the developer who owns it. Ask what changed, why, or how a part works now. ken's model replies in its own words, and backs each claim that needs proof with a card: the exact lines it rests on, which ken looks up before you see the card. ken is built for projects where AI agents write most of the code.
 
-<img src="site/images/ken-risk-with-quotes-wide.png" width="440" alt="The question What did the last commit do, and why? Name the decisions it made and any risk I should know about. Under it, the summary from ken's model, not checked, tells the story: before a32ffb8, retry waited a fixed 200 ms between tries, so it kept hitting the API while the API was down. Now the wait doubles after each failed try, 200, 400, then 800 ms. The thing to watch is that retry still waits after the last try. Then come the line 3 risks, 1 of them serious, and the risks, heaviest first. Risk 1 is marked Quotes code outside the change and Serious: every fetchUser call where all 3 tries fail now waits about 1.4 s before it throws, up from 0.6 s. Its first quote is open and shows line 8 of src/user.ts at a32ffb8, where fetchUser calls retry. Two more quotes of src/retry.ts are folded.">
+<img src="site/images/ken-change-card-wide.png" width="440" alt="The question What could go wrong with the change from 47eec4e to e490d9c? Show me the risks. Under it, the card What this change touched draws the project's 6 parts as boxes, with arrows for which part uses which. Eval CLI, in orange, is marked 1 file: 7 lines added, 4 removed. Test suite, in green, is marked 9 files: 333 lines added, 112 removed. Plugin engine, multeval harness, Eval scenarios, and Vendored skills and scripts are faded and marked Not touched. An arrow from Test suite to Eval CLI runs over the top row.">
 
-Screenshot of an answer on ken's local page, about a commit in a small made-up project, taken before ken replied in its own words. The model was Claude Opus.
+Screenshot of a reply on ken's local page, about a merge in an agent harness that AI agents wrote most of. ken draws this card from git, before the model's words.
+
+## Install
+
+You need Node 22.19 or later and access to the private repository krimvp/ken. ken has no package registry, so you build its package once from a checkout and install that:
+
+```sh
+git clone https://github.com/krimvp/ken.git
+cd ken
+npm ci
+npm pack
+npm install -g ./ken-0.0.0.tgz
+```
+
+This puts two commands on your PATH: `ken`, and `ken-claude-endpoint`, which runs ken on Claude through Claude Code. You can delete the checkout afterwards. To install ken for someone else, give them `ken-0.0.0.tgz`, and they run only the last line. `npm install -g github:krimvp/ken` does not work yet, because npm leaves out aigent, the agent engine ken bundles.
+
+## Quick start
+
+1. Name the model ken asks. For Ollama Cloud, add these lines to your shell startup file, such as `~/.zshrc` or `~/.bashrc`, and open a new terminal:
+
+   ```sh
+   export OLLAMA_API_KEY=<your key>
+   export KEN_MODEL=glm-5.3 KEN_BASE_URL=https://ollama.com/v1 KEN_API_KEY_ENV=OLLAMA_API_KEY
+   ```
+
+   With no model set, any ken command that needs one prints the line to copy for each common setup: Ollama Cloud, an OpenAI-compatible proxy such as LiteLLM, and Claude through Claude Code.
+
+2. Open the page for your project:
+
+   ```sh
+   cd your-project
+   ken open
+   ```
+
+   ken serves the page on 127.0.0.1 and opens it in your browser. Every command reads the project in the current folder, and `--repo <path>` names another. The examples below run ken from a checkout with `npm run ken --`. An installed `ken` takes the same arguments.
+
+## Onboard to a project
+
+New to a project, or back after weeks away? ken can show you around it, one part at a time.
+
+1. Install ken and name its model, as above.
+2. In the project, run `ken open`.
+3. Open **Project** and press **Ask ken to name these parts**. ken's model names the main parts and the arrows between them, and ken checks each against git. Commit `.ken/` so the next person gets the same parts.
+4. Press **Show me around**. Plain code picks the order from the arrows: it starts at the part nothing else uses, goes inward, and leaves tests, build and vendored code for last. ken's model then explains each part in turn, in one run, with the lines of its key files. Move with Next or the arrow keys. Each stop you reach goes on your map, and **I know this part** marks it understood.
+
+Press **Show me around** again later and ken opens the same tour, with no model, at the first stop you have not seen. Inside a part whose own parts are named, the same button tours that part.
 
 ## What ken gives you
 
 - **A colleague who shows the lines.** The model's words are its own, and ken does not check them. A boxed card is a claim, a decision, a risk, a diagram or a topic, with the lines of code, the commit message or the saved session it quotes. ken finds every quoted line where the quote says it is. A card with a quote that is not there goes back to the model alone, and you never see it; the rest of the reply stands. ken checks where a quote is, not whether a sentence is true. Every arrow in a diagram quotes its lines.
-- **Answers about a change.** The reply opens on a card ken draws from git: the project's parts, each part the change touched marked with its files and lines, and the change's commits. Open a part on it to see the change inside that part. Then the model tells the story of the change in a few sentences and says whether it saw decisions or risks worth a look. Ask for them with the Decisions and Risks chips under the reply. Before you see the risks, a second look tries to rule each one out. It can withdraw a risk only with a quote of the line that rules it out, which ken looks up, and the withdrawn risk stays in view with that line. A claim that something is missing or untested must name the missing text, and ken searches the code for it and shows the search. A risk that a later commit fixed is marked "Fixed since, in" that commit, from git.
+- **Answers about a change.** The reply opens on a card ken draws from git: the project's parts, each part the change touched marked with its files and lines, and the change's commits. Open a part on it to see the change inside that part. Then the model tells the story of the change in a few sentences and says whether it saw decisions or risks worth a look. Ask for them with the Decisions and Risks chips under the reply. "Walk me through it" asks for the change as three to seven steps, in the order a reviewer should read them. The steps sit under the picture of the parts, one line each. Pick a step, or move with the arrow keys, and ken lights the parts its quotes fall in, with their arrows, and opens the step's text and changed lines as a diff, before and after. Point at a quote to see its part. ken links each step to its parts and lines from its quotes, in plain code: the model only writes the steps. Before you see the risks, a second look tries to rule each one out. It can withdraw a risk only with a quote of the line that rules it out, which ken looks up, and the withdrawn risk stays in view with that line. A claim that something is missing or untested must name the missing text, and ken searches the code for it and shows the search. A risk that a later commit fixed is marked "Fixed since, in" that commit, from git.
+- **A tour.** "Show me around" walks you through a level of named parts, one stop per part, in an order plain code picks from the arrows. A stop looks and moves like a step of a change, and shows the code its cards quote. The stops you reach go on your map.
 - **One thread.** The page shows your questions to one chat as one thread, and the model remembers what it said earlier in it.
 - **Answers you can find again.** Your questions and ken's answers stay on your machine, in `~/.ken/projects/<first commit>/`. The decisions, their reasons and what each piece of work did go into the project record, in `.ken/record/`, as JSON Lines files that ken only adds to. You commit the record, so a collaborator and their coding agents can read it.
 - **Where each reason comes from.** ken labels each decision from its quotes, so a model cannot mark its own guess as recorded. "Recorded" means written down at the time, in a commit message or with `ken decide`. "From the session" means quoted from a saved session. "Inferred" means the model worked it out. "Found by search" marks a link between pieces of code that rests on a text search.
@@ -21,7 +67,7 @@ In ken's last two test rounds, on pull requests it had never seen, fresh AI judg
 
 ## Status
 
-Early work, not released. Nothing to install, no license, private repository. You run ken from a checkout. [site/](site/index.html) holds a public page about it, not yet published.
+Early work, not released. No package registry, no license, private repository. [site/](site/index.html) holds a public page about it, not yet published.
 
 - ken runs on your machine and only reads. It never edits your code, commits or pushes, and it writes only in `.ken/` in the project and in `~/.ken/`. It works with git repositories, Claude Code sessions and one developer.
 - It talks to an OpenAI-compatible endpoint, and the code and session text it reads go to that provider. It has been run on glm-5.3 and kimi-k3.1-pro through Ollama Cloud, and on Claude Opus through ken's local adapter for the Claude Code command.
@@ -128,11 +174,11 @@ After a session, commit the record in the project: `git add .ken && git commit -
 
 If you have no hosted model to hand, ken can use the Claude Code CLI on your machine. A small endpoint in `scripts/claude-endpoint/` speaks the chat-completions protocol to ken and answers each request by running `claude -p` once. It needs `claude` on the PATH and signed in. It needs no API key.
 
-1. In one terminal, start the endpoint. It listens on 127.0.0.1, port 4141 unless you give `--port`:
+1. In one terminal, start the endpoint. It listens on 127.0.0.1, port 4141 unless you give `--port`. From a checkout, use `npm run claude-endpoint` instead:
 
    ```sh
-   npm run claude-endpoint
-   npm run claude-endpoint -- --port 4242
+   ken-claude-endpoint
+   ken-claude-endpoint --port 4242
    ```
 
 2. In another terminal, set these four variables, in the environment or in `.env`, and use ken as usual:

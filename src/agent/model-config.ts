@@ -21,7 +21,21 @@ const API_KEY_ENV: ModelSetting = {
 
 const MIN_KEY_LENGTH = 8
 
-export const MODEL_EXAMPLE = 'KEN_MODEL=gpt-oss:120b KEN_BASE_URL=https://ollama.com/v1 KEN_API_KEY_ENV=OLLAMA_API_KEY'
+export const MODEL_EXAMPLE = 'KEN_MODEL=glm-5.3 KEN_BASE_URL=https://ollama.com/v1 KEN_API_KEY_ENV=OLLAMA_API_KEY'
+
+const SETUPS = [
+	{ setup: 'Ollama Cloud. Put your key in OLLAMA_API_KEY.', line: MODEL_EXAMPLE },
+	{
+		setup:
+			'An OpenAI-compatible proxy such as LiteLLM. Put its key in LITELLM_API_KEY, and change KEN_MODEL to a model it serves.',
+		line: 'KEN_MODEL=gpt-5 KEN_BASE_URL=http://localhost:4000/v1 KEN_API_KEY_ENV=LITELLM_API_KEY',
+	},
+	{
+		setup:
+			'Claude through Claude Code on this machine, with no API key. Run ken-claude-endpoint in another terminal first.',
+		line: 'KEN_MODEL=opus KEN_BASE_URL=http://127.0.0.1:4141/v1 KEN_API_KEY_ENV=KEN_LOCAL_KEY KEN_LOCAL_KEY=not-a-key',
+	},
+]
 
 // missing lists the settings that are not given at all. It is empty when a setting is given but does not work.
 export type ModelUnset = { kind: 'unset'; message: string; missing: ModelSetting[] }
@@ -40,7 +54,8 @@ export function readModelConfig(
 		const lines = [
 			"ken sends your project's code to the model you choose, so it has no default model. Set these:",
 			...missing.map((setting) => `  ${setting.name} or ${setting.flag}: ${setting.means}`),
-			`For example: ${MODEL_EXAMPLE}`,
+			'Add the line for your setup to your shell startup file, such as ~/.zshrc or ~/.bashrc, then open a new terminal.',
+			...SETUPS.flatMap(({ setup, line }) => ['', `  ${setup}`, `    export ${line}`]),
 		]
 		return { kind: 'unset', message: lines.join('\n'), missing }
 	}

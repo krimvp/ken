@@ -11,7 +11,7 @@ import { namesText } from '../tools/elsewhere-text.ts'
 import { readArgs, refuse, reply, short } from '../tools/tool-edge.ts'
 import { checkCard, isLater } from './check-card.ts'
 import { allowJsonText, readJsonText } from './json-text.ts'
-import type { Card, Risk } from './reply.ts'
+import type { Card, Item, Risk } from './reply.ts'
 import {
 	claimOf,
 	contextOf,
@@ -206,7 +206,7 @@ export function reviseTool(gate: Gate, round: () => Round): Tool {
 				const risk = first[number - 1]
 				return risk ? [{ kind: 'withdrawn', withdrawn: { risk, reason, proof } }] : []
 			})
-			current.pending.push(...kept, ...out)
+			current.pending.push(...[...kept, ...out].map((card): Item => ({ kind: 'card', card })))
 			current.held = []
 			return reply(
 				`ken shows the reader ${kept.length} ${kept.length === 1 ? 'risk' : 'risks'}${out.length > 0 ? ` and ${out.length} withdrawn, each with the lines that rule it out` : ''}. Now tell the reader in a sentence or two what the second look found.`,

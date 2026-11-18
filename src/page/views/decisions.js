@@ -2,6 +2,7 @@
 // out as in an answer, and the change it belongs to. It holds the decisions a coding agent logged with ken decide,
 // which belong to no answer, as well as those answers found.
 
+import { partClass, partOfFile } from '../project/part-colours.js'
 import { labelKey } from './checks.js'
 import { answeredHtml, at, count, esc, LABELS, label, prose, quoteBody, quoteSource } from './format.js'
 import { answerItLink, factsHtml } from './reply.js'
@@ -25,7 +26,11 @@ function rowHtml({ decision: d, work, replacedBy }) {
 		: d.needsOwner && !replacedBy
 			? `<p class="small">${answerItLink(`dv-${d.id}`)}</p>`
 			: ''
-	return `<li class="dv-row" id="dv-${esc(d.id)}" tabindex="-1">
+	// A decision takes the colour of the part its first quoted file sits in, and names that part.
+	const part = d.quotes.map((quote) => (quote.path ? partOfFile(quote.path) : null)).find(Boolean) ?? null
+	const where = part ? `<p class="dv-part"><span class="part-name ${partClass(part)}">${esc(part)}</span></p>` : ''
+	return `<li class="dv-row c-card ${part ? partClass(part) : ''}" id="dv-${esc(d.id)}" tabindex="-1">
+		${where}
 		${replaced}
 		<p class="dv-head">${call}${label(d.label)} <span class="dv-q">${prose(d.question)}</span></p>
 		<p><span class="d-field">Chosen</span> ${prose(d.chosen)}</p>

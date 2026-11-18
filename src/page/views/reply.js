@@ -3,6 +3,8 @@
 // says so, once. A reply about a change opens on the change card, before the model's words, and under it two chips
 // ask for the change's decisions and its risks.
 import { changeCardHtml, changeKey } from '../project/change-card.js'
+import { tourCardHtml, tourKey } from '../project/tour-card.js'
+import { stopState, stopTopics, walkHtml, walkOf } from '../project/walk.js'
 import { checksHtml } from './checks.js'
 import { diagramHtml, elementKey } from './diagram.js'
 import {
@@ -30,6 +32,7 @@ export const LEGEND = "Plain text is what ken's model says. A boxed card is what
 // on its own in a chat that never saw the change.
 export function chipQuestion(kind, change) {
 	const range = `the change from ${short(change.base)} to ${short(change.head)}`
+	if (kind === 'walk') return `Walk me through ${range}, step by step, in the order a reviewer should read it.`
 	return kind === 'risks'
 		? `What could go wrong with ${range}? Show me the risks.`
 		: `What did ${range} decide, and why?`
@@ -41,6 +44,8 @@ export function isMoved(q) {
 }
 
 const UNDO = { easy: 'Easy', 'some-work': 'Some work', hard: 'Hard' }
+
+const CHIPS = { walk: 'Walk me through it', decisions: 'Ask what it decided', risks: 'Ask what could go wrong' }
 
 // The key of the card at item j of turn t, which its quote rows, its place in the panel and its element ids share.
 export function cardKey(t, j) {
@@ -113,19 +118,22 @@ export function replyHtml(q, t, ui, { running, inThread }) {
 	const rows = { ui, commits: manyCommits(q), head: q.head, copies: copiesOf(q), change: q.reply.change }
 	const cards = cardsOf(q, t)
 	const named = new Set(cards.map(({ card }) => topicOf(card)).filter((name) => name !== null))
+	const steps = walkOf(q.reply)
+	// The cards of a step show in the walkthrough, under their step.
 	const parts = q.reply.items.map((item, j) => {
 		if (item.kind === 'words') return wordsHtml(item.text)
+		if (item.kind !== 'card' || (steps.length > 0 && item.step !== undefined)) return ''
 		if (hidden.has(topicOf(item.card))) return ''
 		return cardHtml(item.card, t, j, rows)
 	})
 	const shown = new Set(cards.map(({ card }) => card.kind))
 	const asks =
 		inThread && q.reply.change && !q.about
-			? ['decisions', 'risks']
+			? [...(steps.length > 0 ? [] : ['walk']), 'decisions', 'risks']
 					.filter((kind) => !shown.has(kind.slice(0, -1)))
 					.map(
 						(kind) =>
-							`<button class="chip" data-act="chip" data-chip="${kind}" data-turn="${t}" data-key="chip-${t}-${kind}"${running ? ' disabled' : ''}>${kind === 'risks' ? 'Ask what could go wrong' : 'Ask what it decided'}</button>`,
+							`<button class="chip${kind === 'walk' ? ' chip-main' : ''}" data-act="chip" data-chip="${kind}" data-turn="${t}" data-key="chip-${t}-${kind}"${running ? ' disabled' : ''}>${CHIPS[kind]}</button>`,
 					)
 			: []
 	const checks =
@@ -133,12 +141,59 @@ export function replyHtml(q, t, ui, { running, inThread }) {
 			? ''
 			: `<section class="checks-inline narrow-only" aria-label="What ken checked">${ui.wide ? '' : checksHtml(q, ui)}</section>`
 	const change = q.reply.change ?? q.liveChange
-	const card = inThread && change ? changeCardHtml(change, ui.changeLooks?.get(changeKey(change)) ?? null, t) : ''
-	return `${knownHtml(q, ui, named, isMoved(q))}
+	const { tour } = q.reply
+	const walk =
+		inThread && steps.length > 0
+			? {
+					steps,
+					at: ui.walkAt?.get(t) ?? null,
+					cardHtml: (card, j) => cardHtml(card, t, j, rows),
+					under: !ui.wide,
+					states: q.topics,
+					knowHtml: (step) => knowPartHtml(q, t, step),
+				}
+			: null
+	const look = change ? (ui.changeLooks?.get(changeKey(change)) ?? null) : null
+	const card =
+		inThread && change
+			? changeCardHtml(change, look, t, walk)
+			: walk && tour
+				? tourCardHtml(tour, ui.changeLooks?.get(tourKey(tour)) ?? null, t, walk)
+				: walk
+					? walkHtml(steps, t, { ...walk, boxes: null, change: null, tour: Boolean(tour) })
+					: ''
+	// On a tour each stop says what the reader's map holds, so the lines and buttons for the whole reply stay away.
+	const mapped = inThread && !tour && (q.reply.topics ?? []).length > 0
+	return `${tour ? '' : knownHtml(q, ui, named, isMoved(q))}
 		<div class="reply">${card}${parts.join('')}</div>
 		${asks.length > 0 ? `<p class="chips">${asks.join(' ')}</p>` : ''}
-		${inThread && (q.reply.topics ?? []).length > 0 ? mapBarHtml(q, t, ui, running) : ''}
+		${mapped ? mapBarHtml(q, t, ui, running) : ''}
 		${checks}`
+}
+
+// What the reader's map says about the part of a tour stop, and the button that says they know it.
+export function knowPartHtml(q, t, step) {
+	const names = stopTopics(step).map((name) => name.toLowerCase())
+	if (!(q.topics ?? []).some((state) => names.includes(state.topic.toLowerCase()))) {
+		return '<p class="walk-know muted">ken cannot keep this stop on your map: it quotes no code of the part.</p>'
+	}
+	const stood = stopState(step, q.topics)
+	const part = esc(step.part)
+	if (stood === 'known') return `<p class="walk-know">Your map says you know ${part}.</p>`
+	const said = stood === 'met' ? `Your map says you have seen ${part}. ` : ''
+	return `<p class="walk-know">${said}<button class="quiet-button" data-act="tour-know" data-turn="${t}" data-step="${step.number}" data-key="tour-know-${t}-${step.number}">I know this part</button></p>`
+}
+
+// The cards that prove a step, for the panel. Their quotes open in place, so the panel keeps the step.
+export function stepCardsHtml(q, t, step, ui) {
+	const rows = {
+		ui: { ...ui, wide: false },
+		commits: manyCommits(q),
+		head: q.head,
+		copies: copiesOf(q),
+		change: q.reply.change,
+	}
+	return step.cards.map(({ card, j }) => cardHtml(card, t, j, rows)).join('')
 }
 
 // The model writes plain text: paragraphs, now and then a list or a block of code. Each becomes its own element, and

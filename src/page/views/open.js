@@ -2,6 +2,7 @@
 // topics whose code changed since the reader understood them, with the commits that changed them and who made each. ken
 // works the list out from the record, the map and git; the page only shows it.
 
+import { partClass } from '../project/part-colours.js'
 import { answeredHtml, esc, prose, short, WHO, when, withCost } from './format.js'
 import { linesText, onDay } from './map.js'
 import { decisionHtml } from './reply.js'
@@ -44,7 +45,7 @@ function topicItem({ state, commits }, canAsk) {
 			)
 		: ''
 	return `<li class="t-row o-topic">
-		<p class="t-head"><span class="t-name">${topic}</span> <span class="t-state">You understood it ${onDay(state.entry.date)}</span></p>
+		<p class="t-head"><span class="t-name part-name ${partClass(state.topic)}">${topic}</span> <span class="t-state">You understood it ${onDay(state.entry.date)}</span></p>
 		<p class="t-lines">Changed since: ${linesText(state.changed)}</p>
 		${commitsHtml(commits)}
 		<div class="map-buttons"><button class="quiet-button" data-act="know-topic" data-topic="${topic}" data-key="know-${topic}">I know this change</button>${explain}</div>

@@ -1,5 +1,5 @@
 import { styleText } from 'node:util'
-import type { Card, ChatEvent, Cost, Reply, Risk } from '../../agent/index.ts'
+import type { Card, ChatEvent, Cost, Item, Reply, Risk } from '../../agent/index.ts'
 import { when } from '../../follow-up/index.ts'
 import { type Decision, entryLine } from '../../record/index.ts'
 import { formatDiagram, formatQuote } from './print-diagram.ts'
@@ -31,7 +31,7 @@ export async function printQuestion(events: AsyncIterable<ChatEvent>, out: NodeJ
 				} else if (event.step.kind === 'text') line(paint('dim', `  ${event.step.text.replaceAll('\n', '\n  ')}`))
 				break
 			case 'item':
-				line(`\n${event.item.kind === 'words' ? event.item.text : formatCard(event.item.card, paint)}`)
+				line(`\n${formatItem(event.item, paint)}`)
 				break
 			case 'replied':
 				if (event.reply.change) line(`\n${formatChange(event.reply.change, paint)}`)
@@ -64,8 +64,14 @@ export async function printQuestion(events: AsyncIterable<ChatEvent>, out: NodeJ
 
 // A whole reply, as a live note prints it.
 export function formatReply(reply: Reply, paint: Paint): string {
-	const parts = reply.items.map((item) => (item.kind === 'words' ? item.text : formatCard(item.card, paint)))
+	const parts = reply.items.map((item) => formatItem(item, paint))
 	return [...parts, ...(reply.change ? [formatChange(reply.change, paint)] : [])].join('\n\n')
+}
+
+function formatItem(item: Item, paint: Paint): string {
+	if (item.kind === 'words') return item.text
+	if (item.kind === 'step') return paint('bold', `Step ${item.number}. ${item.text}`)
+	return formatCard(item.card, paint)
 }
 
 export function formatCard(card: Card, paint: Paint): string {

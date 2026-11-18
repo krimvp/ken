@@ -155,8 +155,13 @@ export function liveViewHtml(live, ui, unfolded, canAsk, problem, { seen, hideAs
 		return `<li class="live-item"><button class="ln-folded" data-act="note-unfold" data-id="${id}" data-key="unfold-${id}" aria-expanded="false"><span class="ln-line">${noteHeadHtml(view.entry, tags)} <span class="ln-gist">${gist}</span></span></button></li>`
 	})
 	const look = liveLook(live.status)
+	const empty = `<div class="live-empty">
+		<h2>No notes yet</h2>
+		<p class="live-empty-text">ken writes the first note ${live.status === 'off' ? 'after you turn Live on, ' : ''}when a commit lands or the work goes quiet. Each note says what changed and why, with the code it rests on.</p>
+	</div>`
 	return `<section class="live-view">
-		<h1 class="visually-hidden">Live</h1>
+		<h1 class="live-title">Live</h1>
+		<p class="live-lead">Notes on the work as it happens, written by ken while your coding agent works here.</p>
 		<div class="live-top">
 			<p class="live-status is-${look}" role="status"><span class="live-mark" aria-hidden="true"></span><span>${statusText(live)}</span></p>
 			<div class="live-controls">${controlsHtml(live)}</div>
@@ -165,7 +170,7 @@ export function liveViewHtml(live, ui, unfolded, canAsk, problem, { seen, hideAs
 		${live.said ? `<p class="map-said" role="status">${esc(live.said)}</p>` : ''}
 		${nowLineHtml(live.now)}
 		${live.notes.length > 0 ? `<h2 class="ln-count">Notes (${live.notes.length}), newest first</h2>` : ''}
-		${newest ? noteHtml(newest, 'n0', ui, canAsk, tagsOf(newest)) : '<p class="t-empty">No notes yet. ken writes the first when a commit lands or the work goes quiet.</p>'}
+		${newest ? noteHtml(newest, 'n0', ui, canAsk, tagsOf(newest)) : empty}
 		${nowHtml(live.now, hideAsk)}
 		${folded.length > 0 ? `<h2 class="ln-count">Earlier notes</h2><ol class="live-notes folded">${folded.join('')}</ol>` : ''}
 		${live.notes.length > 0 ? '<p class="live-foot">Notes stay in your history on this machine. A note on commits also adds its decisions to the project record; a note on uncommitted work adds nothing.</p>' : ''}

@@ -13,6 +13,7 @@ import {
 	gitQuotes,
 	type Quote,
 	type QuoteSources,
+	quotedHunks,
 	quotesOutsideChange,
 	usedElsewhere,
 	type VerifiedGitQuote,
@@ -186,7 +187,7 @@ function limitProblems(card: CardDraft): string[] {
 // Every git quote a card shows, a decision's reasons and a diagram's arrows included.
 export function quotesOf(items: Item[]): VerifiedGitQuote[] {
 	return items.flatMap((item) => {
-		if (item.kind === 'words') return []
+		if (item.kind !== 'card') return []
 		const { card } = item
 		switch (card.kind) {
 			case 'claim':
@@ -248,14 +249,16 @@ export async function changedHunks(repo: Repository, range: Range, signal: Abort
 	return coverage.kind === 'ok' ? coverage.uncovered : []
 }
 
-// The change facts of a reply: its commits, the hunks its quotes cover, the commit messages they cite and the names
-// used elsewhere they follow. null when the change is too large to read.
+// The change facts of a reply: its commits, the hunks its quotes cover, the hunks each walkthrough step's quotes
+// overlap, the commit messages they cite and the names used elsewhere they follow. null when the change is too large
+// to read.
 export async function changeOf(
 	repo: Repository,
 	range: Range,
-	quotes: VerifiedGitQuote[],
+	items: Item[],
 	signal: AbortSignal,
 ): Promise<Change | null> {
+	const quotes = quotesOf(items)
 	const logged = await repo.log(range, signal)
 	if (logged.kind === 'too-large') return null
 	const coverage = await checkCoverage(repo, range, quotes, signal)
@@ -264,7 +267,12 @@ export async function changeOf(
 	const messages = countMessages(logged.commits, quotes)
 	const used = await usedElsewhere(repo, range, signal)
 	const followed = used.kind === 'ok' ? await followedNames(repo, used.used, quotes, signal) : null
-	return { ...range, commits: logged.commits, covered, uncovered, binary, messages, usedElsewhere: followed }
+	const stepHunks = items.flatMap((item) => {
+		if (item.kind !== 'step') return []
+		const proof = items.filter((each) => each.kind === 'card' && each.step === item.number)
+		return [{ step: item.number, hunks: quotedHunks(covered, range, quotesOf(proof)) }]
+	})
+	return { ...range, commits: logged.commits, covered, uncovered, binary, messages, usedElsewhere: followed, stepHunks }
 }
 
 function topicOf(topic: string | undefined): { topic?: string } {

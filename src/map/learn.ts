@@ -4,8 +4,8 @@ import type { Depth, MapEntry } from './map-entry.ts'
 import type { TopicState } from './topic-state.ts'
 
 // asked: a question named the topic. know: "I know this". too-much: "Too much". deeper: "Go deeper". forgot: "I do not
-// know this any more", on the map's own page.
-export const SIGNALS = ['asked', 'know', 'too-much', 'deeper', 'forgot'] as const
+// know this any more", on the map's own page. toured: the reader reached the stop of a tour on the topic's part.
+export const SIGNALS = ['asked', 'know', 'too-much', 'deeper', 'forgot', 'toured'] as const
 export type MapSignal = (typeof SIGNALS)[number]
 
 type Line = Pick<MapEntry, 'depth' | 'evidence'>
@@ -14,13 +14,14 @@ type Line = Pick<MapEntry, 'depth' | 'evidence'>
 // understands the code as it is now. "Too much" says the answer went deeper than the reader needed, so ken counts them
 // one step further on, which makes the next answer shorter; it is not understanding. "Go deeper" keeps the depth and
 // drops the understanding, so the next answer on the topic explains again. "I do not know this any more" drops both, so
-// the next answer starts from the top.
+// the next answer starts from the top. Reaching a tour stop, like a question, marks only a topic the reader never met.
 const SIGNAL_LINES: Record<MapSignal, (now: MapEntry | null) => Line | null> = {
 	asked: (now) => (now === null ? { depth: 'heard-of', evidence: 'asked' } : null),
 	know: (now) => ({ depth: now?.depth === 'could-change' ? 'could-change' : 'can-follow', evidence: 'said' }),
 	'too-much': (now) => ({ depth: stepUp(now?.depth ?? 'heard-of'), evidence: 'read' }),
 	deeper: (now) => ({ depth: now?.depth ?? 'heard-of', evidence: 'asked' }),
 	forgot: () => ({ depth: 'heard-of', evidence: 'forgot' }),
+	toured: (now) => (now === null ? { depth: 'heard-of', evidence: 'toured' } : null),
 }
 
 export function lineFor(signal: MapSignal, state: TopicState, now: Date): MapEntry | null {

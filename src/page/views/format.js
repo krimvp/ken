@@ -181,7 +181,8 @@ export function quoteRows(quotes, key, { ui, commits, head = null, copies = NONE
 					? `<span class="q-commit">${copies.has(quote.commit) ? "in ken's copy" : `at <code>${short(quote.commit)}</code>`}</span>`
 					: ''
 			const act = `data-act="quote" data-item="${key}" data-quote="${j}"`
-			return `<li class="q${chosen ? ' chosen' : ''}">
+			const path = isSession(quote) || quote.path === null ? '' : ` data-path="${esc(quote.path)}"`
+			return `<li class="q${chosen ? ' chosen' : ''}"${path}>
 				<button class="q-row" ${act} data-key="${id}" aria-expanded="${ui.wide ? chosen : open}"${ui.wide ? ' aria-controls="panel"' : ''}>
 					<span class="q-path">${quoteSource(quote)}</span><span class="q-lines">${then}<span class="nowrap">${quoteLines(quote)}</span>${at}</span>${chosen ? '<span class="q-there">Shown in the panel on the right</span>' : ''}
 				</button>

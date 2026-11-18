@@ -10,6 +10,7 @@ import type { EntryId, RecordEntry, RecordStore } from '../record/index.ts'
 import type { CommitHash, FileDiff, ObjectId, Range, RepoPath, Repository } from '../repo/index.ts'
 import { type Seed, splitScope, under } from './folder-split.ts'
 import { type BoxMap, type BoxTopic, boxMap, boxTopics, type Next, nextOf } from './reader-marks.ts'
+import { type TourStop, tourOrder } from './tour-order.ts'
 
 // The paths a level shows the inside of, sorted. The empty list is the whole project.
 export type Scope = RepoPath[]
@@ -67,6 +68,7 @@ export type LayoutLook = {
 	loose: string[]
 	change: (Change & { files: number; outside: string[] }) | null
 	next: Next
+	tour: TourStop[] | null
 }
 
 // ken's own record is not part of the project's code, as in every change fact git gives.
@@ -113,7 +115,13 @@ export async function lookAtLayout(
 					outside: diff.map((file) => file.path).filter((file) => !places.some((place) => under(file, place))),
 				}
 			: null
-	return { at: ask.at, head: head.commit, within: ask.within, ...level, boxes, change, next: nextOf(boxes) }
+	const tour = level.named
+		? tourOrder(
+				boxes.filter((box) => box.state !== 'gone'),
+				level.arrows,
+			)
+		: null
+	return { at: ask.at, head: head.commit, within: ask.within, ...level, boxes, change, next: nextOf(boxes), tour }
 }
 
 type Level = {
@@ -167,7 +175,7 @@ async function namedLevel(
 	return {
 		named: { id: chosen.id, drawnAt: chosen.drawnAt, added, stale: changed.size > 0 || added.length > 0 },
 		boxes,
-		arrows: chosen.arrows.map((arrow) => ({ ...arrow, stale: changed.has(arrow.from) })),
+		arrows: chosen.arrows.map((arrow) => ({ ...arrow, text: fromStart(arrow.text), stale: changed.has(arrow.from) })),
 		loose,
 	}
 }
@@ -192,6 +200,12 @@ async function folderLevel(repo: Repository, ask: LayoutAsk, head: CommitHash, s
 		arrows: [],
 		loose: looseIn(files, ask.within, places),
 	}
+}
+
+// An arrow starts at the part whose lines name the other, and the page reads it as "start, verb, end". A verb saved the
+// other way round, such as "is used by", would say the opposite, so it reads as "uses".
+function fromStart(verb: string): string {
+	return /^(is|are|gets?)\b|\bby$/i.test(verb.trim()) ? 'uses' : verb
 }
 
 function sameScope(layout: Stored, within: Scope): boolean {

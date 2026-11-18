@@ -115,23 +115,37 @@ function detailsHtml(q) {
 	].join('')
 }
 
-// A name the change touched that other code uses, where no quote of the reply goes.
+// The names the change touched that other code uses, where no quote of the reply goes, in one line. Details names them.
 function elsewhereHtml(q) {
 	const missed = q.reply.change?.usedElsewhere?.notFollowed ?? []
 	if (missed.length === 0) return ''
-	const [first, ...rest] = missed
-	const uses = (name, full) =>
-		`<code>${esc(name.name)}</code>${full ? ' is used' : ''} in ${count(name.places, 'other place', 'other places')}`
-	const said = [uses(first, true), ...rest.map((name) => uses(name, false))]
-	return `<p class="gap">${list(said)}. No quote shows ${first.places === 1 && rest.length === 0 ? 'it' : 'them'}.</p>`
+	const [first] = missed
+	if (missed.length === 1) {
+		return `<p class="gap"><code>${esc(first.name)}</code> is used in ${count(first.places, 'other place', 'other places')}. No quote shows ${first.places === 1 ? 'it' : 'them'}.</p>`
+	}
+	const places = missed.reduce((sum, name) => sum + name.places, 0)
+	return `<p class="gap">The change touched ${missed.length} names that other code uses, in ${places} places. No quote shows them. Details names them.</p>`
 }
 
-// The names a quote follows to a place that uses them, when no name is missed: the gap line says the rest.
+// Behind Details: the names the change touched that other code uses, whether a quote follows them or not.
 function followedSection(q) {
 	const used = q.reply.change?.usedElsewhere
-	if (!used || used.followed.length === 0 || used.notFollowed.length > 0) return ''
+	if (!used || (used.followed.length === 0 && used.notFollowed.length === 0)) return ''
 	const n = used.followed.length
-	return `<section class="check" id="check-elsewhere"><h3>Used elsewhere</h3><p>${n === 1 ? 'The change touched one name that other code uses. A quote shows where.' : `The change touched ${n} names that other code uses. For each, a quote shows where.`}</p></section>`
+	const followed =
+		n === 0
+			? ''
+			: `<p>${n === 1 ? 'The change touched one name that other code uses, and a quote shows where.' : `The change touched ${n} names that other code uses, and for each a quote shows where.`}</p>`
+	const missed =
+		used.notFollowed.length < 2
+			? ''
+			: `<p>No quote shows where these are used:</p><ul class="used-list">${used.notFollowed
+					.map(
+						(name) =>
+							`<li><code>${esc(name.name)}</code>, in ${count(name.places, 'other place', 'other places')}</li>`,
+					)
+					.join('')}</ul>`
+	return `<section class="check" id="check-elsewhere"><h3>Used elsewhere</h3>${followed}${missed}</section>`
 }
 
 // Each label in use, with one plain line of what it means.

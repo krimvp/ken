@@ -11,7 +11,9 @@ export {
 	personLens,
 	rangeLens,
 	rangeQuestion,
+	type TourLevel,
 	topicQuestion,
+	tourQuestion,
 } from './lens-questions.ts'
 export {
 	type ChangeCommit,

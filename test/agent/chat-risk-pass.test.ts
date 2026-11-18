@@ -208,7 +208,7 @@ test('the risks of a change are held for one second look: the model gets them an
 		'the withdrawn risk shows with the line that rules it out',
 	)
 	assert.deepEqual(
-		replyIn(events).items.map((item) => (item.kind === 'words' ? item.text : item.card.kind)),
+		replyIn(events).items.map((item) => (item.kind === 'card' ? item.card.kind : item.text)),
 		['The timeout is shorter.', 'claim', 'risk', 'risk', 'withdrawn', 'The second look took one risk out.'],
 	)
 	assert.deepEqual(replyIn(events).change?.usedElsewhere, { followed: ['TIMEOUT_MS'], notFollowed: [] })

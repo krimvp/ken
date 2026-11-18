@@ -214,8 +214,9 @@ function logRun(outcome: RunOutcome, promptChars: number, seconds: number): void
 	process.stderr.write(`claude ran ${seconds.toFixed(1)} s on ${promptChars} characters: ${what}; ${tokens}\n`)
 }
 
-if (import.meta.main) {
-	const { values } = parseArgs({ options: { port: { type: 'string', default: String(DEFAULT_PORT) } } })
+// Runs from a checkout with "npm run claude-endpoint", and as the installed command "ken-claude-endpoint".
+export async function serve(args: string[]) {
+	const { values } = parseArgs({ args, options: { port: { type: 'string', default: String(DEFAULT_PORT) } } })
 	const port = Number(values.port)
 	if (!Number.isInteger(port) || port < 0 || port > 65535) {
 		throw new Error(`--port must be a whole number from 0 to 65535, not ${values.port}`)
@@ -226,3 +227,5 @@ if (import.meta.main) {
 			`Set KEN_BASE_URL=${url} KEN_MODEL=opus KEN_API_KEY_ENV=KEN_LOCAL_KEY KEN_LOCAL_KEY=not-a-key\n`,
 	)
 }
+
+if (import.meta.main) await serve(process.argv.slice(2))

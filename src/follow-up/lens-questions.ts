@@ -188,8 +188,39 @@ export function partsQuestion(level: PartsLevel): LensQuestion {
 			'',
 			`Read the code at HEAD (${head}), then call show with layout, and within set to ${JSON.stringify(within)}.`,
 			`Group the paths into ${bounds.fewest} to ${bounds.parts} parts the owner would name. Give each a short name, one line of about 80 characters on its job, and the folders or files it holds, each inside within. No two parts share a file. Leave out what is not code if it does not help, such as docs; ken lists it as in no part.`,
-			`Add at most ${bounds.arrows} arrows for which part uses which, each with a short verb. Each arrow quotes lines from a file of the part it starts at that name a folder or file of the part it ends at: an import line does, a comment does not. Leave out an arrow you cannot quote that way.`,
+			`Add at most ${bounds.arrows} arrows for which part uses which, each with a short verb said from the part it starts at, so that the start part, the verb and the end part read as a sentence, such as "Server runs questions in Chat engine". Never a passive verb such as "is used by". Each arrow quotes lines from a file of the part it starts at that name a folder or file of the part it ends at: an import line does, a comment does not. Leave out an arrow you cannot quote that way.`,
 			'Then say in two or three sentences how the parts fit together.',
+		].join('\n'),
+		empty: false,
+	}
+}
+
+// "Show me around" on a named level. Plain code picked the stops and their order, so the model explains each part in
+// that order and does not choose. name is what the reader calls the level, or null for the whole project.
+export type TourLevel = {
+	name: string | null
+	head: string
+	stops: { name: string; job: string; paths: string[] }[]
+	arrows: { from: string; to: string; text: string }[]
+}
+
+export function tourQuestion(level: TourLevel): LensQuestion {
+	const { stops, arrows } = level
+	const where = level.name ?? 'this project'
+	const stop = (each: TourLevel['stops'][number], k: number) =>
+		`- Stop ${k + 1}, ${each.name} (${each.paths.join(', ')})${each.job ? `: ${each.job}` : ''}`
+	const uses = arrows.map((arrow) => `${arrow.from} ${arrow.text} ${arrow.to}`)
+	return {
+		text: [
+			`Show me around ${where}`,
+			LIST_SAID,
+			...stops.map(stop),
+			...(uses.length > 0 ? [`- How the parts use each other: ${uses.join('; ')}.`] : []),
+			'',
+			`I am new to ${where}. Walk me through it as a tour of ${stops.length} stops, one stop per part, in the order above: ken picked it from the arrows, starting at the parts nothing else uses. Read the code at HEAD (${level.head}) first.`,
+			"Then send one show call per stop, in order, with step: the stop's number, and in its text two short sentences: what the part does, and how it connects to the stops before and after it.",
+			"With each step send one or two claims that quote the part's own key lines, such as its entry function or its main export, so I can read them beside the stop. Name the file or function in the claim, not in the step.",
+			'Write nothing before the first stop, and one sentence after the last at most.',
 		].join('\n'),
 		empty: false,
 	}

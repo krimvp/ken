@@ -3,7 +3,7 @@
 // quote every hunk the range changed and says which commit messages it left unquoted. ken also finds, by search, where
 // else the names a change touches are used, which of them the answer follows, and that the text an entry says is missing
 // is not there. No model takes part, so the same answer always gets the same result.
-export { type ChangedHunk, type Coverage, checkCoverage } from './coverage-check.ts'
+export { type ChangedHunk, type Coverage, checkCoverage, quotedHunks } from './coverage-check.ts'
 export { checkLabel, decisionLabel, type Label, type LabelCheck, quotesOutsideChange } from './label-check.ts'
 export { countMessages, type MessageCount } from './message-count.ts'
 export { checkQuote, type GitQuote, type QuoteCheck, type VerifiedGitQuote } from './quote-check.ts'

@@ -1,10 +1,11 @@
 // The "Project" view: one level of the project's layout, at a commit the reader picks, with a change laid over it and
 // the reader's map on each box. A level is the parts ken's model named, with their jobs and the arrows between them, or
 // the folders when nobody named them. On a wide screen the boxes are a picture with the arrows drawn between them, and
-// the numbered list of arrows sits beside it. Plain HTML with SVG lines, not a Mermaid drawing: at 390 pixels Mermaid
+// the numbered list of arrows sits under it. Plain HTML with SVG lines, not a Mermaid drawing: at 390 pixels Mermaid
 // shrinks a level of six parts to about 62 percent, so its labels fall near 10 pixels. On a narrow screen the boxes
 // and the arrows are two lists at the page's own text size. Each box is one button, and each state on it is one line.
 import { count, esc, prose, quoteBody } from '../views/format.js'
+import { partClass } from './part-colours.js'
 import { pictureHtml } from './parts-picture.js'
 
 const GROUPS = [
@@ -17,9 +18,11 @@ const GROUPS = [
 // Paths a box lists before it says how many more it holds.
 const SHOWN_PATHS = 3
 
-// The map's word on the box, written by the server from the same standing as the line over the level.
+// The map's word on the box, written by the server from the same standing as the line over the level. That line
+// already names every box the reader has not asked about or not finished, so only a box whose code changed since the
+// reader understood it, or one they understand, says so on the box.
 function mapLine(map) {
-	if (map.line === '') return ''
+	if (map.line === '' || map.standing === 'unmet' || map.standing === 'open') return ''
 	const strong = map.standing === 'changed' ? ' pv-strong' : ''
 	return `<span class="pv-map${strong}">${esc(map.line)}</span>`
 }
@@ -44,7 +47,7 @@ function stateLine(box, look) {
 	return `<span class="pv-state">${said}</span>`
 }
 
-function boxHtml(box, i, look) {
+function boxHtml(box, i, look, colour) {
 	const touched = box.touched
 		? `<span class="pv-touched">The change touched ${count(box.touched.files, 'file', 'files')} here: ${count(box.touched.added, 'line', 'lines')} added, ${box.touched.removed} removed</span>`
 		: ''
@@ -55,7 +58,7 @@ function boxHtml(box, i, look) {
 		${touched}
 		${mapLine(box.map)}
 		${box.opens ? '<span class="pv-inside" aria-hidden="true">Look inside</span>' : ''}`
-	const classes = `pv-box is-${box.state}${box.touched ? ' is-touched' : ''}`
+	const classes = `pv-box is-${box.state}${box.touched ? ' is-touched' : ''} ${colour}`
 	const html = box.opens
 		? `<button class="${classes}" data-act="pv-open" data-index="${i}" data-key="pv-box-${i}">${body}</button>`
 		: `<div class="${classes}">${body}</div>`
@@ -65,12 +68,12 @@ function boxHtml(box, i, look) {
 // The arrows as box indexes, for the picture.
 function linksOf(look) {
 	const at = (name) => look.boxes.findIndex((box) => box.name === name)
-	return look.arrows.map((arrow) => ({ from: at(arrow.from), to: at(arrow.to) }))
+	return look.arrows.map((arrow) => ({ from: at(arrow.from), to: at(arrow.to), text: arrow.text }))
 }
 
 // Each arrow names the part that uses the other, a verb, and the part it uses, under the number the picture shows on
 // it. A row opens the line the arrow rests on.
-function arrowsHtml(look, open) {
+function arrowsHtml(look, open, colourOf) {
 	if (look.arrows.length === 0) return ''
 	const items = look.arrows.map((arrow, i) => {
 		const shown = open.has(i)
@@ -82,7 +85,7 @@ function arrowsHtml(look, open) {
 		return `<li class="pv-arrow-item">
 			<button class="pv-arrow" data-act="pv-arrow" data-index="${i}" data-key="pv-arrow-${i}" aria-expanded="${shown}">
 				<span class="pv-num" aria-hidden="true">${i + 1}</span>
-				<span class="pv-arrow-text"><strong>${esc(arrow.from)}</strong> ${esc(arrow.text)} <strong>${esc(arrow.to)}</strong></span>
+				<span class="pv-arrow-text"><strong class="part-name ${colourOf(arrow.from)}">${esc(arrow.from)}</strong> ${esc(arrow.text)} <strong class="part-name ${colourOf(arrow.to)}">${esc(arrow.to)}</strong></span>
 			</button>
 			${quotes}
 		</li>`
@@ -163,6 +166,18 @@ function byHtml(look, canAsk) {
 	return `<div class="pv-by">${by}<p class="pv-by-line pv-stale-line">${esc(why.join(' '))}</p>${ask('Name them again')}</div>`
 }
 
+// The way in for someone new: a tour of this level, part by part, in the order its arrows give. Only a level ken's
+// model named has a tour, and only at the commit checked out, since the model reads the code there.
+function tourHtml(look, trail, canAsk) {
+	if (!look.tour || look.at !== look.head || !canAsk) return ''
+	const first = look.tour[0]?.name
+	const where = trail.length === 1 ? 'the project' : esc(trail.at(-1).name)
+	return `<div class="pv-tour">
+		<button class="primary" data-act="tour" data-key="pv-tour">Show me around</button>
+		<p class="pv-tour-line">ken's model shows you the ${look.tour.length} parts of ${where} in turn, with their code, starting at ${esc(first)}.</p>
+	</div>`
+}
+
 function names(list) {
 	return list.length === 1 ? list[0] : `${list.slice(0, -1).join(', ')} and ${list.at(-1)}`
 }
@@ -218,7 +233,9 @@ export function projectViewHtml(view, canAsk) {
 		return '<section class="project-view"><h1>Project</h1><p class="muted">Reading the project from git.</p></section>'
 	}
 	const level = view.trail.length === 1 ? 'The whole project' : view.trail.at(-1).name
-	const heading = `<h1 class="pv-level" id="pv-level" tabindex="-1">${esc(level)}</h1>`
+	// Inside a part, every box takes the colour of the top-level part it sits in.
+	const colourOf = view.trail.length === 1 ? partClass : () => partClass(view.trail[1].name)
+	const heading = `<h1 class="pv-level ${view.trail.length === 1 ? '' : colourOf('')}" id="pv-level" tabindex="-1">${esc(level)}</h1>`
 	const trail = view.trail.length > 1 ? trailHtml(view.trail) : ''
 	// A level the server refused takes the old one off the screen, so nothing below the problem is out of date.
 	if (view.problem || !view.look) {
@@ -234,17 +251,18 @@ export function projectViewHtml(view, canAsk) {
 		look.boxes.length === 0
 			? '<p class="t-empty">Nothing is here at the commit checked out now.</p>'
 			: pictureHtml(
-					look.boxes.map((box, i) => boxHtml(box, i, look)),
+					look.boxes.map((box, i) => boxHtml(box, i, look, colourOf(box.name))),
 					linksOf(look),
 					{ numbered: true, open },
 				)
 	return `<section class="project-view">
 		${trail}${heading}
+		${tourHtml(look, view.trail, canAsk)}
 		${atLine(look, view.changes)}
 		${byHtml(look, canAsk)}
 		${look.next.line === '' ? '' : `<p class="lead pv-next">${esc(look.next.line)}</p>`}
 		${formHtml(view)}
-		<div class="pv-level-body${look.arrows.length > 0 ? ' has-arrows' : ''}">${boxes}${arrowsHtml(look, open)}</div>
+		<div class="pv-level-body${look.arrows.length > 0 ? ' has-arrows' : ''}">${boxes}${arrowsHtml(look, open, colourOf)}</div>
 		${moreHtml(look)}
 	</section>`
 }
