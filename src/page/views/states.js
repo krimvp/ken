@@ -15,7 +15,7 @@ export function emptyHtml(project, canAsk, named) {
 		canAsk && named
 			? `<div class="welcome-tour">
 		<button class="primary" data-act="tour" data-level="top" data-key="welcome-tour">Show me around</button>
-		<p class="welcome-tour-line">New here? ken's model walks you through the project one part at a time, with the code of each.</p>
+		<p class="welcome-tour-line">New here? ken's model shows you each part of the project in turn, with its code.</p>
 	</div>`
 			: ''
 	return `<section class="welcome">

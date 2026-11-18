@@ -21,11 +21,11 @@ export function tourCardHtml(tour, look, t, walk) {
 	const level = tour.within.length === 0 ? 'the whole project' : 'this part'
 	const said =
 		seen === 0
-			? `${count(walk.steps.length, 'stop', 'stops')}, one per part.`
+			? `${count(walk.steps.length, 'stop', 'stops')}, one for each part.`
 			: `You have seen ${seen} of the ${walk.steps.length} stops.`
 	return `<section class="change-card tour-card has-walk" aria-labelledby="tc-${t}">
 		<h3 class="cc-title" id="tc-${t}">A tour of ${level}</h3>
-		<p class="cc-line">${said} ken picked the order from the arrows: it starts at the part nothing else uses and goes inward. Tests, build and vendored parts come last.</p>
+		<p class="cc-line">${said} The order follows the arrows: first the part that nothing else uses, then the parts it uses. Tests, build files and vendored code come last.</p>
 		${pictureOf(look, t, walk, lit)}
 		${walkHtml(walk.steps, t, { ...walk, boxes, change: null, tour: true })}
 	</section>`
