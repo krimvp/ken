@@ -15,7 +15,7 @@
 	--shadow-md: 0 1px 2px rgb(20 26 40 / 0.05), 0 6px 18px -6px rgb(20 26 40 / 0.12);
 	--shadow-lg: 0 2px 4px rgb(20 26 40 / 0.05), 0 14px 32px -10px rgb(20 26 40 / 0.2);
 	--color-canvas: #fbfbfd;
-	--color-bar: rgb(246 247 249 / 0.88);
+	--color-bar: rgb(246 247 249);
 	--color-add-bg: #e3f3ea;
 	--color-del-bg: #fbe9e6;
 	--color-add-ink: #135f3d;
@@ -42,7 +42,7 @@
 		--shadow-md: 0 1px 2px rgb(0 0 0 / 0.35), 0 8px 20px -8px rgb(0 0 0 / 0.6);
 		--shadow-lg: 0 2px 4px rgb(0 0 0 / 0.35), 0 16px 36px -12px rgb(0 0 0 / 0.7);
 		--color-canvas: #12161c;
-		--color-bar: rgb(15 18 23 / 0.88);
+		--color-bar: rgb(15 18 23);
 		--color-add-bg: #173326;
 		--color-del-bg: #3a1f1b;
 		--color-add-ink: #8fe0b6;
@@ -268,7 +268,6 @@ html {
 	padding: var(--space-2) var(--space-6);
 	border-bottom: 1px solid var(--color-border);
 	background: var(--color-bar);
-	backdrop-filter: saturate(1.4) blur(12px);
 }
 
 /* ken's mark: three part colours in one tile, the way the picture shows a project. */
