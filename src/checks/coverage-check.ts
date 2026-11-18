@@ -33,27 +33,32 @@ export async function checkCoverage(
 	const diff = await repo.diff(resolved.range, signal)
 	if (diff.kind !== 'ok') return diff
 
-	const covered: ChangedHunk[] = []
-	const uncovered: ChangedHunk[] = []
 	const binary: string[] = []
+	const all: ChangedHunk[] = []
 	for (const file of diff.files) {
-		if (file.kind === 'binary') {
-			binary.push(file.path)
-			continue
-		}
-		for (const hunk of file.hunks) {
-			// A hunk that only deletes has no lines at head, so only a quote of the old code at base can cover it.
-			const [commit, path, start, length] =
-				hunk.newLength === 0
-					? [base, file.oldPath, hunk.oldStart, hunk.oldLength]
-					: [head, file.path, hunk.newStart, hunk.newLength]
-			// A quote of a commit message has no path, so it covers no hunk.
-			const isCovered = quotes.some(
-				(quote) =>
-					quote.commit === commit && quote.path === path && quote.startLine < start + length && quote.endLine >= start,
-			)
-			;(isCovered ? covered : uncovered).push({ path: file.path, oldPath: file.oldPath, hunk })
-		}
+		if (file.kind === 'binary') binary.push(file.path)
+		else all.push(...file.hunks.map((hunk) => ({ path: file.path, oldPath: file.oldPath, hunk })))
 	}
+	const covered = quotedHunks(all, { base, head }, quotes)
+	const uncovered = all.filter((hunk) => !covered.includes(hunk))
 	return { kind: 'ok', covered, uncovered, binary }
+}
+
+// The hunks of a change that the quotes overlap. A hunk that only deletes has no lines at head, so only a quote of the
+// old code at base can cover it. A quote of a commit message has no path, so it covers no hunk.
+export function quotedHunks(
+	hunks: ChangedHunk[],
+	range: { base: string; head: string },
+	quotes: VerifiedGitQuote[],
+): ChangedHunk[] {
+	return hunks.filter(({ path, oldPath, hunk }) => {
+		const [commit, file, start, length] =
+			hunk.newLength === 0
+				? [range.base, oldPath, hunk.oldStart, hunk.oldLength]
+				: [range.head, path, hunk.newStart, hunk.newLength]
+		return quotes.some(
+			(quote) =>
+				quote.commit === commit && quote.path === file && quote.startLine < start + length && quote.endLine >= start,
+		)
+	})
 }

@@ -72,7 +72,7 @@ test('a show call with a good card, a false quote and a label the quotes do not 
 	)
 
 	assert.deepEqual(
-		replyIn(events).items.map((item) => (item.kind === 'words' ? item.text : item.card.kind)),
+		replyIn(events).items.map((item) => (item.kind === 'card' ? item.card.kind : item.text)),
 		['Each retry now waits before the next attempt.', 'claim'],
 	)
 	const [shown] = cardsIn(events)
@@ -133,6 +133,7 @@ test('a show call with a good card, a false quote and a label the quotes do not 
 		binary: [],
 		messages: { quoted: [], unquoted: [head] },
 		usedElsewhere: { followed: [], notFollowed: [] },
+		stepHunks: [],
 	})
 })
 
@@ -156,7 +157,7 @@ test('the words of a turn that shows a card again after one was sent back are a 
 	const firstTry: Turn = { tool: 'ken__show', text: 'Each retry now waits.', args: { claims: [claim(FALSE_QUOTE)] } }
 	const again: Turn = { tool: 'ken__show', text: 'Sending it again with tabs.', args: { claims: [claim(TRUE_QUOTE)] } }
 	const said = (events: ChatEvent[]) =>
-		replyIn(events).items.map((item) => (item.kind === 'words' ? item.text : item.card.kind))
+		replyIn(events).items.map((item) => (item.kind === 'card' ? item.card.kind : item.text))
 
 	const closed = await ask([firstTry, again, { text: 'The wait is 100 ms.' }])
 	assert.deepEqual(said(closed.events), ['Each retry now waits.', 'claim', 'The wait is 100 ms.'])

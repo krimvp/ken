@@ -281,8 +281,8 @@ test('a question saved before ken kept the HEAD still opens with no HEAD of its 
 	const before = await json(server, '/api/questions/old-3')
 	assert.deepEqual(
 		before.entry.reply.change,
-		{ ...change, messages: null, usedElsewhere: null },
-		'no count and no names, rather than a count of none and an empty list',
+		{ ...change, messages: null, usedElsewhere: null, stepHunks: [] },
+		'no count, no names and no steps, rather than a count of none and an empty list',
 	)
 	assert.deepEqual(
 		before.entry.reply.items[1].card.risk,

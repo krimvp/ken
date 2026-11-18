@@ -14,7 +14,7 @@ type OldAnswer = {
 	risks?: Risk[] | null
 	topics?: string[]
 	diagrams?: Diagram[]
-	change: (Omit<Change, 'messages' | 'usedElsewhere'> & Partial<Change>) | null
+	change: (Omit<Change, 'messages' | 'usedElsewhere' | 'stepHunks'> & Partial<Change>) | null
 	leftOutPoints?: string[]
 	withdrawn?: Withdrawn[]
 }
@@ -55,6 +55,9 @@ export function parseLine(line: string, decisions: RecordEntry[]): HistoryEntry 
 		const reply = replyOf(answer as OldAnswer, typeof note === 'string' ? note : '', [...stored, ...kept])
 		return { ...rest, outcome: 'answered', reply, recorded: named } as HistoryEntry
 	}
+	// A change saved before ken had walkthrough steps has none.
+	const change = isObject(value.reply) ? value.reply.change : null
+	if (isObject(change) && !Array.isArray(change.stepHunks)) change.stepHunks = []
 	return value as HistoryEntry
 }
 
@@ -85,7 +88,7 @@ function replyOf(old: OldAnswer, note: string, decisions: Decision[]): Reply {
 		...words(left.length === 0 ? '' : `Left out, with no line to quote: ${left.join('; ')}.`),
 		...words(note),
 	]
-	const change = old.change && { messages: null, usedElsewhere: null, ...old.change }
+	const change = old.change && { messages: null, usedElsewhere: null, stepHunks: [], ...old.change }
 	return { items, change, topics: old.topics ?? [] }
 }
 

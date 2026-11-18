@@ -143,7 +143,7 @@ export async function endReply(
 	signal: AbortSignal,
 ): Promise<{ reply: Reply; recorded: RecordEntry[]; problems: string[] }> {
 	const { scope } = round
-	const change = scope && (await changeOf(gate.sources.repo, scope.range, quotesOf(round.items), signal))
+	const change = scope && (await changeOf(gate.sources.repo, scope.range, round.items, signal))
 	const recorded = await recordReply(gate.store, gate.project, round.items, scope, signal)
 	// Every topic is in the record now, so each card names it as the record spells it.
 	const names = (await gate.store.read()).current.flatMap((entry) => (entry.kind === 'topic' ? [entry.name] : []))
@@ -159,26 +159,26 @@ export async function endReply(
 }
 
 function spelled(item: Item, canonical: (name: string) => string): Item {
-	if (item.kind === 'words') return item
+	if (item.kind !== 'card') return item
 	const { card } = item
 	const named = <T extends { topic?: string | null }>(each: T): T =>
 		each.topic ? { ...each, topic: canonical(each.topic) } : each
 	switch (card.kind) {
 		case 'claim':
-			return { kind: 'card', card: { kind: 'claim', claim: named(card.claim) } }
+			return { ...item, card: { kind: 'claim', claim: named(card.claim) } }
 		case 'risk':
-			return { kind: 'card', card: { kind: 'risk', risk: named(card.risk) } }
+			return { ...item, card: { kind: 'risk', risk: named(card.risk) } }
 		case 'decision':
-			return { kind: 'card', card: { kind: 'decision', decision: named(card.decision) } }
+			return { ...item, card: { kind: 'decision', decision: named(card.decision) } }
 		case 'topic':
-			return { kind: 'card', card: { kind: 'topic', topic: { ...card.topic, name: canonical(card.topic.name) } } }
+			return { ...item, card: { kind: 'topic', topic: { ...card.topic, name: canonical(card.topic.name) } } }
 		default:
 			return item
 	}
 }
 
 function topicsOf(item: Item): string[] {
-	if (item.kind === 'words') return []
+	if (item.kind !== 'card') return []
 	const { card } = item
 	switch (card.kind) {
 		case 'claim':
