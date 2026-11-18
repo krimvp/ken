@@ -2270,7 +2270,6 @@ ul.left-out {
 .pv-cell {
 	display: flex;
 	min-width: 0;
-	transition: opacity 0.15s;
 }
 
 @media (min-width: 760px) {
@@ -2302,20 +2301,36 @@ ul.left-out {
 		grid-column: var(--col);
 	}
 
-	/* Pointing at a box lights it, its arrows and the boxes they join, and steps the rest back. */
-	.pv-picture.is-lit .pv-cell:not(.is-near) {
-		opacity: 0.5;
+	/* Pointing at a box lights it, its arrows and the boxes they join, each ringed in its colour. The rest lose their
+	   colour, ring and shadow, and their arrows fade, but every word keeps its full contrast. */
+	.pv-picture.is-lit .pv-cell.is-near .pv-box {
+		border-color: var(--part-line);
+		box-shadow:
+			0 0 0 1px var(--part-line),
+			var(--shadow-lg);
 	}
 
-	.pv-picture.is-lit .pv-link:not(.is-hot),
-	.pv-picture.is-lit .pv-label:not(.is-hot) {
+	.pv-picture.is-lit .pv-cell:not(.is-near) .pv-box {
+		--part-fill: var(--color-card);
+		--part-line: var(--color-box-border);
+		--part-ink: var(--color-note);
+		border-color: var(--color-box-border);
+		box-shadow: none;
+	}
+
+	.pv-picture.is-lit .pv-link:not(.is-hot) {
 		opacity: 0.25;
 	}
-}
 
-@media (prefers-reduced-motion: reduce) {
-	.pv-cell {
-		transition: none;
+	.pv-picture.is-lit .pv-label:not(.is-hot) {
+		border-color: transparent;
+		box-shadow: none;
+	}
+
+	.pv-picture.is-lit .pv-label:not(.is-hot) .pv-label-n {
+		background: none;
+		box-shadow: inset 0 0 0 1px var(--color-box-border);
+		color: var(--color-note);
 	}
 }
 
@@ -2395,7 +2410,6 @@ ul.left-out {
 	line-height: 1.3;
 	pointer-events: auto;
 	cursor: pointer;
-	transition: opacity 0.15s;
 }
 
 .pv-label.is-narrow {
