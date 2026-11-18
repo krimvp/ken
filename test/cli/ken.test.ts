@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { after, test } from 'node:test'
+import { readModelConfig } from '../../src/agent/index.ts'
 import { openMap } from '../../src/map/index.ts'
 import { fileRecordStore } from '../../src/record/index.ts'
 import { gitRepository } from '../../src/repo/index.ts'
@@ -302,6 +303,24 @@ test('ken refuses to start without a model, and says what to set', async () => {
 		assert.equal(stdout, '')
 		for (const name of names) assert.ok(stderr.includes(name), `the message names ${name}: ${stderr}`)
 		assert.doesNotMatch(stderr, /^\s+at /m, 'a plain message, not a stack trace')
+	}
+})
+
+test('with no model set, ken gives a line to copy for each common setup, and each line sets a model ken accepts', async () => {
+	const { code, stderr } = await ken(['ask', 'What changed?', '--repo', root], NO_KEN_VARIABLES)
+
+	assert.equal(code, 2, stderr)
+	for (const setup of [/Ollama Cloud/, /LiteLLM/, /Claude Code[^\n]*Run ken-claude-endpoint/])
+		assert.match(stderr, setup)
+	const lines = stderr.split('\n').flatMap((line) => line.match(/^\s+export (.+)$/)?.slice(1) ?? [])
+	assert.equal(lines.length, 3, stderr)
+	for (const line of lines) {
+		const env: Record<string, string | undefined> = Object.fromEntries(
+			line.split(' ').map((pair) => [pair.slice(0, pair.indexOf('=')), pair.slice(pair.indexOf('=') + 1)]),
+		)
+		// The reader puts their own key in the variable the line names.
+		env[env.KEN_API_KEY_ENV ?? ''] ??= 'a-key-of-some-length'
+		assert.equal(readModelConfig({}, env).kind, 'ok', line)
 	}
 })
 
