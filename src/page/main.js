@@ -4,6 +4,7 @@
 import { fillDrawings, markPart } from './draw-diagrams.js'
 import { liveLook, liveViewHtml } from './live/live-view.js'
 import { changeKey } from './project/change-card.js'
+import { learnParts } from './project/part-colours.js'
 import { drawPictures } from './project/parts-picture.js'
 import { projectViewHtml } from './project/project-view.js'
 import { allQuotesHtml, checksHtml, quoteCardHtml } from './views/checks.js'
@@ -782,6 +783,7 @@ async function loadLayout() {
 		} else {
 			const { look, changes } = body
 			const change = look.change?.asked ?? 'none'
+			if (trail.length === 1) learnParts(look.boxes)
 			state.layout = { ...state.layout, look, changes, change, problem: null, openArrows: new Set() }
 		}
 	} catch (error) {
@@ -816,7 +818,10 @@ function loadChangeLooks() {
 		const key = changeKey(change)
 		looks.set(key, null)
 		getJson(`/api/layout?change=${encodeURIComponent(key)}`)
-			.then(({ look }) => looks.set(key, look))
+			.then(({ look }) => {
+				learnParts(look.boxes)
+				looks.set(key, look)
+			})
 			.catch((error) => looks.set(key, { problem: error.message }))
 			.finally(render)
 	}
@@ -956,7 +961,7 @@ const actions = {
 	'pv-arrow'(el) {
 		toggle(state.layout.openArrows, Number(el.dataset.index))
 		render()
-		if (el.closest('svg')) $(`[data-key="pv-arrow-${el.dataset.index}"]`)?.focus({ preventScroll: true })
+		if (el.closest('.pv-picture')) $(`[data-key="pv-arrow-${el.dataset.index}"]`)?.focus({ preventScroll: true })
 	},
 	'pv-all'() {
 		const { look, openArrows } = state.layout
