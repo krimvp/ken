@@ -1982,15 +1982,30 @@ ul.left-out {
 
 .dv-list {
 	margin-top: var(--space-5);
-	border-top: 1px solid var(--color-border);
 }
 
 .dv-row {
 	display: grid;
 	gap: var(--space-1);
-	padding: var(--space-4) 0;
-	border-bottom: 1px solid var(--color-border);
 	overflow-wrap: anywhere;
+}
+
+/* Each decision, topic and thing waiting on the reader is a card, as a checked card in a reply is. */
+.dv-list,
+.t-list,
+.o-list {
+	display: grid;
+	gap: var(--space-3);
+}
+
+.dv-row,
+.t-row,
+.o-decision {
+	padding: var(--space-4);
+	border: 1px solid var(--color-border);
+	border-radius: 14px;
+	background: var(--color-card);
+	box-shadow: var(--shadow-sm);
 }
 
 .dv-head {
@@ -2027,12 +2042,6 @@ ul.left-out {
 
 .t-list {
 	margin-top: var(--space-5);
-	border-top: 1px solid var(--color-border);
-}
-
-.t-row {
-	padding: var(--space-3) 0;
-	border-bottom: 1px solid var(--color-border);
 }
 
 .t-name {
@@ -2817,12 +2826,6 @@ button.pv-box:hover .pv-inside {
 
 .o-list {
 	margin-top: var(--space-3);
-	border-top: 1px solid var(--color-border);
-}
-
-.o-decision {
-	padding-bottom: var(--space-4);
-	border-bottom: 1px solid var(--color-border);
 }
 
 .o-card .decision {

@@ -128,7 +128,7 @@ function topicHtml(t, canAsk) {
 		...(changed && canAsk ? [withCost(button('explain-topic', 'Explain what changed'))] : []),
 	]
 	return `<li class="t-row t-${t.kind}">
-		<p class="t-head"><span class="t-name">${topic}</span> <span class="t-state">${STATE[t.kind]}</span></p>
+		<p class="t-head"><span class="t-name part-name ${partClass(t.topic)}">${topic}</span> <span class="t-state">${STATE[t.kind]}</span></p>
 		<p class="t-how small">${how}</p>
 		${lines}
 		<div class="map-buttons">${buttons.join('')}</div>
