@@ -2,9 +2,9 @@
 
 ken explains a software project to the developer who owns it. Ask what changed, why, or how a part works now. ken's model replies in its own words, and backs each claim that needs proof with a card: the exact lines it rests on, which ken looks up before you see the card. ken is built for projects where AI agents write most of the code.
 
-<img src="site/images/ken-risk-with-quotes-wide.png" width="440" alt="The question What did the last commit do, and why? Name the decisions it made and any risk I should know about. Under it, the summary from ken's model, not checked, tells the story: before a32ffb8, retry waited a fixed 200 ms between tries, so it kept hitting the API while the API was down. Now the wait doubles after each failed try, 200, 400, then 800 ms. The thing to watch is that retry still waits after the last try. Then come the line 3 risks, 1 of them serious, and the risks, heaviest first. Risk 1 is marked Quotes code outside the change and Serious: every fetchUser call where all 3 tries fail now waits about 1.4 s before it throws, up from 0.6 s. Its first quote is open and shows line 8 of src/user.ts at a32ffb8, where fetchUser calls retry. Two more quotes of src/retry.ts are folded.">
+<img src="site/images/ken-change-card-wide.png" width="440" alt="The question What could go wrong with the change from 47eec4e to e490d9c? Show me the risks. Under it, the card What this change touched draws the project's 6 parts as boxes, with arrows for which part uses which. Eval CLI, in orange, is marked 1 file: 7 lines added, 4 removed. Test suite, in green, is marked 9 files: 333 lines added, 112 removed. Plugin engine, multeval harness, Eval scenarios, and Vendored skills and scripts are faded and marked Not touched. An arrow from Test suite to Eval CLI runs over the top row.">
 
-Screenshot of an answer on ken's local page, about a commit in a small made-up project, taken before ken replied in its own words. The model was Claude Opus.
+Screenshot of a reply on ken's local page, about a merge in an agent harness that AI agents wrote most of. ken draws this card from git, before the model's words.
 
 ## What ken gives you
 
