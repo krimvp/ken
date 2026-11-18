@@ -175,9 +175,11 @@ button {
 	outline-offset: -3px;
 }
 
-/* Keyboard focus never lands under the pinned question box. */
+/* Keyboard focus and a step moved to never land under the pinned header or question box. main.js keeps --composer at
+   the box's height, which grows with the question. */
 html {
-	scroll-padding-bottom: 6rem;
+	scroll-padding-top: calc(var(--top) + var(--space-2));
+	scroll-padding-bottom: calc(var(--composer, 6rem) + var(--space-2));
 }
 
 .muted {

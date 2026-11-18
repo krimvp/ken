@@ -728,8 +728,11 @@ function walkTo(t, number) {
 	render()
 	if (number !== null) {
 		$('#panel').scrollTop = 0
-		document.querySelector(`[data-key="walk-${t}-${number}"]`)?.focus({ preventScroll: true })
-		document.querySelector(`.walk-step[data-step="${number}"]`)?.scrollIntoView({ block: 'nearest' })
+		const head = document.querySelector(`[data-key="walk-${t}-${number}"]`)
+		head?.focus({ preventScroll: true })
+		// On a wide screen the picture and the step's line show together; on a narrow one the step opens under its line.
+		if (ui.wide) $(`#turn-${t} .change-card .pv-picture`)?.scrollIntoView({ block: 'nearest' })
+		head?.scrollIntoView({ block: ui.wide ? 'nearest' : 'start' })
 		void learnStop(t, number, 'toured')
 	}
 }
@@ -1476,6 +1479,9 @@ document.addEventListener('pointerover', lightQuote)
 document.addEventListener('focusin', lightQuote)
 
 $('#question').addEventListener('input', resizeBox)
+new ResizeObserver(([entry]) => {
+	document.documentElement.style.setProperty('--composer', `${entry.target.offsetHeight}px`)
+}).observe($('#ask'))
 wideQuery.addEventListener('change', render)
 window.addEventListener('resize', () => drawPictures($('#thread')))
 darkQuery.addEventListener('change', render)
