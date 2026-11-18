@@ -18,12 +18,16 @@
 		"check": "npm run typecheck && npm run lint && npm test && npm run check:structure && npm run check:prose"
 	},
 	"bin": {
-		"ken": "src/cli/main.ts"
+		"ken": "bin/ken.js",
+		"ken-claude-endpoint": "bin/ken-claude-endpoint.js"
 	},
 	"dependencies": {
 		"aigent": "file:vendor/aigent-0.0.0.tgz",
 		"mermaid": "11.17.2"
 	},
+	"bundleDependencies": [
+		"aigent"
+	],
 	"devDependencies": {
 		"@biomejs/biome": "2.6.4",
 		"@types/node": "22.20.5",
