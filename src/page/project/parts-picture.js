@@ -129,8 +129,9 @@ function crosses(p, q, r, s) {
 // { from, to, text } box indexes and verb. numbered draws each arrow's number and verb on it, which opens the arrow in
 // the list of arrows; open holds the arrows open there. lit holds the boxes that stay lit when nothing is pointed at,
 // such as the parts of the walkthrough step the reader is on. column, when given, is the order of the boxes in one
-// column, such as a tour's stops, in place of the order that crosses the fewest arrows.
-export function pictureHtml(cells, links, { numbered, open, lit = new Set(), column: order = null }) {
+// column, such as a tour's stops, in place of the order that crosses the fewest arrows. still keeps the lit boxes lit
+// while the reader points, as beside a walkthrough, where the lit part is always the step the reader is on.
+export function pictureHtml(cells, links, { numbered, open, lit = new Set(), column: order = null, still = false }) {
 	const pairs = links.map((link) => [link.from, link.to])
 	const place = placeParts(cells.length, pairs)
 	const column = order ?? placeColumn(cells.length, pairs)
@@ -143,7 +144,7 @@ export function pictureHtml(cells, links, { numbered, open, lit = new Set(), col
 		links.map((link, i) => ({ from: link.from, to: link.to, text: link.text, open: open.has(i) })),
 	)
 	const rest = [...lit].join(' ')
-	return `<div class="pv-picture${lit.size > 0 ? ' is-lit' : ''}" style="--rows:${place.rows};--cols:${place.cols}" data-links="${escAttr(data)}" data-numbered="${numbered}" data-lit="${rest}">
+	return `<div class="pv-picture${lit.size > 0 ? ' is-lit' : ''}" style="--rows:${place.rows};--cols:${place.cols}" data-links="${escAttr(data)}" data-numbered="${numbered}" data-lit="${rest}" data-still="${still}">
 		<ul class="pv-boxes">${items.join('')}</ul>
 	</div>`
 }
@@ -188,7 +189,7 @@ export function drawPictures(root) {
 		}
 		picture.prepend(svg)
 		if (picture.dataset.numbered === 'true') placeLabels(picture, links, curves, rects, frame, draw === 'column')
-		wire(picture, links)
+		if (picture.dataset.still !== 'true') wire(picture, links)
 		lightPicture(picture, restOf(picture))
 	}
 }

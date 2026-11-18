@@ -3549,11 +3549,6 @@ q.subject {
 	box-shadow: 0 0 0 1px var(--color-accent);
 }
 
-.walk-step.is-touching {
-	border-color: var(--color-accent);
-	background: var(--color-label-bg);
-}
-
 .walk-head {
 	display: grid;
 	grid-template-columns: auto minmax(0, 1fr);
@@ -3582,8 +3577,7 @@ q.subject {
 	font-variant-numeric: tabular-nums;
 }
 
-.walk-step.is-on .walk-n,
-.walk-step.is-touching .walk-n {
+.walk-step.is-on .walk-n {
 	background: var(--color-accent);
 }
 

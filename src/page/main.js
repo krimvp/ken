@@ -1451,33 +1451,29 @@ for (const kind of ['mouseover', 'focusin']) {
 document.addEventListener('focusout', hideTip)
 document.addEventListener('scroll', () => tipFor?.isConnected && showTip(tipFor), true)
 
-// A walkthrough, its change card and its cards light each other while the reader points: a step lights its parts, a
-// part lights the steps that touch it, and a quote lights the part its file sits in. Leaving puts back the step the
-// reader is on. This only sets classes, so nothing is drawn again.
-function lightWalk(event) {
-	const inPanel = event.target.closest?.('#panel') && state.ui.panel.kind === 'walk'
-	const turn = inPanel ? $(`#turn-${state.ui.panel.t}`) : event.target.closest?.('.turn')
+// Pointing at a quote lights the part its file sits in, on the change or tour card of its reply. Anything else puts
+// back the parts the card keeps lit, which beside a walkthrough are the parts of the step the reader is on.
+let quoteLit = null
+function lightQuote(event) {
+	if (quoteLit) lightPicture(quoteLit, new Set(quoteLit.dataset.lit.split(' ').filter(Boolean).map(Number)))
+	quoteLit = null
+	const quote = event.target.closest?.('.q[data-path]')
+	if (!quote) return
+	const inPanel = quote.closest('#panel') && state.ui.panel.kind === 'walk'
+	const turn = inPanel ? $(`#turn-${state.ui.panel.t}`) : quote.closest('.turn')
 	const picture = turn?.querySelector('.change-card .pv-picture')
 	if (!picture) return
-	const t = Number(turn.id.slice('turn-'.length))
-	const change = state.thread[t]?.reply?.change ?? state.thread[t]?.liveChange
-	const boxes = (change && state.ui.changeLooks.get(changeKey(change))?.boxes) ?? []
-	const steps = [...turn.querySelectorAll('.walk-step')]
-	const rest = () => new Set((picture.dataset.lit ?? '').split(' ').filter(Boolean).map(Number))
-	const step = event.target.closest('.walk-step')
-	const quote = event.target.closest('.q[data-path]')
-	const cell = event.target.closest('.change-card .pv-boxes > li')
-	let parts = null
-	if (quote) parts = new Set([partOf(quote.dataset.path, boxes)].filter((i) => i >= 0))
-	else if (step) parts = new Set(step.dataset.parts.split(' ').filter(Boolean).map(Number))
-	if (parts) lightPicture(picture, parts.size > 0 ? parts : rest())
-	else if (!cell) lightPicture(picture, rest())
-	const box = cell ? [...picture.querySelectorAll(':scope > .pv-boxes > li')].indexOf(cell) : -1
-	for (const each of steps)
-		each.classList.toggle('is-touching', box >= 0 && each.dataset.parts.split(' ').includes(`${box}`))
+	const q = state.thread[Number(turn.id.slice('turn-'.length))]
+	const change = q?.reply?.change ?? q?.liveChange
+	const tour = q?.reply?.tour
+	const key = change ? changeKey(change) : tour ? tourKey(tour) : null
+	const part = partOf(quote.dataset.path, state.ui.changeLooks.get(key)?.boxes ?? [])
+	if (part < 0) return
+	lightPicture(picture, new Set([part]))
+	quoteLit = picture
 }
-document.addEventListener('pointerover', lightWalk)
-document.addEventListener('focusin', lightWalk)
+document.addEventListener('pointerover', lightQuote)
+document.addEventListener('focusin', lightQuote)
 
 $('#question').addEventListener('input', resizeBox)
 wideQuery.addEventListener('change', render)

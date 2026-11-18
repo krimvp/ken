@@ -22,7 +22,7 @@ export function changeCardHtml(change, look, t, walk = null) {
 	const boxes = look?.boxes ?? null
 	const on = walk?.steps.find((step) => step.number === walk.at)
 	const lit = on && boxes ? stepParts(on, boxes) : new Set()
-	const parts = partsHtml(look, t, lit)
+	const parts = partsHtml(look, t, lit, Boolean(walk))
 	const body = walk
 		? `<div class="cc-walk"><div class="cc-walk-picture">${parts}</div>${walkHtml(walk.steps, t, { ...walk, boxes, change })}</div>`
 		: parts
@@ -33,7 +33,7 @@ export function changeCardHtml(change, look, t, walk = null) {
 	</section>`
 }
 
-function partsHtml(look, t, lit) {
+function partsHtml(look, t, lit, still) {
 	if (look === null) return '<p class="cc-line">Reading which parts of the project this change touched.</p>'
 	if (look.problem) return `<p class="cc-line">ken could not lay this change over the parts: ${esc(look.problem)}</p>`
 	const at = (name) => look.boxes.findIndex((box) => box.name === name)
@@ -57,7 +57,7 @@ function partsHtml(look, t, lit) {
 			? ''
 			: `<p class="cc-line">An arrow points from a part to the part it uses. A dashed arrow joins two parts the change left alone.</p>`
 	return `<p class="cc-line">The change touched ${touched === 0 ? 'none' : touched} of the project's ${look.boxes.length} parts.${named} Open a part to see the change inside it.</p>
-		${pictureHtml(cells, links, { numbered: false, open: new Set(), lit })}
+		${pictureHtml(cells, links, { numbered: false, open: new Set(), lit, still })}
 		${key}
 		${outside.length > 0 ? `<p class="cc-line">Also changed, in no part: ${outside.map((p) => `<code class="pv-path">${esc(p)}</code>`).join(', ')}.</p>` : ''}`
 }

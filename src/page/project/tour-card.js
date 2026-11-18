@@ -53,5 +53,5 @@ function pictureOf(look, t, walk, lit) {
 		.map((box, i) => [stop(box) < 0 ? look.boxes.length + i : stop(box), i])
 		.sort((a, b) => a[0] - b[0])
 		.map(([, i]) => i)
-	return pictureHtml(cells, links, { numbered: false, open: new Set(), lit, column })
+	return pictureHtml(cells, links, { numbered: false, open: new Set(), lit, column, still: true })
 }
