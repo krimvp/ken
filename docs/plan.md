@@ -1,6 +1,6 @@
 # Plan: a code companion that explains a project to its reader
 
-As of 2026-11-17
+As of 2026-11-18
 
 ## Summary
 
@@ -77,7 +77,7 @@ The understanding map is personal. It has one entry per topic the reader has met
 
 - the topic;
 - a depth: has heard of it, can follow it, or could change it;
-- the evidence: asked about it, read its card, said "I know this", or wrote it by hand;
+- the evidence: asked about it, read its card, met it on a tour, said "I know this", or wrote it by hand;
 - the date;
 - the hash of the topic's quoted code at that moment.
 
@@ -146,11 +146,22 @@ The model reads the project, then replies in its own words. It calls one tool, `
 
 A reply about a change opens on the change card, which plain code draws when the model names the change with show's scope: the project's top level of parts, each part the change touched marked with its files and lines, any changed file in no part, and the commits. It needs no quote, so it cannot fail. Opening a part on it opens the Project view there with the same change laid over it. Then the model tells the story in two to five sentences of its own and backs the main point with a card. It says in one line whether there are decisions or risks worth a look. The reader asks for them, with two chips under the reply or in words.
 
-A third chip, "Walk me through it", asks for the change as three to seven steps in the order a reviewer should read them. The model sends each step with show's step: a number, one or two sentences of its own, and the claims that prove it. A step whose card ken sends back still shows, and the card sent again under the same number joins it. Plain code links each step, never the model: its hunks are the change's hunks its quotes overlap, by the same rule as the coverage check, and are saved with the change; its parts are the parts of the top level its quote paths fall in, found by the page against the picture it draws. The page shows the steps beside the change card's picture. The step the reader is on lights its parts and opens its hunks as a diff with the line numbers before and after: in the panel on a wide screen, under the step on a narrow one. Pointing at a part lights the steps that touch it, and pointing at a quote lights its part. The picture keeps the Project view's layout for the same parts. On a phone it stands in one column with the arrows bent out to its right. When risks of a change arrive, ken holds them for a second look: in the same session, the model checks each risk against the code and the later commits on the same files. It may withdraw a risk only with a quote of the line that rules it out, and the reader still sees the withdrawn risk with that line.
+A third chip, "Walk me through it", asks for the change as three to seven steps in the order a reviewer should read them. The model sends each step with show's step: a number, at most two short sentences of its own, 40 words in all, and the claims that prove it. A step whose card ken sends back still shows, and the card sent again under the same number joins it. Plain code links each step, never the model: its hunks are the change's hunks its quotes overlap, by the same rule as the coverage check, and are saved with the change; its parts are the parts of the top level its quote paths fall in, found by the page against the picture it draws. The page shows the steps beside the change card's picture. The step the reader is on lights its parts and opens its hunks as a diff with the line numbers before and after: in the panel on a wide screen, under the step on a narrow one. Pointing at a part lights the steps that touch it, and pointing at a quote lights its part. The picture keeps the Project view's layout for the same parts. On a phone it stands in one column with the arrows bent out to its right. When risks of a change arrive, ken holds them for a second look: in the same session, the model checks each risk against the code and the later commits on the same files. It may withdraw a risk only with a quote of the line that rules it out, and the reader still sees the withdrawn risk with that line.
 
 Live notes run in a chat of their own, so a note never sits in the thread the reader talks in.
 
 Besides the quote check, ken runs these checks. An entry that says something is missing or untested names the text that would be there, and ken searches the head commit for it and refuses the entry if it finds the text. A risk that quotes the message of a commit made after the change is marked "Fixed since".
+
+### A tour of the project
+
+The owner asked on 2026-11-18 whether a new user can onboard to a project easily with ken. The Project view is a map; a tour walks the newcomer through it.
+
+- **"Show me around"** sits on the Project view of any named level at HEAD, and on the first visit when the top level is named. Inside a part, it tours that part's own named level.
+- **Plain code picks the order**, from the stored level: first the parts no other part of the code uses, by the checked arrows, the one with the most outgoing arrows first; then the arrows inward, breadth first, in the order the level lists them; then parts no arrow joins; then the parts that support the code, last. A part supports the code when its name or the first word of its job says test, build, scripts or vendored, or when every one of its paths sits under such a folder. Arrows from those parts do not count, since tests use everything. A loop no start reaches starts at its part with the most outgoing arrows. The same level always gives the same order.
+- **One model run for the whole tour.** The question lists each stop in order with its paths and job, and how the parts use each other. The model sends one show step per stop: at most two short sentences, 40 words, on what the part does and how it connects to the stops around it, and one or two claims quoting the part's key lines. A step past the last stop goes back.
+- **A stop is a walkthrough step.** The same list, Next and Previous, arrow keys and panel. Its part is the stop's, not found from quotes; the panel shows the code its cards quote, not a diff. The picture is the level, in tour order on a phone.
+- **The tour follows the map.** When the tour ends, ken adds each stop's part to the record as a topic resting on the lines its step quoted, unless the record has it. Asking for a tour marks nothing. Reaching a stop adds a "toured" line for its topics, which counts as met, not understood; "I know this part" adds "said". A stop all of whose topics are met shows as seen.
+- **A tour is a reply.** It is kept in the reader's history with its stops, and "Show me around" opens the newest tour of the same level and stops again, with no model, at the first stop the reader has not seen.
 
 ### Labels on every statement
 
