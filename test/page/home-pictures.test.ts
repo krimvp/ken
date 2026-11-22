@@ -87,7 +87,6 @@ const again = {
 const model = await scriptedModel([
 	stop(1, 'The code runs the work.', 'src/core/run.ts', 'export function run() {'),
 	stop(2, 'The tests run the code.', 'test/run.test.ts', 'run()'),
-	{ text: '' },
 	...drawing('One command through the code', 'The command runs the core.'),
 	...drawing('The same command, once more', 'The same flow again.'),
 	{ tool: 'ken__show', text: 'Two parts now.', args: { layout: again } },

@@ -21,6 +21,7 @@ import type { UnderstandingMap } from '../../map/index.ts'
 import { RECORD_LIMITS, type RecordStore, sameName, textProblem, UNDO } from '../../record/index.ts'
 import { type Range, type Repository, resolveRange } from '../../repo/index.ts'
 import { type BriefDraft, briefSchema, readBrief } from '../brief/brief-schema.ts'
+import { type Shorten, shortenBrief } from '../brief/shorten-lines.ts'
 import type { ChatEvent } from '../chat-event.ts'
 import { scopeProblem } from '../tools/exploration-tools.ts'
 import { readArgs, refuse, reply, short } from '../tools/tool-edge.ts'
@@ -55,7 +56,8 @@ export type Gate = {
 // question about one concept that the reply answers as a brief, or null.
 // views is what ken took of "In its world" and "Where it runs" in this reply, kept with the top level when it ends.
 // typed is true when the round starts from the reader's own words, the only round in which ken keeps a note about them,
-// so text in a diff or a saved session cannot make the model keep one.
+// so text in a diff or a saved session cannot make the model keep one. read counts the lines of files the model read
+// against the most a brief may read, or is null when the question has no such limit.
 export type Round = {
 	asked: boolean
 	typed: boolean
@@ -72,6 +74,7 @@ export type Round = {
 	held: Risk[]
 	sentBack: number
 	shown: Set<string>
+	read: { used: number; most: number } | null
 	emit: (event: ChatEvent) => void
 }
 
@@ -80,13 +83,17 @@ export type Round = {
 // of a level, or of one of them, which tells the map nothing either, since the page marks each part as the reader
 // reaches it. change: a question about one change that plain code picked, so the reply is about that range whether or
 // not the model sends a scope, with what the reader wants of it. answer: a question about one concept, which the
-// reader pressed or typed in its brief, answered as a brief.
-// view: the reader asked, in the words of text, for another way to show the level whose paths are within.
+// reader pressed or typed in its brief, answered as a brief; paths are the files and folders of the part it is about,
+// empty for a concept that is no part.
+// view: the reader asked, in the words of text, for another way to show the level whose paths are within. parts: the
+// main parts of a level, named from what ken wrote of it. views: the drawings of where the project runs.
 export type Asking =
 	| { kind: 'question' }
+	| { kind: 'parts' }
+	| { kind: 'views' }
 	| { kind: 'note' }
 	| { kind: 'explain'; tour: Tour }
-	| { kind: 'answer'; concept: string; text: string }
+	| { kind: 'answer'; concept: string; text: string; paths: string[] }
 	| { kind: 'change'; range: Range; want: Want }
 	| { kind: 'view'; within: string[]; text: string }
 
@@ -107,6 +114,7 @@ export function freshRound(as: Asking, emit: Round['emit']): Round {
 		held: [],
 		sentBack: 0,
 		shown: new Set(),
+		read: null,
 		emit,
 	}
 }
@@ -121,12 +129,23 @@ function spent(round: Round): string {
 	return `ken has sent back ${sentBackLimit(round)} cards in this reply and checks no more. Say the rest in words, and say which points you could not quote.`
 }
 
-export function showTool(gate: Gate, round: () => Round): Tool {
+// The fields of show a lens offers (see lens/lens.ts). Every request sends the schema again, so a lens that sends only
+// a brief sees only the brief. show still reads every field it takes, so a reply in a shape ken asked for before, such
+// as the steps of a tour, is checked as it always was.
+export type ShowField = keyof typeof SHOW_SCHEMA.properties
+
+// shorten asks the model, in a small request of its own, for a brief's line that has too many words (see
+// shorten-lines.ts).
+export function showTool(
+	gate: Gate,
+	round: () => Round,
+	{ fields, shorten }: { fields?: readonly ShowField[]; shorten?: Shorten } = {},
+): Tool {
 	return {
 		name: 'show',
 		description:
 			'Show the reader cards that prove what you say: claims, decisions, risks, diagrams, topics, the parts of the project and the brief of a part, each with the exact lines it rests on. ken checks each card alone against git and shows it after the words you write in this turn. A card that fails comes back with its problems, and the reader sees nothing of it. Every field is optional.',
-		parameters: PARAMETERS,
+		parameters: allowJsonText(fields ? offered(fields) : SHOW_SCHEMA),
 		async execute(args, ctx) {
 			const current = round()
 			if (current.sentBack >= sentBackLimit(current)) return refuse(spent(current))
@@ -141,7 +160,13 @@ export function showTool(gate: Gate, round: () => Round): Tool {
 			if (raw.step !== undefined && raw.brief !== undefined) {
 				return refuse(nothingShown(['Send a step or a brief in one call, not both.']))
 			}
-			const brief = raw.brief === undefined ? null : readBrief(objectOf(raw.brief), quoteOf)
+			const sent =
+				raw.brief === undefined
+					? null
+					: shorten
+						? await shortenBrief(objectOf(raw.brief), shorten, ctx.signal)
+						: { brief: objectOf(raw.brief), said: [] }
+			const brief = sent ? readBrief(sent.brief, quoteOf) : null
 			// A brief is a step whose text is its one line: the cards of this call are its things to know and its terms.
 			const step = brief
 				? { number: brief.number, text: brief.line, questions: brief.questions }
@@ -166,7 +191,7 @@ export function showTool(gate: Gate, round: () => Round): Tool {
 					current.pending.push({ kind: 'step', ...step })
 					lines.push(`${what} ${step.number} shown, with what passes of this call.`)
 				}
-				lines.push(...(brief?.left ?? []))
+				lines.push(...(brief?.left ?? []), ...(sent?.said ?? []))
 			}
 			if (raw.work !== undefined) {
 				const title = readArgs(objectOf(raw.work), 'show work').text('title')
@@ -1061,4 +1086,7 @@ const SHOW_SCHEMA = {
 	additionalProperties: false,
 } as const
 
-const PARAMETERS = allowJsonText(SHOW_SCHEMA)
+function offered(fields: readonly ShowField[]) {
+	const properties = Object.fromEntries(fields.map((field) => [field, SHOW_SCHEMA.properties[field]]))
+	return { type: 'object', properties } as const
+}

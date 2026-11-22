@@ -93,7 +93,6 @@ const model = await scriptedModel([
 	),
 	stop(3, 'The command starts a run.', 'main calls run.', 'src/cli/main.ts', 'run()'),
 	stop(4, 'The tests call run.', 'The test calls run.', 'test/run.test.ts', 'run()'),
-	{ text: '' },
 	{
 		tool: 'ken__show',
 		text: 'One run, from the command to the store.',

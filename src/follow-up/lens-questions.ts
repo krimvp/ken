@@ -368,7 +368,7 @@ export function explainQuestion(level: ExplainLevel): LensQuestion {
 			'',
 			`Read the code at HEAD (${level.head}) first. For each part, find what its user calls and follow that call to its end: what comes in, each step in order, and what goes out. Then send one show call for each part above, in that order, with brief: the part's number and what follows.`,
 			PICTURES,
-			'line: one sentence on what the part does for whoever uses it.',
+			'line: one sentence on what the part does for whoever uses it. Start with what it does, not with the part that uses it.',
 			`points: ${bounds.fewestPoints} to ${bounds.points} things to know, the ones a maintainer would tell a newcomer first. The first is the main path through the part: what comes in, the steps it takes, and what goes out. The others are what the part refuses, what it keeps, and the one choice in its design. ${pointRule(bounds)}`,
 			...pointRules(level),
 			`terms: up to ${bounds.terms} words a maintainer says when they talk about this part, which a newcomer has to learn: a thing the code names, such as a step, a kind of plugin or a kind of file. Take the word from the project's glossary or README when it has one. Not the name of one constant or one helper function. ${termRule(bounds)} Leave out the names of the parts.`,
