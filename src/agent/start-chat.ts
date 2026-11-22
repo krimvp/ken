@@ -243,6 +243,7 @@ export async function startChat(options: {
 		// wait. A later turn that writes words makes them a step; else they are the reply's, before that turn's cards.
 		let sentBackBefore = 0
 		let endedOnShow = false
+		let remembered = false
 		let retry: { text: string; at: number } | null = null
 		const settleRetry = (as: 'step' | 'reply') => {
 			if (!retry) return
@@ -277,6 +278,7 @@ export async function startChat(options: {
 						readPaths.add(call.args.path)
 					}
 				}
+				if (calls.some(({ call }) => call.tool === 'remember')) remembered = true
 				const text = event.turn.text.trim()
 				const showOnly = calls.length > 0 && calls.every(({ call }) => call.tool === 'show')
 				const writes = text !== '' && calls.every(({ call }) => call.tool === 'show')
@@ -290,8 +292,10 @@ export async function startChat(options: {
 				const passed = current.sentBack === sentBackBefore && calls.every(({ outcome }) => accepted(outcome))
 				sentBackBefore = current.sentBack
 				// A brief's question says to write nothing after the briefs, so once each has passed, the turn that would
-				// only close the run is not asked for. aigent ends a run at a stop that comes as its turn ends.
-				if (showOnly && passed && current.step === 'talk' && briefsDone(current)) {
+				// only close the run is not asked for. aigent ends a run at a stop that comes as its turn ends. A question in
+				// the reader's own words may still keep a note in that turn.
+				const noteLeft = current.typed && !remembered
+				if (showOnly && passed && current.step === 'talk' && briefsDone(current) && !noteLeft) {
 					endedOnShow = true
 					stops.talk.abort()
 				}

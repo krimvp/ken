@@ -92,6 +92,8 @@ stop.abort()
 const answerAsked = model.requests[1] as ChatRequest
 
 writeFileSync(path.join(root, 'src/core/run.ts'), 'export function run() {\n\treturn 2\n}\n')
+// The command's lines move down by one, and the terms that quote them still read the same.
+writeFileSync(path.join(root, 'src/cli/main.ts'), `// The command.\n${FILES['src/cli/main.ts']}`)
 execFileSync('git', ['-c', 'commit.gpgsign=false', 'commit', '--quiet', '-am', 'feat: give back two'], { cwd: root })
 await ask(server, { question: 'What does ken know of the core?' })
 const [known = '', level = '', quotedIn = '', search = '', many = ''] = toolResults(model.requests[3])
@@ -126,7 +128,7 @@ test('memory_level gives the named level: its line, its parts with whether each 
 	assert.match(level, /- Command runs Core/)
 })
 
-test('memory_quoted_in and memory_search find the brief that quotes those lines, and a long list is cut at its cap', () => {
+test('memory_quoted_in and memory_search find the brief that quotes those lines, point at where lines are now, and cut a long list at its cap', () => {
 	for (const found of [quotedIn, search]) {
 		assert.match(
 			found,
@@ -136,6 +138,8 @@ test('memory_quoted_in and memory_search find the brief that quotes those lines,
 	assert.ok(many.length <= 2000, `${many.length} characters`)
 	assert.match(many, /^40 that quote src\/cli:/)
 	assert.match(many, /more lines left out\.$/)
+	assert.match(many, /\[src\/cli\/main\.ts:3\]/, 'a quote whose lines moved points at where they are now')
+	assert.doesNotMatch(many, /main\.ts:2/)
 })
 
 test('a run whose output goes into the project record reads none of what the reader typed or keeps for themselves', async () => {
