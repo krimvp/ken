@@ -476,7 +476,7 @@ function changeLines(change: Change, want: Want): string[] {
 		'ken has set the scope of this reply to that range, so leave scope out of show.',
 		...(want === 'walk'
 			? [
-					'Walk me through the change in steps, in the order a reviewer should read them. A step holds one thing: if a step needs "and" to join two things, make it two steps.',
+					'Walk me through the change in steps, in the order a reviewer should read them. A step holds one change. Two changes make two steps.',
 					'After the last step, and only there, write one line that names what the steps leave out and a reviewer should still open, such as a changed rule or boundary table, a test of new behaviour, or docs. If the steps leave nothing out, say so.',
 				]
 			: [
