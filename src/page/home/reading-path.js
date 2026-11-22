@@ -13,14 +13,14 @@ export function factCard(title, tag, body) {
 	return `<section class="fact-card"><h3 class="fact-head"><span>${title}</span><span class="fact-tag">${tag}</span></h3><div class="fact-body">${body}</div></section>`
 }
 
-// The arrows that start or end at a part, under the numbers the picture shows on them. A row opens the line of code
-// its arrow rests on, and open shows them all.
+// The arrows that start or end at a part, or every arrow of the level when name is null, under the numbers the
+// picture shows on them. A row opens the line of code its arrow rests on, and open shows them all.
 export function usesHtml(home, name, open = false) {
 	const { look } = home
 	const colour = colourOf(home)
 	const part = (each) => `<strong class="part-name ${colour(each)}">${esc(each)}</strong>`
 	const rows = look.arrows.flatMap((arrow, i) => {
-		if (arrow.from !== name && arrow.to !== name) return []
+		if (name !== null && arrow.from !== name && arrow.to !== name) return []
 		const shown = open || home.openArrows.has(i)
 		const quotes = shown
 			? arrow.quotes
@@ -36,7 +36,11 @@ export function usesHtml(home, name, open = false) {
 		rows.length === 0
 			? `<p>No arrow joins ${esc(name)} to another part here.</p>`
 			: `<ul class="uses">${rows.join('')}</ul><p class="small muted">Each arrow rests on a line of code in the part it starts from. Pick one to see its line.</p>`
-	return factCard('What it uses, and what uses it', 'Checked in git', body)
+	return factCard(
+		name === null ? 'How the parts use each other' : 'What it uses, and what uses it',
+		'Checked in git',
+		body,
+	)
 }
 
 // What the reader's map says of a stop's part, and the button that says they know it.

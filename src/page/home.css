@@ -338,6 +338,11 @@ button.brand {
 		padding: var(--space-4) var(--space-2) var(--space-5);
 	}
 
+	/* An arrow around the outside of the picture bends over the top row or under the bottom one. */
+	.home .pv-picture.has-far {
+		padding-block: 4rem;
+	}
+
 	.home .pv-picture .pv-boxes {
 		grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
 		gap: 5.5rem 7rem;

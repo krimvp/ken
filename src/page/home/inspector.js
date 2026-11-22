@@ -76,6 +76,7 @@ function levelView(home, off) {
 		body: `${about}${stale}${tour}
 			<h3 class="insp-sub">${count(parts.length, 'part', 'parts')}. Pick one to read about it.</h3>
 			<ul class="insp-parts">${parts.join('')}</ul>
+			${look.arrows.length > 0 ? usesHtml(home, null) : ''}
 			${next}`,
 	}
 }

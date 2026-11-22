@@ -144,9 +144,21 @@ export function pictureHtml(cells, links, { numbered, open, lit = new Set(), hot
 	const data = JSON.stringify(
 		links.map((link, i) => ({ from: link.from, to: link.to, text: link.text, open: open.has(i) })),
 	)
+	// An arrow that goes around the outside of the picture needs room over the top row or under the bottom one.
+	const far = pairs.some(
+		([a, b]) =>
+			place.cells[a].row === place.cells[b].row &&
+			place.cells.some(
+				(cell, k) =>
+					k !== a &&
+					k !== b &&
+					cell.row === place.cells[a].row &&
+					between(cell.col, place.cells[a].col, place.cells[b].col),
+			),
+	)
 	const rest = [...lit].join(' ')
 	const hotAtRest = hot === null ? '' : ` data-hot="${[...hot].join(' ')}"`
-	return `<div class="pv-picture${lit.size > 0 ? ' is-lit' : ''}" style="--rows:${place.rows};--cols:${place.cols}" data-links="${escAttr(data)}" data-numbered="${numbered}" data-lit="${rest}"${hotAtRest} data-still="${still}">
+	return `<div class="pv-picture${lit.size > 0 ? ' is-lit' : ''}${far ? ' has-far' : ''}" style="--rows:${place.rows};--cols:${place.cols}" data-links="${escAttr(data)}" data-numbered="${numbered}" data-lit="${rest}"${hotAtRest} data-still="${still}">
 		<ul class="pv-boxes">${items.join('')}</ul>
 	</div>`
 }
@@ -327,7 +339,7 @@ function bezier([p0, p1, p2, p3], t) {
 
 // Each arrow's number and verb sit on its line: at the middle, or the point along it where the label covers the least
 // of the boxes, of the labels already placed and of the other lines, inside the picture. On a phone a label is the
-// number alone, and the list under the picture gives the verb.
+// number alone, as is one that finds no free spot, and the page lists the verbs beside the picture.
 function placeLabels(picture, links, curves, rects, frame, compact) {
 	const layer = document.createElement('div')
 	layer.className = 'pv-labels'
@@ -342,6 +354,7 @@ function placeLabels(picture, links, curves, rects, frame, compact) {
 		label.dataset.index = `${i}`
 		label.innerHTML = `<span class="pv-label-n">${i + 1}</span><span class="pv-label-text"></span>`
 		label.lastChild.textContent = link.text ?? ''
+		label.title = link.text ?? ''
 		layer.append(label)
 		// A label that finds no free spot on one line tries again folded to a narrow column.
 		const lines = curves.flatMap((curve, k) => (k === i || !curve ? [] : samples(curve)))
@@ -349,8 +362,16 @@ function placeLabels(picture, links, curves, rects, frame, compact) {
 		const wide = spotFor(label, curves[i], taken, lines, area)
 		label.classList.add('is-narrow')
 		const narrow = wide.cover === 0 || compact ? wide : spotFor(label, curves[i], taken, lines, area)
-		const best = narrow.cover < wide.cover ? narrow : wide
+		let best = narrow.cover < wide.cover ? narrow : wide
 		label.classList.toggle('is-narrow', best === narrow && best !== wide)
+		// A label that still covers a quarter of its own size of boxes, lines or other labels shows its number alone.
+		// The page lists every arrow's verb under the same number.
+		if (best.cover > 0.25 * best.box.w * best.box.h && !compact) {
+			label.classList.add('is-compact')
+			const alone = spotFor(label, curves[i], taken, lines, area)
+			if (alone.cover < best.cover) best = alone
+			else label.classList.remove('is-compact')
+		}
 		label.style.left = `${round(best.box.x)}px`
 		label.style.top = `${round(best.box.y)}px`
 		taken.push(best.box)
