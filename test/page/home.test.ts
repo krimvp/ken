@@ -47,12 +47,14 @@ const {
 } = await import(path.join(HOME, 'state/runs.js'))
 
 // A command that runs the core, a core that saves to a store, and a test of the core. The second commit touches only
-// the store, and the last one, the change the reader reviews, makes the core wait and the store keep.
+// the store, and the last one, the change the reader reviews, makes the core wait and the store keep, and says so in a
+// README that sits in no part.
 const START = {
 	'src/cli/main.ts': "import { run } from '../core/run.ts'\nrun()\n",
 	'src/core/run.ts': "import { save } from '../store/db.ts'\nexport function run() {\n\tsave()\n}\n",
 	'src/store/db.ts': 'export function save() {}\n',
 	'test/run.test.ts': "import { run } from '../src/core/run.ts'\nrun()\n",
+	'README.md': '# demo\n',
 }
 const { root, hashes } = buildRepository([
 	{ message: 'feat: start', files: START },
@@ -65,6 +67,7 @@ const { root, hashes } = buildRepository([
 		files: {
 			'src/core/run.ts': "import { save } from '../store/db.ts'\nexport function run() {\n\twait()\n\tsave()\n}\n",
 			'src/store/db.ts': '// Saves.\nexport function save() {\n\tkeep()\n}\n',
+			'README.md': '# demo\nIt waits.\n',
 		},
 	},
 ])
@@ -134,6 +137,7 @@ const model = await scriptedModel([
 	{ text: '' },
 	step(1, 'The core waits first.', 'src/core/run.ts', '\twait()'),
 	step(2, 'The store keeps what it saved.', 'src/store/db.ts', '\tkeep()'),
+	step(3, 'The README says so.', 'README.md', 'It waits.'),
 	{ text: '' },
 ])
 const server = await openKen(root, readerHome(), model.baseUrl)
@@ -246,7 +250,7 @@ test('for a walked change the panel tells its story at the big picture, opens th
 
 	const picked = { kind: 'step', number: 2 }
 	const how = await panel(`change=${REVIEWED}`, 'how', picked)
-	assert.match(how, /Step 2 of 2/)
+	assert.match(how, /Step 2 of 3/)
 	assert.ok(
 		how.indexOf('The core now waits before it saves.') < how.indexOf('The core waits first'),
 		'the story opens the reading path',
@@ -256,8 +260,15 @@ test('for a walked change the panel tells its story at the big picture, opens th
 	assert.equal(how.match(/lines added:/g)?.length, 1, "the other step's file is not listed with it")
 	assert.match(
 		how,
-		/The steps quote 2 of 2 changed blocks\./,
+		/The steps quote 3 of 3 changed blocks\./,
 		'and the walkthrough says how much of the change it quotes',
+	)
+
+	const outside = await homeOn(`change=${REVIEWED}`, 'how', { kind: 'step', number: 3 })
+	assert.match(
+		said(canvasHtml(outside, rows)),
+		/Step 3 touches no part: README\.md/,
+		'a step whose file sits in no part lights no box, so the canvas names the file',
 	)
 
 	const code = await panel(`change=${REVIEWED}`, 'code', picked)
@@ -365,6 +376,12 @@ test('a run is judged against the level it started on: a reader who looked insid
 	const moved = pageOn(fromServer)
 	moved.home.trail = [whole, { name: 'Core', within: ['src/core'] }]
 	await moved.loads.refresh()
+	const running = { ...ENV, off: 'busy', running: { onHome: started, q: { steps: [], typing: '' }, started: 0 } }
+	assert.match(
+		said(inspectorHtml(moved.home, running)),
+		/ken's model is writing the tour of the whole project\. Go there .*Core/,
+		'while the run goes on elsewhere, one line says so and the panel still shows where the reader is',
+	)
 	await moved.runs.ended(started, tour)
 	assert.deepEqual(
 		[moved.home.ended?.kind, moved.home.ended?.level],
