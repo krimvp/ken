@@ -46,7 +46,7 @@ New to a project, or back after weeks away? ken's page opens on a picture of the
 
 1. Install ken and name its model, as above.
 2. In the project, run `ken open`. The page shows the project's main folders as boxes.
-3. Press **Ask ken to name these parts**. ken's model names the main parts and the arrows between them, and ken checks each against git. Commit `.ken/` so the next person gets the same parts.
+3. Press **Ask ken to name these parts**. ken's model names the main parts and the arrows between them, and ken checks each against git. For the whole project the same run draws where it runs (processes, threads, containers, clusters, and the stores and outside systems they talk to) and who and what it deals with. Each item rests on lines ken finds in git, a frame's copies must match the compose file or manifest it quotes, and where the repository says nothing the drawing says so. Commit `.ken/` so the next person gets the same parts.
 4. Press **Show me around**. ken's model explains each part in turn, in one run. For each part it writes a brief: one line, three to five things to know, each a short line with a small drawing and the lines of code it rests on, the terms the part uses, and a few questions worth asking. The tour goes in the order ken's model named the parts, with tests and upkeep last. The stops open beside the picture, numbered as the boxes are. Move with Next or the arrow keys. Each stop you reach goes on your map, and **I know this part** marks it understood.
 
 Open the page again later and **Start the tour** opens the same tour, with no model, at the first stop you have not seen. **Look inside** a part opens that part's own picture, and once its parts are named it has a tour of its own.

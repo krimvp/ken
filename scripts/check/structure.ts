@@ -21,7 +21,7 @@ export const MODULES: Record<string, Module> = {
 		packages: [],
 	},
 	diagram: {
-		job: "Diagrams as checked data: boxes and arrows that rest on quotes, and their Mermaid text, and the check on a level of the project's parts.",
+		job: "Diagrams as checked data: boxes and arrows that rest on quotes, and their Mermaid text, the check on a level of the project's parts, and the check on the drawings of where the project runs and what it talks to, with what plain code reads from its deploy files.",
 		imports: ['repo', 'checks'],
 		packages: [],
 	},
