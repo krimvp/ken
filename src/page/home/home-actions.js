@@ -202,10 +202,13 @@ export function homeActions(app) {
 			await enter(el.dataset.way)
 			await settle()
 		},
-		// A press in the panel that goes to a finer detail. One that opens code or a diff says so to ken at once.
+		// A press in the panel that goes to a finer detail. One that opens code or a diff says so to ken at once. The
+		// button pressed is gone from the panel, so the keyboard goes to what opened in its place.
 		async detail(el) {
 			await toDetail(el.dataset.detail)
 			if (el.dataset.detail === 'code') seen.now()
+			const opened = $('.path-step.is-on .path-head') ?? $('#insp-title')
+			opened?.focus({ preventScroll: true })
 		},
 		// The Detail control. "ken picks" lets each part open where the server says, and any other detail stays for
 		// every part until the reader picks "ken picks" again.
@@ -249,11 +252,12 @@ export function homeActions(app) {
 			Object.assign(state.home, { opened: true, why: null })
 			return select(null)
 		},
-		// Back to the board: nothing is picked, and the column beside the picture is "Next for you" again.
+		// Back to the board: nothing is picked, what the panel had to say is put away, and the column beside the
+		// picture is "Next for you" again.
 		async 'home-board'() {
 			const home = state.home
 			const drawn = home.shown !== null
-			Object.assign(home, { shown: null, ...atRest() })
+			Object.assign(home, { shown: null, said: null, ended: null, trouble: null, ...atRest() })
 			await select(null)
 			if (drawn) await settle()
 			$('#insp-title')?.focus({ preventScroll: true })
@@ -425,7 +429,8 @@ export function homeActions(app) {
 			if (field === 'at') home.at = text
 			else if (text === '') return true
 			else home.change = field === 'since' ? `since:${text}` : text
-			home.selected = null
+			// The reader asked for a change or a commit, so the panel says what it is.
+			Object.assign(home, { selected: null, opened: true, why: null })
 			void refresh()
 		}
 		return true
@@ -446,7 +451,7 @@ export function homeActions(app) {
 
 	function change(event) {
 		if (event.target.id !== 'home-change') return false
-		Object.assign(state.home, { change: event.target.value, selected: null, storyOpen: false })
+		Object.assign(state.home, { change: event.target.value, selected: null, storyOpen: false, opened: true, why: null })
 		Object.assign(state.home.typed, { since: '', another: '' })
 		void refresh()
 		return true
@@ -460,7 +465,8 @@ export function homeActions(app) {
 		if (event.key === 'Escape') {
 			if (home.askOpen) closeAsk()
 			else if (home.fixing) actions['home-fix']({ dataset: {} })
-			else if (home.selected || home.opened || home.shown !== null) void actions['home-board']()
+			else if (home.selected || home.opened || home.shown !== null || home.said || home.ended || home.trouble)
+				void actions['home-board']()
 			else if (home.trail.length > 1 && !typing) void moveTo(home.trail.slice(0, -1))
 			else return false
 			return true

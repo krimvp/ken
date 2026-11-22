@@ -42,7 +42,8 @@ export function opensAt(home, go) {
 
 export function readoutHtml(home) {
 	const { look } = home
-	if (!look || home.reading === 'level' || look.boxes.length === 0) return ''
+	// A picture ken drew has no boxes to fill, so the line has nothing to say over it.
+	if (!look || home.reading === 'level' || look.boxes.length === 0 || home.content.kind === 'drawn') return ''
 	const box = readoutBox(home)
 	if (!box) {
 		const first = look.boxes.every((each) => each.knows.level === 'new') && (home.reader?.learned.length ?? 0) === 0

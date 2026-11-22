@@ -49,7 +49,8 @@ export function homeLoads({ state, render, read, post, fromView }) {
 	// screen and shows the reason in its place. While the server reads, the home says so: reading is "level" when the
 	// level on screen is another one, and "overlay" when it is the same level with another change or commit to come.
 	// False means a newer request took this one's place. again says the same level is read again with nothing else asked
-	// of it, so what is on screen stays in use meanwhile.
+	// of it, so what is on screen stays in use meanwhile, and stays when the server cannot answer: the reader asked
+	// for nothing.
 	async function loadLayout(again = false) {
 		const home = state.home
 		const { within } = home.trail.at(-1)
@@ -64,7 +65,7 @@ export function homeLoads({ state, render, read, post, fromView }) {
 		if (mine !== asked) return false
 		home.reading = null
 		if (answer.ok) showLevel(answer.body)
-		else refuse(answer.body)
+		else if (!again) refuse(answer.body)
 		return true
 	}
 
@@ -106,10 +107,11 @@ export function homeLoads({ state, render, read, post, fromView }) {
 		state.home.notes = answer.ok ? answer.body.notes : []
 	}
 
-	// What ken recorded of the reader. A server that cannot say leaves the board without that panel.
+	// What ken recorded of the reader. Until the server has said, the board is without that panel, and an answer it
+	// cannot give later leaves the lines the board has.
 	async function loadReader() {
 		const answer = await ask('/api/reader')
-		state.home.reader = answer.ok ? answer.body : null
+		if (answer.ok) state.home.reader = answer.body
 	}
 
 	// What ken has to say about the level on screen, from the saved questions, and the replies it names once read.

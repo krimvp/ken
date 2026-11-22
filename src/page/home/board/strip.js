@@ -25,8 +25,10 @@ function catchUpFact(home) {
 	if (home.wayIn === 'catch-up' && look.change) {
 		const commits = count(look.change.commits.length + look.change.moreCommits, 'commit', 'commits')
 		const picked = changes.find((choice) => choice.kind === 'since' && choice.change === look.change.asked)
-		if (!picked) return `${commits} laid over the picture`
-		const span = picked.name.slice(0, picked.name.lastIndexOf(': '))
+		// A span the reader typed has a name of its own. A range a card opened, from the commit they last looked at,
+		// has none worth saying.
+		if (!picked && !look.change.asked.startsWith('since:')) return `${commits} laid over the picture`
+		const span = picked ? picked.name.slice(0, picked.name.lastIndexOf(': ')) : look.change.name
 		return `${commits} ${span.replace(/^The last/, 'in the last').replace(/^./, (c) => c.toLowerCase())}`
 	}
 	if (look.boxes.every((box) => box.knows.level === 'new')) return suggestion?.facts['catch-up'] ?? null
