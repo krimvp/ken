@@ -6,6 +6,7 @@ import {
 	type ChangeChoice,
 	changeChoices,
 	type LayoutAsk,
+	LEVELS,
 	lookAtLayout,
 	pictureBefore,
 	readLayoutAsk,
@@ -19,6 +20,8 @@ import { refusal } from './http/guard-request.ts'
 import { type PageFile, readPageFiles } from './http/page-files.ts'
 import { openProject } from './ken-project.ts'
 import { fieldOf, type QuestionLine } from './question-desk.ts'
+import { readLooked } from './reader/read-looked.ts'
+import { lastVisit, readerView } from './reader/reader-view.ts'
 import { suggestWayIn } from './way-in.ts'
 
 // model is the name of the model the page asks, or null when none is set and the page can only show earlier answers.
@@ -54,7 +57,7 @@ export async function openServer(options: {
 	const opened = await openProject(options)
 	if (opened.kind !== 'ok') return opened
 	const { project } = opened
-	const { root, shown, repo, history, record, map, readerNotes, layout, model, desk, live } = project
+	const { root, shown, repo, history, record, map, readerNotes, seen, layout, model, desk, live } = project
 	if (options.live && !live) {
 		await project.close()
 		return {
@@ -67,13 +70,15 @@ export async function openServer(options: {
 	let port = 0
 
 	// What landed since the reader last looked leads the changes the page offers, so catching up is one pick away.
+	// levels are the words for what ken thinks the reader knows of a box, weakest first.
 	async function layoutView(ask: LayoutAsk) {
 		const now = new Date()
 		// A note ken wrote by itself in live mode is not a question the reader asked.
 		const questions = (await history.list()).filter((entry) => entry.about === undefined)
+		const visit = lastVisit((await seen.read()).lines, now)
 		const [look, since, choices] = await Promise.all([
 			lookAtLayout(layout, ask, now),
-			sinceChoices(repo, questions, now),
+			sinceChoices(repo, questions, visit, now),
 			changeChoices(layout),
 		])
 		const changes: ChangeChoice[] = [...since.map((each) => each.choice), ...choices]
@@ -81,8 +86,8 @@ export async function openServer(options: {
 		const { own } = ask
 		const isTop = ask.within.length === 0 && ask.change === null && ask.at === look.head
 		const top = isTop ? look : await lookAtLayout(layout, { at: look.head, within: [], change: null, own }, now)
-		const wayIn = await suggestWayIn(layout, { history, questions, spans: since, own, top }, now)
-		return { look, changes, wayIn }
+		const wayIn = await suggestWayIn(layout, { history, questions, visit, spans: since, own, top }, now)
+		return { look, changes, wayIn, levels: LEVELS }
 	}
 
 	async function route(request: IncomingMessage, response: ServerResponse) {
@@ -129,6 +134,25 @@ export async function openServer(options: {
 			if (signal.kind !== 'ok') return sendJson(response, 400, { message: signal.problem })
 			const states = await map.learn(signal.signal, signal.topics, new Date())
 			return sendJson(response, 200, { states })
+		}
+		if (where === 'POST /api/seen') {
+			const body = await readJson(request)
+			const looked = body.kind === 'ok' ? await readLooked(layout.repo, body.value) : body
+			if (looked.kind !== 'ok') return sendJson(response, 400, { message: looked.problem })
+			const added = await seen.add(looked.looked, looked.head, new Date())
+			return sendJson(response, 200, { written: added === 'written' })
+		}
+		if (where === 'GET /api/reader') {
+			const now = new Date()
+			const top = await readLayoutAsk(layout, { change: 'none' }, now)
+			const [look, looked, mapped, read] = await Promise.all([
+				top.kind === 'ok' ? lookAtLayout(layout, top.ask, now) : null,
+				seen.read(),
+				map.read(now),
+				record.read(),
+			])
+			const topics = read.current.flatMap((entry) => (entry.kind === 'topic' ? [entry] : []))
+			return sendJson(response, 200, readerView(seen.file, looked, mapped, topics, look?.boxes ?? [], now))
 		}
 		if (where === 'GET /api/notes') return sendJson(response, 200, { notes: await readerNotes.read() })
 		if (where === 'POST /api/notes') {

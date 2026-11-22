@@ -18,15 +18,17 @@ export type Suggested = {
 const MAIN_LINE = 100
 const SUBJECT_CHARS = 40
 
-// questions are the ones the reader asked, oldest first, and spans the spans of time that hold a commit, in the order
-// the page offers them. own is the reader's own work, uncommitted or their branch ahead of main, and top the top
-// level at HEAD. Catching up is suggested only when commits landed since the reader last looked: since their last
-// question or their own last commit. A span of days alone does not say they looked.
+// questions are the ones the reader asked, oldest first, visit is the newest line on what they looked at from an
+// earlier visit, and spans the spans of time that hold a commit, in the order the page offers them. own is the
+// reader's own work, uncommitted or their branch ahead of main, and top the top level at HEAD. Catching up is
+// suggested only when commits landed since the reader last looked: since that visit, or with none since their last
+// question, or since their own last commit. A span of days alone does not say they looked.
 export async function suggestWayIn(
 	layout: LayoutSources,
 	reader: {
 		history: History
 		questions: Pick<Asked, 'head' | 'askedAt'>[]
+		visit: { at: string; head: string } | null
 		spans: Landed[]
 		own: Change | null
 		top: LayoutLook
@@ -45,8 +47,12 @@ export async function suggestWayIn(
 		review: work?.short ?? (await newestOnMainLine(repo, at)),
 	}
 	if (work) return { suggested: 'review', why: work.why, facts }
-	// When that question was says why ken thinks so, to a reader who is back after weeks.
-	const last = reader.questions.findLast((each) => each.head !== null)
+	// When they last looked says why ken thinks so, to a reader who is back after weeks.
+	const { visit } = reader
+	if (visit?.head === at) {
+		return { suggested: 'learn', why: `Nothing landed since you last looked, ${atMoment(visit.at, now)}.`, facts }
+	}
+	const last = visit ? undefined : reader.questions.findLast((each) => each.head !== null)
 	if (last?.head === at) {
 		const why = `Nothing landed since your last question to ken, ${atMoment(last.askedAt, now)}.`
 		return { suggested: 'learn', why, facts }

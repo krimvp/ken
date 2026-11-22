@@ -84,19 +84,21 @@ export async function timeRange(
 export type SinceChoice = { kind: 'since'; change: string; name: string; commits: number }
 
 // A choice with the same fact said two more ways: landed as a sentence, such as "23 commits landed since your last
-// commit, 14 Oct.", and short in a few words, such as "23 commits since 14 Oct". anchor is what the span starts at: the
-// reader's last question, their own last commit, or a number of days ago.
+// commit, 14 Oct.", and short in a few words, such as "23 commits since 14 Oct". anchor is what the span starts at: when
+// the reader last looked, their last question, their own last commit, or a number of days ago.
 export type Landed = { choice: SinceChoice; anchor: Anchor; landed: string; short: string }
-export type Anchor = 'question' | 'commit' | 'days'
+export type Anchor = 'visit' | 'question' | 'commit' | 'days'
 
 const SPANS_DAYS = [7, 30, 90]
 
-// The spans that hold at least one commit, in this order: since the reader's last question, since their own last
-// commit, then the last 7, 30 and 90 days, without a span that holds the same commits as one before it. asked is the
-// reader's questions, oldest first.
+// The spans that hold at least one commit, in this order: since the reader last looked, since their own last commit,
+// then the last 7, 30 and 90 days, without a span that holds the same commits as one before it. visit is when ken last
+// recorded that the reader looked at the project and the commit it was at then. Without one, their last question
+// stands for it: asked is the reader's questions, oldest first.
 export async function sinceChoices(
 	repo: Repository,
 	asked: { askedAt: string; head: string | null }[],
+	visit: { at: string; head: string } | null,
 	now: Date,
 	signal?: AbortSignal,
 ): Promise<Landed[]> {
@@ -117,8 +119,9 @@ export async function sinceChoices(
 		spans.push({ anchor, title, clause, short, base, commits: await landedSince(base) })
 	}
 
-	const question = await lastAskedBefore(repo, asked, head, signal)
-	if (question) await since('question', 'your last question to ken', question.askedAt, question.head)
+	const looked = await lastAskedBefore(repo, visit ? [{ askedAt: visit.at, head: visit.head }] : asked, head, signal)
+	if (looked && visit) await since('visit', 'you last looked', looked.askedAt, looked.head)
+	else if (looked) await since('question', 'your last question to ken', looked.askedAt, looked.head)
 	const email = await repo.userEmail(signal)
 	const own = email === null ? null : await repo.lastCommitBy(head, email, signal)
 	if (own && own.hash !== head) await since('commit', 'your last commit', own.date, own.hash)
