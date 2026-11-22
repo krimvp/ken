@@ -1,7 +1,7 @@
 // "Show it another way": the reader tells ken, in their own words, how they want to see the level on screen. ken's
 // model then redraws the picture, or keeps a note about the reader when the request is about them. The notes ken
 // keeps sit under the box, each with a way to remove it. On a narrow screen the bar folds to one line.
-import { esc, runButton } from '../views/format.js'
+import { esc, runButton } from '../../views/format.js'
 
 // Requests ken's model can do: draw the parts again, draw a flow as a diagram, or leave parts out.
 const EXAMPLES = [

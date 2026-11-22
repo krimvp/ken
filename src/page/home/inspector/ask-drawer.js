@@ -1,8 +1,8 @@
 // The "Ask ken" drawer: a free question, for when the picture does not answer it. It opens over the inspector, and its
 // reply opens as a thread, as every question does. With a part selected the question is about that part, unless the
 // reader drops it. Under the box are the reader's newest questions, each a way back to its thread.
-import { esc, runButton, when } from '../views/format.js'
-import { colourOf } from './canvas.js'
+import { esc, runButton, when } from '../../views/format.js'
+import { colourOf } from '../state/home-state.js'
 
 const SHOWN_QUESTIONS = 5
 

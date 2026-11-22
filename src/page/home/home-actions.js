@@ -1,193 +1,22 @@
-// The home's state and what the reader can do on it. The home shows one level of the project at a time, the way in
-// the reader took, the detail they chose, and what they picked in the picture. The server reads the level from git on
-// every move. The runs of ken's model that the home starts stay on the home: the page holds the run, and this module
-// decides what the home shows when it ends.
+// What the reader can do on the home: every button, form and key of it. The state these act on is in state/, which
+// also reads the level from the server and holds the runs of ken's model the home starts.
 import { numberAt } from '../draw-diagrams.js'
-import { learnParts } from '../project/part-colours.js'
 import { stepParts, stopTopics } from '../project/walk.js'
 import { chipQuestion } from '../views/reply.js'
-import { askedQuestion } from './ask-drawer.js'
-import {
-	besideCanvas,
-	contentOf,
-	firstUnseen,
-	pathOf,
-	picturesOf,
-	placeOf,
-	repliesOf,
-	shownDetail,
-	stoodOn,
-} from './content.js'
-
-const WHOLE = { name: 'Whole project', within: [] }
-const WAYS = ['learn', 'catch-up', 'review']
-const DETAILS = ['big', 'how', 'code']
-const FIRST_DETAIL = { learn: 'big', 'catch-up': 'big', review: 'how' }
-
-// stored reads a value this browser kept: the reader's way in, and the detail they last chose for each way in.
-// ui holds the quotes and decisions open in the cards the home shows, as a thread's does.
-export function freshHome(stored, ui) {
-	const wayIn = WAYS.find((way) => way === stored('ken-way-in')) ?? null
-	return {
-		// The reader's pick, else the way in ken suggests. picked says the reader chose it themselves.
-		wayIn: wayIn ?? 'learn',
-		picked: wayIn !== null,
-		detail: 'big',
-		// The level on screen is the last of the boxes the reader opened to get here.
-		trail: [WHOLE],
-		// The text that asks the server for the change laid over the parts: "none" for no change, and "" for the
-		// reader's own work. at is another commit to look at, as typed.
-		change: 'none',
-		at: '',
-		look: null,
-		changes: [],
-		suggestion: null,
-		problem: null,
-		notes: [],
-		// The pictures of the level, and the id of the drawn one on screen: null while the parts are.
-		pictures: [{ kind: 'parts' }],
-		shown: null,
-		// What the reader picked: a part, a step of a walkthrough, or a numbered element of a drawn picture.
-		selected: null,
-		content: { kind: 'folders' },
-		// The saved questions the content names, by id, once read.
-		replies: new Map(),
-		// text is the box of "Show it another way", asked the request the model is working on, problem why it was not sent.
-		redraw: { text: '', asked: '', problem: null },
-		redrawOpen: false,
-		backProblem: null,
-		// ken's reply to the last request to show a level another way, and a run that ended with nothing to show.
-		said: null,
-		ended: null,
-		stepsOpen: false,
-		storyOpen: false,
-		formOpen: false,
-		openArrows: new Set(),
-		// The parts the reader knows whose words they asked to see anyway.
-		unfolded: new Set(),
-		askOpen: false,
-		askText: '',
-		askWhole: false,
-		ui,
-	}
-}
+import { askedQuestion } from './inspector/ask-drawer.js'
+import { firstUnseen, pathOf, placeOf, shownDetail, stoodOn } from './state/content.js'
+import { WHOLE } from './state/home-state.js'
+import { homeLoads } from './state/loads.js'
+import { homeRuns } from './state/runs.js'
 
 // app is the page: its state, render, the calls to the server, send, which asks ken's model a question, and the two
 // small stores of this browser.
-export function homeActions({ state, render, getJson, post, send, stored, store, fromView }) {
+export function homeActions(app) {
+	const { state, render, post, send, store } = app
 	const $ = (selector) => document.querySelector(selector)
 	const level = () => state.home.trail.at(-1)
-
-	// One level from the server, for where the reader is now. A level the server refuses takes the last one off the
-	// screen and shows the reason in its place.
-	async function loadLayout() {
-		const home = state.home
-		const query = new URLSearchParams()
-		if (home.at.trim() !== '') query.set('at', home.at.trim())
-		for (const path of level().within) query.append('within', path)
-		if (home.change !== '') query.set('change', home.change)
-		try {
-			const response = await fetch(`/api/layout?${query}`)
-			const body = await response.json()
-			if (!response.ok) {
-				home.problem = { message: body.message, field: body.field ?? null }
-				return
-			}
-			const { look, changes, wayIn } = body
-			if (home.trail.length === 1 && home.at.trim() === '') learnParts(look.boxes)
-			Object.assign(home, { look, changes, problem: null, change: look.change?.asked ?? 'none' })
-			if (wayIn) home.suggestion = wayIn
-		} catch (error) {
-			home.problem = { message: error.message, field: null }
-		}
-	}
-
-	// ken's notes about the reader. A server that keeps none answers 404, and the home then shows none.
-	async function loadNotes() {
-		try {
-			const response = await fetch('/api/notes')
-			state.home.notes = response.ok ? (await response.json()).notes : []
-		} catch {
-			state.home.notes = []
-		}
-	}
-
-	// What ken has to say about the level on screen, from the saved questions, and the replies it names once read.
-	async function settle() {
-		const home = state.home
-		if (!home.look) return
-		const find = () => {
-			home.pictures = picturesOf(home.look, state.rows, home.replies)
-			home.content = contentOf(home.look, state.rows, home.replies, home.shown)
-		}
-		find()
-		// A drawn picture this level does not have gives its place to the parts, and a pick the screen does not hold
-		// is let go.
-		if (home.content.kind !== 'drawn') home.shown = null
-		const { selected } = home
-		const held = {
-			part: () => home.content.kind !== 'drawn' && home.look.boxes.some((box) => box.name === selected.name),
-			step: () => home.content.kind === 'change',
-			element: () => home.content.kind === 'drawn',
-		}
-		if (selected && !held[selected.kind]()) home.selected = null
-		render()
-		// shortcut: a tab names its picture by the diagram's title, which only the reply holds, so the reply of every
-		// drawn picture of the level is read. Send the title with the row when a level has more than a few dozen.
-		const named = [...repliesOf(home.content), ...home.pictures.slice(1)].map((each) => each.id)
-		const unread = [...new Set(named)].filter((id) => !home.replies.has(id))
-		if (unread.length === 0) return
-		await Promise.all(
-			unread.map(async (id) => {
-				try {
-					home.replies.set(id, fromView(await getJson(`/api/questions/${encodeURIComponent(id)}`)))
-				} catch (error) {
-					home.problem = { message: error.message, field: null }
-				}
-			}),
-		)
-		find()
-		render()
-	}
-
-	async function refresh() {
-		await loadLayout()
-		await settle()
-	}
-
-	// Lays over the parts what a way in shows first: nothing to learn the project, what landed last to catch up, and
-	// to review a change the reader's own work, or the newest merge when they have none.
-	async function enter(wayIn) {
-		const home = state.home
-		const kept = stored(`ken-detail-${wayIn}`)
-		Object.assign(home, {
-			wayIn,
-			at: '',
-			shown: null,
-			selected: null,
-			detail: DETAILS.find((detail) => detail === kept) ?? FIRST_DETAIL[wayIn],
-			change: wayIn === 'review' ? '' : 'none',
-		})
-		if (wayIn === 'catch-up') home.change = home.changes.find((choice) => choice.kind === 'since')?.change ?? 'none'
-		await loadLayout()
-		if (wayIn === 'review' && !home.problem && !home.look.change) {
-			const newest = home.changes.find((choice) => choice.kind === 'merge' || choice.kind === 'commit')
-			if (newest) {
-				home.change = newest.change
-				await loadLayout()
-			}
-		}
-	}
-
-	// The first load reads the level with no change, which also says which way in ken suggests and what there is to
-	// catch up on. Then the way in decides what is laid over it.
-	async function start() {
-		const home = state.home
-		await Promise.all([loadLayout(), loadNotes()])
-		if (!home.picked && home.suggestion) home.wayIn = home.suggestion.suggested
-		await enter(home.wayIn)
-		await settle()
-	}
+	const loads = homeLoads(app)
+	const { loadLayout, settle, refresh, enter, start } = loads
 
 	async function show() {
 		state.view = state.base = 'home'
@@ -269,49 +98,13 @@ export function homeActions({ state, render, getJson, post, send, stored, store,
 		$('#home-canvas').scrollTop = 0
 	}
 
-	// A run of ken's model that stays on the home. The page calls ended when it is over.
-	function run(kind, lens) {
-		Object.assign(state.home, { ended: null, stepsOpen: false })
-		return send({ lens }, kind)
-	}
+	const { run, ended } = homeRuns(app, loads, stepTo)
 
 	const levelLens = (kind) => ({
 		kind,
 		within: level().within,
 		name: state.home.trail.length > 1 ? level().name : null,
 	})
-
-	// A run the home started is over. The home reads the level, the questions and the notes again. What the run made
-	// shows in its place, and a run that made nothing the home can show says so, with the way to its full reply.
-	async function ended(kind, q) {
-		const home = state.home
-		// A diagram ken drew for the request opens on the canvas in place of the parts. A request that left only a note,
-		// or failed, changes no picture. Every other run is about the parts.
-		const drew = kind === 'redraw' && picturesOf(home.look, state.rows).some((picture) => picture.id === q.id)
-		const aboutParts = kind !== 'redraw' || state.rows.find((row) => row.id === q.id)?.view?.drew === 'parts'
-		const next = drew ? q.id : aboutParts ? null : home.shown
-		if (home.shown !== next) Object.assign(home, { shown: next, selected: null })
-		await Promise.all([loadLayout(), loadNotes()])
-		await settle()
-		const { content } = home
-		const made =
-			q.outcome === 'answered' &&
-			q.reply &&
-			{
-				name: () => q.reply.items.some((item) => item.kind === 'card' && item.card.kind === 'layout'),
-				tour: () => content.tour?.id === q.id,
-				story: () => content.story?.id === q.id,
-				walk: () => content.walk?.id === q.id,
-				redraw: () => true,
-			}[kind]()
-		if (!made) home.ended = { outcome: q.outcome, error: q.error, id: q.id }
-		else if (kind === 'redraw') home.said = { asked: home.redraw.asked, q: besideCanvas(q, drew) }
-		else if (kind === 'tour' && home.detail === 'big') {
-			home.detail = 'how'
-			await stepTo(firstUnseen(home.look, pathOf(home.look, content)))
-		}
-		render()
-	}
 
 	const actions = {
 		home: show,

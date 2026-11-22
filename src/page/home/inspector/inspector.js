@@ -2,14 +2,13 @@
 // whole level or the whole change. Plain text in it is the model's, and a boxed card is what ken read from git. While
 // a run of ken's model started from the home is under way, the inspector shows that run in place of what it will
 // fill, and when a run ends with nothing to show, it says so.
-import { at, count, esc, list, prose, runButton, short } from '../views/format.js'
-import { storyHtml } from '../views/reply.js'
-import { noModelHtml, workingHtml } from '../views/states.js'
-import { changeName, colourOf, levelName, stateLine } from './canvas.js'
-import { besideCanvas, diagramOf, firstUnseen, pathOf, placeOf, shownDetail, stoodOn } from './content.js'
-import { asksHtml, elementsView, factCard, pathView, pickedElementHtml, usesHtml } from './reading-path.js'
-
-export const DETAILS = { big: 'Big picture', how: 'How it works', code: 'In the code' }
+import { at, count, esc, list, pathList, prose, runButton, short } from '../../views/format.js'
+import { storyHtml } from '../../views/reply.js'
+import { noModelHtml, workingHtml } from '../../views/states.js'
+import { changeName, stateLine } from '../canvas/canvas.js'
+import { besideCanvas, diagramOf, firstUnseen, pathOf, placeOf, shownDetail, stoodOn } from '../state/content.js'
+import { colourOf, DETAILS, levelName } from '../state/home-state.js'
+import { asksHtml, elementsView, factCard, lookInside, pathView, pickedElementHtml, usesHtml } from './reading-path.js'
 
 const LEGEND = "Plain text is what ken's model says. ken has not checked it. A boxed card is checked against git."
 
@@ -18,15 +17,8 @@ const SHOWN_PATHS = 8
 
 // Paths as the end of a sentence: the first few, and the rest behind one line.
 function pathsHtml(paths) {
-	const code = (items) => items.map((p) => `<code class="pv-path">${esc(p)}</code>`).join(', ')
-	if (paths.length <= SHOWN_PATHS) return `${code(paths)}.`
-	return `${code(paths.slice(0, SHOWN_PATHS))}<details class="insp-more"><summary>and ${paths.length - SHOWN_PATHS} more</summary>${code(paths.slice(SHOWN_PATHS))}.</details>`
-}
-
-function lookInside(box) {
-	return box.opens
-		? `<button class="quiet-button" data-act="home-open" data-key="home-open">Look inside ${esc(box.name)}</button>`
-		: ''
+	if (paths.length <= SHOWN_PATHS) return `${pathList(paths)}.`
+	return `${pathList(paths.slice(0, SHOWN_PATHS))}<details class="insp-more"><summary>and ${paths.length - SHOWN_PATHS} more</summary>${pathList(paths.slice(SHOWN_PATHS))}.</details>`
 }
 
 // One level, nothing selected: what the level is, the way to be shown around it, and its parts in reading order.

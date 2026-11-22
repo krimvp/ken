@@ -4,7 +4,7 @@
 // diagram ken's model drew because the reader asked to see it another way: a drawn picture, shown in place of the
 // parts when the reader picks it. The reading path is what the home walks through at "How it works" and "In the
 // code": the stops of a tour, the steps of a walkthrough, or the numbered boxes and arrows of a drawn picture.
-import { stopTopics, walkOf } from '../project/walk.js'
+import { stopTopics, walkOf } from '../../project/walk.js'
 
 const same = (a, b) => a.length === b.length && a.every((each, i) => each === b[i])
 

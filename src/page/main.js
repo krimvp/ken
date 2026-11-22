@@ -3,8 +3,9 @@
 // right the panel with what ken checked. Under 1100 pixels the panel goes away and the same things open in place. The
 // page talks only to the server that sent it.
 import { fillDrawings, markPart, numberAt } from './draw-diagrams.js'
-import { freshHome, homeActions } from './home/home-actions.js'
+import { homeActions } from './home/home-actions.js'
 import { showHome } from './home/home-view.js'
+import { freshHome } from './home/state/home-state.js'
 import { liveLook, liveViewHtml } from './live/live-view.js'
 import { changeKey } from './project/change-card.js'
 import { learnParts } from './project/part-colours.js'

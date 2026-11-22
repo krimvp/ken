@@ -3,7 +3,7 @@
 // the reply, so it needs no quote and cannot be wrong about what changed. A part on it opens the home there,
 // with the same change laid over it. A reply that walks through the change shows its steps beside the picture, and the
 // step the reader is on lights its parts.
-import { count, esc, short } from '../views/format.js'
+import { count, esc, pathList, short } from '../views/format.js'
 import { partClass } from './part-colours.js'
 import { pictureHtml } from './parts-picture.js'
 import { stepParts, walkHtml } from './walk.js'
@@ -57,7 +57,7 @@ function partsHtml(look, t, lit, still) {
 	return `<p class="cc-line">The change touched ${touched === 0 ? 'none' : touched} of the project's ${look.boxes.length} parts.${named} Open a part to see the change inside it.</p>
 		${pictureHtml(cells, links, { numbered: false, open: new Set(), lit, still })}
 		${key}
-		${outside.length > 0 ? `<p class="cc-line">Also changed, in no part: ${outside.map((p) => `<code class="pv-path">${esc(p)}</code>`).join(', ')}.</p>` : ''}`
+		${outside.length > 0 ? `<p class="cc-line">Also changed, in no part: ${pathList(outside)}.</p>` : ''}`
 }
 
 function commitsHtml(commits) {

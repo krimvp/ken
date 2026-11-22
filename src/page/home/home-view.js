@@ -4,23 +4,18 @@
 import { fillDrawings, markPart } from '../draw-diagrams.js'
 import { drawPictures } from '../project/parts-picture.js'
 import { esc } from '../views/format.js'
-import { askDrawerHtml } from './ask-drawer.js'
-import { canvasHtml } from './canvas.js'
-import { shownDetail } from './content.js'
-import { DETAILS, inspectorHtml } from './inspector.js'
-import { redrawBarHtml } from './redraw-bar.js'
-
-const WAYS = [
-	['learn', 'Learn the project'],
-	['catch-up', 'Catch up'],
-	['review', 'Review a change'],
-]
+import { canvasHtml } from './canvas/canvas.js'
+import { redrawBarHtml } from './canvas/redraw-bar.js'
+import { askDrawerHtml } from './inspector/ask-drawer.js'
+import { inspectorHtml } from './inspector/inspector.js'
+import { shownDetail } from './state/content.js'
+import { DETAILS, WAYS } from './state/home-state.js'
 
 // The two controls, each a group of three buttons with one pressed. A way in carries one live fact from git. On a
 // level of folders the detail control waits: there is nothing finer to show until the parts have names.
 function toolbarHtml(home) {
 	const facts = home.suggestion?.facts ?? {}
-	const ways = WAYS.map(
+	const ways = Object.entries(WAYS).map(
 		([way, text]) =>
 			`<button class="seg" data-act="way-in" data-way="${way}" data-key="way-${way}" aria-pressed="${home.wayIn === way}"><span class="seg-text">${text}</span>${facts[way] ? `<span class="seg-fact">${esc(facts[way])}</span>` : ''}</button>`,
 	)

@@ -3,11 +3,11 @@
 // when nobody named them. The chosen detail decides what each box says: its job, its stop on the reading path, its
 // paths. A change marks the parts it touched and fades the rest. A box is a button that selects its part. When ken
 // drew the level another way because the reader asked, a row of tabs offers each drawn picture in place of the parts.
-import { partClass } from '../project/part-colours.js'
-import { pictureHtml } from '../project/parts-picture.js'
-import { stepParts } from '../project/walk.js'
-import { at, count, esc, label, list, prose } from '../views/format.js'
-import { diagramOf, pathOf, placeOf, shownDetail } from './content.js'
+import { pictureHtml } from '../../project/parts-picture.js'
+import { stepParts } from '../../project/walk.js'
+import { at, count, esc, label, list, pathList, prose } from '../../views/format.js'
+import { diagramOf, pathOf, placeOf, shownDetail } from '../state/content.js'
+import { colourOf, levelName } from '../state/home-state.js'
 
 // The changes "Review a change" offers, by kind, in the order of the picker.
 const REVIEW_GROUPS = [
@@ -22,15 +22,6 @@ const REVIEW_GROUPS = [
 const SHOWN_PATHS = 3
 const SHOWN_EXPLAINED = 8
 const SHOWN_DRAWN = 4
-
-export function levelName(home) {
-	return home.trail.length === 1 ? 'The whole project' : home.trail.at(-1).name
-}
-
-// Inside a part, every box takes the colour of the top-level part it sits in.
-export function colourOf(home) {
-	return home.trail.length === 1 ? partClass : () => partClass(home.trail[1].name)
-}
 
 // A merge or a commit is named by its subject alone. The hash says nothing to the reader the subject does not.
 function plainName(choice) {
@@ -65,9 +56,9 @@ export function pathsLine(box) {
 	const [only] = box.paths
 	const files = count(box.files, 'file', 'files')
 	if (box.paths.length === 1 && only.split('/').at(-1) === box.name) return `<span class="pv-paths">${files}</span>`
-	const shown = box.paths.slice(0, SHOWN_PATHS).map((p) => `<code class="pv-path">${esc(p)}</code>`)
-	const more = box.paths.length - shown.length
-	const paths = more > 0 ? `${shown.join(', ')} and ${more} more` : shown.join(', ')
+	const shown = pathList(box.paths.slice(0, SHOWN_PATHS))
+	const more = box.paths.length - SHOWN_PATHS
+	const paths = more > 0 ? `${shown} and ${more} more` : shown
 	return `<span class="pv-paths">${paths}. ${files}.</span>`
 }
 
@@ -257,17 +248,16 @@ function notesHtml(home) {
 
 // What sits in no box folds behind one line: the reader rarely needs the list.
 function looseHtml(look) {
-	const paths = (items) => items.map((p) => `<code class="pv-path">${esc(p)}</code>`).join(', ')
 	const noun = look.named ? 'part' : 'box'
 	const loose =
 		look.loose.length === 0
 			? ''
-			: `<details class="home-loose"><summary>${count(look.loose.length, 'file or folder', 'files and folders')} at this level ${look.loose.length === 1 ? 'is' : 'are'} in no ${noun}.</summary><p>${paths(look.loose)}.</p></details>`
+			: `<details class="home-loose"><summary>${count(look.loose.length, 'file or folder', 'files and folders')} at this level ${look.loose.length === 1 ? 'is' : 'are'} in no ${noun}.</summary><p>${pathList(look.loose)}.</p></details>`
 	const outside = look.change?.outside ?? []
 	const changed =
 		outside.length === 0
 			? ''
-			: `<p class="home-loose">The change also touched ${count(outside.length, 'file', 'files')} in no ${noun}: ${paths(outside)}.</p>`
+			: `<p class="home-loose">The change also touched ${count(outside.length, 'file', 'files')} in no ${noun}: ${pathList(outside)}.</p>`
 	return changed + loose
 }
 

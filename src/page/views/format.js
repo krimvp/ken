@@ -29,6 +29,11 @@ export function list(items) {
 	return items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`
 }
 
+// File paths in a sentence, each as code.
+export function pathList(paths) {
+	return paths.map((path) => `<code class="pv-path">${esc(path)}</code>`).join(', ')
+}
+
 export function duration(seconds) {
 	const whole = Math.round(seconds)
 	if (whole < 60) return `${whole} s`

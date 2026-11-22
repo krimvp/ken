@@ -3,11 +3,12 @@
 // the reader picked is open, with its cards and what the reader can do next, and the others show their title and, at
 // "How it works", their words. So picking a box in the picture and picking a line here are the same act. A drawn
 // picture has a path too: the boxes and arrows of its diagram, under the numbers the drawing shows.
-import { cardPaths, stepDiffHtml, stepTitle, stopTopics } from '../project/walk.js'
-import { count, esc, label, prose, quoteBody, runButton } from '../views/format.js'
-import { stepCardsHtml, storyHtml, wordsHtml } from '../views/reply.js'
-import { colourOf, pathsLine } from './canvas.js'
-import { firstUnseen, pathOf, placeOf, shownDetail, stoodOn } from './content.js'
+import { cardPaths, stepDiffHtml, stepTitle, stopTopics } from '../../project/walk.js'
+import { count, esc, label, pathList, prose, quoteBody, runButton } from '../../views/format.js'
+import { stepCardsHtml, storyHtml, wordsHtml } from '../../views/reply.js'
+import { pathsLine } from '../canvas/canvas.js'
+import { firstUnseen, pathOf, placeOf, shownDetail, stoodOn } from '../state/content.js'
+import { colourOf } from '../state/home-state.js'
 
 // A boxed card of facts ken read from git. tag says how ken knows them.
 export function factCard(title, tag, body) {
@@ -42,6 +43,13 @@ export function usesHtml(home, name, open = false) {
 		'Checked in git',
 		body,
 	)
+}
+
+// The way into a part's own level, for a part that has one.
+export function lookInside(box) {
+	return box.opens
+		? `<button class="quiet-button" data-act="home-open" data-key="home-open">Look inside ${esc(box.name)}</button>`
+		: ''
 }
 
 // What the reader's map says of a stop's part, and the button that says they know it.
@@ -84,9 +92,7 @@ function stepPaths(step) {
 	const paths = [
 		...new Set([...step.hunks.map((each) => each.path), ...step.cards.flatMap(({ card }) => cardPaths(card))]),
 	]
-	return paths.length === 0
-		? '<span class="muted">This step quotes no file.</span>'
-		: paths.map((path) => `<code class="pv-path">${esc(path)}</code>`).join(', ')
+	return paths.length === 0 ? '<span class="muted">This step quotes no file.</span>' : pathList(paths)
 }
 
 function stopHtml(step, k, on, ctx) {
@@ -105,9 +111,7 @@ function stopHtml(step, k, on, ctx) {
 	if (stood === 'known' && !home.unfolded.has(step.part)) {
 		return `${head}<div class="path-body"><p class="insp-known">You said you know this part. Nothing in it changed since. <button class="link" data-act="home-unfold" data-name="${esc(step.part)}" data-key="home-unfold">Show it anyway</button></p></div>`
 	}
-	const inside = box.opens
-		? `<button class="quiet-button" data-act="home-open" data-key="home-open">Look inside ${esc(step.part)}</button>`
-		: ''
+	const inside = lookInside(box)
 	if (detail === 'how') {
 		return `${head}<div class="path-body">
 				<p>${text}</p>

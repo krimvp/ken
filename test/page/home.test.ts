@@ -19,15 +19,15 @@ const {
 }: {
 	contentOf: (look: object, rows: object[], replies?: Replies, shown?: string | null) => Content
 	picturesOf: (look: object, rows: object[], replies?: Replies) => Picture[]
-} = await import(path.join(HOME, 'content.js'))
+} = await import(path.join(HOME, 'state/content.js'))
 const { inspectorHtml }: { inspectorHtml: (home: object, env: object) => string } = await import(
-	path.join(HOME, 'inspector.js')
+	path.join(HOME, 'inspector/inspector.js')
 )
 const { canvasHtml }: { canvasHtml: (home: object, rows: object[]) => string } = await import(
-	path.join(HOME, 'canvas.js')
+	path.join(HOME, 'canvas/canvas.js')
 )
 const { freshHome }: { freshHome: (stored: () => null, ui: object) => object } = await import(
-	path.join(HOME, 'home-actions.js')
+	path.join(HOME, 'state/home-state.js')
 )
 
 // A command that runs the core, a core that saves to a store, and a test of the core. The second commit touches only
