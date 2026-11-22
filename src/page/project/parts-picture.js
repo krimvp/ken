@@ -185,6 +185,8 @@ function escAttr(text) {
 // window changes size. A narrow screen hides the picture's lines, and the list says the same.
 export function drawPictures(root) {
 	for (const picture of root.querySelectorAll('.pv-picture')) {
+		// The labels are made again, so the one that has the keyboard is given it back.
+		const held = picture.querySelector('.pv-label:focus')?.dataset.index
 		picture.querySelector(':scope > svg')?.remove()
 		picture.querySelector(':scope > .pv-labels')?.remove()
 		const draw = getComputedStyle(picture).getPropertyValue('--draw').trim()
@@ -196,7 +198,13 @@ export function drawPictures(root) {
 			const r = box.getBoundingClientRect()
 			return { x: r.left - frame.left, y: r.top - frame.top, w: r.width, h: r.height }
 		})
-		const curves = draw === 'column' ? arcs(links, rects) : routes(links, rects)
+		// A box may carry a badge, such as its stop on a tour, on its top right corner. Where each begins is read before
+		// the arrows are routed, so the arrows on that edge keep to the left of it.
+		const badges = boxes.map((box) => {
+			const badge = box.querySelector('.pv-badge')
+			return badge ? badge.getBoundingClientRect().left - frame.left : null
+		})
+		const curves = draw === 'column' ? arcs(links, rects) : routes(links, rects, badges)
 		const svg = document.createElementNS(SVG, 'svg')
 		svg.setAttribute('class', 'pv-lines')
 		svg.setAttribute('aria-hidden', 'true')
@@ -216,8 +224,11 @@ export function drawPictures(root) {
 			svg.append(group)
 		}
 		picture.prepend(svg)
-		placeBadges(picture, curves, frame)
-		if (picture.dataset.numbered === 'true') placeLabels(picture, links, curves, rects, frame, draw === 'column')
+		if (picture.dataset.numbered === 'true') {
+			const names = boxes.map((box) => box.querySelector('.pv-name')?.textContent ?? '')
+			placeLabels(picture, { links, names }, curves, rects, frame, draw === 'column')
+			if (held) picture.querySelector(`.pv-label[data-index="${held}"]`)?.focus({ preventScroll: true })
+		}
 		if (picture.dataset.still !== 'true') wire(picture, links)
 		atRest(picture)
 	}
@@ -232,8 +243,9 @@ function head(kind) {
 // boxes in one row with a box between them are joined around the outside instead: over the top row, under the bottom
 // one. So no arrow runs over a box, and none crosses the arrows between the rows. The arrows on
 // one side of a box share it out, in the order of the boxes they go to, so they neither start at one point nor cross
-// as they leave.
-function routes(links, rects) {
+// as they leave. badges[i] is where the badge on the top edge of box i begins, or null: the arrows on that edge share
+// what is left of it, so no head lands under a badge and every badge keeps its corner.
+function routes(links, rects, badges) {
 	const ends = links.map((link) => {
 		const a = rects[link.from]
 		const b = rects[link.to]
@@ -267,7 +279,10 @@ function routes(links, rects) {
 		list.sort((p, q) => mid(rects[p.other])[across] - mid(rects[q.other])[across] || p.link - q.link)
 		for (const [k, port] of list.entries()) {
 			const r = rects[port.box]
-			const share = list.length === 1 ? 0.5 : 0.2 + (0.6 * k) / (list.length - 1)
+			const badge = side === 'top' ? badges[port.box] : null
+			const most = badge === null ? 0.8 : Math.min(0.8, (badge - HEAD - r.x) / r.w)
+			const least = Math.min(0.2, most / 2)
+			const share = list.length === 1 ? Math.min(0.5, most) : least + ((most - least) * k) / (list.length - 1)
 			at.set(`${port.link}:${port.box}:${side}`, pointOn(r, side, share))
 		}
 	}
@@ -352,25 +367,6 @@ function bezier([p0, p1, p2, p3], t) {
 	return { x: f('x'), y: f('y') }
 }
 
-// A box may carry a badge, such as its stop on a tour. It sits on the top right corner of the box, unless an arrow's
-// head lands there: then it takes the first corner where none does.
-function placeBadges(picture, curves, frame) {
-	const heads = curves.flatMap((curve) => (curve ? [curve[3]] : []))
-	for (const badge of picture.querySelectorAll('.pv-badge')) {
-		for (const corner of ['', ' is-left', ' is-under', ' is-under is-left']) {
-			badge.className = `pv-badge${corner}`
-			const r = badge.getBoundingClientRect()
-			const box = {
-				x: r.left - frame.left - HEAD,
-				y: r.top - frame.top - HEAD,
-				w: r.width + 2 * HEAD,
-				h: r.height + 2 * HEAD,
-			}
-			if (!heads.some((p) => inside(p, box))) break
-		}
-	}
-}
-
 // The length of an arrow's head, in pixels, and how close a label may come to a box.
 const HEAD = 14
 const CLEAR = 3
@@ -378,11 +374,11 @@ const CLEAR = 3
 // Each arrow's number and verb sit beside its line where there is room, and on it where there is none. A label never
 // covers an arrow's head, more than half of its own line, a box, or another label, and stays inside the picture. It
 // tries first on one line, then folded to a narrow column, then as the number alone. On a phone every label is the
-// number alone. The page lists every arrow's verb under the same number.
-function placeLabels(picture, links, curves, rects, frame, compact) {
+// number alone. A label is a button named by its whole sentence, "Tests runs Command", and one that is the number
+// alone shows that sentence when the reader points at it or moves to it with the keyboard. names are the boxes' names.
+function placeLabels(picture, { links, names }, curves, rects, frame, compact) {
 	const layer = document.createElement('div')
 	layer.className = 'pv-labels'
-	layer.setAttribute('aria-hidden', 'true')
 	picture.append(layer)
 	const taken = rects.map((r) => ({ x: r.x - CLEAR, y: r.y - CLEAR, w: r.w + 2 * CLEAR, h: r.h + 2 * CLEAR }))
 	// A badge hangs over the edge of its box, so a label keeps off it as it keeps off the box.
@@ -402,12 +398,15 @@ function placeLabels(picture, links, curves, rects, frame, compact) {
 	const area = { w: frame.width, h: frame.height }
 	for (const [i, link] of links.entries()) {
 		if (!curves[i]) continue
-		const label = document.createElement('span')
+		const label = document.createElement('button')
+		const sentence = `${names[link.from]} ${link.text ?? ''} ${names[link.to]}`
+		label.type = 'button'
 		label.dataset.act = 'pv-arrow'
 		label.dataset.index = `${i}`
+		label.dataset.key = `pv-arrow-${i}`
+		label.setAttribute('aria-label', `Arrow ${i + 1}: ${sentence}`)
 		label.innerHTML = `<span class="pv-label-n">${i + 1}</span><span class="pv-label-text"></span>`
 		label.lastChild.textContent = link.text ?? ''
-		label.title = link.text ?? ''
 		layer.append(label)
 		const others = lines.filter((_, k) => k !== i)
 		let spot = null
@@ -416,6 +415,7 @@ function placeLabels(picture, links, curves, rects, frame, compact) {
 			spot = spotFor(label, curves[i], { taken, own: lines[i], others, heads, area })
 			if (spot.fits) break
 		}
+		if (label.classList.contains('is-compact')) label.dataset.tip = sentence
 		label.style.left = `${round(spot.box.x)}px`
 		label.style.top = `${round(spot.box.y)}px`
 		taken.push(spot.box)

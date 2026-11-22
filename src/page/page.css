@@ -1999,7 +1999,7 @@ ul.left-out {
 	marker-end: none;
 }
 
-/* An arrow's number and verb, on its line. The list under the picture says the same to a screen reader. */
+/* An arrow's number and verb, on its line: a button that opens the arrow in the list under the picture. */
 .pv-labels {
 	position: absolute;
 	inset: 0;
@@ -2023,8 +2023,8 @@ ul.left-out {
 	font-size: var(--text-sm);
 	font-weight: 500;
 	line-height: 1.3;
+	text-align: left;
 	pointer-events: auto;
-	cursor: pointer;
 }
 
 .pv-label.is-narrow {
@@ -2178,7 +2178,7 @@ button.pv-box:hover {
 }
 
 /* A badge on a box, such as its stop on a tour: a pill in the accent colour, where an arrow's number is a dark
-   circle. It hangs on a corner of the box, and parts-picture.js picks the corner no arrow's head lands on. */
+   circle. It hangs on the top right corner of the box, and parts-picture.js keeps the arrows' heads off it. */
 .pv-badge {
 	position: absolute;
 	top: -0.8rem;
@@ -2191,16 +2191,6 @@ button.pv-box:hover {
 	font-weight: 700;
 	line-height: 1.5;
 	white-space: nowrap;
-}
-
-.pv-badge.is-left {
-	right: auto;
-	left: var(--space-3);
-}
-
-.pv-badge.is-under {
-	top: auto;
-	bottom: -0.8rem;
 }
 
 /* The change card: what a change touched, over the project's top level of parts, at the top of a reply about it. The

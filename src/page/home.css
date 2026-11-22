@@ -594,7 +594,8 @@ button.brand {
 	grid-template-columns: minmax(0, 1fr);
 }
 
-.pv-says > * {
+.pv-says > *,
+.pv-unseen > * {
 	grid-area: 1 / 1;
 	min-width: 0;
 }
@@ -605,7 +606,10 @@ button.brand {
 	overflow-wrap: anywhere;
 }
 
+/* The unseen one is laid out as the seen one is, as a cell of the same grid, so each takes the height it has when
+   it shows. */
 .pv-unseen {
+	display: contents;
 	visibility: hidden;
 }
 

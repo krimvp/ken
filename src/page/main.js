@@ -612,7 +612,8 @@ function render() {
 	$('#page').hidden = onHome
 	if (onHome) {
 		renderHome()
-		return refocus()
+		refocus()
+		return tipFrom(null)
 	}
 	const q = state.open
 	const page = $('#page')
@@ -658,6 +659,7 @@ function render() {
 	panel.scrollTop = scroll
 	watchTurns()
 	refocus()
+	tipFrom(null)
 }
 
 // On a wide screen the panel follows the reader down the thread: it shows the checks of the reply most in view. A reply
@@ -1377,13 +1379,15 @@ function hideTip() {
 	$('#tip').hidden = true
 }
 
-for (const kind of ['mouseover', 'focusin']) {
-	document.addEventListener(kind, (event) => {
-		const mark = event.target.closest?.('[data-tip]')
-		if (mark) showTip(mark)
-		else hideTip()
-	})
+// The tip is for the mark pointed at, else for the one that has the keyboard: a page that scrolls under a still
+// pointer, or is drawn again, must not take the tip from a reader who moved to a mark with the keyboard.
+function tipFrom(target) {
+	const mark = target?.closest?.('[data-tip]') ?? document.activeElement?.closest?.('[data-tip]')
+	if (mark) showTip(mark)
+	else hideTip()
 }
+
+for (const kind of ['mouseover', 'focusin']) document.addEventListener(kind, (event) => tipFrom(event.target))
 document.addEventListener('focusout', hideTip)
 document.addEventListener('scroll', () => tipFor?.isConnected && showTip(tipFor), true)
 
