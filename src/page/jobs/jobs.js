@@ -9,7 +9,7 @@ export const freshJobs = () => ({ list: [], open: false, sent: null })
 
 const RETRY_MS = 3000
 
-const live = (job) => job.state.kind === 'waiting' || job.state.kind === 'running'
+export const live = (job) => job.state.kind === 'waiting' || job.state.kind === 'running'
 
 export function inLine(n) {
 	const teen = n % 100 >= 11 && n % 100 <= 13
@@ -70,12 +70,12 @@ export function jobsLineHtml(jobs) {
 	return `${line}<div class="k-jobs-list" id="jobs-list"><p class="k-eyebrow">What ken reads by itself</p>${list}<p class="k-muted k-jobs-note">What you ask goes first. Each is one run of ken's model.</p></div>`
 }
 
-// What a brief says while ken reads its part, or answers its question, by itself.
-export function jobLineHtml(job, what) {
+// What a brief, or a page, says while ken reads its part, answers its question or draws it by itself.
+export function jobLineHtml(job, what, tag = 'p') {
 	if (job.state.kind === 'running') {
-		return `<p class="k-job-says" role="status"><span class="k-spin" aria-hidden="true"></span> ken is ${what} now. ${clockHtml(job)}.</p>`
+		return `<${tag} class="k-job-says" role="status"><span class="k-spin" aria-hidden="true"></span> ken is ${what} now. ${clockHtml(job)}.</${tag}>`
 	}
-	return `<p class="k-job-says" role="status">ken is ${what}: ${inLine(job.place)}.</p>`
+	return `<${tag} class="k-job-says" role="status">ken is ${what}: ${inLine(job.place)}.</${tag}>`
 }
 
 // app is the page: its state, render, post and linesOf; made is told the jobs that just made something.

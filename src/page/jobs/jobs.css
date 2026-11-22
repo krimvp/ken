@@ -141,18 +141,27 @@
 	color: var(--k-muted);
 }
 
+/* A brief or Ask ken takes the right of the window, so the bar keeps the line in view beside it. */
+@media (min-width: 761px) {
+	.k-bar.has-drawer {
+		padding-right: calc(var(--k-drawer) + 24px);
+	}
+}
+
 @media (max-width: 760px) {
 	.k .k-jobs-line {
 		padding: 4px 6px;
 	}
 
-	/* A phone has room for the dot and the count alone. */
-	.k-jobs-now {
+	/* A phone has room for the dot alone; its label says what ken reads and how many runs wait. */
+	.k-jobs-now,
+	.k-jobs-wait {
 		display: none;
 	}
 
-	.k-jobs-wait {
-		padding-left: 0;
-		border-left: 0;
+	.k .k-jobs-line {
+		justify-content: center;
+		min-width: 44px;
+		min-height: 44px;
 	}
 }

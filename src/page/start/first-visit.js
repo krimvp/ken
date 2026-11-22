@@ -1,6 +1,7 @@
 // Home on a first visit, and on a project whose parts ken's model has not named: what the project is, in its own
 // words, from plain code in the first second; then what ken's model is doing about it and how long that takes; and,
 // once the model has named the parts, its one line on the project, its parts and the main process, in the same place.
+import { jobLineHtml, live } from '../jobs/jobs.js'
 import { partClass } from '../project/part-colours.js'
 import { icon } from '../shell/icons.js'
 import { count, esc, prose } from '../views/format.js'
@@ -125,6 +126,10 @@ function processHtml({ look, concepts, briefOf, env, routeHtml }) {
 	}
 	const flow = look.named.flows[0]
 	if (!flow) return ''
+	const drawing = env.jobs?.find((job) => job.kind === 'process' && live(job))
+	if (drawing) {
+		return `<div class="k-first-flow"><p>The main process, as ken's model named it: <b>${prose(flow)}</b>.</p>${jobLineHtml(drawing, 'drawing it')}</div>`
+	}
 	const cost = env.off ? esc(env.off) : "One run of ken's model."
 	return `<p class="k-first-flow">The main process, as ken's model named it: <b>${prose(flow)}</b>. <button class="k-link" data-act="first-draw" data-key="first-draw"${env.off ? ' disabled' : ''}>Draw it</button> <span class="k-muted">${cost}</span></p>`
 }

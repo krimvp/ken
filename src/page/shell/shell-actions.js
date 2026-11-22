@@ -211,6 +211,7 @@ export function shellActions(app) {
 		$('#pg-old').hidden = !over
 		// A brief or Ask ken takes the right of the window, and Home makes room for it.
 		start.classList.toggle('has-drawer', Boolean(state.brief.id) || state.ask.open)
+		$('.k-bar').classList.toggle('has-drawer', Boolean(state.brief.id) || state.ask.open)
 		if (start.hidden) fill(start, '')
 		else {
 			const view = { top: shell.top, home, reader: home.reader, followUp: state.followUp, concepts: shell.concepts }
