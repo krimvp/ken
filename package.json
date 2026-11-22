@@ -16,6 +16,8 @@
 		"test": "node --import ./test/fixtures/git-identity.ts --test 'test/**/*.test.ts'",
 		"check:structure": "node scripts/check/structure.ts",
 		"check:prose": "node scripts/check/prose.ts",
+		"bench": "node scripts/bench/run-questions.ts",
+		"bench:check": "node scripts/bench/check-reply.ts",
 		"check": "npm run typecheck && npm run lint && npm test && npm run check:structure && npm run check:prose"
 	},
 	"bin": {

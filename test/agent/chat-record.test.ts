@@ -110,7 +110,7 @@ test('a question recalls a matching note before browsing other topics, and drops
 	const others = Array.from({ length: 32 }, (_, i) => ({ kind: 'topic' as const, name: `Workshop ${i}`, quotes }))
 	assert.equal((await store.append([{ kind: 'note', topic: id, text: note }, ...others])).kind, 'appended')
 	const question = 'Explain backoff.'
-	const lens: Asking = { kind: 'answer', concept: 'part::Backoff', text: question }
+	const lens: Asking = { kind: 'answer', concept: 'part::Backoff', text: question, paths: [] }
 	const first = await ask(
 		[{ tool: 'ken__read_record', args: { kind: 'topic', search: 'Workshop', page: 2 } }, { text: 'Done.' }],
 		built.root,

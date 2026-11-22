@@ -38,7 +38,6 @@ const point = (line: string, file: keyof typeof FILES, quoted: string) => ({
 })
 const brief = (line: string, rest: object): Turn[] => [
 	{ tool: 'ken__show', args: { brief: { number: 1, line, ...rest } } },
-	{ text: '' },
 ]
 
 const WRITTEN = 'What happens when a save fails?'

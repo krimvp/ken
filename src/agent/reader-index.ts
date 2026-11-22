@@ -4,17 +4,7 @@
 import { type MapRead, type Prefs, prefsLine, type ReaderNote, stateLine } from '../map/index.ts'
 
 export function readerIndex(read: MapRead, notes: ReaderNote[], prefs: Prefs): string {
-	const told = [
-		...(notes.length === 0
-			? []
-			: [
-					'',
-					"The reader's notes on what they know and how they want replies. A note from ken addresses the reader. A note from the reader uses their own words:",
-					...notes.map((note) => `- ${note.by === 'reader' ? 'Reader' : 'ken'}: ${note.text}`),
-				]),
-		'',
-		`How much text the reader chose: ${prefsLine(prefs)}`,
-	]
+	const told = [...notesLines(notes), '', `How much text the reader chose: ${prefsLine(prefs)}`]
 	const met = read.states.filter((state) => state.kind !== 'never-met')
 	if (met.length === 0) {
 		return ['The reader has no recorded familiarity with the topics shown above.', ...told].join('\n')
@@ -28,4 +18,18 @@ export function readerIndex(read: MapRead, notes: ReaderNote[], prefs: Prefs): s
 		...(changed.length > 1 ? [`${changed.length} topics the reader understood have changed since.`] : []),
 		...told,
 	].join('\n')
+}
+
+// A lens ken wrote holds its own rules for what to send, so it starts from the reader's notes alone.
+export function readerNotes(notes: ReaderNote[]): string {
+	return notesLines(notes).join('\n').trim()
+}
+
+function notesLines(notes: ReaderNote[]): string[] {
+	if (notes.length === 0) return []
+	return [
+		'',
+		"The reader's notes on what they know and how they want replies. A note from ken addresses the reader. A note from the reader uses their own words:",
+		...notes.map((note) => `- ${note.by === 'reader' ? 'Reader' : 'ken'}: ${note.text}`),
+	]
 }

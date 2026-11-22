@@ -1,14 +1,17 @@
 import { randomUUID } from 'node:crypto'
 import { createSession, type RunResult, type Session } from 'aigent'
-import type { Tool } from 'aigent/plugin'
+import type { Tool, ToolOutcome } from 'aigent/plugin'
 import { followedNames, usedElsewhere } from '../checks/index.ts'
 import type { ReaderNotes, ReaderPrefs, UnderstandingMap } from '../map/index.ts'
 import { fileRecordStore } from '../record/index.ts'
 import { findRoot, gitRepository } from '../repo/index.ts'
 import { projectSessions } from '../transcripts/index.ts'
+import { SHORTEN_PROMPT, type Shorten, shortened, shortenQuestion } from './brief/shorten-lines.ts'
 import type { ChatEvent, Cost } from './chat-event.ts'
+import { briefParts, lensOf, readLimit } from './lens/lens.ts'
+import { plainFacts } from './lens/plain-facts.ts'
 import type { ModelConfig } from './model-config.ts'
-import { readerIndex } from './reader-index.ts'
+import { readerIndex, readerNotes } from './reader-index.ts'
 import { quotesOf } from './reply/check-card.ts'
 import { fileTurn } from './reply/file-turn.ts'
 import { endReply } from './reply/record-reply.ts'
@@ -105,31 +108,70 @@ export async function startChat(options: {
 	const gate = { sources: { repo, sessions }, store, project, map: reader?.map ?? null }
 	const { model, baseUrl, apiKeyEnv } = options.model
 	const memory = threadMemory(reader?.readSaved)
-	const open = (as: Asking['kind'] = 'question') =>
-		createSession({
+	// A question's own session: a lens's tools and prompt, or every tool and the whole prompt.
+	const open = (as: Asking = { kind: 'question' }) => {
+		const lens = lensOf(as)
+		const reads = explorationTools(repo, elsewhere, () => round.read)
+		const record = recordTool(store, repo, reader?.map)
+		const remember = reader ? [rememberTool(reader.notes, () => round)] : []
+		const tools = lens
+			? [
+					...[...reads, record, ...memory.tools(), ...remember].filter((tool) => lens.tools.includes(tool.name)),
+					showTool(gate, () => round, { fields: lens.show, shorten }),
+				]
+			: [
+					...reads,
+					diffTool(repo, elsewhere),
+					record,
+					...sessionTools(sessions),
+					...(as.kind === 'note' ? [] : memory.tools()),
+					...remember,
+					showTool(gate, () => round, { shorten }),
+					reviseTool(gate, () => round),
+				]
+		return createSession({
 			model: { kind: 'openai-compatible', baseUrl, id: model, apiKeyEnv },
 			plugins: [
 				{
 					name: PLUGIN,
 					description: "Reads the project's files, git history and saved sessions, and checks cards against them.",
-					tools: [
-						...explorationTools(repo, elsewhere),
-						diffTool(repo, elsewhere),
-						recordTool(store, repo, reader?.map),
-						...sessionTools(sessions),
-						...(as === 'note' ? [] : memory.tools()),
-						...(reader ? [rememberTool(reader.notes, () => round)] : []),
-						showTool(gate, () => round, as),
-						reviseTool(gate, () => round),
-					].map(withTurnsLeft),
+					tools: tools.map(withTurnsLeft),
 				},
 			],
 			enabled: [PLUGIN],
 			toolMode: 'native',
 			maxTurns: STEPS.talk.turns,
 			maxToolResultChars: MAX_TOOL_RESULT_CHARS,
-			systemPrompt: SYSTEM_PROMPT,
+			systemPrompt: lens?.systemPrompt ?? SYSTEM_PROMPT,
 		})
+	}
+	// The question running now counts what the small requests to shorten a line cost.
+	let charge: (usage: { input: number; output: number }) => void = () => {}
+	const shorten: Shorten = async (lines, signal) => {
+		const helper = await createSession({
+			model: { kind: 'openai-compatible', baseUrl, id: model, apiKeyEnv },
+			plugins: [],
+			toolMode: 'native',
+			maxTurns: 1,
+			systemPrompt: SHORTEN_PROMPT,
+		})
+		const off = helper.subscribe((event) => {
+			if (event.type === 'record' && event.record.kind === 'usage') {
+				const { input, output, cacheRead, cacheWrite } = event.record
+				charge({ input: input + cacheRead + cacheWrite, output })
+			}
+		})
+		try {
+			const result = await helper.prompt(shortenQuestion(lines), { signal })
+			// One turn is all it has, so a reply ends the run at its turn limit.
+			return 'text' in result ? shortened(result.text, lines.length) : lines.map(() => null)
+		} catch {
+			return lines.map(() => null)
+		} finally {
+			off()
+			await helper.close()
+		}
+	}
 
 	// Open once at startup so a bad model setting still fails before the first question.
 	let next: Promise<Session> | null = open()
@@ -149,10 +191,10 @@ export async function startChat(options: {
 		if (next && as.kind !== 'question') {
 			next = next.then(async (initial) => {
 				await initial.close()
-				return open(as.kind)
+				return open(as)
 			})
 		}
-		next ??= open(as.kind)
+		next ??= open(as)
 		const opening = next
 		try {
 			yield* askIn(await opening, question, signal, as)
@@ -174,12 +216,18 @@ export async function startChat(options: {
 	): AsyncGenerator<ChatEvent> {
 		const events = eventQueue()
 		const current = freshRound(as, events.push)
+		const most = readLimit(as)
+		current.read = most === null ? null : { used: 0, most }
 		round = current
 		turnsEnded = 0
 		shown.clear()
 		// The second look has its own stop, so ending it at its turn limit does not end the question.
 		const stops: Record<Round['step'], AbortController> = { talk: new AbortController(), risks: new AbortController() }
 		const tokens = { input: 0, output: 0 }
+		charge = (usage) => {
+			tokens.input += usage.input
+			tokens.output += usage.output
+		}
 		const readPaths = new Set<string>()
 		const file = (cards: Round['pending']) => {
 			for (const event of fileTurn({ text: '', calls: [] }, cards)) {
@@ -190,6 +238,7 @@ export async function startChat(options: {
 		// A turn that shows cards again after ken sent one back mostly says so: "sending it again without them". Its words
 		// wait. A later turn that writes words makes them a step; else they are the reply's, before that turn's cards.
 		let sentBackBefore = 0
+		let endedOnShow = false
 		let retry: { text: string; at: number } | null = null
 		const settleRetry = (as: 'step' | 'reply') => {
 			if (!retry) return
@@ -234,7 +283,14 @@ export async function startChat(options: {
 					if (filed.kind === 'item') current.items.push(filed.item)
 					events.push(filed)
 				}
+				const passed = current.sentBack === sentBackBefore && calls.every(({ outcome }) => accepted(outcome))
 				sentBackBefore = current.sentBack
+				// A brief's question says to write nothing after the briefs, so once each has passed, the turn that would
+				// only close the run is not asked for. aigent ends a run at a stop that comes as its turn ends.
+				if (showOnly && passed && current.step === 'talk' && briefsDone(current)) {
+					endedOnShow = true
+					stops.talk.abort()
+				}
 				// aigent stops the first step at its turns; the second look has fewer, so ken stops it.
 				if (current.step === 'risks' && turnsEnded >= STEPS.risks.turns) stops.risks.abort()
 			}
@@ -250,19 +306,14 @@ export async function startChat(options: {
 				.catch((error: unknown): RunResult => ({ stop: 'error', message: String(error), turns: 0 }))
 		const talk = async () => {
 			if (as.kind === 'change') events.push(await changeNamed(repo, as.range, signal))
-			const record = await store.read()
-			const index = await recordIndex(record, question, as, repo, signal)
-			const known = reader
-				? readerIndex(
-						...(await Promise.all([
-							reader.map.read(new Date(), signal, { record, names: index.topics }),
-							reader.notes.read(),
-							reader.prefs.read(),
-						])),
-					)
-				: ''
-			const earlier = as.kind === 'note' ? '' : memory.recent()
-			const result = await prompt(`${index.text}\n\n${known}\n\n${earlier}The question: ${question}`, stops.talk)
+			const lens = lensOf(as)
+			const followUp = lens ? lens.followUp : as.kind !== 'note'
+			const opening = lens && !lens.followUp ? await lensOpening() : await chatOpening(question, as, signal)
+			const earlier = followUp ? memory.recent() : ''
+			const facts = lens ? await briefFacts(as, signal) : ''
+			const ran = await prompt(`${opening}${earlier}The question: ${question}${facts}`, stops.talk)
+			const result: RunResult =
+				endedOnShow && ran.stop === 'aborted' ? { stop: 'done', text: '', turns: ran.turns } : ran
 			settleRetry('reply')
 			let secondLook: Cost | null = null
 			const { scope } = current
@@ -322,11 +373,56 @@ export async function startChat(options: {
 		}
 	}
 
+	// A question in the reader's words starts with the records that match it and the reader's map of their topics.
+	async function chatOpening(question: string, as: Asking, signal?: AbortSignal): Promise<string> {
+		const record = await store.read()
+		const index = await recordIndex(record, question, as, repo, signal)
+		if (!reader) return `${index.text}\n\n`
+		const [map, notes, prefs] = await Promise.all([
+			reader.map.read(new Date(), signal, { record, names: index.topics }),
+			reader.notes.read(),
+			reader.prefs.read(),
+		])
+		return `${index.text}\n\n${readerIndex(map, notes, prefs)}\n\n`
+	}
+
+	// A brief's question ends with what plain code knows of its files and the most it may read.
+	async function briefFacts(as: Asking, signal?: AbortSignal): Promise<string> {
+		const parts = briefParts(as)
+		const most = readLimit(as)
+		const head = await repo.resolve('HEAD', signal)
+		if (parts.length === 0 || head.kind !== 'ok') return ''
+		const facts = await plainFacts(repo, head.commit, parts, signal)
+		const limit =
+			most === null
+				? ''
+				: `\n\nRead at most ${most} lines of files in all for this question: read_file stops there. Read the ranges where the work happens, not whole files.`
+		return `\n\n${facts}${limit}`
+	}
+
+	// A lens's question holds what ken knows of the level, so it starts from the reader's notes alone.
+	async function lensOpening(): Promise<string> {
+		const notes = reader ? readerNotes(await reader.notes.read()) : ''
+		return notes === '' ? '' : `${notes}\n\n`
+	}
+
 	async function close() {
 		closed = true
 		await next?.then((session) => session.close())
 	}
 	return { kind: 'ok', chat: { root: found.root, thread: randomUUID(), ask, close } }
+}
+
+function accepted(outcome: ToolOutcome): boolean {
+	return outcome.kind === 'ran' && !outcome.result.isError
+}
+
+// Every brief the question asks for has been shown: one for each part of a tour, or the one that answers a question.
+function briefsDone(round: Round): boolean {
+	const wanted = round.tour ? round.tour.stops.length : round.answers ? 1 : 0
+	if (wanted === 0) return false
+	const shown = new Set(round.items.flatMap((item) => (item.kind === 'step' ? [item.number] : [])))
+	return Array.from({ length: wanted }, (_, at) => at + 1).every((number) => shown.has(number))
 }
 
 function riskItem(risk: Round['held'][number]): Extract<Item, { kind: 'card' }> {

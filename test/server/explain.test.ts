@@ -4,7 +4,7 @@ import { fileRecordStore } from '../../src/record/index.ts'
 import { gitRepository } from '../../src/repo/index.ts'
 import { buildRepository } from '../fixtures/build-repository.ts'
 import { ask, call, json, openKen, readerHome } from '../fixtures/ken-server.ts'
-import { scriptedModel, type Turn } from '../fixtures/scripted-model.ts'
+import { scriptedModel, type Turn, toolResults } from '../fixtures/scripted-model.ts'
 
 // A command that runs the core, a core that saves to a store, and a test of the core.
 const FILES = {
@@ -62,6 +62,8 @@ const brief = (number: number, line: string, rest: object): Turn => ({
 	args: { brief: { number, line, ...rest } },
 })
 
+const LONG = 'This line runs on and on, well past the ten words a line may hold.'
+const SHORT = 'A run is one function.'
 const ASKED = ['What happens when a save fails?', 'Why does a run save once?', 'What would a second store break?']
 const model = await scriptedModel([
 	{ text: 'Let me read the parts.', tool: 'ken__read_file', args: { path: 'src/cli/main.ts' } },
@@ -75,7 +77,7 @@ const model = await scriptedModel([
 			}),
 			point({ line: 'A run saves twice to be safe.', file: 'src/core/run.ts', quoted: '\tsaveTwice()' }),
 			point({
-				line: 'This line runs on and on, well past the ten words a line may hold.',
+				line: LONG,
 				file: 'src/core/run.ts',
 				quoted: 'export function run() {',
 			}),
@@ -83,6 +85,8 @@ const model = await scriptedModel([
 		terms: [term('save', 'Writes what a run made.', 'src/store/db.ts', 'export function save() {}')],
 		questions: ASKED,
 	}),
+	// ken's own request for the line that runs past ten words.
+	{ text: JSON.stringify([SHORT]) },
 	brief(2, 'Keeps what the core hands it.', {
 		points: [
 			point({
@@ -100,7 +104,6 @@ const model = await scriptedModel([
 	brief(4, 'Runs the core the way the command does.', {
 		points: [point({ line: 'The test calls run.', file: 'test/run.test.ts', quoted: 'run()' })],
 	}),
-	{ text: 'That is the whole project.' },
 	// Later, the reader asks for the store alone.
 	brief(1, 'Holds the one function that saves.', {
 		points: [
@@ -128,6 +131,11 @@ test('explaining a level asks for a brief of each part in the order the level li
 		],
 		'the question carries each part in order with its paths and job',
 	)
+	assert.deepEqual(
+		lines.filter((line) => line.kind === 'tool' && line.name === 'show').map((line) => line.step),
+		Array(4).fill('Sent a brief for ken to check'),
+		'the steps say each show call sent a brief, not that it named a change',
+	)
 	const rows = (await json(server, '/api/questions')).questions
 	assert.deepEqual(rows[0].tour, { within: [], stops: ['Core', 'Store', 'Command', 'Tests'] })
 	const topics: { topic: string; kind: string }[] = lines.at(-1).view.topics
@@ -153,6 +161,13 @@ test("a part ken's model explained opens with the model's line, its things to kn
 				drawing: { kind: 'steps', count: 3, lit: 3, label: 'save' },
 				quotes: [{ path: 'src/core/run.ts', startLine: 4, endLine: 4, text: '\tsave()' }],
 			},
+			{
+				line: SHORT,
+				more: `${LONG} More.`,
+				long: `${LONG} Long. And longer.`,
+				drawing: { kind: 'dot' },
+				quotes: [{ path: 'src/core/run.ts', startLine: 3, endLine: 3, text: 'export function run() {' }],
+			},
 		],
 	)
 	assert.deepEqual(core.terms, [{ id: 'term:save', name: 'save' }])
@@ -162,15 +177,22 @@ test("a part ken's model explained opens with the model's line, its things to kn
 	)
 })
 
-test('a thing to know whose quote is not in git, or whose line passes ten words, goes back to the model alone and never reaches the brief', () => {
+test('a thing to know whose quote is not in git goes back to the model alone, and one whose line passes ten words is cut in a request of its own', () => {
 	assert.deepEqual(
 		lines.flatMap((line) => (line.kind === 'step' && line.step.kind === 'sent-back' ? [line.step.what] : [])),
-		['Point 2', 'Point 3'],
+		['Point 2'],
 	)
 	const sent = JSON.stringify(core)
 	assert.ok(!sent.includes('saveTwice') && !sent.includes('saves twice'), 'nothing of the point with the false quote')
-	assert.ok(!sent.includes('runs on and on'), 'nothing of the point with the long line')
-	assert.equal(core.points.length, 1, 'the thing to know that passed stands')
+	assert.deepEqual(
+		core.points.map((point: { line: string }) => point.line),
+		['A run saves once, at its end.', SHORT],
+		'the point that passed stands, and the long one shows with its cut line',
+	)
+	const asked = model.requests[2]?.messages ?? []
+	const [, question] = asked
+	assert.equal(asked.length, 2, 'the request to cut the line holds its own prompt and question, not the conversation')
+	assert.match(String(question?.content), /runs on and on[\s\S]*export function run\(\) \{/)
 })
 
 test('a term is a topic of the record with one meaning: a second brief that names it keeps the first meaning, and the term opens as a brief', async () => {
@@ -216,7 +238,11 @@ test('a thing to know that quotes only a comment goes back to the model, and one
 		brief(1, 'Runs the work.', {
 			points: [point({ line: 'The core runs the work.', file: 'src/core/run.ts', quoted })],
 		})
-	const scripted = await scriptedModel([told(comment), told(`${comment}\nexport function run() {`), { text: '' }])
+	const scripted = await scriptedModel([
+		told(comment),
+		told(`${comment}\nexport function run() {`),
+		{ text: 'A turn that only closes the run.' },
+	])
 	const again = await openKen(root, readerHome(), scripted.baseUrl)
 	const said = await ask(again, { lens: { kind: 'explain', within: [], part: 'Core' } })
 
@@ -231,6 +257,16 @@ test('a thing to know that quotes only a comment goes back to the model, and one
 		[`${comment}\nexport function run() {`],
 		'the reader sees the one point that quotes code',
 	)
+	assert.equal(scripted.requests.length, 2, 'a brief with a point sent back is asked for again, then the run ends')
+	const [first] = scripted.requests as { tools?: { function: { name: string; parameters: object } }[] }[]
+	const declared = first?.tools ?? []
+	assert.deepEqual(
+		declared.map((tool) => tool.function.name).filter((name) => name.startsWith('ken__')),
+		['ken__read_file', 'ken__list_files', 'ken__search', 'ken__show'],
+		'a brief is asked with the tools that read files and show alone',
+	)
+	const show = declared.find((tool) => tool.function.name === 'ken__show')?.function.parameters
+	assert.deepEqual(Object.keys((show as { properties: object }).properties), ['brief'], 'show offers only the brief')
 })
 
 test('briefs the model sends in one turn reach the reader in the order of the parts, each followed by its own things to know and terms', async () => {
@@ -275,7 +311,6 @@ test('asked to explain the whole level once one part is explained, the model is 
 			points: [point({ line: 'The core runs the work.', file: 'src/core/run.ts', quoted: 'export function run() {' })],
 		}),
 		{ text: '' },
-		{ text: '' },
 	])
 	const again = await openKen(root, readerHome(), scripted.baseUrl)
 	await ask(again, { lens: { kind: 'explain', within: [], part: 'Core' } })
@@ -285,4 +320,40 @@ test('asked to explain the whole level once one part is explained, the model is 
 		[...question.matchAll(/^- Part \d+, (.+?) \(/gm)].map((match) => match[1]),
 		['Store', 'Command', 'Tests'],
 	)
+})
+
+test("a brief's question carries each file's lines and outline and the most it may read, and read_file stops there", async () => {
+	const long = Array.from({ length: 1000 }, (_, at) => `const line${at + 1} = ${at + 1}`).join('\n')
+	const files = {
+		'src/core/run.ts': 'export function run() {\n\treturn 1\n}\n',
+		'src/core/long.ts': `${long}\n`,
+		'test/run.test.ts': 'run()\n',
+	}
+	const { root: own } = buildRepository([{ message: 'feat: start', files }])
+	const named = await fileRecordStore(own, gitRepository(own)).append([
+		{
+			kind: 'layout',
+			within: [],
+			at: 'HEAD',
+			parts: [
+				{ name: 'Core', job: 'Runs the work', paths: ['src'] },
+				{ name: 'Tests', job: 'Tests the core', paths: ['test'] },
+			],
+			arrows: [],
+		},
+	])
+	if (named.kind !== 'appended') assert.fail(named.problems.join(' '))
+	const read = (start: number) => ({ tool: 'ken__read_file', args: { path: 'src/core/long.ts', start } })
+	const scripted = await scriptedModel([read(1), read(401), read(801), { text: 'I read what I could.' }])
+	const server = await openKen(own, readerHome(), scripted.baseUrl)
+	await ask(server, { lens: { kind: 'explain', within: [], part: 'Core' } })
+
+	const asked = JSON.stringify(scripted.requests[0]?.messages.at(-1)?.content)
+	assert.match(asked, /- src\/core\/long\.ts, 1000 lines/, 'the question gives each file its lines')
+	assert.match(asked, /- src\/core\/run\.ts, 3 lines: run 1/, 'and what it declares at which line')
+	assert.match(asked, /Read at most 800 lines of files in all/)
+	const results = toolResults(scripted.requests.at(-1))
+	assert.match(results[0] ?? '', /lines 1-400 of 1000/)
+	assert.match(results[1] ?? '', /lines 401-800 of 1000[\s\S]*That was the last of the 800 lines/)
+	assert.match(results[2] ?? '', /This question has read its 800 lines of files/, 'a read past the limit is refused')
 })

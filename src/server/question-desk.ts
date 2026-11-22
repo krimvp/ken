@@ -380,7 +380,7 @@ export function questionDesk(
 			const read = await levelOf(lens)
 			if (read.kind !== 'ok') return read
 			const top = read.level.within.length === 0 ? { drawings: await viewsAsk(read.level.head) } : {}
-			return { kind: 'ok', text: partsQuestion({ ...read.level, ...top }).text }
+			return { kind: 'ok', text: partsQuestion({ ...read.level, ...top }).text, as: { kind: 'parts' } }
 		}
 		if (kind === 'views') {
 			const read = await levelOf(lens)
@@ -397,7 +397,8 @@ export function questionDesk(
 					"ken's model has not named the parts of this project yet. Ask ken to name them: that run draws these too."
 				return { kind: 'refused', problem }
 			}
-			return { kind: 'ok', text: viewsQuestion({ ...level, drawings: await viewsAsk(level.head) }).text }
+			const text = viewsQuestion({ ...level, drawings: await viewsAsk(level.head) }).text
+			return { kind: 'ok', text, as: { kind: 'views' } }
 		}
 		if (kind === 'view') {
 			const said = fieldOf(lens, 'text')
@@ -452,6 +453,8 @@ export function questionDesk(
 			const about = typeof concept === 'string' ? await concepts.brief(concept, new Date()) : null
 			const head = await headNow()
 			if (!about || head === null) return { kind: 'refused', problem: 'ken has no such concept here to ask about.' }
+			// A brief whose quotes changed points at the changed files, so the answer reads them again.
+			const paths = about.staleFiles ?? about.deeper?.within.split(',') ?? []
 			const asked = answerQuestion({
 				asked: text,
 				head,
@@ -460,7 +463,7 @@ export function questionDesk(
 					name: about.name,
 					knows: about.knows,
 					line: about.staleFiles ? '' : about.line,
-					paths: about.staleFiles ?? about.deeper?.within.split(',') ?? [],
+					paths,
 					told: about.staleFiles ? [] : about.points.map((point) => point.line),
 				},
 				bounds: BRIEF_BOUNDS,
@@ -469,7 +472,7 @@ export function questionDesk(
 			return {
 				kind: 'ok',
 				text: asked.text,
-				as: { kind: 'answer', concept: about.id, text, typed: fieldOf(lens, 'typed') === true },
+				as: { kind: 'answer', concept: about.id, text, paths, typed: fieldOf(lens, 'typed') === true },
 			}
 		}
 		if (kind === 'change') {

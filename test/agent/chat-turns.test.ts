@@ -127,11 +127,13 @@ test('asking for a brief loads only its card form and the next free question can
 	const fields = (request: ChatRequest | undefined) =>
 		Object.keys(request?.tools.find((tool) => tool.function.name === 'ken__show')?.function.parameters.properties ?? {})
 	try {
-		await collect(started.chat.ask('A brief', undefined, { kind: 'answer', concept: 'Retry', text: 'How many?' }))
+		await collect(
+			started.chat.ask('A brief', undefined, { kind: 'answer', concept: 'Retry', text: 'How many?', paths: [] }),
+		)
 		await collect(started.chat.ask('A tour', undefined, { kind: 'explain', tour: { within: [], stops: [] } }))
 		const full = await collect(started.chat.ask('Show me the retry count.'))
 		assert.deepEqual(fields(model.requests[0]), ['brief'])
-		assert.deepEqual(fields(model.requests[1]), ['brief', 'step', 'claims'])
+		assert.deepEqual(fields(model.requests[1]), ['brief'], 'a tour offers only the brief')
 		assert.ok(fields(model.requests[2]).includes('claims'))
 		assert.ok(replyIn(full).items.some((item) => item.kind === 'card' && item.card.kind === 'claim'))
 	} finally {
