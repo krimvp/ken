@@ -40,7 +40,11 @@ const { freshHome }: { freshHome: (stored: () => null, ui: object) => Home } = a
 	path.join(HOME, 'state/home-state.js')
 )
 type Answer = { ok: boolean; body: object }
-type Loads = { loadLayout: () => Promise<boolean>; loadDiff: () => Promise<void>; refresh: () => Promise<void> }
+type Loads = {
+	loadLayout: (again?: boolean) => Promise<boolean>
+	loadDiff: () => Promise<void>
+	refresh: () => Promise<void>
+}
 const { homeLoads }: { homeLoads: (app: object) => Loads } = await import(path.join(HOME, 'state/loads.js'))
 const {
 	homeRuns,
@@ -369,6 +373,24 @@ test('a level the server answers late does not replace the one the reader asked 
 	await first
 
 	assert.equal(home.look?.change?.range.head, head, 'the change the reader asked for last is the one on screen')
+	assert.equal(home.reading, null, 'and the home no longer says it is reading')
+})
+
+test('a level read again behind the screen stays as it is when the server cannot answer, and a level the reader asked for says why it is gone', async () => {
+	let down = false
+	const { home, loads } = pageOn(async (url) =>
+		down ? { ok: false, body: { message: 'git is busy.' } } : fromServer(url),
+	)
+	home.change = 'none'
+	await loads.refresh()
+	down = true
+
+	await loads.loadLayout(true)
+	assert.match(said(canvasHtml(home, rows)), /Store Saves what the core makes/, 'the picture is still there')
+	assert.equal(home.reading, null)
+
+	await loads.loadLayout()
+	assert.match(said(canvasHtml(home, rows)), /ken could not show this\. git is busy\./)
 	assert.equal(home.reading, null, 'and the home no longer says it is reading')
 })
 
