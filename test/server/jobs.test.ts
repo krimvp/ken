@@ -18,9 +18,18 @@ const BACKGROUND = { KEN_BACKGROUND: 'on' }
 const fresh = buildRepository([{ message: 'feat: start', files: FILES }])
 const namedRepo = buildRepository([{ message: 'feat: start', files: FILES }])
 const asking = buildRepository([{ message: 'feat: start', files: FILES }])
-const homes = [readerHome(), readerHome(), readerHome()]
+const busy = buildRepository([{ message: 'feat: start', files: FILES }])
+const homes = [readerHome(), readerHome(), readerHome(), readerHome()]
 
-type Job = { key: string; title: string; by: string; state: { kind: string; skipped?: boolean }; place: number | null }
+type Job = {
+	key: string
+	title: string
+	by: string
+	state: { kind: string; skipped?: boolean }
+	place: number | null
+	reason: string | null
+	retryIn: number | null
+}
 
 // GET /api/jobs as the page reads it: one list of jobs a line, a new line each time a job changes.
 function jobLines(server: KenServer) {
@@ -205,4 +214,24 @@ test('ken answers ahead only the first two questions a brief lists, and answerin
 		],
 		'with the first answered, the third question never joins the line',
 	)
+})
+
+test("a brief the model endpoint refused says the endpoint's reason, and waits to be tried again while the next part goes on", async () => {
+	const { root } = busy
+	const record = fileRecordStore(root, gitRepository(root))
+	const parts = [
+		{ name: 'Core', job: 'Runs the work', paths: ['src/core'] },
+		{ name: 'Command', job: 'The command a person types', paths: ['src/cli'] },
+	]
+	const named = await record.append([{ kind: 'layout', within: [], at: 'HEAD', parts, arrows: [] }])
+	if (named.kind !== 'appended') assert.fail(named.problems.join(' '))
+	const model = await scriptedModel([{ status: 429 }, { hang: () => {} }])
+	const server = await openKen(root, homes[3] ?? '', model.baseUrl, BACKGROUND)
+	const jobs = await until(
+		async () => (await json(server, '/api/jobs', { looking: { brief: null, within: null } })).jobs as Job[],
+		(listed) => listed.some((job) => job.key === 'explain:part::Command' && job.state.kind === 'running'),
+	)
+	const core = jobs.find((job) => job.key === 'explain:part::Core')
+	assert.deepEqual([core?.state.kind, core?.reason], ['failed', 'The model endpoint is busy: 429.'])
+	assert.ok((core?.retryIn ?? 0) > 25, `tried again in ${core?.retryIn} s`)
 })

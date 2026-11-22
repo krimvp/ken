@@ -458,8 +458,16 @@ const STOPPED = 'The question was stopped before it had a reply.'
 function endOf(result: RunResult, round: Round): ChatEvent {
 	if (result.stop === 'aborted') return { kind: 'error', message: STOPPED }
 	if (round.items.length > 0) return { kind: 'done', outcome: 'answered' }
-	if (result.stop === 'error') return { kind: 'error', message: result.message }
+	if (result.stop === 'error') return { kind: 'error', message: modelError(result.message), model: true }
 	return { kind: 'done', outcome: result.stop === 'max_turns' ? 'out-of-turns' : 'no-answer' }
+}
+
+// aigent says "429: {...}" for a request the endpoint refused, and the error itself for one that never reached it.
+function modelError(message: string): string {
+	const status = Number(/^(\d{3}):/.exec(message)?.[1])
+	if (status === 429 || status === 503) return `The model endpoint is busy: ${status}.`
+	if (status >= 400) return `The model endpoint failed the request: ${status}.`
+	return `ken could not reach the model: ${message}`
 }
 
 // Turns aigent's listener calls into the stream ask returns.

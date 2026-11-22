@@ -27,7 +27,8 @@ export type JobState =
 	| { kind: 'done'; skipped: boolean }
 	| { kind: 'failed'; why: string }
 
-// What the page sees of one job. place counts from 1 among the jobs that wait, in the order they will run.
+// What the page sees of one job. place counts from 1 among the jobs that wait, in the order they will run. A job
+// that failed says why in reason, and retryIn is the seconds until ken tries it again, when it will.
 export type JobView = {
 	key: string
 	kind: string
@@ -37,7 +38,13 @@ export type JobView = {
 	by: 'reader' | 'ken'
 	state: JobState
 	place: number | null
+	reason: string | null
+	retryIn: number | null
 }
+
+// How a run ended when it threw nothing. A model that refused or failed the request may answer later, so the job is
+// tried again; a run that made nothing would make nothing again.
+export type Ran = { kind: 'ran' } | { kind: 'model-error'; why: string }
 
 type Job<W, L> = JobAsk<W> & {
 	// Who asked first. A job the reader started stops when they stop it; one ken started goes on.
@@ -54,6 +61,7 @@ type Job<W, L> = JobAsk<W> & {
 	run: Promise<void>
 	ended: Promise<void>
 	end: () => void
+	retryAt: number | null
 }
 
 // run makes the job's thing: it may call say with each line a follower should see, and acted with each action of the
@@ -61,7 +69,7 @@ type Job<W, L> = JobAsk<W> & {
 // what the reader looks at now. ended is told when any job ends, so the server can want what is missing next.
 export type QueueDeps<W, L> = {
 	parallel: number
-	run(job: JobAsk<W>, signal: AbortSignal, say: (line: L) => void, acted: () => void): Promise<void>
+	run(job: JobAsk<W>, signal: AbortSignal, say: (line: L) => void, acted: () => void): Promise<Ran>
 	fresh(job: JobAsk<W>): Promise<boolean>
 	rankOf(job: JobAsk<W>): Exclude<Rank, 1>
 	ended?(job: JobView): void
@@ -70,6 +78,8 @@ export type QueueDeps<W, L> = {
 // The jobs that ended stay in the list for a while, so the page can say what ken did.
 const KEPT_ENDED = 20
 const GAVE_WAY = 'gave way to the reader'
+// The waits before ken tries again a job the model refused, the last one repeated.
+const RETRY_WAITS = [30_000, 120_000, 600_000]
 
 export function jobQueue<W, L>(deps: QueueDeps<W, L>) {
 	const jobs: Job<W, L>[] = []
@@ -77,6 +87,11 @@ export function jobQueue<W, L>(deps: QueueDeps<W, L>) {
 	// A background thing ken tried once in this server's life is not tried again by itself: a run that made nothing
 	// would otherwise run again each time ken looks for what is missing. The reader can still ask for it.
 	const tried = new Set<string>()
+	// The model refusals of each thing so far, and when ken may try it again.
+	const refused = new Map<string, { times: number; at: number }>()
+	const timers = new Set<ReturnType<typeof setTimeout>>()
+	// How many run at once. A model that refuses a request is told no more at once than it was serving.
+	let slots = deps.parallel
 	let seq = 0
 	let bumps = 0
 	let closed = false
@@ -101,6 +116,7 @@ export function jobQueue<W, L>(deps: QueueDeps<W, L>) {
 		const waiting = line()
 		const ended = jobs.filter((job) => !live(job)).slice(-KEPT_ENDED)
 		const shown = [...running(), ...waiting, ...ended]
+		const now = Date.now()
 		return shown.map((job) => ({
 			key: job.key,
 			kind: job.kind,
@@ -110,6 +126,8 @@ export function jobQueue<W, L>(deps: QueueDeps<W, L>) {
 			by: job.asked ? 'reader' : 'ken',
 			state: job.state,
 			place: job.state.kind === 'waiting' ? waiting.indexOf(job) + 1 : null,
+			reason: job.state.kind === 'failed' ? job.state.why : null,
+			retryIn: job.retryAt !== null && job.retryAt > now ? Math.ceil((job.retryAt - now) / 1000) : null,
 		}))
 	}
 
@@ -122,7 +140,7 @@ export function jobQueue<W, L>(deps: QueueDeps<W, L>) {
 	function pump() {
 		if (closed) return
 		for (const job of line()) {
-			if (running().length >= deps.parallel) break
+			if (running().length >= slots) break
 			start(job)
 		}
 		changed()
@@ -149,8 +167,16 @@ export function jobQueue<W, L>(deps: QueueDeps<W, L>) {
 				if (stop.signal.aborted) state = stopped(stop.signal)
 				else if (made) state = { kind: 'done', skipped: true }
 				else {
-					await deps.run(job, stop.signal, say, acted)
-					state = stop.signal.aborted ? stopped(stop.signal) : { kind: 'done', skipped: false }
+					const ran = await deps.run(job, stop.signal, say, acted)
+					if (stop.signal.aborted) state = stopped(stop.signal)
+					else if (ran.kind === 'model-error') {
+						state = { kind: 'failed', why: ran.why }
+						slots = Math.max(1, running().filter((each) => each !== job).length)
+						if (!job.asked) retryLater(job)
+					} else {
+						refused.delete(job.key)
+						state = { kind: 'done', skipped: false }
+					}
 				}
 			} catch (error) {
 				state = stop.signal.aborted ? stopped(stop.signal) : { kind: 'failed', why: messageOf(error) }
@@ -161,6 +187,21 @@ export function jobQueue<W, L>(deps: QueueDeps<W, L>) {
 			else finish(job)
 			pump()
 		})()
+	}
+
+	// ken tries the job again by itself after a wait that grows with each refusal.
+	function retryLater(job: Job<W, L>) {
+		const times = (refused.get(job.key)?.times ?? 0) + 1
+		const wait = RETRY_WAITS[Math.min(times, RETRY_WAITS.length) - 1] ?? 0
+		job.retryAt = Date.now() + wait
+		refused.set(job.key, { times, at: job.retryAt })
+		tried.delete(job.key)
+		const { key, kind, concept, title, order, yields, work } = job
+		const timer = setTimeout(() => {
+			timers.delete(timer)
+			want({ key, kind, concept, title, order, yields, work }, 'ken')
+		}, wait)
+		timers.add(timer)
 	}
 
 	function finish(job: Job<W, L>) {
@@ -176,7 +217,7 @@ export function jobQueue<W, L>(deps: QueueDeps<W, L>) {
 	// again later from the head of its rank.
 	function makeRoom() {
 		const busy = running()
-		if (busy.length < deps.parallel || busy.some((job) => job.stop?.signal.aborted)) return
+		if (busy.length < slots || busy.some((job) => job.stop?.signal.aborted)) return
 		const yielding = busy
 			.filter((job) => !job.asked && job.yields)
 			.sort((a, b) => rank(b) - rank(a) || b.seq - a.seq)
@@ -209,7 +250,7 @@ export function jobQueue<W, L>(deps: QueueDeps<W, L>) {
 			}
 			return same
 		}
-		if (by === 'ken' && tried.has(ask.key)) return null
+		if (by === 'ken' && (tried.has(ask.key) || (refused.get(ask.key)?.at ?? 0) > Date.now())) return null
 		let end = () => {}
 		const ended = new Promise<void>((resolve) => (end = resolve))
 		const job: Job<W, L> = {
@@ -225,6 +266,7 @@ export function jobQueue<W, L>(deps: QueueDeps<W, L>) {
 			run: Promise.resolve(),
 			ended,
 			end,
+			retryAt: null,
 		}
 		jobs.push(job)
 		if (job.asked) makeRoom()
@@ -279,6 +321,7 @@ export function jobQueue<W, L>(deps: QueueDeps<W, L>) {
 	// Stops every job and waits for the running ones to end. A job that gave way ends as stopped too.
 	async function close() {
 		closed = true
+		for (const timer of timers) clearTimeout(timer)
 		const ending = running().map((job) => {
 			job.stop?.abort('stopped')
 			return job.run
@@ -298,8 +341,6 @@ export function jobQueue<W, L>(deps: QueueDeps<W, L>) {
 
 	return { want, wantAll, follow, stop, settled, refocus, view, subscribe, close }
 }
-
-export type JobQueue<W, L> = ReturnType<typeof jobQueue<W, L>>
 
 const STOPPED = 'You stopped it.'
 

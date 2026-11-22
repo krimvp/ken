@@ -28,7 +28,7 @@ import {
 	viewsQuestion,
 } from '../follow-up/index.ts'
 import { entryFrom, type History, type HistoryEntry, whyNoNote } from '../history/index.ts'
-import { gaveWay, jobQueue } from '../jobs/index.ts'
+import { gaveWay, jobQueue, type Ran } from '../jobs/index.ts'
 import {
 	type Change,
 	type LayoutSources,
@@ -47,6 +47,7 @@ import { type Layer, type Looking, type layerPlan, lensKey } from './concepts/la
 import { toldWithLines } from './concepts/told.ts'
 
 const MAX_QUESTION_CHARS = 4000
+const RAN: Ran = { kind: 'ran' }
 const MAX_TOPICS = 20
 // How much of a note's words the next question about it quotes back.
 const NOTE_CHARS = 400
@@ -136,7 +137,10 @@ export function questionDesk(
 		parallel: jobs.parallel,
 		async run(job, signal, say, acted) {
 			const { work } = job
-			if (work.kind === 'note') return say({ kind: 'saved', view: await writeNote(work, signal) })
+			if (work.kind === 'note') {
+				say({ kind: 'saved', view: await writeNote(work, signal) })
+				return RAN
+			}
 			if (!chats) throw new Error('No model is set.')
 			const asked = work.asked ?? (await askedOf(work.body))
 			const chat = work.chat === 'reader' ? chats.reader : chats.ken
@@ -144,11 +148,13 @@ export function questionDesk(
 				if (line.kind === 'tool') acted()
 				say(line)
 			}
-			await run(chat, asked.text, signal, sent, asked.as)
+			const ran = await run(chat, asked.text, signal, sent, asked.as)
+			if (ran.kind === 'model-error') return ran
 			// A run can end without making its thing, such as a brief whose every point was sent back.
 			if (work.layer !== null && !signal.aborted && !(await plan.fresh(job.key))) {
 				throw new Error("ken's model ran, but made nothing that passed ken's checks.")
 			}
+			return RAN
 		},
 		fresh: async ({ key, work }) => work.kind === 'ask' && work.layer !== null && (await plan.fresh(key)),
 		rankOf: ({ concept, work }) =>
@@ -218,12 +224,22 @@ export function questionDesk(
 		const leave = () => queue.stop(key, 'unfollow')
 		if (stop.aborted) return leave()
 		stop.addEventListener('abort', leave)
-		const ended = await queue.follow(key, send)
+		let erred = false
+		const ended = await queue.follow(key, (line) => {
+			if (line.kind === 'error') erred = true
+			send(line)
+		})
 		stop.removeEventListener('abort', leave)
-		if (ended?.kind === 'failed' && !stop.aborted) send({ kind: 'error', message: ended.why })
+		if (ended?.kind === 'failed' && !stop.aborted && !erred) send({ kind: 'error', message: ended.why })
 	}
 
-	async function run(chat: Chat, question: string, stop: AbortSignal, send: (line: QuestionLine) => void, as?: Asking) {
+	async function run(
+		chat: Chat,
+		question: string,
+		stop: AbortSignal,
+		send: (line: QuestionLine) => void,
+		as?: Asking,
+	): Promise<Ran> {
 		const asked = {
 			id: randomUUID(),
 			question,
@@ -241,10 +257,12 @@ export function questionDesk(
 			} else send(event)
 		}
 		// A job that gave way to the reader runs again from the start, so this run leaves nothing in the history.
-		if (gaveWay(stop)) return
+		if (gaveWay(stop)) return RAN
 		const entry = entryFrom(asked, events, stop.aborted)
 		await history.add(entry)
 		send({ kind: 'saved', view: await viewOf(entry) })
+		const last = events.at(-1)
+		return last?.kind === 'error' && last.model ? { kind: 'model-error', why: last.message } : RAN
 	}
 
 	// A note ken writes by itself in live mode, saved in the history with what it is about. null when live mode was

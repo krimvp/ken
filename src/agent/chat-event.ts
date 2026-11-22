@@ -30,7 +30,8 @@ export type ChatEvent =
 	// The whole question's cost. secondLook is the part the second look at risks took, null when it did not run.
 	| ({ kind: 'usage'; secondLook: Cost | null } & Cost)
 	| { kind: 'done'; outcome: Outcome }
-	| { kind: 'error'; message: string }
+	// model is true when the model refused or failed the request, so asking again later may work.
+	| { kind: 'error'; message: string; model?: true }
 
 // "no-answer": the model wrote nothing and showed nothing. "out-of-turns": it was still reading at the turn limit.
 export type Outcome = 'answered' | 'no-answer' | 'out-of-turns'
