@@ -3,7 +3,7 @@
 // a run of ken's model started from the home is under way, the inspector shows that run in place of what it will
 // fill, and when a run ends with nothing to show, it says so.
 import { at, count, esc, list, prose, runButton, short } from '../views/format.js'
-import { storyHtml, wordsHtml } from '../views/reply.js'
+import { storyHtml } from '../views/reply.js'
 import { noModelHtml, workingHtml } from '../views/states.js'
 import { changeName, colourOf, levelName, stateLine } from './canvas.js'
 import { firstUnseen, pathOf, shownDetail, stoodOn } from './content.js'
@@ -262,14 +262,17 @@ function endedHtml(ended) {
 	</div>`
 }
 
-// ken's own words on the reader's request to show a level another way: what changed, or why nothing did.
-function saidHtml(said) {
+// ken's reply to the reader's request to show a level another way: what changed, or why nothing did, and the diagram
+// when the request needed one.
+function saidHtml(said, ui) {
 	if (!said) return ''
+	const reply =
+		said.q.reply.items.length === 0 ? "<p>ken's model answered with no words.</p>" : storyHtml(said.q, 'said', ui)
 	return `<section class="insp-said" aria-labelledby="insp-said-head">
 		<p class="insp-said-head"><strong id="insp-said-head">ken on your request</strong><button class="link" data-act="home-said-close" data-key="said-close">Close</button></p>
 		<p class="insp-asked">"${esc(said.asked)}"</p>
-		${said.words === '' ? "<p>ken's model answered with no words.</p>" : wordsHtml(said.words)}
-		<p><button class="link" data-act="open" data-id="${esc(said.id)}" data-key="said-open">Open the full reply</button></p>
+		${reply}
+		<p><button class="link" data-act="open" data-id="${esc(said.q.id)}" data-key="said-open">Open the full reply</button></p>
 	</section>`
 }
 
@@ -303,7 +306,7 @@ export function inspectorHtml(home, env) {
 				: `Show all of ${esc(levelName(home))}`
 	const clear =
 		view.picked && !working ? `<button class="link" data-act="home-clear" data-key="home-clear">${whole}</button>` : ''
-	const notices = working ? '' : `${endedHtml(home.ended)}${saidHtml(home.said)}`
+	const notices = working ? '' : `${endedHtml(home.ended)}${saidHtml(home.said, home.ui)}`
 	const noModel = env.model?.kind === 'unset' ? noModelHtml(env.model, env.asked, true) : ''
 	return `<div class="insp-scroll" id="insp-scroll">
 			<p class="insp-head"><span class="insp-detail">${DETAILS[shownDetail(home)]}</span><span class="insp-where">${view.where}</span>${clear}</p>

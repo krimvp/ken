@@ -1134,15 +1134,15 @@ const actions = {
 		render()
 	},
 	parts(el) {
-		toggle(state.ui.openParts, el.dataset.diagram)
+		toggle(uiNow().openParts, el.dataset.diagram)
 		render()
 	},
 	drawing(el) {
-		state.ui.drawingsShown.add(el.dataset.diagram)
+		uiNow().drawingsShown.add(el.dataset.diagram)
 		render()
 	},
 	element(el) {
-		state.ui.openElements.add(el.dataset.item)
+		uiNow().openElements.add(el.dataset.item)
 		render()
 	},
 	step(el) {

@@ -56,8 +56,11 @@ export function showHome(root, home, env, redraw) {
 	if (fill(inspector, inspectorHtml(home, env))) {
 		const now = inspector.querySelector('#insp-scroll')
 		if (now) now.scrollTop = scroll
-		fillDrawings(inspector, redraw)
 	}
+	// A drawing that does not fit gives its place to its numbered list, as in a thread.
+	const tooWide = fillDrawings(inspector, redraw).filter((id) => !home.ui.tooWide.has(id))
+	for (const id of tooWide) home.ui.tooWide.add(id)
+	if (tooWide.length > 0) redraw()
 	const ask = region('ask')
 	ask.hidden = !home.askOpen
 	if (fill(ask, home.askOpen ? askDrawerHtml(home, env) : '') && home.askOpen) {

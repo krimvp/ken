@@ -41,7 +41,7 @@ export function freshHome(stored, ui) {
 		redraw: { text: '', asked: '', problem: null },
 		redrawOpen: false,
 		backProblem: null,
-		// ken's words on the last request to show a level another way, and a run that ended with nothing to show.
+		// ken's reply to the last request to show a level another way, and a run that ended with nothing to show.
 		said: null,
 		ended: null,
 		stepsOpen: false,
@@ -274,8 +274,9 @@ export function homeActions({ state, render, getJson, post, send, stored, store,
 			}[kind]()
 		if (!made) home.ended = { outcome: q.outcome, error: q.error, id: q.id }
 		else if (kind === 'redraw') {
-			const words = q.reply.items.filter((item) => item.kind === 'words').map((item) => item.text)
-			home.said = { asked: home.redraw.asked, words: words.join('\n\n'), id: q.id }
+			// The picture shows the parts ken drew, so the note leaves that card out. A diagram or a claim stays in it.
+			const items = q.reply.items.filter((item) => item.kind !== 'card' || item.card.kind !== 'layout')
+			home.said = { asked: home.redraw.asked, q: { ...q, reply: { ...q.reply, items } } }
 		} else if (kind === 'tour' && home.detail === 'big') {
 			home.detail = 'how'
 			await stepTo(firstUnseen(home.look, pathOf(home.look, content)))
@@ -427,7 +428,8 @@ export function homeActions({ state, render, getJson, post, send, stored, store,
 	function sendAsk() {
 		const home = state.home
 		const text = home.askText.trim()
-		if (text === '') return
+		// With no run to start, the question stays in its box.
+		if (text === '' || state.running || state.model?.kind !== 'ok') return
 		const question = askedQuestion(home, text)
 		Object.assign(home, { askText: '', askOpen: false })
 		void send({ question })
@@ -511,5 +513,5 @@ export function homeActions({ state, render, getJson, post, send, stored, store,
 		$('#home-level')?.focus({ preventScroll: true })
 	}
 
-	return { actions, start, show, settle, ended, submit, input, change, key, openAt }
+	return { actions, start, ended, submit, input, change, key, openAt }
 }
