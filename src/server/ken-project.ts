@@ -20,6 +20,7 @@ import { findRoot, gitRepository, type Repository } from '../repo/index.ts'
 import { projectSessions } from '../transcripts/index.ts'
 import { conceptReads } from './concepts/brief.ts'
 import { layerPlan } from './concepts/layers.ts'
+import { memoryOf } from './concepts/memory.ts'
 import { type LiveRunner, liveRunner } from './live-runner.ts'
 import { type DeskChats, questionDesk } from './question-desk.ts'
 
@@ -83,8 +84,11 @@ export async function openProject(options: {
 	let chats: DeskChats = null
 	const parallel = parallelOf(options.env.KEN_PARALLEL)
 	if (parallel === null) return { kind: 'refused', message: 'Set KEN_PARALLEL to a whole number from 1 to 16.' }
+	const withSnapshots = gitRepository(root, { alternate: store.objects })
+	const layout = { root, repo: withSnapshots, snapshots: store, record, map, seen }
+	const concepts = conceptReads(layout, history)
 	if (config.kind === 'ok') {
-		const reader = { map, notes: readerNotes, prefs }
+		const reader = { map, notes: readerNotes, prefs, memory: memoryOf(layout, concepts, history) }
 		const chat = { directory: root, model: config.config, env: options.env, reader, snapshots: store.objects }
 		const asks = { ...chat, reader: { ...reader, readSaved: history.readSaved } }
 		const [started, forNotes, own] = await Promise.all([
@@ -101,9 +105,6 @@ export async function openProject(options: {
 	} else {
 		model = config
 	}
-	const withSnapshots = gitRepository(root, { alternate: store.objects })
-	const layout = { root, repo: withSnapshots, snapshots: store, record, map, seen }
-	const concepts = conceptReads(layout, history)
 	const plan = layerPlan(layout, concepts, seen)
 	const background = options.env.KEN_BACKGROUND !== 'off'
 	const desk = questionDesk(history, record, repo, map, layout, concepts, { plan, chats, parallel, background })

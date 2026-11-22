@@ -40,3 +40,4 @@ export {
 export type { Asking } from './reply/show-tool.ts'
 export type { SavedAnswer } from './reply/thread-memory.ts'
 export { type Chat, startChat } from './start-chat.ts'
+export type { Fact, Known, KnownLevel, Memory, MemoryQuote } from './tools/memory-tool.ts'

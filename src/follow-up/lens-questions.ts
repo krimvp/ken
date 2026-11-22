@@ -162,6 +162,8 @@ export type PartsLevel = {
 	named: { drawnAt: string; added: string[] } | null
 	loose: string[]
 	drawings?: ViewsAsk
+	// Inside a part: what ken's model said of that part in its brief, each thing to know with the lines it quotes.
+	parent?: { name: string; line: string; told: string[] }
 }
 
 // What the drawings of where a project runs start from: the deploy files plain code read, and the bounds show checks
@@ -183,6 +185,7 @@ export function partsQuestion(level: PartsLevel): LensQuestion {
 			`${named ? 'Name again' : 'Name'} the main parts of ${whereOf(level)}`,
 			LIST_SAID,
 			...levelLines(level),
+			...(level.parent ? parentLines(level.parent) : []),
 			...(drawings ? deployLines(drawings) : []),
 			'',
 			`Read the code at HEAD (${head}), then call show with layout, and within set to ${JSON.stringify(within)}.`,
@@ -280,6 +283,14 @@ export function viewQuestion(
 	}
 }
 
+function parentLines(parent: NonNullable<PartsLevel['parent']>): string[] {
+	return [
+		`- ken's brief of ${parent.name} says: ${parent.line}`,
+		...parent.told.map((line) => `  - ${line}`),
+		'- Start from those lines: ask memory what else quotes a file before you read it.',
+	]
+}
+
 function whereOf({ name, within }: PartsLevel): string {
 	return name ?? (within.length === 0 ? 'this project' : within.join(', '))
 }
@@ -332,6 +343,8 @@ function layoutRules(level: PartsLevel): string[] {
 // time.
 export type ExplainLevel = {
 	name: string | null
+	// What the level is, in the line ken's model wrote when it named the parts.
+	about: string | null
 	head: string
 	parts: { name: string; job: string; paths: string[] }[]
 	beside: { name: string; job: string }[]
@@ -362,6 +375,7 @@ export function explainQuestion(level: ExplainLevel): LensQuestion {
 		text: [
 			one ? `Explain ${one.name}, a part of ${where}` : `Explain the parts of ${where}`,
 			LIST_SAID,
+			...(level.about ? [`- What ${where} is: ${level.about}`] : []),
 			...parts.map(part),
 			...(others.length > 0 ? [`- Beside ${one ? 'it' : 'them'}: ${others.join('; ')}.`] : []),
 			...(uses.length > 0 ? [`- How the parts use each other: ${uses.join('; ')}.`] : []),
@@ -382,8 +396,8 @@ export function explainQuestion(level: ExplainLevel): LensQuestion {
 }
 
 // A question about one concept, pressed or typed in its brief. about is the concept as its brief names it: what kind
-// of thing it is, its name, its one line, the paths it holds when it is a part, and the lines its brief already tells,
-// so the answer does not say them again.
+// of thing it is, its name, its one line, the paths it holds when it is a part, and the lines its brief already tells
+// with where each quotes, so the answer does not say them again and reads only the lines it needs.
 export type AnswerAbout = {
 	asked: string
 	head: string
@@ -410,7 +424,9 @@ export function answerQuestion(question: AnswerAbout): LensQuestion {
 			...(about.knows
 				? [`- Your map: ${about.knows.why}${about.knows.since ? ' The code has changed since you looked.' : ''}`]
 				: []),
-			...(about.told.length > 0 ? [`- Its brief already says: ${about.told.join(' ')}`] : []),
+			...(about.told.length > 0
+				? ['- Its brief already says, with the lines each point quotes:', ...about.told.map((line) => `  - ${line}`)]
+				: []),
 			'',
 			`Read the code at HEAD (${question.head}) that decides the answer. Then answer with one show call, with brief: number 1 and what follows.`,
 			BRIEF_STYLE,

@@ -44,6 +44,7 @@ import { parsePath, type Repository } from '../repo/index.ts'
 import type { conceptReads } from './concepts/brief.ts'
 import { partId, questionId } from './concepts/concept.ts'
 import { type Layer, type Looking, type layerPlan, lensKey } from './concepts/layers.ts'
+import { toldWithLines } from './concepts/told.ts'
 
 const MAX_QUESTION_CHARS = 4000
 const MAX_TOPICS = 20
@@ -397,6 +398,16 @@ export function questionDesk(
 		return { kind: 'ok' as const, level }
 	}
 
+	// The part of the top level a level inside stands for, with what its brief says, for the run that names its parts.
+	async function parentOf(within: string[]): Promise<{ parent?: { name: string; line: string; told: string[] } }> {
+		const top = await levelOf({ within: [] })
+		const box =
+			top.kind === 'ok' ? top.level.boxes.find((each) => each.paths.toSorted().join() === within.join()) : null
+		const brief = box ? await concepts.brief(partId([], box.name), new Date()) : null
+		if (!brief?.explained || brief.staleFiles) return {}
+		return { parent: { name: brief.name, line: brief.line, told: brief.points.map(toldWithLines) } }
+	}
+
 	async function viewsAsk(head: string): Promise<ViewsAsk> {
 		const at = await repo.resolve(head)
 		const deploy =
@@ -461,8 +472,11 @@ export function questionDesk(
 		if (kind === 'parts') {
 			const read = await levelOf(lens)
 			if (read.kind !== 'ok') return read
-			const top = read.level.within.length === 0 ? { drawings: await viewsAsk(read.level.head) } : {}
-			return { kind: 'ok', text: partsQuestion({ ...read.level, ...top }).text, as: { kind: 'parts' } }
+			const { level } = read
+			const top = level.within.length === 0 ? { drawings: await viewsAsk(level.head) } : await parentOf(level.within)
+			const parts = level.boxes.filter((box) => box.state !== 'gone').map(({ name, paths }) => ({ name, paths }))
+			const text = partsQuestion({ ...level, ...top }).text
+			return { kind: 'ok', text, as: { kind: 'parts', within: level.within, parts } }
 		}
 		if (kind === 'views') {
 			const read = await levelOf(lens)
@@ -516,6 +530,7 @@ export function questionDesk(
 			}
 			const text = explainQuestion({
 				name: level.name,
+				about: level.named?.about ?? null,
 				head: level.head,
 				parts: stops,
 				beside: order.filter((stop) => !stops.includes(stop)),
@@ -546,7 +561,7 @@ export function questionDesk(
 					knows: about.knows,
 					line: about.staleFiles ? '' : about.line,
 					paths,
-					told: about.staleFiles ? [] : about.points.map((point) => point.line),
+					told: about.staleFiles ? [] : about.points.map(toldWithLines),
 				},
 				bounds: BRIEF_BOUNDS,
 				drawings: DRAWINGS,

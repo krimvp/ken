@@ -24,7 +24,7 @@ import { describeCall } from './tools/describe-call.ts'
 import { diffTool } from './tools/diff-tool.ts'
 import { type Elsewhere, elsewhereText } from './tools/elsewhere-text.ts'
 import { explorationTools } from './tools/exploration-tools.ts'
-import { recordIndex, recordTool } from './tools/record-tool.ts'
+import { type Memory, memoryTools, recordIndex } from './tools/memory-tool.ts'
 import { rememberTool } from './tools/remember-tool.ts'
 import { sessionTools } from './tools/session-tools.ts'
 
@@ -68,7 +68,13 @@ export async function startChat(options: {
 	directory: string
 	model: ModelConfig
 	env: Record<string, string | undefined>
-	reader?: { map: UnderstandingMap; notes: ReaderNotes; prefs: ReaderPrefs; readSaved?: () => Promise<SavedAnswer[]> }
+	reader?: {
+		map: UnderstandingMap
+		notes: ReaderNotes
+		prefs: ReaderPrefs
+		readSaved?: () => Promise<SavedAnswer[]>
+		memory?: Memory
+	}
 	snapshots?: string
 	thread?: boolean
 }): Promise<{ kind: 'ok'; chat: Chat } | { kind: 'no-repository'; message: string }> {
@@ -110,7 +116,7 @@ export async function startChat(options: {
 	const { reader } = options
 	const gate = { sources: { repo, sessions }, store, project, map: reader?.map ?? null }
 	const { model, baseUrl, apiKeyEnv } = options.model
-	const memory = threadMemory(reader?.readSaved)
+	const thread = threadMemory(reader?.readSaved)
 	// A question's own session: a lens's tools and prompt, or every tool and the whole prompt.
 	const open = (as: Asking, run: Run) => {
 		const lens = lensOf(as)
@@ -118,19 +124,18 @@ export async function startChat(options: {
 		const round = () => run.round
 		const shorten = shortenIn(run)
 		const reads = explorationTools(repo, elsewhere, () => run.round.read)
-		const record = recordTool(store, repo, reader?.map)
+		const memory = memoryTools({ store, repo, map: reader?.map, memory: reader?.memory, chat: thread })
 		const remember = reader ? [rememberTool(reader.notes, round)] : []
 		const tools = lens
 			? [
-					...[...reads, record, ...memory.tools(), ...remember].filter((tool) => lens.tools.includes(tool.name)),
+					...[...reads, ...memory, ...remember].filter((tool) => lens.tools.includes(tool.name)),
 					showTool(gate, round, { fields: lens.show, shorten }),
 				]
 			: [
 					...reads,
 					diffTool(repo, elsewhere),
-					record,
+					...memory,
 					...sessionTools(sessions),
-					...(as.kind === 'note' ? [] : memory.tools()),
 					...remember,
 					showTool(gate, round, { shorten }),
 					reviseTool(gate, round),
@@ -305,7 +310,7 @@ export async function startChat(options: {
 			const lens = lensOf(as)
 			const followUp = lens ? lens.followUp : as.kind !== 'note'
 			const opening = lens && !lens.followUp ? await lensOpening() : await chatOpening(question, as, signal)
-			const earlier = followUp ? memory.recent() : ''
+			const earlier = followUp ? thread.recent() : ''
 			const facts = lens ? await briefFacts(as, signal) : ''
 			const ran = await prompt(`${opening}${earlier}The question: ${question}${facts}`, stops.talk)
 			const result: RunResult =
@@ -345,7 +350,7 @@ export async function startChat(options: {
 					events.push({ kind: 'step', step: { kind: 'sent-back', what, problems: ended.problems } })
 				}
 				if (as.kind !== 'note' && options.thread !== false) {
-					memory.keep(as.kind === 'answer' || as.kind === 'view' ? as.text : question, ended.reply, readPaths)
+					thread.keep(as.kind === 'answer' || as.kind === 'view' ? as.text : question, ended.reply, readPaths)
 				}
 				events.push({ kind: 'replied', reply: ended.reply, recorded: ended.recorded })
 			}

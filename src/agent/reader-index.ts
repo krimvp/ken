@@ -13,7 +13,7 @@ export function readerIndex(read: MapRead, notes: ReaderNote[], prefs: Prefs): s
 		(state) => state.kind === 'changed' || (state.kind === 'long-ago' && state.changed.length > 0),
 	)
 	return [
-		"The reader's understanding of the topics shown above. Read another topic with read_record to see its state.",
+		"The reader's understanding of the topics shown above. Open another topic with memory_known to see its state.",
 		...met.map((state) => `- ${stateLine(state)}`),
 		...(changed.length > 1 ? [`${changed.length} topics the reader understood have changed since.`] : []),
 		...told,

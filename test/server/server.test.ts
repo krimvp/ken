@@ -729,7 +729,7 @@ test('a new visit can look up an earlier answer with its date and commit, withou
 	const saved = (await ask(first, 'How did we pace retries?')).at(-1).view.entry
 	const returning = await scriptedModel([
 		{ text: 'Hello again.' },
-		{ tool: 'ken__recall_chat', args: { search: 'pace retries' } },
+		{ tool: 'ken__memory_search', args: { words: 'pace retries' } },
 		{ text: 'We discussed the delay.' },
 	])
 	execFileSync(

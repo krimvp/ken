@@ -119,6 +119,17 @@ function firstSentence(text: string): string {
 	return /^.*?[.!?](?=\s|$)/s.exec(text.trim())?.[0] ?? text.trim()
 }
 
+// A thing to know with where its quotes are, such as "A run saves once. (src/core/run.ts:4)", so a later run can read
+// those lines alone.
+export function toldWithLines(point: BriefPoint): string {
+	const at = point.quotes.map((quote) =>
+		quote.startLine === quote.endLine
+			? `${quote.path}:${quote.startLine}`
+			: `${quote.path}:${quote.startLine}-${quote.endLine}`,
+	)
+	return at.length > 0 ? `${point.line} (${at.join(', ')})` : point.line
+}
+
 // The lines of files a statement rests on. A quote of a commit message or of a saved session has no file to open.
 export function fileQuotes(quotes: Claim['quotes']): BriefQuote[] {
 	return quotes.flatMap((quote) => {

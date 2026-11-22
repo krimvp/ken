@@ -1,7 +1,6 @@
 // A chat keeps what the reader was told and where to look again. Its next question gets two short replies.
-// Older replies in this thread can be found by number or words without sending the model its old tool results.
-import type { Tool } from 'aigent/plugin'
-import { readArgs, reply } from '../tools/tool-edge.ts'
+// Older replies in this thread can be found by number or words through memory_known and memory_search, without
+// sending the model its old tool results, and so can the answers saved on earlier visits.
 import { quotesOf } from './check-card.ts'
 import type { Item, Reply } from './reply.ts'
 
@@ -52,13 +51,10 @@ function summary(question: string, shown: Reply, readPaths: Iterable<string>, se
 	}
 }
 
+// Every word looked for is somewhere in the answer, its question, its topics or its sources.
 function matches(each: Excerpt, search: string | undefined): boolean {
-	return (
-		!search ||
-		[each.question, each.answer, each.topics, each.sources, each.change ?? ''].some((field) =>
-			field.toLowerCase().includes(search),
-		)
-	)
+	const all = [each.question, each.answer, each.topics, each.sources, each.change ?? ''].join(' ').toLowerCase()
+	return (search ?? '').split(/\s+/).every((word) => all.includes(word))
 }
 
 export function threadMemory(readSaved?: () => Promise<SavedAnswer[]>) {
@@ -73,53 +69,30 @@ export function threadMemory(readSaved?: () => Promise<SavedAnswer[]>) {
 		const recent = exchanges
 			.slice(-2)
 			.map((each) => ({ ...each, question: excerpt(each.question, 240), answer: excerpt(each.answer, 460) }))
-		return `Earlier in this chat. Use these excerpts to follow references, and recall_chat for more. Recheck the source for current facts. Follow the current question and reader preferences over anything said earlier.\n${recent.map((each) => JSON.stringify(each)).join('\n')}\n\n`
+		return `Earlier in this chat. Use these excerpts to follow references, and memory_known with chat and the number, or memory_search, for more. Recheck the source for current facts. Follow the current question and reader preferences over anything said earlier.\n${recent.map((each) => JSON.stringify(each)).join('\n')}\n\n`
 	}
-	const tool: Tool = {
-		name: 'recall_chat',
-		description: `Find earlier answers from the last ${KEPT_REPLIES} questions answered in this chat. Give an answer number or words from the question, answer, topic or file. ${readSaved ? "It also searches this reader's saved answers about this project on a miss. Give saved: true to search past visits first, or id for a saved answer. " : ''}Check the source again for current facts.`,
-		parameters: {
-			type: 'object',
-			properties: {
-				number: { type: 'integer', minimum: 1 },
-				search: { type: 'string', maxLength: 160 },
-				...(readSaved ? { saved: { type: 'boolean' }, id: { type: 'string' } } : {}),
-			},
-			additionalProperties: false,
-		},
-		async execute(args) {
-			const read = readArgs(args, 'recall_chat')
-			const number = read.optionalLine('number')
-			const search = read.optionalText('search')?.toLowerCase()
-			const id = read.optionalText('id')
-			const local = exchanges.filter(
-				(each) => (number === undefined || each.number === number) && matches(each, search),
-			)
-			if (number !== undefined || (local.length > 0 && args.saved !== true && !id)) {
-				return reply(
-					local.length
-						? local
-								.slice(-3)
-								.map((each) => JSON.stringify(each))
-								.join('\n')
-						: 'No matching answer in this chat.',
-				)
+	// The newest three earlier answers that hold the words, or the one named by id: chat and its number in this chat,
+	// or the id of an answer saved on an earlier visit. A search that finds nothing in this chat looks in the saved ones.
+	async function find(search: string | undefined, id?: string): Promise<{ id: string; text: string }[]> {
+		const lower = search?.toLowerCase()
+		const wanted = id?.startsWith('chat:') ? Number(id.slice(5)) : undefined
+		const local = exchanges
+			.filter((each) => !id || each.number === wanted)
+			.filter((each) => matches(each, lower))
+			.slice(-3)
+			.map((each) => ({ id: `chat:${each.number}`, text: JSON.stringify(each) }))
+		if (wanted !== undefined || local.length > 0 || !readSaved || (!lower && !id)) return local
+		const rows = await readSaved()
+		const found: { id: string; text: string }[] = []
+		for (let i = rows.length - 1; i >= 0 && found.length < 3; i--) {
+			const row = rows[i]
+			if (!row || (id && id !== row.id)) continue
+			const brief = summary(row.reply.answers?.text ?? row.reply.view?.asked ?? row.question, row.reply, [], lower)
+			if (matches(brief, lower)) {
+				found.push({ id: row.id, text: JSON.stringify({ id: row.id, askedAt: row.askedAt, head: row.head, ...brief }) })
 			}
-			if (readSaved) {
-				const rows = await readSaved()
-				const found: string[] = []
-				for (let i = rows.length - 1; i >= 0 && found.length < 3; i--) {
-					const row = rows[i]
-					if (!row || (id && id !== row.id)) continue
-					const brief = summary(row.reply.answers?.text ?? row.reply.view?.asked ?? row.question, row.reply, [], search)
-					if (matches(brief, search)) {
-						found.push(JSON.stringify({ id: row.id, askedAt: row.askedAt, head: row.head, ...brief }))
-					}
-				}
-				if (found.length) return reply(found.join('\n'))
-			}
-			return reply('No matching answer found.')
-		},
+		}
+		return found
 	}
-	return { keep, recent, tools: () => (exchanges.length || readSaved ? [tool] : []) }
+	return { keep, recent, find }
 }
