@@ -28,7 +28,7 @@ export async function suggestWayIn(
 ): Promise<Suggested> {
 	const { repo, root } = layout
 	// With no change asked, the layout's change is the reader's own work: uncommitted, or their branch ahead of main.
-	const own = await readLayoutAsk(layout, {})
+	const own = await readLayoutAsk(layout, {}, now)
 	if (own.kind !== 'ok') throw new Error(`${root} has no HEAD commit to suggest a way in from`)
 	const { at, change } = own.ask
 	const [top, work, asked] = await Promise.all([

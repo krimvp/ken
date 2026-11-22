@@ -138,7 +138,7 @@ test('a reply about a change opens on the change card, before the words: the par
 	const opened = await openMap(home, repo, record)
 	if (opened.kind !== 'ok') assert.fail('the fixture has commits')
 	const sources = { root: project, repo, snapshots: await openSnapshots(home, repo, project), record, map: opened.map }
-	const asked = await readLayoutAsk(sources, { within: ['src'], change: `${base}..${head}` })
+	const asked = await readLayoutAsk(sources, { within: ['src'], change: `${base}..${head}` }, new Date())
 	if (asked.kind !== 'ok') assert.fail(asked.message)
 	const look = await lookAtLayout(sources, asked.ask, new Date())
 	const range = asked.ask.change?.range

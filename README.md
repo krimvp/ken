@@ -136,7 +136,7 @@ npm run ken -- catch-up --repo ../my-project
 npm run ken -- area src/server --repo ../my-project
 ```
 
-`layout` prints one level of the project's layout and needs no model. `--at` picks the commit, `--within` opens a box (give each of its paths), and `--change` lays a change over the boxes: a range such as `main..feature`, a branch, `uncommitted`, or `none`. Without `--change`, ken lays your own work over the boxes: your uncommitted work if there is any, else the branch you are on against the main branch.
+`layout` prints one level of the project's layout and needs no model. `--at` picks the commit, `--within` opens a box (give each of its paths), and `--change` lays a change over the boxes: a range such as `main..feature`, a branch, a span of time such as `since:14d` or `since:2026-11-01`, `uncommitted`, or `none`. Without `--change`, ken lays your own work over the boxes: your uncommitted work if there is any, else the branch you are on against the main branch.
 
 ```sh
 npm run ken -- layout --repo ../my-project

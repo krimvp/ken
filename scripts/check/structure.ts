@@ -47,7 +47,7 @@ export const MODULES: Record<string, Module> = {
 	},
 	layout: {
 		job: "The project's layout at a commit: a few boxes per level, the parts ken's model named or else the folders, which of them changed or are gone, what a change touched, and what the reader's map says about each.",
-		imports: ['live', 'map', 'record', 'repo'],
+		imports: ['follow-up', 'live', 'map', 'record', 'repo'],
 		packages: [],
 	},
 	agent: {

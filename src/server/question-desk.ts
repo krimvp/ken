@@ -291,7 +291,7 @@ export function questionDesk(
 	// is the level at HEAD whatever commit the page shows.
 	async function levelOf(lens: unknown) {
 		const within = fieldOf(lens, 'within')
-		const ask = await readLayoutAsk(layout, { within: Array.isArray(within) ? within.map(String) : [] })
+		const ask = await readLayoutAsk(layout, { within: Array.isArray(within) ? within.map(String) : [] }, new Date())
 		if (ask.kind !== 'ok') return { kind: 'refused' as const, problem: ask.message }
 		const look = await lookAtLayout(layout, ask.ask, new Date())
 		const name = fieldOf(lens, 'name')
@@ -379,7 +379,7 @@ export function questionDesk(
 		}
 		if (kind === 'tour') {
 			const within = fieldOf(lens, 'within')
-			const ask = await readLayoutAsk(layout, { within: Array.isArray(within) ? within.map(String) : [] })
+			const ask = await readLayoutAsk(layout, { within: Array.isArray(within) ? within.map(String) : [] }, new Date())
 			if (ask.kind !== 'ok') return { kind: 'refused', problem: ask.message }
 			const look = await lookAtLayout(layout, ask.ask, new Date())
 			if (!look.tour) {
@@ -403,7 +403,7 @@ export function questionDesk(
 				return { kind: 'refused', problem: `Send the change, and what you want of it: ${WANTS.join(' or ')}.` }
 			}
 			// The layout reads the change, so the question is about the same commits the page lays over the picture.
-			const ask = await readLayoutAsk(layout, { change: asked })
+			const ask = await readLayoutAsk(layout, { change: asked }, new Date())
 			if (ask.kind !== 'ok') return { kind: 'refused', problem: ask.message }
 			const { change } = ask.ask
 			if (change === null) return { kind: 'refused', problem: 'Name the change to ask about.' }

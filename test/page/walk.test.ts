@@ -42,7 +42,7 @@ async function lookAndChange() {
 	const opened = await openMap(home, repo, record)
 	if (opened.kind !== 'ok') assert.fail('the fixture has commits')
 	const sources = { root, repo, snapshots: await openSnapshots(home, repo, root), record, map: opened.map }
-	const asked = await readLayoutAsk(sources, { within: ['src'], change: `${base}..${head}` })
+	const asked = await readLayoutAsk(sources, { within: ['src'], change: `${base}..${head}` }, new Date())
 	if (asked.kind !== 'ok') assert.fail(asked.message)
 	const look = await lookAtLayout(sources, asked.ask, new Date())
 	const coverage = await checkCoverage(repo, { base, head }, [])

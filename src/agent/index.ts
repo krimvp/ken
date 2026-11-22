@@ -10,6 +10,7 @@ export {
 	readModelConfig,
 } from './model-config.ts'
 export { type NoteFacts, noteQuestion } from './note-question.ts'
+export { changedHunks } from './reply/check-card.ts'
 export {
 	CARD_KINDS,
 	type Card,
