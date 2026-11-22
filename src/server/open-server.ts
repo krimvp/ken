@@ -176,7 +176,7 @@ export async function openServer(options: {
 			if (!Array.isArray(within) || !within.every((each) => typeof each === 'string')) {
 				return sendJson(response, 400, { message: 'Send within: the paths of the level, as a list.' })
 			}
-			const ask = await readLayoutAsk(layout, { within }, new Date())
+			const ask = await readLayoutAsk(layout, { within, change: 'none' }, new Date())
 			if (ask.kind !== 'ok') return sendJson(response, 400, { message: ask.message, field: ask.field })
 			const pictures = pictureBefore((await record.read()).entries, ask.ask.within)
 			if (!pictures) {

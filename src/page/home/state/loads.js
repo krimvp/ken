@@ -17,7 +17,7 @@ export function diffKey(change, box) {
 // app is the page: its state, render, read, which asks the server and gives back { ok, body } for any answer it
 // sends, fromView, which turns a saved question into the page's own shape, and stored, which reads a value this
 // browser kept.
-export function homeLoads({ state, render, read, fromView, stored }) {
+export function homeLoads({ state, render, read, post, fromView, stored }) {
 	// The number of the newest request for a level. An answer to an older one is dropped: the reader has moved on.
 	let asked = 0
 	// A request the server never answered is an answer too: one that is not ok, with the reason.
@@ -169,5 +169,19 @@ export function homeLoads({ state, render, read, fromView, stored }) {
 		await settle()
 	}
 
-	return { loadLayout, loadNotes, loadDiff, showLevel, settle, refresh, enter, start }
+	// The server brings back the picture before, and the home then reads the level as it reads any other, with the
+	// change and the commit the reader is on.
+	async function back() {
+		const home = state.home
+		try {
+			await post('/api/layout/back', { within: home.trail.at(-1).within })
+		} catch (error) {
+			home.backProblem = error.message
+			return render()
+		}
+		Object.assign(home, { backProblem: null, said: null })
+		await refresh()
+	}
+
+	return { loadLayout, loadNotes, loadDiff, settle, refresh, enter, start, back }
 }

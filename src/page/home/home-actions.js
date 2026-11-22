@@ -249,17 +249,7 @@ export function homeActions(app) {
 		'run-tour': () => run('tour', levelLens('tour')),
 		'run-story': () => run('story', { kind: 'change', change: state.home.look.change.asked, want: 'story' }),
 		'run-walk': () => run('walk', { kind: 'change', change: state.home.look.change.asked, want: 'walk' }),
-		// The server answers with the level as it is after the step back, so the home does not ask for it again.
-		async 'home-back'() {
-			const home = state.home
-			try {
-				loads.showLevel(await post('/api/layout/back', { within: level().within }))
-				Object.assign(home, { backProblem: null, said: null })
-			} catch (error) {
-				home.backProblem = error.message
-			}
-			await settle()
-		},
+		'home-back': loads.back,
 		async 'note-remove'(el) {
 			try {
 				state.home.notes = (await post('/api/notes', { remove: el.dataset.id })).notes
