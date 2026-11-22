@@ -146,12 +146,7 @@ export async function lookAtLayout(
 					moreCommits: Math.max(0, commits.length - MAX_COMMITS),
 				}
 			: null
-	const tour = level.named
-		? tourOrder(
-				boxes.filter((box) => box.state !== 'gone'),
-				level.arrows,
-			)
-		: null
+	const tour = level.named ? tourOrder(boxes.filter((box) => box.state !== 'gone')) : null
 	return { at: ask.at, head: head.commit, within: ask.within, ...level, boxes, change, next: nextOf(boxes), tour }
 }
 

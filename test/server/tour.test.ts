@@ -25,7 +25,7 @@ process.env[KEY_ENV] = 'scripted-model-key'
 const home = mkdtempSync(path.join(tmpdir(), 'ken-home-'))
 after(() => rmSync(home, { recursive: true, force: true }))
 
-// The parts as ken's model named them, the test part first, so the order cannot come from the level's own order.
+// The parts as ken's model named them, the test part first, to show that a tour still leaves it for last.
 const record = fileRecordStore(root, gitRepository(root))
 const quote = (file: keyof typeof FILES, text: string) => ({ path: file, commit: 'HEAD', text })
 const named = await record.append([
@@ -35,8 +35,8 @@ const named = await record.append([
 		at: 'HEAD',
 		parts: [
 			{ name: 'Tests', job: 'Tests the core', paths: ['test'] },
-			{ name: 'Store', job: 'Saves what the core makes', paths: ['src/store'] },
 			{ name: 'Core', job: 'Runs the work', paths: ['src/core'] },
+			{ name: 'Store', job: 'Saves what the core makes', paths: ['src/store'] },
 			{ name: 'Command', job: 'The command a person types', paths: ['src/cli'] },
 		],
 		arrows: [
@@ -108,7 +108,7 @@ async function json(server: KenServer, route: string, body?: object) {
 type State = { topic: string; kind: string }
 const kinds = (states: State[]) => Object.fromEntries(states.map((state) => [state.topic, state.kind]))
 
-test('a tour asks for its stops from the most used part outward, reaches the reader stop by stop with its cards, follows the map, and reopens with no model', async () => {
+test('a tour asks for its stops in the order the level lists its parts, tests last, reaches the reader stop by stop with its cards, follows the map, and reopens with no model', async () => {
 	const model = await scriptedModel([
 		{ text: 'Let me read the parts.', tool: 'ken__read_file', args: { path: 'src/cli/main.ts' } },
 		stop(1, 'The core runs the work.', 'src/core/run.ts', 'export function run() {'),
