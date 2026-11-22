@@ -996,7 +996,9 @@ app.chg = chg
 // A run ken started by itself made something: the pages read what they show again, so it fills in with no reload.
 const jobs = jobsActions({ ...app, linesOf }, async (made) => {
 	await Promise.all([loadRows(), shell.reread()])
-	await Promise.all([level.loads.refresh(), made.some((job) => job.kind === 'process') ? procs.reread() : null])
+	// The reader asked for nothing, so the level on screen stays while it is read again.
+	await Promise.all([level.loads.loadLayout(true), made.some((job) => job.kind === 'process') ? procs.reread() : null])
+	await level.loads.settle()
 	render()
 })
 
