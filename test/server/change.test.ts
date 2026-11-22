@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
+import { writeFileSync } from 'node:fs'
+import path from 'node:path'
 import { test } from 'node:test'
 import { buildRepository, type FixtureCommit } from '../fixtures/build-repository.ts'
 import { ask, call, json, openKen, readerHome } from '../fixtures/ken-server.ts'
@@ -50,6 +53,15 @@ test('a change laid over the picture lists its commits newest first without the 
 	)
 })
 
+test("uncommitted work laid over the picture has no commits, since ken's snapshot of it is no commit of the project", async () => {
+	const { root } = buildRepository([{ message: 'feat: start', files: { 'src/a.ts': 'a\n' } }])
+	const server = await openKen(root, readerHome())
+	writeFileSync(path.join(root, 'src/a.ts'), 'a\nb\n')
+
+	const { look } = await json(server, layoutOf('uncommitted'))
+	assert.deepEqual([look.change.commits, look.change.moreCommits, look.change.files], [[], 0, 1])
+})
+
 test('a change with more commits or more files in a box than the page lists says how many it left out', async () => {
 	const many: Record<string, string> = {}
 	for (let file = 0; file < 23; file++) many[`src/f${String(file).padStart(2, '0')}.ts`] = 'new\n'
@@ -66,6 +78,27 @@ test('a change with more commits or more files in a box than the page lists says
 	)
 	const { touched } = look.boxes.find((box: { name: string }) => box.name === 'src')
 	assert.deepEqual([touched.files, touched.paths.length, touched.morePaths], [23, 20, 3])
+})
+
+test('a range whose commits list more file names than git hands ken is still laid out, with the newest 50 commits and a count of the rest', async () => {
+	const { root, hashes } = buildRepository([{ message: 'feat: start', files: { 'src/a.ts': 'a\n' } }])
+	// 1100 commits that each change the same 64 long-named files list about 18 MB of names, past git's 16 MB limit.
+	const files = Array.from({ length: 64 }, (_, at) => `src/${'deep/'.repeat(48)}f${at}.ts`)
+	let stream = ''
+	for (let n = 1; n <= 1100; n++) {
+		const from = n === 1 ? `from ${hashes[0]}\n` : ''
+		stream += `commit refs/heads/main\ncommitter Ada <ada@example.com> ${1767225600 + n} +0000\ndata ${`step ${n}`.length}\nstep ${n}\n${from}`
+		for (const file of files) stream += `M 100644 inline ${file}\ndata ${`${n}\n`.length}\n${n}\n`
+	}
+	execFileSync('git', ['fast-import', '--quiet'], { cwd: root, input: stream })
+	execFileSync('git', ['reset', '--quiet', '--hard'], { cwd: root })
+	const server = await openKen(root, readerHome())
+
+	const { look } = await json(server, layoutOf(`${hashes[0]}..main`))
+	assert.deepEqual(
+		[look.change.commits.length, look.change.commits[0].subject, look.change.moreCommits],
+		[50, 'step 1100', 1050],
+	)
 })
 
 test('a change asked as a span of time is the commits since then, a span with no commit is refused, and the change lens takes a span too', async () => {
