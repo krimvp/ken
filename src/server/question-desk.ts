@@ -26,7 +26,8 @@ const NOTE_CHARS = 400
 // One row in the page's list of questions. cards counts the checked cards of the reply, calls the decisions the model
 // wants the reader to decide, and risks its risks. hunks is null when the reply was not about a range of commits.
 // thread groups the rows the page shows as one thread. tour names the level and the stops of a tour, so the page can
-// open a tour it has already instead of asking again.
+// open a tour it has already instead of asking again. change is the change the reply is about and steps the number of
+// steps it walks through, so the page can open the stored story or walkthrough of a change the same way.
 export type QuestionRow = {
 	id: string
 	question: string
@@ -38,6 +39,8 @@ export type QuestionRow = {
 	risks: number
 	hunks: { uncovered: number; total: number } | null
 	tour: { within: string[]; stops: string[] } | null
+	change: { base: string; head: string } | null
+	steps: number
 }
 
 // An entry from the history, its diagrams with their drawings. head is the project's HEAD now, which the page
@@ -225,7 +228,9 @@ export function questionDesk(
 			.map((entry) => {
 				const { id, question, askedAt, thread, outcome } = entry
 				const row = { id, question, askedAt, thread, outcome }
-				if (entry.outcome !== 'answered') return { ...row, cards: 0, calls: 0, risks: 0, hunks: null, tour: null }
+				if (entry.outcome !== 'answered') {
+					return { ...row, cards: 0, calls: 0, risks: 0, hunks: null, tour: null, change: null, steps: 0 }
+				}
 				const { items, change, tour } = entry.reply
 				const cards = items.flatMap((item) => (item.kind === 'card' ? [item.card] : []))
 				const total = change ? change.covered.length + change.uncovered.length : 0
@@ -236,6 +241,8 @@ export function questionDesk(
 					risks: cards.filter((card) => card.kind === 'risk').length,
 					hunks: change && { uncovered: change.uncovered.length, total },
 					tour: tour ? { within: tour.within, stops: tour.stops.map((each) => each.name) } : null,
+					change: change && { base: change.base, head: change.head },
+					steps: items.filter((item) => item.kind === 'step').length,
 				}
 			})
 	}
