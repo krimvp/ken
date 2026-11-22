@@ -42,34 +42,37 @@ type Evidence = { at: string } & ({ kind: Kind } | { kind: 'set'; level: Level }
 // that HEAD reaches counts: for a change they read it is the change's last commit, then the commit they read it at.
 export type Looks = { evidence: Evidence[]; lookedAt: string[] }
 
-// on is the day in words, such as "on 20 Nov", and often the same with a count before it when there were several.
-const KINDS: Record<Kind, { level: Exclude<Level, 'new'>; why: (on: string, often: string, times: number) => string }> =
-	{
-		opened: {
-			level: 'seen',
-			why: (on, often, times) =>
-				times === 1 ? `You opened it once ${on} and did not read on.` : `You opened it ${often}, and did not read on.`,
-		},
-		change: { level: 'seen', why: (_, often) => `You looked at a change here ${often}.` },
-		forgot: { level: 'seen', why: (on) => `You said ${on} that you do not know this part.` },
-		unlearned: { level: 'seen', why: (on) => `You said ${on} that you do not know a topic here any more.` },
-		read: { level: 'read', why: (_, often) => `You read about it ${often}.` },
-		toured: { level: 'read', why: (_, often) => `You read its tour stop ${often}.` },
-		answered: { level: 'read', why: (_, often) => `You read an answer about it ${often}.` },
-		code: { level: 'code', why: (_, often) => `You read its code ${often}.` },
-		said: { level: 'said', why: (on) => `You said you know this part ${on}.` },
-		topics: {
-			level: 'said',
-			why: (on) => `You said you understand each topic ken explained here, the last one ${on}.`,
-		},
-	}
+// What a belief is about, as its sentence names it: a box is a part, and a term and a drawn process have briefs too.
+export type Thing = 'part' | 'term' | 'process'
 
-const SET: Record<Level, (on: string) => string> = {
-	new: (on) => `You said ${on} that this part is new to you.`,
-	seen: (on) => `You said ${on} that you have only seen this part.`,
-	read: (on) => `You said ${on} that you have read about this part.`,
+// on is the day in words, such as "on 20 Nov", and often the same with a count before it when there were several.
+type Said = { on: string; often: string; times: number; thing: Thing }
+const KINDS: Record<Kind, { level: Exclude<Level, 'new'>; why: (said: Said) => string }> = {
+	opened: {
+		level: 'seen',
+		why: ({ on, often, times }) =>
+			times === 1 ? `You opened it once ${on} and did not read on.` : `You opened it ${often}, and did not read on.`,
+	},
+	change: { level: 'seen', why: ({ often }) => `You looked at a change here ${often}.` },
+	forgot: { level: 'seen', why: ({ on, thing }) => `You said ${on} that you do not know this ${thing}.` },
+	unlearned: { level: 'seen', why: ({ on }) => `You said ${on} that you do not know a topic here any more.` },
+	read: { level: 'read', why: ({ often }) => `You read about it ${often}.` },
+	toured: { level: 'read', why: ({ often }) => `You read its tour stop ${often}.` },
+	answered: { level: 'read', why: ({ often }) => `You read an answer about it ${often}.` },
+	code: { level: 'code', why: ({ often }) => `You read its code ${often}.` },
+	said: { level: 'said', why: ({ on, thing }) => `You said you know this ${thing} ${on}.` },
+	topics: {
+		level: 'said',
+		why: ({ on }) => `You said you understand each topic ken explained here, the last one ${on}.`,
+	},
+}
+
+const SET: Record<Level, (on: string, thing: Thing) => string> = {
+	new: (on, thing) => `You said ${on} that this ${thing} is new to you.`,
+	seen: (on, thing) => `You said ${on} that you have only seen this ${thing}.`,
+	read: (on, thing) => `You said ${on} that you have read about this ${thing}.`,
 	code: (on) => `You said ${on} that you have read its code.`,
-	said: (on) => `You said you know this part ${on}.`,
+	said: (on, thing) => `You said you know this ${thing} ${on}.`,
 }
 
 // A part new to the reader opens at its job, one they have seen at how it works, and one they have read at the code.
@@ -117,7 +120,7 @@ function fromMap(states: TopicState[]): Evidence[] {
 }
 
 // head is the commit checked out, where a change that shows what landed since the reader looked ends.
-export function believe(looks: Looks, since: Since, head: CommitHash, now: Date): Knows {
+export function believe(looks: Looks, since: Since, head: CommitHash, now: Date, thing: Thing = 'part'): Knows {
 	const { evidence } = looks
 	// A correction takes back all that came before it and leaves the level the reader picked: seen, for one that
 	// only says they do not know the part.
@@ -131,13 +134,13 @@ export function believe(looks: Looks, since: Since, head: CommitHash, now: Date)
 	)
 	const last = evidence.at(-1)?.at.slice(0, 10) ?? null
 	const fresh = { level: 'new', last, since: 0, stale: false, go: { way: 'learn', detail: OPENS.new } } as const
-	if (best === undefined) return { ...fresh, why: 'You have not opened this part.' }
+	if (best === undefined) return { ...fresh, why: `You have not opened this ${thing}.` }
 	const on = onDay(best.at.slice(0, 10), now)
 	// A part the reader calls new to them has no look of theirs to count commits from.
-	if (best.kind === 'set' && best.level === 'new') return { ...fresh, why: SET.new(on) }
+	if (best.kind === 'set' && best.level === 'new') return { ...fresh, why: SET.new(on, thing) }
 	const times = standing.filter((each) => each.kind === best.kind).length
 	const often = times === 1 ? on : `${times === 2 ? 'twice' : `${times} times`}, last ${on}`
-	const said = best.kind === 'set' ? SET[best.level](on) : KINDS[best.kind].why(on, often, times)
+	const said = best.kind === 'set' ? SET[best.level](on, thing) : KINDS[best.kind].why({ on, often, times, thing })
 	const why = since === 'gone' ? `${said} ken could not find the commit you last looked at.` : said
 	const landed = since === 'gone' || since === null || since.commits === 0 ? null : since
 	const level = levelOf(best)

@@ -13,11 +13,13 @@ import type {
 import type { Diagram, Layout } from '../../diagram/index.ts'
 import type { Decision, Statement } from '../../record/index.ts'
 import type { Commit, CommitHash } from '../../repo/index.ts'
+import type { Point } from '../brief/brief.ts'
 
-// tour is there only on a tour of the project's parts, and view only when the reader asked to see a level another way:
-// within is that level and asked their own words. want is there only when the reader asked for the story of a change
-// or a walk through it, so the page can tell that reply from a later one about the same commits. Plain code sets all
-// three, never the model.
+// tour is there only when the reply explains parts of a level as briefs, and view only when the reader asked to see a
+// level another way: within is that level and asked their own words. want is there only when the reader asked for the
+// story of a change or a walk through it, so the page can tell that reply from a later one about the same commits.
+// answers is there only when the reply answers a question about one concept as a brief: the concept's id and the
+// question as asked. Plain code sets all four, never the model.
 export type Reply = {
 	items: Item[]
 	change: Change | null
@@ -26,25 +28,29 @@ export type Reply = {
 	tour?: Tour
 	view?: { within: string[]; asked: string }
 	want?: Want
+	answers?: { concept: string; text: string }
 }
 
 // What the reader wants of a change: its story, or a walk through it in steps.
 export const WANTS = ['story', 'walk'] as const
 export type Want = (typeof WANTS)[number]
 
-// A tour of one named level of the project's parts. Plain code picked the stops and their order, and step n of the
-// reply is stop n, in the model's words. Each stop's part is a topic in the record, so the reader's map can say which
-// stops the reader reached. within is the level's scope, empty for the whole project.
+// The parts of one level that a reply explains: every part of the level, or one. Plain code picked the stops and their
+// order, and step n of the reply is the brief of stop n, in the model's words. Each stop's part is a topic in the
+// record, so the reader's map can say which the reader reached. within is the level's scope, empty for the whole
+// project. A reply saved while ken still gave tours has the same shape, with a paragraph for each step.
 export type Tour = { within: string[]; stops: TourStop[] }
 export type TourStop = { name: string; job: string; paths: string[] }
 
 // A step of a walkthrough: the model explains a change as a few numbered steps, in the order a reviewer should read
 // them, each in a sentence or two of its own words. A card that proves a step carries the step's number. Plain code
 // links each step to the change's hunks (Change.stepHunks) and the page links it to the parts its quotes fall in.
+// A brief is a step too: its text is the brief's one line, questions are the few worth asking next, and the cards that
+// carry its number are its things to know (claims with a point) and its terms (topics).
 export type Item =
 	| { kind: 'words'; text: string }
 	| { kind: 'card'; card: Card; step?: number }
-	| { kind: 'step'; number: number; text: string }
+	| { kind: 'step'; number: number; text: string; questions?: string[] }
 
 // Every kind of card, listed once. The page has a renderer for each, and a test holds it to this list.
 export const CARD_KINDS = ['claim', 'risk', 'decision', 'diagram', 'layout', 'topic', 'withdrawn'] as const
@@ -86,8 +92,9 @@ export type Change = {
 }
 
 // A claim about the code. topic names the topic it belongs to, as the project record names it. absent is ken's search
-// for the text a claim says is missing, which found nothing; only a claim that says so has it.
-export type Claim = Statement & { topic?: string; absent?: Absence }
+// for the text a claim says is missing, which found nothing; only a claim that says so has it. point is there on a thing
+// to know of a brief: the same claim in a short line and in a longer telling, and its drawing.
+export type Claim = Statement & { topic?: string; absent?: Absence; point?: Point }
 
 // checked is ken's own mark on a risk of a change, set from git: true when a quote lies wholly outside the change.
 // fixedIn is the later commit, after the change's head, whose message the risk quotes: the project fixed it since.

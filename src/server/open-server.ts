@@ -15,6 +15,7 @@ import type { MapSignal } from '../map/index.ts'
 import { MERMAID_FILE, PAGE_FOLDER } from '../page/index.ts'
 import { OUTCOMES } from '../record/index.ts'
 import { type Hunk, parsePath } from '../repo/index.ts'
+import { conceptReads } from './concepts/brief.ts'
 import { decisionRows } from './decision-list.ts'
 import { refusal } from './http/guard-request.ts'
 import { type PageFile, readPageFiles } from './http/page-files.ts'
@@ -66,6 +67,7 @@ export async function openServer(options: {
 		}
 	}
 	const openNow = async () => openItems(repo, await record.read(), (await map.read(new Date())).states)
+	const reads = conceptReads(layout, history)
 	const files = await readPageFiles(PAGE_FOLDER, { '/mermaid.min.js': MERMAID_FILE })
 	let port = 0
 
@@ -179,6 +181,11 @@ export async function openServer(options: {
 			const ask = await readLayoutAsk(layout, raw, new Date())
 			if (ask.kind !== 'ok') return sendJson(response, 400, { message: ask.message, field: ask.field })
 			return sendJson(response, 200, await layoutView(ask.ask))
+		}
+		if (where === 'GET /api/brief') {
+			const brief = await reads.brief(url.searchParams.get('concept') ?? '', new Date())
+			if (!brief) return sendJson(response, 404, { message: 'ken has no such concept in this project.' })
+			return sendJson(response, 200, brief)
 		}
 		if (where === 'GET /api/change/diff') {
 			const paths = url.searchParams.getAll('path').map(parsePath)
