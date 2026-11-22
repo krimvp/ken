@@ -314,6 +314,7 @@ function layoutOf(raw: JsonObject, quoteOf: ReadQuote, problems: string[]): Layo
 			})
 			return { from: arrow.text('from'), to: arrow.text('to'), text: arrow.text('text'), quotes }
 		}),
+		about: layout.optionalText('about'),
 	}
 }
 
@@ -747,6 +748,10 @@ const LAYOUT_SCHEMA = {
 			items: { type: 'string' },
 		},
 		at: { type: 'string', description: 'The commit you read. HEAD when left out.' },
+		about: {
+			type: 'string',
+			description: `What this level is as a whole, in one or two plain sentences for a reader who has never seen it, at most ${LAYOUT_BOUNDS.about} characters`,
+		},
 		parts: {
 			type: 'array',
 			description: `${LAYOUT_BOUNDS.fewest} to ${LAYOUT_BOUNDS.parts} parts. No two share a file.`,

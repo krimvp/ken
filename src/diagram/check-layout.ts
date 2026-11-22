@@ -11,8 +11,19 @@ export type Part = { name: string; job: string; places: Place[] }
 export type PartArrow = { from: string; to: string; text: string; quotes: VerifiedGitQuote[] }
 
 // within is the paths this level shows the inside of, sorted, and empty for the whole project. A part opens the level
-// whose within is the part's paths, so zoom is a lookup with nothing to keep in step.
-export type Layout = { kind: 'layout'; within: RepoPath[]; drawnAt: CommitHash; parts: Part[]; arrows: PartArrow[] }
+// whose within is the part's paths, so zoom is a lookup with nothing to keep in step. about is the model's sentence or
+// two on the level as a whole. asked is the reader's own words when ken drew the level because they asked for another
+// way to show it: plain code sets it, never the model. A layout stored before ken kept either has neither, and a
+// layout without one has no such key, so its id in the record stays what it was.
+export type Layout = {
+	kind: 'layout'
+	within: RepoPath[]
+	drawnAt: CommitHash
+	parts: Part[]
+	arrows: PartArrow[]
+	about?: string
+	asked?: string
+}
 
 // at is the commit the model read, HEAD when left out.
 export type LayoutDraft = {
@@ -20,9 +31,21 @@ export type LayoutDraft = {
 	at: string | undefined
 	parts: { name: string; job: string; paths: string[] }[]
 	arrows: { from: string; to: string; text: string; quotes: GitQuote[] }[]
+	about?: string | undefined
+	asked?: string | undefined
 }
 
-export const LAYOUT_BOUNDS = { fewest: 2, parts: 6, arrows: 8, quotes: 3, name: 40, job: 120, text: 40 } as const
+export const LAYOUT_BOUNDS = {
+	fewest: 2,
+	parts: 6,
+	arrows: 8,
+	quotes: 3,
+	name: 40,
+	job: 120,
+	text: 40,
+	about: 240,
+	asked: 300,
+} as const
 
 export type LayoutCheck = { kind: 'ok'; layout: Layout } | { kind: 'refused'; problems: string[] }
 
@@ -55,6 +78,14 @@ export async function checkLayout(
 	for (const place of within) {
 		if (!files.some((file) => under(file, place)))
 			say(`within names ${place}, which holds no file at ${short(at.commit)}.`)
+	}
+	const about = draft.about?.trim() || undefined
+	const asked = draft.asked?.trim() || undefined
+	for (const [what, text, most] of [
+		['about', about, LAYOUT_BOUNDS.about],
+		["the reader's request", asked, LAYOUT_BOUNDS.asked],
+	] as const) {
+		if (text && text.length > most) say(`${what} has ${text.length} characters. Keep it to ${most}.`)
 	}
 
 	const parts = draft.parts.map((part, index) => {
@@ -136,6 +167,8 @@ export async function checkLayout(
 				places: part.paths.map((place) => ({ path: place, id: idOf.get(place) ?? ('' as ObjectId) })),
 			})),
 			arrows,
+			...(about ? { about } : {}),
+			...(asked ? { asked } : {}),
 		},
 	}
 }
@@ -157,6 +190,8 @@ export function layoutDraft(layout: Layout): LayoutDraft {
 				line: quote.startLine,
 			})),
 		})),
+		about: layout.about,
+		asked: layout.asked,
 	}
 }
 

@@ -647,7 +647,7 @@ test('the layout comes from git with no model: the query picks the commit, a com
 	)
 })
 
-test('"Ask ken to name these parts" sends the folder split to the model, and the parts it names then show in the layout with no model', async () => {
+test('"Ask ken to name these parts" sends the folder split to the model, and the parts it names and what it says the level is then show in the layout with no model', async () => {
 	const { root: repo } = buildRepository([
 		{
 			message: 'feat: start',
@@ -659,6 +659,7 @@ test('"Ask ken to name these parts" sends the folder split to the model, and the
 	])
 	const layout = {
 		within: ['src'],
+		about: 'A server that hands each question to a chat engine.',
 		parts: [
 			{ name: 'Server', job: 'serves the page', paths: ['src/server'] },
 			{ name: 'Chat engine', job: 'answers questions', paths: ['src/agent'] },
@@ -697,4 +698,6 @@ test('"Ask ken to name these parts" sends the folder split to the model, and the
 		look.arrows.map((arrow: { from: string; text: string; to: string }) => [arrow.from, arrow.text, arrow.to]),
 		[['Server', 'asks', 'Chat engine']],
 	)
+	assert.equal(look.named.about, layout.about, 'the picture says what the level is, in the words the model gave')
+	assert.equal(look.named.asked, null, 'nobody asked for another way to show it')
 })

@@ -47,8 +47,17 @@ export type LookBox = Seed & {
 
 // A level ken's model named: the record entry, the commit it was named at, and what no longer fits there. added names
 // what sits in the scope at the commit asked, in no part, and was not there when the model named the parts. stale says
-// the drawing no longer fits: a part changed or went, or something was added in no part.
-export type Named = { id: EntryId; drawnAt: CommitHash; added: string[]; stale: boolean }
+// the drawing no longer fits: a part changed or went, or something was added in no part. about is the model's sentence
+// or two on the level as a whole, and asked the reader's own words when ken drew it because they asked for another way
+// to show it. Each is null when the entry has none.
+export type Named = {
+	id: EntryId
+	drawnAt: CommitHash
+	added: string[]
+	stale: boolean
+	about: string | null
+	asked: string | null
+}
 
 // An arrow is possibly stale when the part it starts at changed since the model named the parts, since its lines may
 // have changed with it.
@@ -177,7 +186,14 @@ async function namedLevel(
 	const added = loose.filter((_, i) => thenIds[i] === null)
 	const changed = new Set(chosen.parts.filter((part) => stateOf(part) !== 'same').map((part) => part.name))
 	return {
-		named: { id: chosen.id, drawnAt: chosen.drawnAt, added, stale: changed.size > 0 || added.length > 0 },
+		named: {
+			id: chosen.id,
+			drawnAt: chosen.drawnAt,
+			added,
+			stale: changed.size > 0 || added.length > 0,
+			about: chosen.about ?? null,
+			asked: chosen.asked ?? null,
+		},
 		boxes,
 		arrows: chosen.arrows.map((arrow) => ({ ...arrow, text: fromStart(arrow.text), stale: changed.has(arrow.from) })),
 		loose,

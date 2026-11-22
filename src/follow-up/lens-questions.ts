@@ -157,7 +157,7 @@ export type PartsLevel = {
 	name: string | null
 	within: string[]
 	head: string
-	bounds: { fewest: number; parts: number; arrows: number }
+	bounds: { fewest: number; parts: number; arrows: number; about: number }
 	boxes: { name: string; paths: string[]; files: number; job: string | null; state: 'same' | 'changed' | 'gone' }[]
 	named: { drawnAt: string; added: string[] } | null
 	loose: string[]
@@ -187,6 +187,7 @@ export function partsQuestion(level: PartsLevel): LensQuestion {
 			...(level.loose.length > 0 ? [`- In no part now: ${level.loose.join(', ')}.`] : []),
 			'',
 			`Read the code at HEAD (${head}), then call show with layout, and within set to ${JSON.stringify(within)}.`,
+			`Say in about what ${where} is as a whole, in one or two plain sentences of at most ${bounds.about} characters, for a reader who has never seen it.`,
 			`Group the paths into ${bounds.fewest} to ${bounds.parts} parts the owner would name. Give each a short name, one line of about 80 characters on its job, and the folders or files it holds, each inside within. No two parts share a file. Leave out what is not code if it does not help, such as docs; ken lists it as in no part.`,
 			`Add at most ${bounds.arrows} arrows for which part uses which, each with a short verb said from the part it starts at, so that the start part, the verb and the end part read as a sentence, such as "Server runs questions in Chat engine". Never a passive verb such as "is used by". Each arrow quotes lines from a file of the part it starts at that name a folder or file of the part it ends at: an import line does, a comment does not. Leave out an arrow you cannot quote that way.`,
 			'Then say in two or three sentences how the parts fit together.',
