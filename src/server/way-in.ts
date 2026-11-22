@@ -48,7 +48,10 @@ export async function suggestWayIn(
 		return { suggested: 'learn', why: 'Nothing landed since your last question to ken.', facts }
 	}
 	if (first && first.anchor !== 'days') return { suggested: 'catch-up', why: first.landed, facts }
-	const why = met ? 'Nothing landed since you last looked.' : 'You have not looked at this project with ken yet.'
+	// A span of days is no sign of when the reader looked, so with a history and no other span ken says it cannot tell.
+	const why = met
+		? 'ken cannot tell when you last looked, so it shows the project as it is.'
+		: 'You have not looked at this project with ken yet.'
 	return { suggested: 'learn', why, facts }
 }
 

@@ -87,9 +87,9 @@ The map is a plain file the reader can open and correct, because it will sometim
 
 ### Reader notes
 
-A reader note is one plain sentence ken keeps about the reader: how they want things shown, or what they already know. "Explain with examples from the tests" is one. The notes are personal, so they sit beside the map, in a plain file that only grows. A line adds a note, and another line removes it by its id.
+A reader note is one plain sentence ken keeps about the reader: how they want things shown, or what they already know. The model writes it to the reader, since the page shows it to them: "You are new to TypeScript, so I explain language features as they come up." The notes are personal, so they sit beside the map, in a plain file that only grows. A line adds a note, and another line removes it by its id.
 
-The model keeps a note with the `remember` tool when the reader says how they want to be answered. It keeps how they want to be answered, never what they asked about. Every question then starts with the newest twelve notes. The page lists them, and the reader can remove any of them.
+The model keeps a note with the `remember` tool when the reader says how they want to be answered. It keeps how they want to be answered, never what they asked about. Every question then starts with the newest twelve notes. The page lists them, and the reader can remove any of them. When a note says the reader is new to a language or a tool, the model explains a feature of it once in a thread, in one sentence, in the card whose quoted lines contain it, and never with an example that is not in the code.
 
 ### The project's layout
 

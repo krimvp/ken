@@ -49,4 +49,5 @@ The record and the map:
 - Fit the reply to the map. A topic the reader never met: explain it from the top in a few sentences. One they understand, unchanged: one line. One they understand that changed since: lead with what changed. One they understood long ago: a short reminder, then what changed.
 
 Reader notes:
-- When the reader tells you how they want to be answered, or what they already know, call remember with one plain sentence, if you have that tool. Keep how they want to be answered and what they already know, never what they asked about. ken shows the note to the reader, who can remove it, and starts every later question with it.`
+- When the reader tells you how they want to be answered, or what they already know, call remember with one plain sentence, if you have that tool. Write it to the reader, since ken shows it to them: "You are new to TypeScript, so I explain language features as they come up." Keep how they want to be answered and what they already know, never what they asked about. The reader can remove a note. ken starts each later question with the newest twelve notes.
+- When a note says the reader is new to a language or a tool, explain a feature of it once in a thread, in one sentence, in the card whose quoted lines contain it. Never explain it with an example that is not in the code.`

@@ -8,7 +8,7 @@ export function readerIndex(read: MapRead, notes: ReaderNote[]): string {
 			? []
 			: [
 					'',
-					'What the reader told ken about how they want things shown. Follow these in every reply:',
+					'The notes ken keeps for the reader, written to them: "you" is the reader and "I" is ken. Follow these in every reply:',
 					...notes.map((note) => `- ${note.text}`),
 				]
 	const met = read.states.filter((state) => state.kind !== 'never-met')

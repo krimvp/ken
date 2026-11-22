@@ -143,6 +143,22 @@ test("ken suggests catching up on what landed since the reader's own last commit
 	assert.match(wayIn.why, /\b1 commit\b/)
 })
 
+test("when the reader's last question was asked at a commit the history no longer holds, ken does not claim that nothing landed since they looked", async () => {
+	const bo = { name: 'Bo Other', email: 'bo@example.com' }
+	const { root } = buildRepository([{ message: 'feat: start', files: { 'src/a/x.ts': 'x\n' }, author: bo }])
+	const model = await scriptedModel([{ text: 'It holds x.' }])
+	const server = await openKen(root, readerHome(), model.baseUrl)
+	await ask(server, { question: 'What is here?' })
+	const env = { ...process.env, GIT_COMMITTER_EMAIL: bo.email }
+	execFileSync('git', ['-c', 'commit.gpgsign=false', 'commit', '--quiet', '--amend', '--no-edit'], { cwd: root, env })
+	commitNow(root, 'src/a/y.ts', 'y\n')
+
+	const { wayIn } = await json(server, '/api/layout')
+	assert.equal(wayIn.suggested, 'learn')
+	assert.match(wayIn.facts['catch-up'], /^1 commit /, 'a commit did land in the last days')
+	assert.doesNotMatch(wayIn.why, /nothing landed/i)
+})
+
 test('a GitHub merge is named by its pull request number, not by the branch it came from, in the review fact and in a question about it', async () => {
 	const { root, hashes } = buildRepository([
 		{ message: 'feat: start', files: { 'src/a/x.ts': 'x\n' } },
