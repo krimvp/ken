@@ -27,7 +27,7 @@ export type ViewBrief = {
 	topics?: string[]
 }
 
-// How each way of crossing reads after what crosses: "prompts, over HTTPS".
+// How each way of crossing reads after what crosses: "prompts, over HTTPS". Other adds nothing.
 const HOW_WORDS = {
 	http: 'over HTTP',
 	https: 'over HTTPS',
@@ -37,7 +37,7 @@ const HOW_WORDS = {
 	file: 'through files',
 	process: 'by starting a process',
 	library: 'as a library call',
-	other: 'some other way',
+	other: '',
 } as const
 
 const PROJECT = 'the project'
@@ -131,16 +131,19 @@ export function viewBrief(kind: Kind, id: string, views: LookViews): ViewBrief |
 			if (across) {
 				const other = outsideNamed(across.outside)
 				const [from, to] = across.direction === 'in' ? [other, PROJECT] : [PROJECT, other]
-				const both = across.direction === 'both' ? ', both ways' : ''
-				const line = `${capital(from)} sends ${wordsOf(across)} to ${to}${both}.`
-				return { ...base(`${capital(from)} to ${to}`, line, across.quotes), sideways: { uses: [], usedBy: [] } }
+				const line =
+					across.direction === 'both'
+						? `${capital(wordsOf(across))}: between ${PROJECT} and ${other}, both ways.`
+						: `${capital(from)} sends ${wordsOf(across)} to ${to}.`
+				const name = across.direction === 'both' ? `${capital(PROJECT)} and ${other}` : `${capital(from)} to ${to}`
+				return { ...base(name, line, across.quotes), sideways: { uses: [], usedBy: [] } }
 			}
 			const crossing = runtime.crossings.find((each) => each.id === id)
 			if (!crossing) return null
 			const [from, to] = [nameOf(thingOf(crossing.from)), nameOf(thingOf(crossing.to))]
 			const line =
 				crossing.kind === 'call'
-					? `${from} calls ${to} and waits for the answer: ${crossing.text}, ${HOW_WORDS[crossing.how]}.`
+					? `${from} calls ${to} and waits for the answer: ${wordsOf(crossing)}.`
 					: `${from} sends ${crossing.text} on ${crossing.topic}, and ${to} picks it up later.`
 			const quotes = [...crossing.quotes.from, ...crossing.quotes.to]
 			return { ...base(`${from} to ${to}`, line, quotes), sideways: { uses: [], usedBy: [] } }
@@ -187,13 +190,12 @@ function conceptOf(thing: Thing, name: string): Named {
 }
 
 function verbOf(crossing: Runtime['crossings'][number]): string {
-	return crossing.kind === 'call'
-		? `${crossing.text}, ${HOW_WORDS[crossing.how]}`
-		: `${crossing.text}, on ${crossing.topic}, picked up later`
+	return crossing.kind === 'call' ? wordsOf(crossing) : `${crossing.text}, on ${crossing.topic}, picked up later`
 }
 
 function wordsOf(crossing: { text: string; how: keyof typeof HOW_WORDS }): string {
-	return `${crossing.text}, ${HOW_WORDS[crossing.how]}`
+	const how = HOW_WORDS[crossing.how]
+	return how === '' ? crossing.text : `${crossing.text}, ${how}`
 }
 
 function capital(text: string): string {

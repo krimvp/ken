@@ -307,6 +307,7 @@ async function showViews(
 	const lines: string[] = []
 	const top = (cards: Card[]) => cards.findLast((card) => card.kind === 'layout' && card.layout.within.length === 0)
 	const named = top(passed.filter(Boolean))
+	if (raw === undefined && !(named && current.views)) return lines
 	const shown = named ?? top(cardsShown(current))
 	const stored = (await gate.store.read()).current.findLast(
 		(entry) => entry.kind === 'layout' && entry.within.length === 0,
