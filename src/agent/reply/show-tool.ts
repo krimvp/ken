@@ -21,6 +21,7 @@ import type { UnderstandingMap } from '../../map/index.ts'
 import { RECORD_LIMITS, type RecordStore, sameName, textProblem, UNDO } from '../../record/index.ts'
 import { type Range, type Repository, resolveRange } from '../../repo/index.ts'
 import { type BriefDraft, briefSchema, readBrief } from '../brief/brief-schema.ts'
+import { type Shorten, shortenBrief } from '../brief/shorten-lines.ts'
 import type { ChatEvent } from '../chat-event.ts'
 import { scopeProblem } from '../tools/exploration-tools.ts'
 import { readArgs, refuse, reply, short } from '../tools/tool-edge.ts'
@@ -129,7 +130,13 @@ function spent(round: Round): string {
 // as the steps of a tour, is checked as it always was.
 export type ShowField = keyof typeof SHOW_SCHEMA.properties
 
-export function showTool(gate: Gate, round: () => Round, fields?: readonly ShowField[]): Tool {
+// shorten asks the model, in a small request of its own, for a brief's line that has too many words (see
+// shorten-lines.ts).
+export function showTool(
+	gate: Gate,
+	round: () => Round,
+	{ fields, shorten }: { fields?: readonly ShowField[]; shorten?: Shorten } = {},
+): Tool {
 	return {
 		name: 'show',
 		description:
@@ -149,7 +156,13 @@ export function showTool(gate: Gate, round: () => Round, fields?: readonly ShowF
 			if (raw.step !== undefined && raw.brief !== undefined) {
 				return refuse(nothingShown(['Send a step or a brief in one call, not both.']))
 			}
-			const brief = raw.brief === undefined ? null : readBrief(objectOf(raw.brief), quoteOf)
+			const sent =
+				raw.brief === undefined
+					? null
+					: shorten
+						? await shortenBrief(objectOf(raw.brief), shorten, ctx.signal)
+						: { brief: objectOf(raw.brief), said: [] }
+			const brief = sent ? readBrief(sent.brief, quoteOf) : null
 			// A brief is a step whose text is its one line: the cards of this call are its things to know and its terms.
 			const step = brief
 				? { number: brief.number, text: brief.line, questions: brief.questions }
@@ -174,7 +187,7 @@ export function showTool(gate: Gate, round: () => Round, fields?: readonly ShowF
 					current.pending.push({ kind: 'step', ...step })
 					lines.push(`${what} ${step.number} shown, with what passes of this call.`)
 				}
-				lines.push(...(brief?.left ?? []))
+				lines.push(...(brief?.left ?? []), ...(sent?.said ?? []))
 			}
 			if (raw.work !== undefined) {
 				const title = readArgs(objectOf(raw.work), 'show work').text('title')

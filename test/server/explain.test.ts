@@ -62,6 +62,8 @@ const brief = (number: number, line: string, rest: object): Turn => ({
 	args: { brief: { number, line, ...rest } },
 })
 
+const LONG = 'This line runs on and on, well past the ten words a line may hold.'
+const SHORT = 'A run is one function.'
 const ASKED = ['What happens when a save fails?', 'Why does a run save once?', 'What would a second store break?']
 const model = await scriptedModel([
 	{ text: 'Let me read the parts.', tool: 'ken__read_file', args: { path: 'src/cli/main.ts' } },
@@ -75,7 +77,7 @@ const model = await scriptedModel([
 			}),
 			point({ line: 'A run saves twice to be safe.', file: 'src/core/run.ts', quoted: '\tsaveTwice()' }),
 			point({
-				line: 'This line runs on and on, well past the ten words a line may hold.',
+				line: LONG,
 				file: 'src/core/run.ts',
 				quoted: 'export function run() {',
 			}),
@@ -83,6 +85,8 @@ const model = await scriptedModel([
 		terms: [term('save', 'Writes what a run made.', 'src/store/db.ts', 'export function save() {}')],
 		questions: ASKED,
 	}),
+	// ken's own request for the line that runs past ten words.
+	{ text: JSON.stringify([SHORT]) },
 	brief(2, 'Keeps what the core hands it.', {
 		points: [
 			point({
@@ -157,6 +161,13 @@ test("a part ken's model explained opens with the model's line, its things to kn
 				drawing: { kind: 'steps', count: 3, lit: 3, label: 'save' },
 				quotes: [{ path: 'src/core/run.ts', startLine: 4, endLine: 4, text: '\tsave()' }],
 			},
+			{
+				line: SHORT,
+				more: `${LONG} More.`,
+				long: `${LONG} Long. And longer.`,
+				drawing: { kind: 'dot' },
+				quotes: [{ path: 'src/core/run.ts', startLine: 3, endLine: 3, text: 'export function run() {' }],
+			},
 		],
 	)
 	assert.deepEqual(core.terms, [{ id: 'term:save', name: 'save' }])
@@ -166,15 +177,22 @@ test("a part ken's model explained opens with the model's line, its things to kn
 	)
 })
 
-test('a thing to know whose quote is not in git, or whose line passes ten words, goes back to the model alone and never reaches the brief', () => {
+test('a thing to know whose quote is not in git goes back to the model alone, and one whose line passes ten words is cut in a request of its own', () => {
 	assert.deepEqual(
 		lines.flatMap((line) => (line.kind === 'step' && line.step.kind === 'sent-back' ? [line.step.what] : [])),
-		['Point 2', 'Point 3'],
+		['Point 2'],
 	)
 	const sent = JSON.stringify(core)
 	assert.ok(!sent.includes('saveTwice') && !sent.includes('saves twice'), 'nothing of the point with the false quote')
-	assert.ok(!sent.includes('runs on and on'), 'nothing of the point with the long line')
-	assert.equal(core.points.length, 1, 'the thing to know that passed stands')
+	assert.deepEqual(
+		core.points.map((point: { line: string }) => point.line),
+		['A run saves once, at its end.', SHORT],
+		'the point that passed stands, and the long one shows with its cut line',
+	)
+	const asked = model.requests[2]?.messages ?? []
+	const [, question] = asked
+	assert.equal(asked.length, 2, 'the request to cut the line holds its own prompt and question, not the conversation')
+	assert.match(String(question?.content), /runs on and on[\s\S]*export function run\(\) \{/)
 })
 
 test('a term is a topic of the record with one meaning: a second brief that names it keeps the first meaning, and the term opens as a brief', async () => {

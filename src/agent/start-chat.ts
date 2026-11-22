@@ -6,6 +6,7 @@ import type { ReaderNotes, ReaderPrefs, UnderstandingMap } from '../map/index.ts
 import { fileRecordStore } from '../record/index.ts'
 import { findRoot, gitRepository } from '../repo/index.ts'
 import { projectSessions } from '../transcripts/index.ts'
+import { SHORTEN_PROMPT, type Shorten, shortened, shortenQuestion } from './brief/shorten-lines.ts'
 import type { ChatEvent, Cost } from './chat-event.ts'
 import { type Lens, lensOf } from './lens/lens.ts'
 import type { ModelConfig } from './model-config.ts'
@@ -120,6 +121,33 @@ export async function startChat(options: {
 			maxToolResultChars: MAX_TOOL_RESULT_CHARS,
 			systemPrompt,
 		})
+	// The question running now counts what the small requests to shorten a line cost.
+	let charge: (usage: { input: number; output: number }) => void = () => {}
+	const shorten: Shorten = async (lines, signal) => {
+		const helper = await createSession({
+			model: { kind: 'openai-compatible', baseUrl, id: model, apiKeyEnv },
+			plugins: [],
+			toolMode: 'native',
+			maxTurns: 1,
+			systemPrompt: SHORTEN_PROMPT,
+		})
+		const off = helper.subscribe((event) => {
+			if (event.type === 'record' && event.record.kind === 'usage') {
+				const { input, output, cacheRead, cacheWrite } = event.record
+				charge({ input: input + cacheRead + cacheWrite, output })
+			}
+		})
+		try {
+			const result = await helper.prompt(shortenQuestion(lines), { signal })
+			// One turn is all it has, so a reply ends the run at its turn limit.
+			return 'text' in result ? shortened(result.text, lines.length) : lines.map(() => null)
+		} catch {
+			return lines.map(() => null)
+		} finally {
+			off()
+			await helper.close()
+		}
+	}
 	const session = await sessionOf(
 		[
 			...explorationTools(repo, elsewhere),
@@ -127,7 +155,7 @@ export async function startChat(options: {
 			recordTool(store, repo),
 			...sessionTools(sessions),
 			...(reader ? [rememberTool(reader.notes, () => round)] : []),
-			showTool(gate, () => round),
+			showTool(gate, () => round, { shorten }),
 			reviseTool(gate, () => round),
 		],
 		SYSTEM_PROMPT,
@@ -137,7 +165,7 @@ export async function startChat(options: {
 		await sessionOf(
 			[
 				...explorationTools(repo, elsewhere).filter((tool) => lens.tools.includes(tool.name)),
-				showTool(gate, () => round, lens.show),
+				showTool(gate, () => round, { fields: lens.show, shorten }),
 			],
 			lens.systemPrompt,
 		)
@@ -157,6 +185,10 @@ export async function startChat(options: {
 		// The second look has its own stop, so ending it at its turn limit does not end the question.
 		const stops: Record<Round['step'], AbortController> = { talk: new AbortController(), risks: new AbortController() }
 		const tokens = { input: 0, output: 0 }
+		charge = (usage) => {
+			tokens.input += usage.input
+			tokens.output += usage.output
+		}
 		const file = (cards: Round['pending']) => {
 			for (const event of fileTurn({ text: '', calls: [] }, cards)) {
 				if (event.kind === 'item') current.items.push(event.item)
