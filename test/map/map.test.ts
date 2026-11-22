@@ -142,7 +142,7 @@ test('a line a person changed by hand counts, a line that does not parse is skip
 	)
 })
 
-test('ken keeps a reader note once whatever its case and spaces, reads the newest twelve oldest first, drops one the reader removed, and skips a line that does not parse', async () => {
+test('ken keeps a reader note on one line, once whatever its case and spaces, reads the newest twelve oldest first, drops one the reader removed, and skips a line that does not parse', async () => {
 	const { home, repo } = setUp()
 	const opened = await openNotes(home, repo)
 	if (opened.kind !== 'ok') assert.fail('the repository has commits')
@@ -152,7 +152,6 @@ test('ken keeps a reader note once whatever its case and spaces, reads the newes
 	await notes.add('Explain with examples.', NOW)
 	await notes.add('  explain   with EXAMPLES. ', NOW)
 	assert.deepEqual(await texts(), ['Explain with examples.'])
-	assert.equal((await notes.add('two\nlines', NOW)).kind, 'refused')
 	assert.equal((await notes.add('x'.repeat(201), NOW)).kind, 'refused')
 
 	appendFileSync(notes.file, 'not json\n{"id":"by-hand","text":"I know git well.","at":"2026-11-16T10:00:00Z"}\n')
@@ -167,4 +166,11 @@ test('ken keeps a reader note once whatever its case and spaces, reads the newes
 	for (let n = 1; n <= 13; n++) await notes.add(`Note ${n}.`, NOW)
 	const read = await texts()
 	assert.deepEqual([read.length, read[0], read.at(-1)], [12, 'Note 2.', 'Note 13.'])
+
+	await notes.add('Show the tests\r\nfirst,\u2028 then   the code.', NOW)
+	assert.equal(
+		(await texts()).at(-1),
+		'Show the tests first, then the code.',
+		'every break and run of spaces is one space',
+	)
 })

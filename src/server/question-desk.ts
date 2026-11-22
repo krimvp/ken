@@ -264,7 +264,7 @@ export function questionDesk(
 		const name = fieldOf(lens, 'name')
 		const level = {
 			...look,
-			name: typeof name === 'string' && name.trim() !== '' ? name.trim().slice(0, 80) : null,
+			name: typeof name === 'string' ? oneLine(name).slice(0, 80) || null : null,
 			within: ask.ask.within,
 			bounds: LAYOUT_BOUNDS,
 		}
@@ -330,7 +330,7 @@ export function questionDesk(
 		if (kind === 'view') {
 			const said = fieldOf(lens, 'text')
 			// The reader's words head the question, so they stay on one line.
-			const text = typeof said === 'string' ? said.replaceAll(/\s+/g, ' ').trim() : ''
+			const text = typeof said === 'string' ? oneLine(said) : ''
 			if (text === '' || text.length > LAYOUT_BOUNDS.asked) {
 				const problem = `Say how ken should show it, in 1 to ${LAYOUT_BOUNDS.asked} characters.`
 				return { kind: 'refused', problem }
@@ -351,7 +351,7 @@ export function questionDesk(
 			const name = fieldOf(lens, 'name')
 			const stops = look.tour.map(({ name, job, paths }) => ({ name, job, paths }))
 			const text = tourQuestion({
-				name: typeof name === 'string' && name.trim() !== '' ? name.trim().slice(0, 80) : null,
+				name: typeof name === 'string' ? oneLine(name).slice(0, 80) || null : null,
 				head: look.head,
 				stops,
 				arrows: look.arrows,
@@ -463,4 +463,9 @@ function drawnReply(reply: Reply): Reply {
 // A field of a JSON body the page sent, or undefined.
 export function fieldOf(body: unknown, name: string): unknown {
 	return typeof body === 'object' && body !== null ? Reflect.get(body, name) : undefined
+}
+
+// Every run of white space, line breaks of any kind among them, is one space.
+function oneLine(text: string): string {
+	return text.replaceAll(/\s+/g, ' ').trim()
 }
