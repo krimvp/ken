@@ -10,7 +10,9 @@ export type Rank = 1 | 2 | 3 | 4
 
 // key names what the job makes, so two jobs for one thing are one job. order places a background job within its rank,
 // lowest first. yields says it gives way to the reader; a live note does not, as the reader turned live mode on and a
-// note stopped halfway is lost, and nor does the run that names the top parts. work is what the server needs to run it.
+// note stopped halfway is lost, and nor does the run that names the top parts. holds names the things it makes, such
+// as the parts a brief explains: no job starts while another running job holds one of them. work is what the server
+// needs to run it.
 export type JobAsk<W> = {
 	key: string
 	kind: string
@@ -18,6 +20,7 @@ export type JobAsk<W> = {
 	title: string
 	order: number
 	yields: boolean
+	holds?: string[]
 	work: W
 }
 
@@ -181,7 +184,8 @@ export function jobQueue<W, L>(deps: QueueDeps<W, L>) {
 		if (closed) return
 		for (const job of line()) {
 			if (running().length >= slots) break
-			start(job)
+			const held = running().some((other) => other.holds?.some((thing) => job.holds?.includes(thing)))
+			if (!held) start(job)
 		}
 		changed()
 	}
@@ -239,10 +243,10 @@ export function jobQueue<W, L>(deps: QueueDeps<W, L>) {
 		job.retryAt = Date.now() + wait
 		refused.set(job.key, { times, at: job.retryAt })
 		tried.delete(job.key)
-		const { key, kind, concept, title, order, yields, work } = job
+		const { key, kind, concept, title, order, yields, holds, work } = job
 		const timer = setTimeout(() => {
 			timers.delete(timer)
-			want({ key, kind, concept, title, order, yields, work }, 'ken')
+			want({ key, kind, concept, title, order, yields, ...(holds ? { holds } : {}), work }, 'ken')
 		}, wait)
 		timers.add(timer)
 	}
@@ -358,11 +362,6 @@ export function jobQueue<W, L>(deps: QueueDeps<W, L>) {
 		}
 	}
 
-	// Ranks change when the reader looks at something else.
-	function refocus() {
-		pump()
-	}
-
 	// Stops every job and waits for the running ones to end. A job that gave way ends as stopped too.
 	async function close() {
 		closed = true
@@ -384,7 +383,8 @@ export function jobQueue<W, L>(deps: QueueDeps<W, L>) {
 		return () => listeners.delete(listener)
 	}
 
-	return { want, wantAll, follow, stop, settled, refocus, view, left, subscribe, close }
+	// refocus: ranks change when the reader looks at something else.
+	return { want, wantAll, follow, stop, settled, refocus: pump, view, left, subscribe, close }
 }
 
 const STOPPED = 'You stopped it.'

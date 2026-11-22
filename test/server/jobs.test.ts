@@ -241,7 +241,7 @@ test('ken answers ahead only the first two questions of the parts the reader ope
 	)
 })
 
-test("a brief the model endpoint refused says the endpoint's reason, and waits to be tried again while the next part goes on", async () => {
+test("a brief the model endpoint refused says the endpoint's reason, stays out of the reader's list, and waits to be tried again while the next part goes on", async () => {
 	const { root } = busy
 	const record = fileRecordStore(root, gitRepository(root))
 	const parts = [
@@ -264,4 +264,5 @@ test("a brief the model endpoint refused says the endpoint's reason, and waits t
 	const core = jobs.find((job) => job.key === 'explain:part::Core')
 	assert.deepEqual([core?.state.kind, core?.reason], ['failed', 'The model endpoint is busy: 429.'])
 	assert.ok((core?.retryIn ?? 0) > 25, `tried again in ${core?.retryIn} s`)
+	assert.deepEqual((await json(server, '/api/questions')).questions, [], "ken's failed run is not in the reader's list")
 })

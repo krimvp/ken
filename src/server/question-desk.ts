@@ -157,8 +157,8 @@ export function questionDesk(
 			return RAN
 		},
 		fresh: async ({ key, work }) => work.kind === 'ask' && work.layer !== null && (await plan.fresh(key)),
-		rankOf: ({ concept, work }) =>
-			work.kind === 'ask' && work.layer !== null ? plan.rankOf({ layer: work.layer, concept }) : 2,
+		rankOf: ({ key, concept, work }) =>
+			work.kind === 'ask' && work.layer !== null ? plan.rankOf({ key, layer: work.layer, concept }) : 2,
 		ended: () => void refill(),
 	})
 
@@ -180,7 +180,8 @@ export function questionDesk(
 							layer: job.layer,
 						}
 						// The run that names the top parts is the slowest, and every layer waits for it.
-						return { ...job, yields: job.kind !== 'parts', work }
+						const holds = job.kind === 'explain' && job.concept ? [job.concept] : []
+						return { ...job, yields: job.kind !== 'parts', holds, work }
 					}),
 				)
 			})
@@ -210,6 +211,7 @@ export function questionDesk(
 		const concept = fieldOf(lens, 'concept') ?? null
 		const title = titleOf(lens, asked.text.split('\n')[0] ?? '')
 		const work = { kind: 'ask' as const, body, asked, chat: 'reader' as const, layer: null }
+		const tour = asked.as?.kind === 'explain' ? asked.as.tour : null
 		const ask = {
 			key,
 			kind,
@@ -217,6 +219,7 @@ export function questionDesk(
 			title,
 			order: 0,
 			yields: true,
+			holds: tour ? tour.stops.map((each) => partId(tour.within, each.name)) : [],
 			work,
 		}
 		const job = queue.want(ask, 'reader')
@@ -260,8 +263,11 @@ export function questionDesk(
 		// A job that gave way to the reader runs again from the start, so this run leaves nothing in the history.
 		if (gaveWay(stop)) return RAN
 		const entry = entryFrom(asked, events, stop.aborted)
-		await history.add(entry)
-		send({ kind: 'saved', view: await viewOf(entry) })
+		// The reader's list of questions holds what they asked and what ken made; the jobs list says why ken's failed.
+		if (entry.outcome === 'answered' || chat !== chats?.ken) {
+			await history.add(entry)
+			send({ kind: 'saved', view: await viewOf(entry) })
+		}
 		const last = events.at(-1)
 		return last?.kind === 'error' && last.model ? { kind: 'model-error', why: last.message } : RAN
 	}
@@ -551,7 +557,13 @@ export function questionDesk(
 			// level, the model explains the parts it has not explained yet, or all of them when none is left.
 			const order = tourOrder(level.boxes.filter((box) => box.state !== 'gone'))
 			const { explained } = await concepts.levelTold(level)
-			const rest = order.filter((stop) => !explained.includes(stop.name))
+			// A part ken is explaining now is left to that run.
+			const now = new Set(
+				queue.view().flatMap((job) => (job.state.kind === 'running' && job.kind === 'explain' ? [job.key] : [])),
+			)
+			const rest = order.filter(
+				(stop) => !explained.includes(stop.name) && !now.has(`explain:${partId(level.within, stop.name)}`),
+			)
 			const stops = part === null ? (rest.length > 0 ? rest : order) : order.filter((stop) => stop.name === part)
 			if (stops.length === 0) {
 				const problem = part === null ? 'There is no part here to explain.' : `There is no part "${String(part)}" here.`

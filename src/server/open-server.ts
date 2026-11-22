@@ -3,6 +3,7 @@ import { MODEL_EXAMPLE, type ModelFlags } from '../agent/index.ts'
 import { layoutDraft } from '../diagram/index.ts'
 import { readFirstLook, sizeOf } from '../first-look/index.ts'
 import { authorsOf, decide, openItems, sinceChoices, timeRange } from '../follow-up/index.ts'
+import type { JobView, Left } from '../jobs/index.ts'
 import {
 	type ChangeChoice,
 	changeChoices,
@@ -487,6 +488,9 @@ function sendFile(response: ServerResponse, file: PageFile) {
 }
 
 // The reader may have closed the request already; the question still ends and is saved.
-function writeLine(response: ServerResponse, value: QuestionLine | { kind: 'error'; message: string } | object) {
+function writeLine(
+	response: ServerResponse,
+	value: QuestionLine | { kind: 'error'; message: string } | { jobs: JobView[]; left: Left },
+) {
 	if (!response.destroyed) response.write(`${JSON.stringify(value)}\n`)
 }

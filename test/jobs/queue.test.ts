@@ -285,3 +285,14 @@ test('the queue says when each waiting job starts and when all end, from how lon
 	t.mock.timers.tick(10_000)
 	assert.deepEqual(queue.left(), { jobs: 3, seconds: 80 })
 })
+
+test('no job starts while a running job makes one of the same things, as two briefs of one part would', async () => {
+	const { queue, ask, started, finish, settle } = harness({ parallel: 2 })
+	queue.want({ ...ask('every', 0), holds: ['part::Core', 'part::Command'] }, 'ken')
+	queue.want({ ...ask('core', 1), holds: ['part::Core'] }, 'ken')
+	queue.want({ ...ask('store', 2), holds: ['part::Store'] }, 'ken')
+	await settle()
+	assert.deepEqual(started, ['every', 'store'])
+	await finish('every')
+	assert.deepEqual(started, ['every', 'store', 'core'])
+})

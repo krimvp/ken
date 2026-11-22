@@ -130,10 +130,12 @@ export function layerPlan(layout: LayoutSources, reads: ReturnType<typeof concep
 
 	// How near a job is to what the reader looks at: 2 when it fills it, 3 for the layer below a part they opened, 4
 	// for the rest. With a brief open the reader looks at that brief, not at the level behind the drawer.
-	function rankOf(job: { layer: Layer; concept: string | null }): 2 | 3 | 4 {
+	function rankOf(job: { key: string; layer: Layer; concept: string | null }): 2 | 3 | 4 {
 		const onTop = looking.within?.length === 0 && looking.brief === null
+		const onCanvas = looking.brief === null && looking.within !== null
 		if (job.layer === 1 && (job.concept === looking.brief || onTop)) return 2
 		if (job.layer === 0 && onTop) return 2
+		if (job.layer === 2 && onCanvas && job.key === lensKey({ kind: 'parts', within: looking.within })) return 2
 		if (job.layer === 2) return 3
 		return 4
 	}
