@@ -17,6 +17,7 @@ import {
 import type { UnderstandingMap } from '../../map/index.ts'
 import { RECORD_LIMITS, type RecordStore, sameName, textProblem, UNDO } from '../../record/index.ts'
 import { type Range, type Repository, resolveRange } from '../../repo/index.ts'
+import { type BriefDraft, briefSchema, readBrief } from '../brief/brief-schema.ts'
 import type { ChatEvent } from '../chat-event.ts'
 import { scopeProblem } from '../tools/exploration-tools.ts'
 import { readArgs, refuse, reply, short } from '../tools/tool-edge.ts'
@@ -28,9 +29,6 @@ export const MAX_SENT_BACK = 6
 // The most words a step of a change asks for. It sits beside the picture and the diff, and a longer one pushed the
 // picture off the screen.
 export const STEP_WORDS = 40
-// The most words a tour step asks for. It follows the main path through a part and names one choice in its design,
-// which a reviewer found two sentences could not hold: they only said the part's job again.
-export const TOUR_WORDS = 80
 
 // What show checks against and what the end of a reply writes to. map is the reader's understanding map: a reply marks
 // the topics it names as asked there. project reads the project's own git, without ken's snapshots, for the draft rule
@@ -46,10 +44,10 @@ export type Gate = {
 // reader's map nothing and gets no second look. scope is the change the reply is about. Cards that passed wait in
 // pending until their turn ends, so they follow that turn's words. held is the risks of a change that passed, waiting
 // for the second look. shown holds a hash of each card the reader has, so the same card twice shows once. step is
-// "risks" while the second look runs, and passRejections counts the revisions it refused. tour is the tour the
-// question asks for, whose stops the reader's map learns from the page as the reader reaches them. view is the level
-// the reader asked to see another way, with their words, which ken keeps with a layout the reply shows for that level.
-// want is what the reader asked of a change through its lens, or null.
+// "risks" while the second look runs, and passRejections counts the revisions it refused. tour is the parts the
+// question asks ken to explain, each as a brief, which the reader's map learns from the page as the reader reaches
+// them. view is the level the reader asked to see another way, with their words, which ken keeps with a layout the
+// reply shows for that level. want is what the reader asked of a change through its lens, or null.
 // typed is true when the round starts from the reader's own words, the only round in which ken keeps a note about them,
 // so text in a diff or a saved session cannot make the model keep one.
 export type Round = {
@@ -70,23 +68,23 @@ export type Round = {
 }
 
 // How a question is asked, which decides what its round starts with. question: the reader typed it, or a lens wrote
-// it. note: ken writes by itself in live mode, which tells the reader's map nothing. tour: a tour of a named level,
-// which tells the map nothing either, since the page marks each stop as the reader reaches it. change: a question
-// about one change that plain code picked, so the reply is about that range whether or not the model sends a scope,
-// with what the reader wants of it.
+// it. note: ken writes by itself in live mode, which tells the reader's map nothing. explain: the briefs of the parts
+// of a level, or of one of them, which tells the map nothing either, since the page marks each part as the reader
+// reaches it. change: a question about one change that plain code picked, so the reply is about that range whether or
+// not the model sends a scope, with what the reader wants of it.
 // view: the reader asked, in the words of text, for another way to show the level whose paths are within.
 export type Asking =
 	| { kind: 'question' }
 	| { kind: 'note' }
-	| { kind: 'tour'; tour: Tour }
+	| { kind: 'explain'; tour: Tour }
 	| { kind: 'change'; range: Range; want: Want }
 	| { kind: 'view'; within: string[]; text: string }
 
 export function freshRound(as: Asking, emit: Round['emit']): Round {
 	return {
-		asked: as.kind !== 'note' && as.kind !== 'tour',
+		asked: as.kind !== 'note' && as.kind !== 'explain',
 		typed: as.kind === 'question' || as.kind === 'view',
-		tour: as.kind === 'tour' ? as.tour : null,
+		tour: as.kind === 'explain' ? as.tour : null,
 		view: as.kind === 'view' ? { within: as.within, text: as.text } : null,
 		want: as.kind === 'change' ? as.want : null,
 		step: 'talk',
@@ -101,17 +99,24 @@ export function freshRound(as: Asking, emit: Round['emit']): Round {
 	}
 }
 
-const SPENT = `ken has sent back ${MAX_SENT_BACK} cards in this reply and checks no more. Say the rest in words, and say which points you could not quote.`
+// A reply that explains several parts sends a brief for each, so each part has its own cards to send back.
+function sentBackLimit(round: Round): number {
+	return MAX_SENT_BACK * Math.max(1, round.tour?.stops.length ?? 1)
+}
+
+function spent(round: Round): string {
+	return `ken has sent back ${sentBackLimit(round)} cards in this reply and checks no more. Say the rest in words, and say which points you could not quote.`
+}
 
 export function showTool(gate: Gate, round: () => Round): Tool {
 	return {
 		name: 'show',
 		description:
-			'Show the reader cards that prove what you say: claims, decisions, risks, diagrams, topics and the parts of the project, each with the exact lines it rests on. ken checks each card alone against git and shows it after the words you write in this turn. A card that fails comes back with its problems, and the reader sees nothing of it. Every field is optional.',
+			'Show the reader cards that prove what you say: claims, decisions, risks, diagrams, topics, the parts of the project and the brief of a part, each with the exact lines it rests on. ken checks each card alone against git and shows it after the words you write in this turn. A card that fails comes back with its problems, and the reader sees nothing of it. Every field is optional.',
 		parameters: PARAMETERS,
 		async execute(args, ctx) {
 			const current = round()
-			if (current.sentBack >= MAX_SENT_BACK) return refuse(SPENT)
+			if (current.sentBack >= sentBackLimit(current)) return refuse(spent(current))
 			const read = readJsonText(SHOW_SCHEMA, args)
 			if (read.kind === 'refused') return refuse(nothingShown(read.problems))
 			const raw = read.args
@@ -120,23 +125,35 @@ export function showTool(gate: Gate, round: () => Round): Tool {
 				if (problem) return refuse(nothingShown([problem]))
 			}
 			const lines: string[] = []
-			const step = raw.step === undefined ? null : stepOf(objectOf(raw.step))
+			if (raw.step !== undefined && raw.brief !== undefined) {
+				return refuse(nothingShown(['Send a step or a brief in one call, not both.']))
+			}
+			const brief = raw.brief === undefined ? null : readBrief(objectOf(raw.brief), quoteOf)
+			// A brief is a step whose text is its one line: the cards of this call are its things to know and its terms.
+			const step = brief
+				? { number: brief.number, text: brief.line, questions: brief.questions }
+				: raw.step === undefined
+					? null
+					: stepOf(objectOf(raw.step))
 			if (step) {
-				const long = textProblem('The step text', step.text, RECORD_LIMITS.reason)
+				const what = brief ? 'Brief' : 'Step'
+				const long = textProblem(brief ? 'The line of the brief' : 'The step text', step.text, RECORD_LIMITS.reason)
 				if (long) return refuse(nothingShown([long]))
 				const stops = current.tour?.stops.length
 				if (stops !== undefined && step.number > stops) {
-					return refuse(nothingShown([`This tour has ${stops} stops, so there is no step ${step.number}.`]))
+					const asked = stops === 1 ? 'for 1 part' : `for ${stops} parts`
+					return refuse(nothingShown([`The question asks ${asked}, so there is no number ${step.number}.`]))
 				}
 				const steps = [...current.items, ...current.pending].flatMap((item) =>
 					item.kind === 'step' ? [item.number] : [],
 				)
 				if (steps.includes(step.number))
-					lines.push(`Step ${step.number} was shown already. Its cards in this call join it.`)
+					lines.push(`${what} ${step.number} was shown already. What this call sends joins it.`)
 				else {
 					current.pending.push({ kind: 'step', ...step })
-					lines.push(`Step ${step.number} shown, with the cards of this call that pass.`)
+					lines.push(`${what} ${step.number} shown, with what passes of this call.`)
 				}
+				lines.push(...(brief?.left ?? []))
 			}
 			if (raw.work !== undefined) {
 				const title = readArgs(objectOf(raw.work), 'show work').text('title')
@@ -151,18 +168,18 @@ export function showTool(gate: Gate, round: () => Round): Tool {
 				...(await topicNames(gate.store)),
 				...cardsShown(current).flatMap((card) => (card.kind === 'topic' ? [card.topic.name] : [])),
 			]
-			const drafts = draftsOf(raw).map((draft, at) => ({ ...draft, at }))
+			const drafts = [...draftsOf(raw), ...(brief ? briefDrafts(brief) : [])].map((draft, at) => ({ ...draft, at }))
 			const topicsFirst = [...drafts].sort((a, b) => Number(b.kind === 'topic') - Number(a.kind === 'topic'))
 			const passed: Card[] = []
-			for (const { at, where, parse } of topicsFirst) {
-				if (current.sentBack >= MAX_SENT_BACK) {
-					lines.push(`${where} was not checked. ${SPENT}`)
+			for (const { at, where, parse, term } of topicsFirst) {
+				if (current.sentBack >= sentBackLimit(current)) {
+					lines.push(`${where} was not checked. ${spent(current)}`)
 					continue
 				}
 				const problems: string[] = []
 				const draft = parse(problems)
 				const topic = 'topic' in draft.draft ? draft.draft.topic : undefined
-				// The reader opens a tour step's cards to read the part's code, and a comment is not code.
+				// The reader opens what explains a part to read the part's code, and a comment is not code.
 				if (
 					current.tour &&
 					step &&
@@ -171,8 +188,23 @@ export function showTool(gate: Gate, round: () => Round): Tool {
 					draft.draft.quotes.every(({ text }) => onlyComments(text))
 				) {
 					problems.push(
-						`${where} quotes only comments. On a tour, quote the code where the work happens, such as a loop, a dispatch, a table or the body of the entry function.`,
+						`${where} quotes only comments. Quote the code where the work happens, such as a loop, a check, a table or the body of the entry function.`,
 					)
+				}
+				// One name means one thing: a term the reply or the record already holds keeps the meaning it has there.
+				if (term && draft.kind === 'topic' && problems.length === 0) {
+					const { name, note } = draft.draft
+					if (current.tour?.stops.some((stop) => sameName(stop.name, name))) {
+						lines.push(`${where} names the part ${name}, which has a brief of its own, so this brief leaves it out.`)
+						continue
+					}
+					const held = await heldTerm(gate.store, [...cardsShown(current), ...passed.filter(Boolean)], name, note)
+					if (held) {
+						const id = cardId(held, step)
+						if (!current.shown.has(id)) passed[at] = held
+						current.shown.add(id)
+						continue
+					}
 				}
 				if (topic !== undefined && !known.some((name) => sameName(name, topic))) {
 					problems.push(
@@ -198,7 +230,7 @@ export function showTool(gate: Gate, round: () => Round): Tool {
 				if (card.kind === 'layout' && current.view?.within.join('\n') === card.layout.within.join('\n')) {
 					card.layout.asked = current.view.text
 				}
-				const id = createHash('sha256').update(JSON.stringify(card)).digest('hex')
+				const id = cardId(card, brief ? step : null)
 				if (current.shown.has(id)) {
 					lines.push(`${where} was shown already.`)
 					continue
@@ -247,6 +279,43 @@ export function showTool(gate: Gate, round: () => Round): Tool {
 			return text === '' ? reply('Nothing to show.') : reply(text)
 		},
 	}
+}
+
+// A card shows once in a reply. A thing to know or a term shows once in each brief, since two parts may share one.
+function cardId(card: Card, brief: { number: number } | null): string {
+	return createHash('sha256')
+		.update(JSON.stringify(brief ? [card, brief.number] : card))
+		.digest('hex')
+}
+
+// The term as this reply already showed it, or as the record holds it, with the record's note as its meaning. meaning
+// is the model's, for a topic the record keeps no note on. null when the term is new.
+async function heldTerm(store: RecordStore, shown: Card[], name: string, meaning: string): Promise<Card | null> {
+	const before = shown.find((card) => card.kind === 'topic' && sameName(card.topic.name, name))
+	if (before) return before
+	const { current } = await store.read()
+	const topic = current.find((entry) => entry.kind === 'topic' && sameName(entry.name, name))
+	if (topic?.kind !== 'topic') return null
+	const note = current.findLast((entry) => entry.kind === 'note' && entry.topic === topic.id)
+	const kept = note?.kind === 'note' ? note.text : meaning
+	return { kind: 'topic', topic: { name: topic.name, note: kept, quotes: topic.quotes, replaces: null } }
+}
+
+// The things to know and the terms of a brief, as the cards ken checks them as.
+function briefDrafts(brief: BriefDraft): ReturnType<typeof draftsOf> {
+	return [
+		...brief.points.map(({ where, parse }) => ({
+			kind: 'claim' as const,
+			where,
+			parse: (problems: string[]) => ({ kind: 'claim' as const, draft: parse(problems) }),
+		})),
+		...brief.terms.map(({ where, parse }) => ({
+			kind: 'topic' as const,
+			where,
+			term: true,
+			parse: (problems: string[]) => ({ kind: 'topic' as const, draft: parse(problems) }),
+		})),
+	]
 }
 
 function nothingShown(problems: string[]): string {
@@ -307,7 +376,7 @@ type ReadQuote = (raw: JsonObject) => Quote
 // into its draft with the quote problems it has, which send it back before ken checks a quote.
 function draftsOf(
 	raw: JsonObject,
-): { kind: CardDraft['kind']; where: string; parse: (problems: string[]) => CardDraft }[] {
+): { kind: CardDraft['kind']; where: string; term?: boolean; parse: (problems: string[]) => CardDraft }[] {
 	const each = (
 		list: string,
 		name: string,
@@ -880,12 +949,12 @@ const SHOW_SCHEMA = {
 		step: {
 			type: 'object',
 			description:
-				'Only when the reader asks you to walk them through a change, or for a tour of the project: one step, with the claims in this call as its proof. Send one show call per step, numbered from 1: in the order a reviewer should read the change, or in the tour order the question gives. ken links each step of a change to the parts and the changed lines its quotes fall in, so quote the changed lines. On a tour, quote code where the work happens: ken sends back a claim that quotes only comments. To fix a card of a step that came back, send it again with the same step.',
+				'Only when the reader asks you to walk them through a change: one step, with the claims in this call as its proof. Send one show call per step, numbered from 1, in the order a reviewer should read the change. ken links each step to the parts and the changed lines its quotes fall in, so quote the changed lines. To fix a card of a step that came back, send it again with the same step.',
 			properties: {
 				number: { type: 'integer', minimum: 1 },
 				text: {
 					type: 'string',
-					description: `In your own words. A step of a change: at most two short sentences, ${STEP_WORDS} words in all. A tour step: at most four sentences, ${TOUR_WORDS} words in all. The detail goes in the claims.`,
+					description: `In your own words: at most two short sentences, ${STEP_WORDS} words in all. The detail goes in the claims.`,
 				},
 			},
 			required: ['number', 'text'],
@@ -905,6 +974,7 @@ const SHOW_SCHEMA = {
 		},
 		topics: { type: 'array', description: 'Parts of the project the reply explains', items: TOPIC_SCHEMA },
 		layout: LAYOUT_SCHEMA,
+		brief: briefSchema(QUOTE),
 	},
 	additionalProperties: false,
 } as const

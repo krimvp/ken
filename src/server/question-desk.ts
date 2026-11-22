@@ -1,18 +1,20 @@
 import { randomUUID } from 'node:crypto'
 import {
 	type Asking,
+	BRIEF_BOUNDS,
 	type CardKind,
 	type Chat,
 	type ChatEvent,
+	DRAWINGS,
 	firstWords,
 	type Item,
 	type Reply,
-	TOUR_WORDS,
 	WANTS,
 	type Want,
 } from '../agent/index.ts'
 import { DIAGRAM_BOUNDS, drawn, LAYOUT_BOUNDS } from '../diagram/index.ts'
 import {
+	explainQuestion,
 	type LensFacts,
 	onDay,
 	openItems,
@@ -20,11 +22,17 @@ import {
 	personLens,
 	rangeLens,
 	topicQuestion,
-	tourQuestion,
 	viewQuestion,
 } from '../follow-up/index.ts'
 import { entryFrom, type History, type HistoryEntry, whyNoNote } from '../history/index.ts'
-import { type Change, type LayoutSources, lookAtLayout, pullRequestOf, readLayoutAsk } from '../layout/index.ts'
+import {
+	type Change,
+	type LayoutSources,
+	lookAtLayout,
+	pullRequestOf,
+	readLayoutAsk,
+	tourOrder,
+} from '../layout/index.ts'
 import { type About, holdsSnapshot } from '../live/index.ts'
 import { areaQuestion, catchUpQuestion, deeperQuestion, type TopicState, type UnderstandingMap } from '../map/index.ts'
 import { type RecordStore, sameName } from '../record/index.ts'
@@ -37,8 +45,8 @@ const NOTE_CHARS = 400
 
 // One row in the page's list of questions. cards counts the checked cards of the reply, calls the decisions the model
 // wants the reader to decide, and risks its risks. hunks is null when the reply was not about a range of commits.
-// thread groups the rows the page shows as one thread. tour names the level and the stops of a tour, so the page can
-// open a tour it has already instead of asking again. change is the change the reply is about and steps the number of
+// thread groups the rows the page shows as one thread. tour names the level and the parts a reply explains as briefs,
+// so the page can open what it has already instead of asking again. change is the change the reply is about and steps the number of
 // steps it walks through. want says the reader asked for the story of that change or a walk through it, so the page
 // opens the stored one again and never takes a later reply about the same commits for it. snapshot is true when the
 // change ends at a commit of ken's own snapshot store, which is uncommitted work and no range to look at again. view is there
@@ -367,24 +375,30 @@ export function questionDesk(
 				as: { kind: 'view', within: level.within, text },
 			}
 		}
-		if (kind === 'tour') {
-			const within = fieldOf(lens, 'within')
-			const ask = await readLayoutAsk(layout, { within: Array.isArray(within) ? within.map(String) : [] }, new Date())
-			if (ask.kind !== 'ok') return { kind: 'refused', problem: ask.message }
-			const look = await lookAtLayout(layout, ask.ask, new Date())
-			if (!look.tour) {
-				return { kind: 'refused', problem: "ken's model has not named the parts here yet. Name them first." }
+		// shortcut: "tour" is the old name for explaining every part of a level, which the home still sends. Drop it
+		// when the home asks for "explain".
+		if (kind === 'explain' || kind === 'tour') {
+			const read = await levelOf(lens)
+			if (read.kind !== 'ok') return read
+			const { level } = read
+			const part = fieldOf(lens, 'part') ?? null
+			// The order a tour took: the order the parts were named in, with tests and upkeep last.
+			const order = tourOrder(level.boxes.filter((box) => box.state !== 'gone'))
+			const stops = part === null ? order : order.filter((stop) => stop.name === part)
+			if (stops.length === 0) {
+				const problem = part === null ? 'There is no part here to explain.' : `There is no part "${String(part)}" here.`
+				return { kind: 'refused', problem }
 			}
-			const name = fieldOf(lens, 'name')
-			const stops = look.tour.map(({ name, job, paths }) => ({ name, job, paths }))
-			const text = tourQuestion({
-				name: typeof name === 'string' ? oneLine(name).slice(0, 80) || null : null,
-				head: look.head,
-				words: TOUR_WORDS,
-				stops,
-				arrows: look.arrows,
+			const text = explainQuestion({
+				name: level.name,
+				head: level.head,
+				parts: stops,
+				beside: order.filter((stop) => !stops.includes(stop)),
+				arrows: level.arrows,
+				bounds: BRIEF_BOUNDS,
+				drawings: DRAWINGS,
 			}).text
-			return { kind: 'ok', text, as: { kind: 'tour', tour: { within: ask.ask.within, stops } } }
+			return { kind: 'ok', text, as: { kind: 'explain', tour: { within: level.within, stops } } }
 		}
 		if (kind === 'change') {
 			const asked = fieldOf(lens, 'change')
@@ -424,7 +438,7 @@ export function questionDesk(
 			return {
 				kind: 'refused',
 				problem:
-					'Send a question, or a lens: catch-up, area with a path, change, deeper, parts, person, range, topic, tour, view or note.',
+					'Send a question, or a lens: catch-up, area with a path, change, deeper, explain, parts, person, range, topic, view or note.',
 			}
 		}
 		await map.learn('deeper', names, new Date())

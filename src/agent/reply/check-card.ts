@@ -23,9 +23,11 @@ import {
 import { checkDiagram, checkLayout, type DiagramDraft, diagramElements, type LayoutDraft } from '../../diagram/index.ts'
 import { RECORD_LIMITS, textProblem, type Undo } from '../../record/index.ts'
 import type { CommitHash, Range, Repository } from '../../repo/index.ts'
+import { BRIEF_BOUNDS, type Point, wordCount } from '../brief/brief.ts'
 import type { Card, Change, Item, Weight } from './reply.ts'
 
-// absent is the text the card says is missing, and the path prefix to search under.
+// absent is the text the card says is missing, and the path prefix to search under. point is there on a thing to know
+// of a brief.
 type Sought = { text: string; under: string | null }
 export type ClaimDraft = {
 	text: string
@@ -34,6 +36,7 @@ export type ClaimDraft = {
 	topic?: string
 	weight?: Weight
 	absent?: Sought
+	point?: Point
 }
 export type DecisionDraft = {
 	question: string
@@ -89,7 +92,8 @@ export async function checkCard(
 			const quotes = await verify(where, draft.quotes)
 			const absent = await search(draft.absent)
 			if (problems.length > 0 || label.kind === 'refused') return refused()
-			const claim = { text: draft.text, label: label.label, quotes, ...topicOf(draft.topic), ...absent }
+			const point = draft.point === undefined ? {} : { point: draft.point }
+			const claim = { text: draft.text, label: label.label, quotes, ...topicOf(draft.topic), ...absent, ...point }
 			if (kind === 'claim') return { kind: 'ok', card: { kind: 'claim', claim } }
 			const weight = draft.weight === undefined ? {} : { weight: draft.weight }
 			const marks = change ? await riskMarks(sources.repo, change, quotes, signal) : {}
@@ -151,10 +155,19 @@ function limitProblems(card: CardDraft): string[] {
 	const problems: string[] = []
 	switch (card.kind) {
 		case 'claim':
-		case 'risk':
-			texts.push(['the text', card.draft.text, text])
+		case 'risk': {
+			const { point } = card.draft
+			texts.push([point ? 'more' : 'the text', card.draft.text, text])
 			counts.push(['', card.draft.quotes.length])
+			if (point) {
+				texts.push(['its line', point.line, text], ['long', point.long, BRIEF_BOUNDS.long])
+				const words = wordCount(point.line)
+				if (words > BRIEF_BOUNDS.lineWords) {
+					problems.push(`its line has ${words} words; keep it to ${BRIEF_BOUNDS.lineWords}, and say the rest in more.`)
+				}
+			}
 			break
+		}
 		case 'decision': {
 			const { draft } = card
 			texts.push(['the question', draft.question, option], ['chosen', draft.chosen, text])

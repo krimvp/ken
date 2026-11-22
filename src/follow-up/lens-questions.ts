@@ -258,35 +258,63 @@ function layoutRules(level: PartsLevel): string[] {
 	]
 }
 
-// "Show me around" on a named level. Plain code picked the stops and their order, so the model explains each part in
-// that order and does not choose. name is what the reader calls the level, or null for the whole project. words is the
-// most words a step may have.
-export type TourLevel = {
+// "Ask ken to explain it" on a part, and on a whole level. Plain code picked the parts and their order, so the model
+// explains each in that order and does not choose. name is what the reader calls the level, or null for the whole
+// project. parts are the ones to explain, and beside the ones of the level it leaves out, which the model reads to
+// say how the parts connect. bounds and drawings are what show checks a brief against, so the model can pass first
+// time.
+export type ExplainLevel = {
 	name: string | null
 	head: string
-	words: number
-	stops: { name: string; job: string; paths: string[] }[]
+	parts: { name: string; job: string; paths: string[] }[]
+	beside: { name: string; job: string }[]
 	arrows: { from: string; to: string; text: string }[]
+	bounds: {
+		lineWords: number
+		fewestPoints: number
+		points: number
+		terms: number
+		meansWords: number
+		fewestQuestions: number
+		questions: number
+		label: number
+	}
+	drawings: Record<string, string>
 }
 
-export function tourQuestion(level: TourLevel): LensQuestion {
-	const { stops, arrows } = level
+export function explainQuestion(level: ExplainLevel): LensQuestion {
+	const { parts, beside, arrows, bounds } = level
 	const where = level.name ?? 'this project'
-	const stop = (each: TourLevel['stops'][number], k: number) =>
-		`- Stop ${k + 1}, ${each.name} (${each.paths.join(', ')})${each.job ? `: ${each.job}` : ''}`
+	const [only] = parts
+	const one = parts.length === 1 && only !== undefined && beside.length > 0 ? only : null
+	const part = (each: ExplainLevel['parts'][number], k: number) =>
+		`- Part ${k + 1}, ${each.name} (${each.paths.join(', ')})${each.job ? `: ${each.job}` : ''}`
 	const uses = arrows.map((arrow) => `${arrow.from} ${arrow.text} ${arrow.to}`)
+	const kinds = Object.entries(level.drawings).map(([kind, shows]) => `${kind} (${shows})`)
 	return {
 		text: [
-			`Show me around ${where}`,
+			one ? `Explain ${one.name}, a part of ${where}` : `Explain the parts of ${where}`,
 			LIST_SAID,
-			...stops.map(stop),
+			...parts.map(part),
+			...(beside.length > 0
+				? [
+						`- Beside ${one ? 'it' : 'them'}: ${beside.map((each) => `${each.name}${each.job ? ` (${each.job})` : ''}`).join('; ')}.`,
+					]
+				: []),
 			...(uses.length > 0 ? [`- How the parts use each other: ${uses.join('; ')}.`] : []),
 			'',
-			`I am new to ${where}. Walk me through it as a tour of ${stops.length} stops, one stop per part, in the order above: the order the parts were named in, with tests and upkeep last. Read the code at HEAD (${level.head}) first.`,
-			`Then send one show call per stop, in order, with step: the stop's number and its text. I can read each part's job above, so do not say it again. Tell me the main path through the part, from what comes in to what goes out, and the one choice in its design a maintainer would explain. Use four sentences and ${level.words} words at most.`,
-			'Say how two parts connect in the words of the arrows, such as "Tests runs scenarios through Eval harness". Never use the order of the tour for it, such as "the next stop": I may open a stop on its own.',
-			'With each step send one or two claims that quote code where the work happens: the loop, the dispatch, the table, or the entry function with its body. Not a comment, and not a signature alone. ken sends back a claim that quotes only comments. A claim says only what its quoted lines show. Name the file or function in the claim, not in the step.',
-			'Write nothing before the first stop, and one sentence after the last at most.',
+			`Read the code at HEAD (${level.head}) first. Then send one show call for each part above, in that order, with brief: the part's number and what follows.`,
+			'I think in pictures. I read a brief beside a picture of the parts: each thing to know is a short line with a small drawing, and I open the longer telling when I want words. Write short, literal words: the short word, the active verb, the name the code uses. No figure of speech.',
+			'line: one sentence on what the part does for whoever uses it.',
+			`points: ${bounds.fewestPoints} to ${bounds.points} things to know, the ones a maintainer would tell a newcomer first: the main path from what comes in to what goes out, what the part refuses, what it keeps, and the one choice in its design. One idea each. Give each a line of at most ${bounds.lineWords} words that is a whole sentence; more, one sentence that says it in full; long, two or three sentences; a drawing; and quotes.`,
+			'A point says only what its quoted lines show. Quote code where the work happens: the loop, the check, the table, or the function with its body. Not a comment, and not a signature alone: ken sends back a point that quotes only comments. Give each quote its path. Name a file or a function in more or long, never in line.',
+			`drawing: pick the kind that shows the point: ${kinds.join('; ')}. Give count for steps and loop, lit for steps, and a label of at most ${bounds.label} characters when one word helps. Pick dot when no kind fits. Never change what a point says so that a drawing fits it.`,
+			`terms: up to ${bounds.terms} words the code uses that a newcomer would not know, such as the name of a type, a step or a kind of file. Give each its name as the code spells it, means: what it means in at most ${bounds.meansWords} words, and quote: one line where the code uses it. Leave out the names of the parts.`,
+			`questions: ${bounds.fewestQuestions} or ${bounds.questions} questions I would ask next about the part, one sentence each, that the code can answer: what happens when something fails, why it is built this way, what a change would break.`,
+			'Say how two parts connect in the words of the arrows, such as "Tests runs scenarios through Eval harness". Never use the order of the list for it, such as "the next part": I open each brief on its own.',
+			'Never write that I understand, know or have learned something. Say what the code does.',
+			'If ken sends a point or a term back, fix it and send it again alone, in a brief with the same number.',
+			`Write nothing before the first brief, and one sentence after the last at most.`,
 		].join('\n'),
 		empty: false,
 	}
