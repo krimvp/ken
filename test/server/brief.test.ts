@@ -326,7 +326,7 @@ test('the processes of a level come as lanes matched to its parts and the messag
 test("ken's model explains a term when asked, and its answer is the term's brief from then on", async () => {
 	const before = await briefOf('term:save')
 	const lens = { kind: 'answer', concept: 'term:save', text: 'What does "save" mean in this project?' }
-	assert.deepEqual(before.explain, { lens })
+	assert.deepEqual([before.explained, before.explain], [false, { lens }], 'until the model explains it')
 	await ask(server, { lens })
 	const after = await briefOf('term:save')
 	assert.equal(after.line, 'Save writes one number to the store.')

@@ -207,7 +207,8 @@ export function conceptReads(layout: LayoutSources, history: History) {
 		const words = told ? toldFields(told, all.read) : null
 		return {
 			...blank(id, 'term', topic.name, told?.line ?? meaning ?? ''),
-			explained: meaning !== null || told !== undefined,
+			// What the record says a term means is its line; the things to know are the model's alone.
+			explained: told !== undefined,
 			explain: { lens: { kind: 'answer', concept: id, text: meansWhat(topic.name) } },
 			points: [...(words?.points ?? []), ...quotes.slice(0, TERM_PLACES).map(placePoint)],
 			terms: words?.terms.filter((term) => term.id !== id) ?? [],
