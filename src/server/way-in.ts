@@ -74,11 +74,17 @@ async function newestOnMainLine(repo: Repository, head: Change['range']['head'])
 	const merge = commits.find((commit) => commit.parents.length > 1)
 	const newest = merge ?? commits[0]
 	if (!newest) return null
-	const pull = merge && /^Merge pull request (#\d+) from \S+$/.exec(merge.subject)
-	if (pull) return `Newest merge: pull request ${pull[1]}`
+	const pull = merge && pullRequestOf(merge.subject)
+	if (pull) return `Newest merge: pull request ${pull}`
 	const subject =
 		newest.subject.length > SUBJECT_CHARS ? `${newest.subject.slice(0, SUBJECT_CHARS - 3)}...` : newest.subject
 	return `Newest ${merge ? 'merge' : 'commit'}: ${subject}`
+}
+
+// The number of the pull request a merge brought in, such as "#107", read from the subject GitHub writes for it. ken
+// names such a merge by that number wherever it names the change, since the subject is mostly a branch name.
+export function pullRequestOf(subject: string): string | null {
+	return /^Merge pull request (#\d+) from \S+$/.exec(subject)?.[1] ?? null
 }
 
 function count(n: number, one: string): string {

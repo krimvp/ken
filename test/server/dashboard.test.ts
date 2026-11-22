@@ -143,16 +143,23 @@ test("ken suggests catching up on what landed since the reader's own last commit
 	assert.match(wayIn.why, /\b1 commit\b/)
 })
 
-test('the review fact names a GitHub merge by its pull request number, not by the branch it came from', async () => {
-	const { root } = buildRepository([
+test('a GitHub merge is named by its pull request number, not by the branch it came from, in the review fact and in a question about it', async () => {
+	const { root, hashes } = buildRepository([
 		{ message: 'feat: start', files: { 'src/a/x.ts': 'x\n' } },
 		{ message: 'feat: y', files: { 'src/a/y.ts': 'y\n' }, parent: 0 },
 		{ message: 'Merge pull request #107 from someone/a-long-branch-name', files: {}, parent: 0, merge: 1 },
 	])
-	const server = await openKen(root, readerHome())
+	const model = await scriptedModel([{ text: 'It adds y.' }])
+	const server = await openKen(root, readerHome(), model.baseUrl)
 	const { review } = (await json(server, '/api/layout')).wayIn.facts
 	assert.ok(review.includes('pull request #107'), review)
 	assert.ok(!review.includes('someone'), review)
+
+	const merge = hashes[2]
+	const lines = await ask(server, { lens: { kind: 'change', change: `${merge}^1..${merge}`, want: 'story' } })
+	const [title] = lines[0].question.split('\n')
+	assert.ok(title.includes('pull request #107'), title)
+	assert.ok(!title.includes('someone'), title)
 })
 
 test('on a branch ahead of main ken suggests review, and says which branch and how many commits', async () => {

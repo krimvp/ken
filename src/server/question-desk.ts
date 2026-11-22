@@ -27,6 +27,7 @@ import type { About } from '../live/index.ts'
 import { areaQuestion, catchUpQuestion, deeperQuestion, type TopicState, type UnderstandingMap } from '../map/index.ts'
 import { type RecordStore, sameName } from '../record/index.ts'
 import { parsePath, type Repository } from '../repo/index.ts'
+import { pullRequestOf } from './way-in.ts'
 
 const MAX_QUESTION_CHARS = 4000
 const MAX_TOPICS = 20
@@ -438,15 +439,18 @@ function deeperOnNote(about: About, at: string, summary: string, commits: number
 	return `Go deeper on the ${time} note about uncommitted work\nken copied that work into commit ${short(about.snapshot)} in its own store, on top of HEAD ${short(about.head)}. Read it with diff from ${short(about.base)} to ${short(about.snapshot)} and with read_file at ${short(about.snapshot)}, as you would a commit.\n${explain}`
 }
 
-// The change as the layout names it to the reader, inside a sentence: their uncommitted work, a branch, the subject of
-// a merge or of one commit, or a count of commits.
+// The change as the layout names it to the reader, inside a sentence: their uncommitted work, a branch, the pull
+// request a merge brought in, the subject of another merge or of one commit, or a count of commits.
 async function changeName(repo: Repository, change: Change): Promise<string> {
 	if (change.kind === 'uncommitted') return 'your uncommitted work'
 	if (change.kind === 'branch') return `the branch ${change.name}`
 	const { base, head } = change.range
 	const line = await repo.mainLine(head, 1)
 	const newest = line.kind === 'ok' ? line.commits[0] : undefined
-	if (newest?.hash === head && newest.parents[0] === base) return `"${newest.subject}"`
+	if (newest?.hash === head && newest.parents[0] === base) {
+		const pull = pullRequestOf(newest.subject)
+		return pull ? `the merge of pull request ${pull}` : `"${newest.subject}"`
+	}
 	const logged = await repo.log(change.range)
 	const commits = logged.kind === 'ok' ? logged.commits.length : 0
 	const count = commits === 1 ? 'the commit' : commits > 1 ? `the ${commits} commits` : 'the commits'
@@ -463,9 +467,16 @@ function changeLines(change: Change, want: (typeof WANTS)[number]): string[] {
 			? `ken copied that work into commit ${short(head)} in its own store, on top of HEAD ${short(base)}. Read it with diff from ${short(base)} to ${short(head)} and with read_file at ${short(head)}, as you would a commit.`
 			: `The change is the commits from ${short(base)} to ${short(head)}. Read them with log and diff over that range.`,
 		'ken has set the scope of this reply to that range, so leave scope out of show.',
-		want === 'walk'
-			? 'Walk me through the change in steps, in the order a reviewer should read them.'
-			: 'Tell its story: what was wrong or missing before, what the change does now, and why.',
+		...(want === 'walk'
+			? [
+					'Walk me through the change in steps, in the order a reviewer should read them. A step holds one thing: if a step needs "and" to join two things, make it two steps.',
+					'After the last step, write one line that names what the steps leave out and a reviewer should still open, such as a changed rule or boundary table, a test of new behaviour, or docs. If the steps leave nothing out, say so.',
+				]
+			: [
+					'Tell its story in two to five sentences of plain prose: what was wrong or missing before, what the change does now, and why. No list and no heading. No file names and no numbers unless one is the point.',
+					"If most of the change is tests or upkeep, name the one change it makes to the product's own code.",
+				]),
+		`Before you say how something was before the change, read the code at ${short(base)}. A commit message can describe a state the code never had.`,
 	]
 }
 
