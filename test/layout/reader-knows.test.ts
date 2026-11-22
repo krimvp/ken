@@ -135,6 +135,7 @@ test('what to look at next leads with the part that changed since the reader rea
 		'each item names the boxes it is about, and the review the box the uncommitted work touched',
 	)
 	assert.deepEqual(items[0]?.landed, { files: 1, added: 1, removed: 1 })
+	assert.deepEqual(items[1]?.size, { files: 1, what: 'your uncommitted work' })
 	for (const item of items.filter((each) => each.kind !== 'review')) {
 		const { part, ...opens } = item.go
 		assert.deepEqual(seen.boxes.find((box) => box.name === part)?.knows.go, opens, `${part} opens where its item goes`)

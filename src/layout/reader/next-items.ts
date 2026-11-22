@@ -1,6 +1,7 @@
 // What the reader should look at next, the first thing first: a decision that waits on them, a part that changed
-// since they looked, a change to review, the next stop of the tour, then the parts they never opened. Plain code
-// ranks them from the record, what the reader looked at and git, so the page can show them before the reader asks.
+// since they looked, a change to review, the next stop of the tour, then the parts they never opened. For a reader
+// who has opened nothing, the tour comes before the change. Plain code ranks them from the record, what the reader
+// looked at and git, so the page can show them before the reader asks.
 import type { Knows, Level, OpensAt } from './box-knows.ts'
 
 // Where an item takes the reader: a way in, and there a part of this level, a level of detail and a change, as the
@@ -11,7 +12,8 @@ export type Go = Pick<OpensAt, 'way'> & Partial<OpensAt> & { part?: string }
 // What landed in a part since the reader looked: the files it changed there, and their lines added and removed.
 export type LandedSize = { files: number; added: number; removed: number }
 
-// parts names the boxes of this level the item is about. Only a part that changed has landed.
+// parts names the boxes of this level the item is about. Only a part that changed has landed, and only a change to
+// review has size: the files it changed and what it is in a few words, such as "pull request #107".
 export type NextItem = {
 	kind: 'decision' | 'stale' | 'review' | 'tour' | 'read'
 	title: string
@@ -19,14 +21,16 @@ export type NextItem = {
 	go: Go
 	parts: string[]
 	landed?: LandedSize
+	size?: { files: number; what: string }
 }
 
 // A box as the ranking reads it. landed is what the commits since the reader looked did there, when git could say.
 export type NextBox = { name: string; knows: Knows; landed: LandedSize | null }
 
-// The change the reader has not reviewed. why may be empty. change asks the layout for it, and files and parts say
-// how large it is: the files it changed, and the boxes of this level that hold one of them.
-export type ToReview = { title: string; why: string; change: string; files: number; parts: string[] }
+// The change the reader has not reviewed. what is the change in a few words, and why may be empty. change asks the
+// layout for it, and files and parts say how large it is: the files it changed, and the boxes of this level that hold
+// one of them.
+export type ToReview = { title: string; what: string; why: string; change: string; files: number; parts: string[] }
 
 export type NextFacts = {
 	// The questions of the decisions that wait on the reader, newest first.
@@ -56,11 +60,14 @@ export function nextItems(facts: NextFacts): NextItem[] {
 		? inOrder.find((box) => box.knows.level === 'new' || box.knows.level === 'seen')
 		: undefined
 	const untouched = boxes.every((box) => box.knows.level === 'new')
+	const tour = onTour ? [tourItem(onTour, untouched)] : []
 	const items: NextItem[] = [
 		...decisionItem(facts.decisions),
 		...stale.map(staleItem),
+		// A reader who has opened nothing starts with the tour: a change says little before they know the parts.
+		...(untouched ? tour : []),
 		...(review ? [reviewItem(review)] : []),
-		...(onTour ? [tourItem(onTour, untouched)] : []),
+		...(untouched ? [] : tour),
 		...inOrder.filter((box) => box.knows.level === 'new' && box !== onTour).map(meetItem),
 	]
 	return items.slice(0, MOST)
@@ -93,7 +100,7 @@ function staleItem({ name, knows, landed }: NextBox): NextItem {
 	}
 }
 
-function reviewItem({ title, why, change, files, parts }: ToReview): NextItem {
+function reviewItem({ title, what, why, change, files, parts }: ToReview): NextItem {
 	const size =
 		parts.length === 0 ? `${count(files, 'file')}.` : `${count(files, 'file')} in ${count(parts.length, 'part')}.`
 	return {
@@ -102,6 +109,7 @@ function reviewItem({ title, why, change, files, parts }: ToReview): NextItem {
 		why: why === '' ? size : `${why} ${size}`,
 		go: { way: 'review', detail: 'how', change },
 		parts,
+		size: { files, what },
 	}
 }
 

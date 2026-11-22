@@ -14,7 +14,7 @@ export type PartArrow = { from: string; to: string; text: string; quotes: Verifi
 // whose within is the part's paths, so zoom is a lookup with nothing to keep in step. about is the model's sentence or
 // two on the level as a whole. asked is the reader's own words when ken drew the level because they asked for another
 // way to show it: plain code sets it, never the model. flows are the processes of the level the model finds worth a
-// diagram of their own, each a short request such as "How a tool call is gated", which the page offers to draw. A
+// diagram of their own, each a short request such as "How an order is paid", which the page offers to draw. A
 // layout stored before ken kept one of these has none, and a layout without one has no such key, so its id in the
 // record stays what it was.
 export type Layout = {

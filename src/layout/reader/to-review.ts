@@ -26,6 +26,7 @@ export async function toReview(
 		const files = diff ?? (read?.kind === 'ok' ? read.files : [])
 		return {
 			title: own.kind === 'uncommitted' ? 'Review your uncommitted work' : `Review your branch ${own.name}`,
+			what: own.kind === 'uncommitted' ? 'your uncommitted work' : `your branch ${own.name}`,
 			why: own.kind === 'uncommitted' ? '' : 'It is ahead of the main branch.',
 			change: own.asked,
 			files: files.length,
@@ -38,6 +39,7 @@ export async function toReview(
 	const pull = pullRequestOf(merge.subject)
 	return {
 		title: pull ? `Review the merge of pull request ${pull}` : 'Review the newest merge',
+		what: pull ? `pull request ${pull}` : 'the newest merge',
 		why: pull
 			? 'It is the newest merge and you have not walked through it.'
 			: `It is "${merge.subject}", and you have not walked through it.`,

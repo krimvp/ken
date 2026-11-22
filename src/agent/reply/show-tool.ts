@@ -803,7 +803,7 @@ const LAYOUT_SCHEMA = {
 		},
 		flows: {
 			type: 'array',
-			description: `Up to ${LAYOUT_BOUNDS.flows} processes of this level that a diagram would show better than the parts do, each as a short request the reader can press, such as "How a tool call is gated", at most ${LAYOUT_BOUNDS.flow} characters. Name only what the code you read does, and leave it out when there is none.`,
+			description: `Up to ${LAYOUT_BOUNDS.flows} processes of this level that a diagram would show better than the parts do, each as a short request the reader can press, such as "How an order is paid", at most ${LAYOUT_BOUNDS.flow} characters. Name only what the code you read does, and leave it out when there is none.`,
 			items: { type: 'string' },
 		},
 		parts: {
