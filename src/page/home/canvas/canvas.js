@@ -239,7 +239,9 @@ function pickerHtml(home, rows) {
 	const own = review ? 'another' : 'since'
 	const refused = problem?.field === 'change' && typed[own].trim() !== '' ? own : problem?.field
 	const error = (field) =>
-		refused === field ? `<span class="home-error" id="home-${field}-error">${esc(problem.message)}</span>` : ''
+		refused === field
+			? `<span class="home-error" id="home-${field}-error">${esc(problem.message)} The picture has not changed.</span>`
+			: ''
 	const invalid = (field) => (refused === field ? ` aria-invalid="true" aria-describedby="home-${field}-error"` : '')
 	// A field the reader types in, behind one line. Each is a form of its own, so Enter sends the field it is pressed in.
 	const typedIn = (field, summary, label, placeholder) =>

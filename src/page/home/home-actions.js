@@ -428,10 +428,10 @@ export function homeActions(app) {
 		void select(selected?.number === number ? null : { kind: 'element', number })
 	}
 
-	// A press on an example or a note must not take the keyboard out of the box of "Show it another way": the examples
-	// show only while the box has it.
+	// A press in the bar of "Show it another way" must not take the keyboard out of its box: the examples show only
+	// while the box has it, so the bar would shrink under the mouse and the button would move away before the click.
 	function press(event) {
-		if (event.target.closest?.('.redraw-more')) event.preventDefault()
+		if (event.target.closest?.('#redraw-form') && event.target.id !== 'redraw-text') event.preventDefault()
 	}
 
 	return { actions, start, back, address, ended, submit, input, change, key, press, openAt, pick }
