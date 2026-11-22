@@ -39,7 +39,7 @@ const arrow = base.arrows[0]
 if (!server || !agent || !arrow) throw new Error('the draft has its parts and its arrow')
 
 test('a layout whose arrow quotes an import line in its from part naming its to part is accepted, with git ids for its paths', async () => {
-	const checked = await checkLayout(repo, base, 'The layout')
+	const checked = await checkLayout(repo, base, { where: 'The layout', needsAbout: false })
 	assert.ok(checked.kind === 'ok', JSON.stringify(checked))
 	assert.deepEqual(
 		checked.layout.parts.map((part) => [part.name, part.places.map((place) => place.path)]),
@@ -118,7 +118,7 @@ test('each broken rule refuses the layout and names the problem', async () => {
 		],
 	]
 	for (const [what, each, problem] of cases) {
-		const checked = await checkLayout(repo, each, 'The layout')
+		const checked = await checkLayout(repo, each, { where: 'The layout', needsAbout: false })
 		assert.ok(checked.kind === 'refused', `${what} is refused`)
 		assert.match(checked.problems.join('\n'), problem, what)
 	}

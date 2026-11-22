@@ -52,11 +52,12 @@ export type LayoutCheck = { kind: 'ok'; layout: Layout } | { kind: 'refused'; pr
 // ken's own record is not part of the project's code.
 const RECORD = '.ken'
 
-// Refuses with every problem it finds. where names the layout in each problem, such as "The layout".
+// Refuses with every problem it finds. where names the layout in each problem, such as "The layout". needsAbout is
+// true for a layout ken's model sends now, and false for one the record holds, which may be older than the rule.
 export async function checkLayout(
 	repo: Repository,
 	draft: LayoutDraft,
-	where: string,
+	{ where, needsAbout }: { where: string; needsAbout: boolean },
 	signal?: AbortSignal,
 ): Promise<LayoutCheck> {
 	const problems: string[] = []
@@ -81,6 +82,11 @@ export async function checkLayout(
 	}
 	const about = draft.about?.trim() || undefined
 	const asked = draft.asked?.trim() || undefined
+	if (needsAbout && !about) {
+		say(
+			'it does not say what the level is. Set the field about to what it is, who uses it, and the one idea its maintainer would say first.',
+		)
+	}
 	for (const [what, text, most] of [
 		['about', about, LAYOUT_BOUNDS.about],
 		["the reader's request", asked, LAYOUT_BOUNDS.asked],

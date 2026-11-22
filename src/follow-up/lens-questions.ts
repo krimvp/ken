@@ -150,7 +150,7 @@ export function rangeQuestion(range: TimeRange, record: RecordRead, userEmail: s
 	}
 }
 
-// "Ask ken to name these parts" and "Name them again" in the Project view. The level as the reader sees it now is the
+// "Ask ken to name these parts" and "Name them again" on the picture of the project. The level as the reader sees it now is the
 // starting point, and the rules are those show's layout is checked against, so the model can pass the check first time.
 // name is what the reader calls the level, such as the part they opened, or null for the whole project.
 export type PartsLevel = {
@@ -232,13 +232,21 @@ function levelLines({ boxes, named, loose }: PartsLevel): string[] {
 	]
 }
 
-// The rules show's layout is checked against, so the model can pass the check first time.
+// What a good picture of a level is, and the rules show's layout is checked against, so the model can pass the check
+// first time. A reviewer found parts filed by folder, a product squeezed into one part and arrows that said more than
+// their lines, so each rule says what to look at.
 function layoutRules(level: PartsLevel): string[] {
 	const { bounds } = level
 	return [
-		`Fill about with what ${whereOf(level)} is as a whole: one or two plain sentences, at most ${bounds.about} characters, for a reader who has never seen it.`,
-		`Group the paths into ${bounds.fewest} to ${bounds.parts} parts the owner would name. Give each a short name, one line of about 80 characters on its job, and the folders or files it holds, each inside within. No two parts share a file. Leave out what is not code if it does not help, such as docs; ken lists it as in no part.`,
-		`Add at most ${bounds.arrows} arrows for which part uses which, each with a short verb said from the part it starts at, so that the start part, the verb and the end part read as a sentence, such as "Server runs questions in Chat engine". Never a passive verb such as "is used by". Each arrow quotes lines from a file of the part it starts at that name a folder or file of the part it ends at: an import line does, a comment does not. Leave out an arrow you cannot quote that way.`,
+		"Read the project's own maps before you group anything: the README, the design docs, a glossary, and any table in the code or the tests that names the modules or their boundaries. Call the parts what those call them, so the picture uses words the owner already knows.",
+		`Group the paths into ${bounds.fewest} to ${bounds.parts} parts. Give each a short name, a job, and the folders or files it holds, each inside within. No two parts share a file.`,
+		'Put a file in the part whose work it does, not the part its folder suggests. What it imports and what starts it tell you. If two parts would use each other, move the file that causes it.',
+		'Spend the parts on the product. The code a user of the project runs gets parts in proportion to its size. What only keeps the repository going, such as build scripts, vendored code and agent setup, is one part at most. Leave out what is not code if it does not help, such as docs; ken lists it as in no part.',
+		'A job is one sentence of about 80 characters with a verb. It says what the part does for whoever uses it, with no file names, flags or build steps. If you can only write a job as a list of nouns, the part is too big: split it.',
+		`Set the field about to what ${whereOf(level)} is, who uses it, and the one idea its maintainer would say first: one or two plain sentences, at most ${bounds.about} characters. ken sends back a layout without it.`,
+		`Add at most ${bounds.arrows} arrows for which part uses which. Show the relation that matters when the code runs: one part calls the other, starts it as a process, or reads its files. Fall back on an import of types only when nothing stronger joins the two parts.`,
+		'Give each arrow a short verb said from the part it starts at, so that the start part, the verb and the end part read as a sentence, such as "Server runs questions in Chat engine". Never a passive verb such as "is used by". The verb says only what the quoted lines show: a line that imports a list shows "reads", not "runs".',
+		'Each arrow quotes lines of code from a file of the part it starts at that name a folder or file of the part it ends at. A comment does not count. Leave out an arrow you cannot quote that way.',
 	]
 }
 

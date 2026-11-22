@@ -767,7 +767,7 @@ const DIAGRAM_SCHEMA = {
 const LAYOUT_SCHEMA = {
 	type: 'object',
 	description:
-		"Give it when the reader asks for the main parts of the project or of one folder. One level of the project's layout: the parts the reader would name, what each does, and which part uses which. ken checks every path and arrow, keeps the level, and shows it in the Project view.",
+		"Give it when the reader asks for the main parts of the project or of one folder. One level of the project's layout: the parts the reader would name, what each does, and which part uses which. ken checks every path and arrow, keeps the level, and shows it as the picture of the project.",
 	properties: {
 		within: {
 			type: 'array',
@@ -777,7 +777,7 @@ const LAYOUT_SCHEMA = {
 		at: { type: 'string', description: 'The commit you read. HEAD when left out.' },
 		about: {
 			type: 'string',
-			description: `What this level is as a whole, in one or two plain sentences for a reader who has never seen it, at most ${LAYOUT_BOUNDS.about} characters`,
+			description: `What this level is, who uses it, and the one idea its maintainer would say first, in one or two plain sentences, at most ${LAYOUT_BOUNDS.about} characters. ken sends back a layout without it.`,
 		},
 		parts: {
 			type: 'array',
@@ -791,7 +791,7 @@ const LAYOUT_SCHEMA = {
 					},
 					job: {
 						type: 'string',
-						description: `What it does, in one short line of about 80 characters, never more than ${LAYOUT_BOUNDS.job}`,
+						description: `One sentence with a verb on what it does for whoever uses it, about 80 characters and never more than ${LAYOUT_BOUNDS.job}. No file names, flags or build steps.`,
 					},
 					paths: {
 						type: 'array',
@@ -805,7 +805,7 @@ const LAYOUT_SCHEMA = {
 		},
 		arrows: {
 			type: 'array',
-			description: `At most ${LAYOUT_BOUNDS.arrows}: which part uses which. Each rests on lines from a file of the part it starts at that name a folder or file of the part it ends at, as an import line does. A comment does not count. Leave out an arrow you cannot quote that way.`,
+			description: `At most ${LAYOUT_BOUNDS.arrows}: which part uses which, by the relation that matters when the code runs (calls, starts as a process, reads the files of) before an import of types. Each rests on lines from a file of the part it starts at that name a folder or file of the part it ends at, as an import line does. A comment does not count. Leave out an arrow you cannot quote that way.`,
 			items: {
 				type: 'object',
 				properties: {
@@ -814,7 +814,7 @@ const LAYOUT_SCHEMA = {
 					text: {
 						type: 'string',
 						description:
-							'A verb of one to four words said from the part the arrow starts at, so "from, verb, to" reads as a sentence: "calls", "reads" or "runs questions in". Never a passive verb such as "is used by"',
+							'A verb of one to four words said from the part the arrow starts at, so "from, verb, to" reads as a sentence: "calls", "reads" or "runs questions in". Never a passive verb such as "is used by". It says only what the quoted lines show',
 					},
 					quotes: {
 						type: 'array',

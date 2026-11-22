@@ -23,6 +23,7 @@ const PORT = { path: 'src/server/serve.ts', commit: 'HEAD', text: 'export const 
 function layout(quote: { path: string; commit?: string; text: string }) {
 	return {
 		within: [],
+		about: 'A page server that asks a chat engine for its answers.',
 		parts: [
 			{ name: 'Server', job: 'serves the page', paths: ['src/server'] },
 			{ name: 'Chat engine', job: 'answers questions', paths: ['src/agent'] },
@@ -80,4 +81,20 @@ test("a layout whose arrow quotes a line that does not name its target is sent b
 	for (const line of ['Server (src/server): serves the page', 'Chat engine (src/agent): answers questions']) {
 		assert.ok(prompt.includes(line), `the next question's first request names the part: ${line}`)
 	}
+})
+
+test('a layout the model sends without saying what the level is comes back naming the field, and passes once it says it', async () => {
+	const { about, ...silent } = layout(IMPORT)
+	const { events } = await ask([
+		{ tool: 'ken__show', text: 'Two parts.', args: { layout: silent } },
+		{ tool: 'ken__show', args: { layout: { ...silent, about } } },
+		{ text: '' },
+	])
+
+	assert.deepEqual(
+		sentBackIn(events).map((each) => [each.what, each.problems.join(' ').includes('about')]),
+		[['The layout', true]],
+	)
+	const [card] = cardsIn(events)
+	assert.equal(card?.kind === 'layout' && card.layout.about, about)
 })

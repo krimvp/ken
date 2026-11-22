@@ -230,6 +230,7 @@ test('a level the reader asks to see another way is stored with their own words 
 	])
 	const layout = {
 		within: ['src'],
+		about: 'A server that answers from a store.',
 		parts: [
 			{ name: 'Front', job: 'serves and answers', paths: ['src/server', 'src/agent'] },
 			{ name: 'Store', job: 'saves', paths: ['src/store'] },
