@@ -38,6 +38,7 @@ import {
 	type Told,
 	toldOfPart,
 } from './told.ts'
+import { viewBrief, viewRows } from './views-brief.ts'
 
 export const TRUST = "ken's model wrote the words. ken found each quoted line in git."
 
@@ -46,7 +47,8 @@ type Neighbour = Named & { verb: string }
 
 // explained is false while nothing from the model is here: points, terms and questions are then empty, and explain is
 // what to send to /api/questions to have ken's model write them. quotes is there for a decision, an arrow and a step,
-// about for a question and a step, usedIn for a term, and why for a decision.
+// about for a question and a step, usedIn for a term, and why for a decision. A frame, a store, an outside system and a
+// crossing of the drawings of the top level have quotes, and as their kind has them inside, parts, gaps and topics.
 export type Brief = {
 	id: string
 	// A part is a file where nobody named the parts and git lists one file.
@@ -69,6 +71,10 @@ export type Brief = {
 	usedIn?: Named[]
 	quotes?: BriefQuote[]
 	why?: string
+	inside?: Named[]
+	parts?: Named[]
+	gaps?: string[]
+	topics?: string[]
 }
 
 // One row of what search can find. level is what ken thinks the reader knows of it, null when ken holds nothing.
@@ -113,6 +119,16 @@ export function conceptReads(layout: LayoutSources, history: History) {
 				return decisionBrief(concept.id, all)
 			case 'question':
 				return await questionBrief(concept.id, all)
+			case 'frame':
+			case 'store':
+			case 'outside':
+			case 'crossing': {
+				const views = (await levelAt([], all.now))?.views
+				const found = views && viewBrief(concept.kind, concept.id, views)
+				if (!found) return null
+				const { id: named, kind, name, line, sideways, ...rest } = found
+				return { ...blank(named, kind, name, line), explained: true, sideways: { ...sideways, processes: [] }, ...rest }
+			}
 			default:
 				return concept satisfies never
 		}
@@ -296,6 +312,7 @@ export function conceptReads(layout: LayoutSources, history: History) {
 			entry.kind === 'topic' && !parts.some((part) => sameName(part.name, entry.name)) ? [entry] : [],
 		)
 		const [top] = looks
+		const views = top?.views ? viewRows(top.views).map((row) => ({ ...row, level: null })) : []
 		const processes = all.drawn.map((each) => processOf(each, top ? partsOf(top) : []))
 		const known = await knowsOf(
 			layout,
@@ -321,6 +338,7 @@ export function conceptReads(layout: LayoutSources, history: History) {
 				line: processLine(process),
 				level: known[topics.length + at]?.level ?? null,
 			})),
+			...views,
 		]
 	}
 

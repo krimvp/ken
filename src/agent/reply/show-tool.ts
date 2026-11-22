@@ -7,12 +7,15 @@ import type { JsonObject, JsonValue, Tool } from 'aigent/plugin'
 import type { ChangedHunk, Quote, QuoteSources } from '../../checks/index.ts'
 import {
 	CARDINALITIES,
+	checkViews,
 	DIAGRAM_BOUNDS,
 	DIAGRAM_KINDS,
 	type DiagramDraft,
 	LAYOUT_BOUNDS,
 	type LayoutDraft,
 	onlyComments,
+	type Views,
+	viewsDraft,
 } from '../../diagram/index.ts'
 import type { UnderstandingMap } from '../../map/index.ts'
 import { RECORD_LIMITS, type RecordStore, sameName, textProblem, UNDO } from '../../record/index.ts'
@@ -21,6 +24,7 @@ import { type BriefDraft, briefSchema, readBrief } from '../brief/brief-schema.t
 import type { ChatEvent } from '../chat-event.ts'
 import { scopeProblem } from '../tools/exploration-tools.ts'
 import { readArgs, refuse, reply, short } from '../tools/tool-edge.ts'
+import { readViews, viewsSchema } from '../views/views-schema.ts'
 import { type CardContext, type CardDraft, changedHunks, checkCard } from './check-card.ts'
 import { allowJsonText, readJsonText } from './json-text.ts'
 import { type Card, type Item, type Risk, type Tour, type Want, WEIGHTS } from './reply.ts'
@@ -49,6 +53,7 @@ export type Gate = {
 // them. view is the level the reader asked to see another way, with their words, which ken keeps with a layout the
 // reply shows for that level. want is what the reader asked of a change through its lens, or null. answers is the
 // question about one concept that the reply answers as a brief, or null.
+// views is what ken took of "In its world" and "Where it runs" in this reply, kept with the top level when it ends.
 // typed is true when the round starts from the reader's own words, the only round in which ken keeps a note about them,
 // so text in a diff or a saved session cannot make the model keep one.
 export type Round = {
@@ -58,6 +63,7 @@ export type Round = {
 	view: { within: string[]; text: string } | null
 	want: Want | null
 	answers: { concept: string; text: string } | null
+	views: Views | null
 	step: 'talk' | 'risks'
 	passRejections: number
 	scope: { range: Range; work: string | null; hunks: Promise<ChangedHunk[]> | null } | null
@@ -92,6 +98,7 @@ export function freshRound(as: Asking, emit: Round['emit']): Round {
 		view: as.kind === 'view' ? { within: as.within, text: as.text } : null,
 		want: as.kind === 'change' ? as.want : null,
 		answers: as.kind === 'answer' ? { concept: as.concept, text: as.text } : null,
+		views: null,
 		step: 'talk',
 		passRejections: 0,
 		scope: as.kind === 'change' ? { range: as.range, work: null, hunks: null } : null,
@@ -104,9 +111,10 @@ export function freshRound(as: Asking, emit: Round['emit']): Round {
 	}
 }
 
-// A reply that explains several parts sends a brief for each, so each part has its own cards to send back.
+// A reply that explains several parts sends a brief for each, so each part has its own cards to send back, and the two
+// drawings of where the project runs have many items, so they get two more sets.
 function sentBackLimit(round: Round): number {
-	return MAX_SENT_BACK * Math.max(1, round.tour?.stops.length ?? 1)
+	return MAX_SENT_BACK * (Math.max(1, round.tour?.stops.length ?? 1) + (round.views ? 2 : 0))
 }
 
 function spent(round: Round): string {
@@ -244,6 +252,7 @@ export function showTool(gate: Gate, round: () => Round): Tool {
 				if (card.kind === 'topic') known.push(card.topic.name)
 				passed[at] = card
 			}
+			lines.push(...(await showViews(gate, current, raw.views, passed, ctx.signal)))
 			const shown: string[] = []
 			const held: string[] = []
 			for (const [at, card] of passed.entries()) {
@@ -284,6 +293,73 @@ export function showTool(gate: Gate, round: () => Round): Tool {
 			return text === '' ? reply('Nothing to show.') : reply(text)
 		},
 	}
+}
+
+// What this call sends of the drawings joins what the reply holds. A layout of the top level that passed in this call
+// names the parts again, so what the reply holds is checked again against those parts.
+async function showViews(
+	gate: Gate,
+	current: Round,
+	raw: JsonValue | undefined,
+	passed: Card[],
+	signal: AbortSignal,
+): Promise<string[]> {
+	const lines: string[] = []
+	const top = (cards: Card[]) => cards.findLast((card) => card.kind === 'layout' && card.layout.within.length === 0)
+	const named = top(passed.filter(Boolean))
+	if (raw === undefined && !(named && current.views)) return lines
+	const shown = named ?? top(cardsShown(current))
+	const stored = (await gate.store.read()).current.findLast(
+		(entry) => entry.kind === 'layout' && entry.within.length === 0,
+	)
+	const names =
+		shown?.kind === 'layout'
+			? shown.layout.parts.map((part) => part.name)
+			: stored?.kind === 'layout'
+				? stored.parts.map((part) => part.name)
+				: []
+	if (named && current.views) {
+		const again = await checkViews(gate.sources.repo, viewsDraft(current.views), { parts: names }, signal)
+		current.views = again.views
+		for (const { where, problems } of again.sentBack) {
+			lines.push(
+				`${where} no longer fits the parts and was dropped. Send it again if it should stay.`,
+				...problems.map((p) => `- ${p}`),
+			)
+		}
+	}
+	if (raw === undefined) return lines
+	const checked = await checkViews(
+		gate.sources.repo,
+		readViews(objectOf(raw)),
+		{
+			parts: names,
+			held: current.views ?? { world: null, runtime: null },
+		},
+		signal,
+	)
+	const before = new Set(itemIds(current.views))
+	current.views = checked.views
+	const taken = itemIds(checked.views).filter((id) => !before.has(id))
+	if (taken.length > 0) lines.push(`Drawings: ken took ${taken.join(', ')}.`)
+	for (const { where, problems } of checked.sentBack) {
+		current.sentBack += 1
+		current.emit({ kind: 'step', step: { kind: 'sent-back', what: where, problems } })
+		lines.push(`${where} sent back. The reader saw nothing of it.`, ...problems.map((p) => `- ${p}`))
+	}
+	return lines
+}
+
+function itemIds(views: Views | null): string[] {
+	const { world, runtime } = views ?? { world: null, runtime: null }
+	return [
+		...(world?.outside ?? []),
+		...(world?.crossings ?? []),
+		...(runtime?.frames ?? []),
+		...(runtime?.things ?? []),
+		...(runtime?.crossings ?? []),
+		...(runtime?.gaps ?? []),
+	].map((item) => item.id)
 }
 
 // A card shows once in a reply. A thing to know or a term shows once in each brief, since two parts may share one.
@@ -980,6 +1056,7 @@ const SHOW_SCHEMA = {
 		topics: { type: 'array', description: 'Parts of the project the reply explains', items: TOPIC_SCHEMA },
 		layout: LAYOUT_SCHEMA,
 		brief: briefSchema(QUOTE),
+		views: viewsSchema(QUOTE),
 	},
 	additionalProperties: false,
 } as const

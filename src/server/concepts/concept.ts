@@ -11,6 +11,7 @@ export type Concept =
 	| { kind: 'question'; id: string }
 	| { kind: 'decision'; id: string }
 	| { kind: 'arrow'; within: string[]; n: number }
+	| { kind: 'frame' | 'store' | 'outside' | 'crossing'; id: string }
 
 export type ConceptKind = Concept['kind']
 
@@ -40,6 +41,10 @@ export function parseConcept(id: string): Concept | null {
 		case 'process':
 		case 'question':
 		case 'decision':
+		case 'frame':
+		case 'store':
+		case 'outside':
+		case 'crossing':
 			return rest === '' ? null : { kind, id: rest }
 		default:
 			return null
