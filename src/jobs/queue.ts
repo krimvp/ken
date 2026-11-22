@@ -27,8 +27,9 @@ export type JobState =
 	| { kind: 'done'; skipped: boolean }
 	| { kind: 'failed'; why: string }
 
-// What the page sees of one job. place counts from 1 among the jobs that wait, in the order they will run. A job
-// that failed says why in reason, and retryIn is the seconds until ken tries it again, when it will.
+// What the page sees of one job. place counts from 1 among the jobs that wait, in the order they will run, and
+// startsIn is the seconds until a waiting job starts, by the estimate. A job that failed says why in reason, and
+// retryIn is the seconds until ken tries it again, when it will.
 export type JobView = {
 	key: string
 	kind: string
@@ -38,9 +39,13 @@ export type JobView = {
 	by: 'reader' | 'ken'
 	state: JobState
 	place: number | null
+	startsIn: number | null
 	reason: string | null
 	retryIn: number | null
 }
+
+// The jobs that wait or run, and the seconds until the last ends by the estimate, null when none is left.
+export type Left = { jobs: number; seconds: number | null }
 
 // How a run ended when it threw nothing. A model that refused or failed the request may answer later, so the job is
 // tried again; a run that made nothing would make nothing again.
@@ -80,6 +85,9 @@ const KEPT_ENDED = 20
 const GAVE_WAY = 'gave way to the reader'
 // A background run gives way to the reader only this soon after it started; later, the reader's job waits for it.
 const YIELD_WITHIN = 20_000
+// The estimate takes the median of the last runs of each kind, and this many seconds before any has run.
+const KEPT_TIMES = 5
+const FIRST_GUESS = 60
 // The waits before ken tries again a job the model refused, the last one repeated.
 const RETRY_WAITS = [30_000, 120_000, 600_000]
 
@@ -94,6 +102,7 @@ export function jobQueue<W, L>(deps: QueueDeps<W, L>) {
 	const timers = new Set<ReturnType<typeof setTimeout>>()
 	// How many run at once. A model that refuses a request is told no more at once than it was serving.
 	let slots = deps.parallel
+	const took = new Map<string, number[]>()
 	let seq = 0
 	let bumps = 0
 	let closed = false
@@ -114,8 +123,36 @@ export function jobQueue<W, L>(deps: QueueDeps<W, L>) {
 		return ranked.map(({ job }) => job)
 	}
 
+	function guess(kind: string): number {
+		const times = took.get(kind)?.toSorted((a, b) => a - b) ?? []
+		return times.length === 0 ? FIRST_GUESS : (times[Math.floor(times.length / 2)] ?? FIRST_GUESS)
+	}
+
+	// Each waiting job starts when the slot that frees first is free, and holds it for the guess of its kind.
+	function estimate(): { startsIn: Map<Job<W, L>, number>; seconds: number } {
+		const now = Date.now()
+		const free = running().map((job) =>
+			job.state.kind === 'running' ? Math.max(0, guess(job.kind) - (now - job.state.startedAt) / 1000) : 0,
+		)
+		while (free.length < slots) free.push(0)
+		const startsIn = new Map<Job<W, L>, number>()
+		for (const job of line()) {
+			free.sort((a, b) => a - b)
+			const at = free[0] ?? 0
+			startsIn.set(job, Math.round(at))
+			free[0] = at + guess(job.kind)
+		}
+		return { startsIn, seconds: Math.round(Math.max(0, ...free)) }
+	}
+
+	function left(): Left {
+		const count = jobs.filter(live).length
+		return { jobs: count, seconds: count === 0 ? null : estimate().seconds }
+	}
+
 	function view(): JobView[] {
 		const waiting = line()
+		const { startsIn } = estimate()
 		const ended = jobs.filter((job) => !live(job)).slice(-KEPT_ENDED)
 		const shown = [...running(), ...waiting, ...ended]
 		const now = Date.now()
@@ -128,6 +165,7 @@ export function jobQueue<W, L>(deps: QueueDeps<W, L>) {
 			by: job.asked ? 'reader' : 'ken',
 			state: job.state,
 			place: job.state.kind === 'waiting' ? waiting.indexOf(job) + 1 : null,
+			startsIn: startsIn.get(job) ?? null,
 			reason: job.state.kind === 'failed' ? job.state.why : null,
 			retryIn: job.retryAt !== null && job.retryAt > now ? Math.ceil((job.retryAt - now) / 1000) : null,
 		}))
@@ -150,7 +188,8 @@ export function jobQueue<W, L>(deps: QueueDeps<W, L>) {
 
 	function start(job: Job<W, L>) {
 		const stop = new AbortController()
-		Object.assign(job, { state: { kind: 'running', startedAt: Date.now(), actions: 0 }, stop, lines: [] })
+		const startedAt = Date.now()
+		Object.assign(job, { state: { kind: 'running', startedAt, actions: 0 }, stop, lines: [] })
 		if (!job.asked) tried.add(job.key)
 		const say = (said: L) => {
 			if (job.stop !== stop) return
@@ -177,6 +216,8 @@ export function jobQueue<W, L>(deps: QueueDeps<W, L>) {
 						if (!job.asked) retryLater(job)
 					} else {
 						refused.delete(job.key)
+						const times = [...(took.get(job.kind) ?? []), (Date.now() - startedAt) / 1000]
+						took.set(job.kind, times.slice(-KEPT_TIMES))
 						state = { kind: 'done', skipped: false }
 					}
 				}
@@ -343,7 +384,7 @@ export function jobQueue<W, L>(deps: QueueDeps<W, L>) {
 		return () => listeners.delete(listener)
 	}
 
-	return { want, wantAll, follow, stop, settled, refocus, view, subscribe, close }
+	return { want, wantAll, follow, stop, settled, refocus, view, left, subscribe, close }
 }
 
 const STOPPED = 'You stopped it.'

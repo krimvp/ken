@@ -208,7 +208,7 @@ export function questionDesk(
 		const key = (lens === undefined ? null : lensKey(lens)) ?? `ask:${randomUUID()}`
 		const kind = String(fieldOf(lens, 'kind') ?? 'question')
 		const concept = fieldOf(lens, 'concept') ?? null
-		const title = asked.text.split('\n')[0] ?? ''
+		const title = titleOf(lens, asked.text.split('\n')[0] ?? '')
 		const work = { kind: 'ask' as const, body, asked, chat: 'reader' as const, layer: null }
 		const ask = {
 			key,
@@ -271,7 +271,10 @@ export function questionDesk(
 	async function note(chat: Chat, about: About, question: string, stop: AbortSignal): Promise<QuestionView | null> {
 		const key = `note:${randomUUID()}`
 		const work = { kind: 'note' as const, chat, about, question }
-		queue.want({ key, kind: 'note', concept: null, title: 'Writing a live note', order: 0, yields: false, work }, 'ken')
+		queue.want(
+			{ key, kind: 'note', concept: null, title: 'ken is writing a live note.', order: 0, yields: false, work },
+			'ken',
+		)
 		const off = () => queue.stop(key, 'stop')
 		if (stop.aborted) off()
 		stop.addEventListener('abort', off)
@@ -659,6 +662,7 @@ export function questionDesk(
 		refill,
 		close,
 		jobs: queue.view,
+		left: queue.left,
 		subscribe: queue.subscribe,
 	}
 }
@@ -680,6 +684,37 @@ function deeperOnNote(about: About, at: string, summary: string, commits: number
 		return `Go deeper on the ${time} note about ${what}\nThe note was about the commits from ${short(about.base)} to ${short(about.head)}. Read them with log and diff over that range.\n${explain}`
 	}
 	return `Go deeper on the ${time} note about uncommitted work\nken copied that work into commit ${short(about.snapshot)} in its own store, on top of HEAD ${short(about.head)}. Read it with diff from ${short(about.base)} to ${short(about.snapshot)} and with read_file at ${short(about.snapshot)}, as you would a commit.\n${explain}`
+}
+
+// What the page shows of a job the reader asked for: a whole sentence, from the lens and the question's first line.
+function titleOf(lens: unknown, first: string): string {
+	const field = (name: string) => {
+		const value = fieldOf(lens, name)
+		return typeof value === 'string' ? value : null
+	}
+	const within = fieldOf(lens, 'within')
+	const top = !Array.isArray(within) || within.length === 0
+	const said = (text: string) => (/[.?!]$/.test(text) ? text : `${text}.`)
+	switch (field('kind')) {
+		case 'explain': {
+			const part = field('part')
+			return part ? `ken is explaining ${part}.` : 'ken is explaining every part here.'
+		}
+		case 'parts':
+			return top
+				? 'ken is naming the main parts of the project.'
+				: `ken is naming the parts inside ${field('name') ?? 'this part'}.`
+		case 'views':
+			return 'ken is drawing where the project runs.'
+		case 'view':
+			return `ken is drawing it the way you asked: ${said(field('text') ?? first)}`
+		case 'change':
+			return `ken is reading the change: ${said(first)}`
+		case 'answer':
+			return `ken is answering your question: ${said(field('text') ?? first)}`
+		default:
+			return `ken is answering your question: ${said(first)}`
+	}
 }
 
 // The questions the page asks beside a change's story. Each is answered in a thread of its own.

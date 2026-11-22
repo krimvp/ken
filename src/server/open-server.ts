@@ -156,8 +156,8 @@ export async function openServer(options: {
 			// One line with every job, then one each time a job changes, until the page goes away.
 			response.writeHead(200, { ...HEADERS, 'content-type': 'application/x-ndjson; charset=utf-8' })
 			response.flushHeaders()
-			writeLine(response, { jobs: desk.jobs() })
-			const off = desk.subscribe((jobs) => writeLine(response, { jobs }))
+			writeLine(response, { jobs: desk.jobs(), left: desk.left() })
+			const off = desk.subscribe((jobs) => writeLine(response, { jobs, left: desk.left() }))
 			response.on('close', off)
 			return
 		}
@@ -171,7 +171,7 @@ export async function openServer(options: {
 				const message = 'Send looking, with the open brief and the level on the canvas, or the key of a job to stop.'
 				return sendJson(response, 400, { message })
 			}
-			return sendJson(response, 200, { jobs: desk.jobs() })
+			return sendJson(response, 200, { jobs: desk.jobs(), left: desk.left() })
 		}
 		if (where === 'GET /api/decisions') return sendJson(response, 200, { decisions: decisionRows(await record.read()) })
 		if (where === 'GET /api/map') return sendJson(response, 200, { file: map.file, ...(await map.read(new Date())) })

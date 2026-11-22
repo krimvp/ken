@@ -259,3 +259,29 @@ test('a background run that has gone on 20 seconds is not thrown away for the re
 	assert.deepEqual([state('long'), state('asked'), started], ['running', 'waiting', ['long']])
 	assert.equal(queue.view().find((job) => job.key === 'asked')?.place, 1)
 })
+
+test('the queue says when each waiting job starts and when all end, from how long the last runs of a kind took', async (t) => {
+	t.mock.timers.enable({ apis: ['setTimeout', 'Date'] })
+	const flush = () => new Promise((resolve) => setImmediate(resolve))
+	const { queue, ask, finish } = harness()
+	queue.want(ask('first'), 'ken')
+	await flush()
+	assert.deepEqual(queue.left(), { jobs: 1, seconds: 60 }, 'a guess before any run of the kind')
+	t.mock.timers.tick(30_000)
+	const finished = finish('first')
+	t.mock.timers.tick(5)
+	await finished
+	for (const key of ['a', 'b', 'c']) queue.want(ask(key), 'ken')
+	await flush()
+	assert.deepEqual(
+		queue.view().flatMap((job) => (job.key === 'first' ? [] : [[job.key, job.startsIn]])),
+		[
+			['a', null],
+			['b', 30],
+			['c', 60],
+		],
+	)
+	assert.deepEqual(queue.left(), { jobs: 3, seconds: 90 })
+	t.mock.timers.tick(10_000)
+	assert.deepEqual(queue.left(), { jobs: 3, seconds: 80 })
+})
