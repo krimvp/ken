@@ -14,13 +14,15 @@ import type { Diagram, Layout } from '../../diagram/index.ts'
 import type { Decision, Statement } from '../../record/index.ts'
 import type { Commit, CommitHash } from '../../repo/index.ts'
 
-// tour is there only on a tour of the project's parts.
+// tour is there only on a tour of the project's parts, and view only when the reader asked to see a level another way:
+// within is that level and asked their own words. Plain code sets both, never the model.
 export type Reply = {
 	items: Item[]
 	change: Change | null
 	// Every topic a card names, and on a tour the topic of each stop. The reader's map buttons act on these.
 	topics: string[]
 	tour?: Tour
+	view?: { within: string[]; asked: string }
 }
 
 // A tour of one named level of the project's parts. Plain code picked the stops and their order, and step n of the

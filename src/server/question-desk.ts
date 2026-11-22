@@ -1,6 +1,14 @@
 import { randomUUID } from 'node:crypto'
-import { type Asking, type Chat, type ChatEvent, firstWords, type Item, type Reply } from '../agent/index.ts'
-import { drawn, LAYOUT_BOUNDS } from '../diagram/index.ts'
+import {
+	type Asking,
+	type CardKind,
+	type Chat,
+	type ChatEvent,
+	firstWords,
+	type Item,
+	type Reply,
+} from '../agent/index.ts'
+import { DIAGRAM_BOUNDS, drawn, LAYOUT_BOUNDS } from '../diagram/index.ts'
 import {
 	type LensFacts,
 	onDay,
@@ -30,7 +38,9 @@ const NOTE_CHARS = 400
 // wants the reader to decide, and risks its risks. hunks is null when the reply was not about a range of commits.
 // thread groups the rows the page shows as one thread. tour names the level and the stops of a tour, so the page can
 // open a tour it has already instead of asking again. change is the change the reply is about and steps the number of
-// steps it walks through, so the page can open the stored story or walkthrough of a change the same way.
+// steps it walks through, so the page can open the stored story or walkthrough of a change the same way. view is there
+// when the reader asked to see a level another way, and drew says what the reply drew for it: the parts again, a
+// diagram, since a flow or the data is not a grouping of parts, or nothing.
 export type QuestionRow = {
 	id: string
 	question: string
@@ -44,6 +54,7 @@ export type QuestionRow = {
 	tour: { within: string[]; stops: string[] } | null
 	change: { base: string; head: string } | null
 	steps: number
+	view: { within: string[]; asked: string; drew: 'parts' | 'diagram' | 'nothing' } | null
 }
 
 // An entry from the history, its diagrams with their drawings. head is the project's HEAD now, which the page
@@ -226,10 +237,11 @@ export function questionDesk(
 				const { id, question, askedAt, thread, outcome } = entry
 				const row = { id, question, askedAt, thread, outcome }
 				if (entry.outcome !== 'answered') {
-					return { ...row, cards: 0, calls: 0, risks: 0, hunks: null, tour: null, change: null, steps: 0 }
+					return { ...row, cards: 0, calls: 0, risks: 0, hunks: null, tour: null, change: null, steps: 0, view: null }
 				}
-				const { items, change, tour } = entry.reply
+				const { items, change, tour, view } = entry.reply
 				const cards = items.flatMap((item) => (item.kind === 'card' ? [item.card] : []))
+				const has = (kind: CardKind) => cards.some((card) => card.kind === kind)
 				const total = change ? change.covered.length + change.uncovered.length : 0
 				return {
 					...row,
@@ -240,6 +252,7 @@ export function questionDesk(
 					tour: tour ? { within: tour.within, stops: tour.stops.map((each) => each.name) } : null,
 					change: change && { base: change.base, head: change.head },
 					steps: items.filter((item) => item.kind === 'step').length,
+					view: view ? { ...view, drew: has('layout') ? 'parts' : has('diagram') ? 'diagram' : 'nothing' } : null,
 				}
 			})
 	}
@@ -338,7 +351,11 @@ export function questionDesk(
 			const read = await levelOf(lens)
 			if (read.kind !== 'ok') return read
 			const { level } = read
-			return { kind: 'ok', text: viewQuestion(level, text).text, as: { kind: 'view', within: level.within, text } }
+			return {
+				kind: 'ok',
+				text: viewQuestion({ ...level, diagram: DIAGRAM_BOUNDS }, text).text,
+				as: { kind: 'view', within: level.within, text },
+			}
 		}
 		if (kind === 'tour') {
 			const within = fieldOf(lens, 'within')

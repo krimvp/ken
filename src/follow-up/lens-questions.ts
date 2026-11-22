@@ -181,12 +181,16 @@ export function partsQuestion(level: PartsLevel): LensQuestion {
 
 // The box where the reader tells ken to show a level another way. asked is their own words. The level as they see it
 // now and the layout rules follow, as in partsQuestion, and then what to do: draw the level again when the words are
-// about the picture, keep a reader note when they are about the reader.
+// about the picture, draw one diagram when they ask for an order of events or the data, which parts cannot show, and
+// keep a reader note when they are about the reader. diagram holds the bounds show checks a diagram against.
 export function viewQuestion(
-	level: PartsLevel & { arrows: { from: string; to: string; text: string }[] },
+	level: PartsLevel & {
+		arrows: { from: string; to: string; text: string }[]
+		diagram: { nodes: number; edges: number; title: number }
+	},
 	asked: string,
 ): LensQuestion {
-	const { within, head, arrows } = level
+	const { within, head, arrows, diagram } = level
 	const uses = arrows.map((arrow) => `${arrow.from} ${arrow.text} ${arrow.to}`)
 	return {
 		text: [
@@ -198,7 +202,8 @@ export function viewQuestion(
 			`If what I ask is about the picture, such as how the parts are grouped, how many there are or what the arrows show: read the code at HEAD (${head}), then call show with a layout that does it, with within set to ${JSON.stringify(within)}, and say in one or two sentences what changed.`,
 			...layoutRules(level),
 			'If it is about me, such as what I know or how I want things explained: call remember with one plain sentence, and draw the picture again only if it should change too.',
-			'If the layout rules cannot do what I ask, say so plainly, and say what I can ask for instead.',
+			`If what I ask needs an order of events or the shape of the data, such as following one request, a data flow or a lifecycle, the parts cannot show it. Then read the code at HEAD (${head}) and call show with one diagram instead: sequence for steps in order, component for calls between pieces, entity-relationship for data. Give it a title of at most ${diagram.title} characters that says what it follows, at most ${diagram.nodes} participants, boxes or entities and at most ${diagram.edges} messages, arrows or relations, each quoting the lines it rests on. Then say in one or two sentences what it shows.`,
+			'If neither a layout nor a diagram can do what I ask, say so plainly, and say what I can ask for instead.',
 		].join('\n'),
 		empty: false,
 	}
