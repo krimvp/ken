@@ -15,9 +15,10 @@ import { type TourStop, tourOrder } from './tour-order.ts'
 // The paths a level shows the inside of, sorted. The empty list is the whole project.
 export type Scope = RepoPath[]
 
-// name says what the change is to the reader: "Uncommitted work", a branch, or a range as they typed it. asked is the
-// text that asks for this change again.
-export type Change = { name: string; asked: string; range: Range }
+// kind says how the change was asked for: the reader's uncommitted work, a branch against the main branch, or a range
+// of commits. name says what the change is to the reader: "Uncommitted work", a branch, or a range as they typed it.
+// asked is the text that asks for this change again.
+export type Change = { kind: 'uncommitted' | 'branch' | 'range'; name: string; asked: string; range: Range }
 
 export type LayoutAsk = { at: CommitHash; within: Scope; change: Change | null }
 

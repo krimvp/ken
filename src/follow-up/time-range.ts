@@ -78,6 +78,10 @@ export async function timeRange(
 // as the layout takes it, and name is what the reader picks: the span, then the commits it holds.
 export type SinceChoice = { kind: 'since'; change: string; name: string; commits: number }
 
+// A choice with the same fact said two more ways: landed as a sentence, such as "23 commits landed since your last
+// commit, 14 Oct.", and short in a few words, such as "23 commits since 14 Oct".
+export type Landed = { choice: SinceChoice; landed: string; short: string }
+
 const SPANS_DAYS = [7, 30, 90]
 // shortcut: the reader's last commit is looked for among this many of the newest commits on HEAD's main line, and
 // their last question among this many of the commits they last asked at. Walk further if a reader ever misses one.
@@ -86,14 +90,13 @@ const MAX_ASKED_AT = 20
 
 // The spans that hold at least one commit, in this order: since the reader's last question at an older commit, since
 // their own last commit, then the last 7, 30 and 90 days, without a span that holds the same commits as a shorter one.
-// asked is the reader's questions, oldest first. landed says the choice in one sentence, such as "23 commits landed
-// since your last commit, 14 Oct."
+// asked is the reader's questions, oldest first.
 export async function sinceChoices(
 	repo: Repository,
 	asked: { askedAt: string; head: string | null }[],
 	now: Date,
 	signal?: AbortSignal,
-): Promise<{ choice: SinceChoice; landed: string }[]> {
+): Promise<Landed[]> {
 	const resolved = await repo.resolve('HEAD', signal)
 	if (resolved.kind !== 'ok') return []
 	const head = resolved.commit
@@ -102,19 +105,22 @@ export async function sinceChoices(
 		const logged = await repo.log({ base, head }, signal)
 		return logged.kind === 'ok' ? logged.commits.filter((commit) => commit.parents.length < 2).length : 0
 	}
-	// title heads the choice and clause says the same span inside a sentence.
-	const spans: { title: string; clause: string; base: CommitHash; commits: number }[] = []
-	const since = async (what: string, base: CommitHash) =>
-		spans.push({ title: `Since ${what}`, clause: `since ${what}`, base, commits: await landedSince(base) })
+	// title heads the choice, clause says the same span inside a sentence, and short says it in the fewest words.
+	const spans: { title: string; clause: string; short: string; base: CommitHash; commits: number }[] = []
+	const since = async (what: string, moment: string, base: CommitHash) => {
+		const when = day(moment, now)
+		const [title, clause, short] = [`Since ${what}, ${when}`, `since ${what}, ${when}`, `since ${when}`]
+		spans.push({ title, clause, short, base, commits: await landedSince(base) })
+	}
 
 	const question = await lastAskedBefore(repo, asked, head, signal)
-	if (question) await since(`your last question to ken, ${day(question.askedAt, now)}`, question.head)
+	if (question) await since('your last question to ken', question.askedAt, question.head)
 	const [email, line] = await Promise.all([repo.userEmail(signal), repo.mainLine(head, MAX_WALK, signal)])
 	const own =
 		email === null || line.kind !== 'ok'
 			? undefined
 			: line.commits.find((commit) => commit.email.toLowerCase() === email.toLowerCase())
-	if (own && own.hash !== head) await since(`your last commit, ${day(own.date, now)}`, own.hash)
+	if (own && own.hash !== head) await since('your last commit', own.date, own.hash)
 	const bases = new Set<CommitHash>()
 	for (const days of SPANS_DAYS) {
 		const range = await timeRange(repo, { kind: 'days', days }, now, signal)
@@ -123,17 +129,19 @@ export async function sinceChoices(
 		spans.push({
 			title: `The last ${days} days`,
 			clause: `in the last ${days} days`,
+			short: `in the last ${days} days`,
 			base: range.range.base,
 			commits: range.range.commits.length,
 		})
 	}
 	return spans
 		.filter((span) => span.commits > 0)
-		.map(({ title, clause, base, commits }) => {
+		.map(({ title, clause, short, base, commits }) => {
 			const count = commits === 1 ? '1 commit' : `${commits} commits`
 			return {
 				choice: { kind: 'since', change: `${base}..${head}`, name: `${title}: ${count}`, commits },
 				landed: `${count} landed ${clause}.`,
+				short: `${count} ${short}`,
 			}
 		})
 }

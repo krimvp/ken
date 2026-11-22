@@ -14,10 +14,11 @@ import type { MapSignal } from '../map/index.ts'
 import { MERMAID_FILE, PAGE_FOLDER } from '../page/index.ts'
 import { OUTCOMES } from '../record/index.ts'
 import { decisionRows } from './decision-list.ts'
-import { refusal } from './guard-request.ts'
+import { refusal } from './http/guard-request.ts'
+import { type PageFile, readPageFiles } from './http/page-files.ts'
 import { openProject } from './ken-project.ts'
-import { type PageFile, readPageFiles } from './page-files.ts'
 import { fieldOf, type QuestionLine } from './question-desk.ts'
+import { suggestWayIn } from './way-in.ts'
 
 // model is the name of the model the page asks, or null when none is set and the page can only show earlier answers.
 export type KenServer = { url: string; root: string; model: string | null; live: boolean; close(): Promise<void> }
@@ -72,7 +73,7 @@ export async function openServer(options: {
 			changeChoices(layout),
 		])
 		const changes: ChangeChoice[] = [...since.map((each) => each.choice), ...choices]
-		return { look, changes }
+		return { look, changes, wayIn: await suggestWayIn(layout, history, since[0], now) }
 	}
 
 	async function route(request: IncomingMessage, response: ServerResponse) {

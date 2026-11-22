@@ -1,0 +1,79 @@
+// The way in ken suggests when the reader opens the project: review their own work, catch up on what landed since
+// they last looked, or learn the project. Plain code picks it from git, the reader's history and their map, says why in
+// one sentence, and gives one short fact for each way in, which the page shows under each choice.
+import type { Landed } from '../follow-up/index.ts'
+import type { History } from '../history/index.ts'
+import { type Change, type LayoutSources, lookAtLayout, readLayoutAsk } from '../layout/index.ts'
+import type { Repository } from '../repo/index.ts'
+
+export type WayIn = 'learn' | 'catch-up' | 'review'
+
+export type Suggested = {
+	suggested: WayIn
+	why: string
+	facts: { learn: string; 'catch-up': string | null; review: string | null }
+}
+
+// The main line is read this far back for its newest merge, as the layout's own choice of changes reads it.
+const MAIN_LINE = 100
+const SUBJECT_CHARS = 40
+
+// since is the first span of time that holds a commit, when there is one.
+export async function suggestWayIn(
+	layout: LayoutSources,
+	history: History,
+	since: Landed | undefined,
+	now: Date,
+): Promise<Suggested> {
+	const { repo, root } = layout
+	// With no change asked, the layout's change is the reader's own work: uncommitted, or their branch ahead of main.
+	const own = await readLayoutAsk(layout, {})
+	if (own.kind !== 'ok') throw new Error(`${root} has no HEAD commit to suggest a way in from`)
+	const { at, change } = own.ask
+	const [top, work, asked] = await Promise.all([
+		lookAtLayout(layout, { at, within: [], change: null }, now),
+		change && ownWork(repo, change),
+		history.list(),
+	])
+	const met = asked.length > 0 || (await layout.map.read(now)).states.some((state) => state.kind !== 'never-met')
+	const facts = {
+		learn: count(top.boxes.length, top.named ? 'part' : 'folder'),
+		'catch-up': since?.short ?? null,
+		review: work?.short ?? (await newestOnMainLine(repo, at)),
+	}
+	if (work) return { suggested: 'review', why: work.why, facts }
+	if (met && since) return { suggested: 'catch-up', why: since.landed, facts }
+	const why = met ? 'Nothing changed since you last looked.' : 'You have not looked at this project with ken yet.'
+	return { suggested: 'learn', why, facts }
+}
+
+async function ownWork(repo: Repository, change: Change): Promise<{ why: string; short: string }> {
+	if (change.kind === 'uncommitted') {
+		const diff = await repo.diff(change.range)
+		const files = count(diff.kind === 'ok' ? diff.files.length : 0, 'file')
+		return { why: `You have uncommitted work in ${files}.`, short: `${files} uncommitted` }
+	}
+	const logged = await repo.log(change.range)
+	const commits = count(logged.kind === 'ok' ? logged.commits.length : 0, 'commit')
+	return {
+		why: `You are on the branch ${change.name}, ${commits} ahead of the main branch.`,
+		short: `${commits} on ${change.name}`,
+	}
+}
+
+// The newest merge on the main line, or its newest commit when it has no merge. The first commit of the project is left
+// out, as the layout leaves it out of its changes: it has no commit before it to compare with.
+async function newestOnMainLine(repo: Repository, head: Change['range']['head']): Promise<string | null> {
+	const line = await repo.mainLine(head, MAIN_LINE)
+	const commits = line.kind === 'ok' ? line.commits.filter((commit) => commit.parents.length > 0) : []
+	const merge = commits.find((commit) => commit.parents.length > 1)
+	const newest = merge ?? commits[0]
+	if (!newest) return null
+	const subject =
+		newest.subject.length > SUBJECT_CHARS ? `${newest.subject.slice(0, SUBJECT_CHARS - 3)}...` : newest.subject
+	return `Newest ${merge ? 'merge' : 'commit'}: ${subject}`
+}
+
+function count(n: number, one: string): string {
+	return n === 1 ? `1 ${one}` : `${n} ${one}s`
+}

@@ -24,5 +24,13 @@ export {
 	openItems,
 } from './open-items.ts'
 export { type Author, authorsOf, findAuthor, type PersonChanges, personChanges } from './person.ts'
-export { type Since, type SinceChoice, sinceChoices, sinceOf, type TimeRange, timeRange } from './time-range.ts'
+export {
+	type Landed,
+	type Since,
+	type SinceChoice,
+	sinceChoices,
+	sinceOf,
+	type TimeRange,
+	timeRange,
+} from './time-range.ts'
 export { at, day, onDay, when } from './when.ts'

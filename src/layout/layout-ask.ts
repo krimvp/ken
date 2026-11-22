@@ -50,11 +50,11 @@ async function ownWork(sources: LayoutSources, signal?: AbortSignal): Promise<Ch
 	if (branch === null || main === null || branch === main) return null
 	const range = await resolveRange(repo, { base: main, head: branch }, signal)
 	if (range.kind !== 'ok' || range.range.base === range.range.head) return null
-	return { name: branch, asked: branch, range: range.range }
+	return { kind: 'branch', name: branch, asked: branch, range: range.range }
 }
 
 function uncommitted(head: CommitHash, snapshot: CommitHash): Change {
-	return { name: 'Uncommitted work', asked: UNCOMMITTED, range: { base: head, head: snapshot } }
+	return { kind: 'uncommitted', name: 'Uncommitted work', asked: UNCOMMITTED, range: { base: head, head: snapshot } }
 }
 
 async function changeOf(
@@ -70,7 +70,8 @@ async function changeOf(
 			change: uncommitted(snapshot.head, snapshot.kind === 'taken' ? snapshot.commit : snapshot.head),
 		}
 	}
-	const [base, head, ...rest] = text.includes('..') ? text.split('..') : [await mainBranch(repo, signal), text]
+	const kind = text.includes('..') ? 'range' : 'branch'
+	const [base, head, ...rest] = kind === 'range' ? text.split('..') : [await mainBranch(repo, signal), text]
 	if (base === null) {
 		return {
 			kind: 'refused',
@@ -82,7 +83,7 @@ async function changeOf(
 	const range = await resolveRange(repo, { base, head }, signal)
 	// A change card asks by full hashes, which the reader reads more easily cut to seven characters.
 	const name = text.replace(/\b[0-9a-f]{40}\b/g, (hash) => hash.slice(0, 7))
-	if (range.kind === 'ok') return { kind: 'ok', change: { name, asked: text, range: range.range } }
+	if (range.kind === 'ok') return { kind: 'ok', change: { kind, name, asked: text, range: range.range } }
 	if (range.kind === 'unrelated') return { kind: 'refused', message: `${base} and ${head} share no history.` }
 	return {
 		kind: 'refused',
