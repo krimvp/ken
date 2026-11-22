@@ -113,15 +113,37 @@ const model = await scriptedModel([
 		},
 	},
 	{ text: '' },
+	{
+		tool: 'ken__show',
+		args: {
+			brief: {
+				number: 1,
+				line: 'Save writes one number to the store.',
+				points: [
+					{
+						line: 'It takes what the core made.',
+						more: 'It takes the number the core made.',
+						long: 'It takes the number the core made, and keeps it.',
+						drawing: { kind: 'store' },
+						quotes: [{ path: 'src/store/db.ts', text: 'export function save(made: number) {}' }],
+					},
+				],
+			},
+		},
+	},
+	{ text: '' },
 ])
 const server = await openKen(root, readerHome(), model.baseUrl)
 const briefOf = async (concept: string) => await json(server, `/api/brief?concept=${encodeURIComponent(concept)}`)
 
 const unexplained = await briefOf('part::Core')
+const levelBefore = await json(server, '/api/layout')
 await ask(server, { lens: { kind: 'explain', within: [], part: null } })
+const levelAfter = await json(server, '/api/layout')
 await ask(server, { lens: { kind: 'view', within: [], text: 'Follow one run' } })
 
 test('a part ken has not explained opens from what ken holds: its job, the decision in its files, what is inside it, and the lens that asks for the rest', () => {
+	assert.equal(unexplained.trust, "ken found this in git. ken's model has not explained it yet.")
 	assert.deepEqual(
 		[unexplained.id, unexplained.kind, unexplained.name, unexplained.line, unexplained.explained],
 		['part::Core', 'part', 'Core', 'Runs the work', false],
@@ -138,6 +160,17 @@ test('a part ken has not explained opens from what ken holds: its job, the decis
 	)
 	assert.deepEqual(unexplained.deeper, { within: 'src/core', parts: 2, files: 2 }, 'two files, each a box inside')
 	assert.equal(unexplained.knows.level, 'new')
+})
+
+test("a level says how many of its parts ken's model explained, and a block of one file says its lines and what the model said of it", async () => {
+	assert.deepEqual(
+		[levelBefore.look.explained, levelAfter.look.explained],
+		[0, levelAfter.look.boxes.length],
+		'a level explained part by part counts as explained as one explained whole',
+	)
+	const inside = await json(server, '/api/layout?within=src/core')
+	const run = inside.look.boxes.find((box: { name: string }) => box.name === 'run.ts')
+	assert.deepEqual([run.lines, run.told], [4, null])
 })
 
 test('inside a part nobody split, a block of one file opens as that file', async () => {
@@ -244,6 +277,8 @@ test('search finds each part of the level, the term and the drawn process, and f
 		],
 		'the tour made a topic of each part, and none of them is found as a term',
 	)
+	const core = found.find((each) => each.id === 'part::Core') as { minutes: number } | undefined
+	assert.equal(core?.minutes, (await briefOf('part::Core')).minutes, 'a part takes as long as its brief says')
 	assert.deepEqual(
 		found.filter((each) => each.kind === 'process').map((each) => [each.name, each.line, each.level]),
 		[['One run, from the command to the store', '2 steps across 3 lanes.', null]],
@@ -286,4 +321,18 @@ test('the processes of a level come as lanes matched to its parts and the messag
 	)
 	const inside = await json(server, '/api/processes?within=test')
 	assert.deepEqual(inside, { processes: [], offers: [] }, 'no drawn process rests on a line of the tests')
+})
+
+test("ken's model explains a term when asked, and its answer is the term's brief from then on", async () => {
+	const before = await briefOf('term:save')
+	const lens = { kind: 'answer', concept: 'term:save', text: 'What does "save" mean in this project?' }
+	assert.deepEqual([before.explained, before.explain], [false, { lens }], 'until the model explains it')
+	await ask(server, { lens })
+	const after = await briefOf('term:save')
+	assert.equal(after.line, 'Save writes one number to the store.')
+	assert.deepEqual(
+		after.points.map((point: { line: string }) => point.line),
+		['It takes what the core made.', 'Find it in src/store/db.ts.'],
+		"the model's things to know come first, then where the code uses it",
+	)
 })

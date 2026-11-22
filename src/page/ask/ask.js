@@ -1,0 +1,72 @@
+// The "Ask ken" drawer: a free question, for when no picture or brief answers it. It offers the questions of the
+// briefs the reader opened last, then the box, and the reader's earlier replies behind one press. A question sent
+// here opens as a thread with the cards ken checked, as every question does.
+import { icon } from '../shell/icons.js'
+import { esc, prose, RUN_COST, when } from '../views/format.js'
+import { lensHtml } from '../views/map.js'
+
+const SUGGESTED = 4
+
+// The questions of the briefs opened last, newest first: [{ text, about, id, answered }]. briefOf gives a brief the
+// page has read, or null.
+export function suggestions(recent, briefOf) {
+	const found = []
+	for (const id of recent) {
+		const brief = briefOf(id)
+		for (const question of brief?.questions ?? []) {
+			if (found.some((each) => each.text === question.text)) continue
+			found.push({ text: question.text, about: brief.name, id: question.id, answered: question.answered })
+		}
+	}
+	return found.slice(0, SUGGESTED)
+}
+
+// ask is the drawer's state: { text, earlier, recent }. env holds the reader's saved questions (rows), the model's
+// setting, off, the reason no run can start now, and what the lenses need.
+export function askDrawerHtml(ask, env, briefOf) {
+	const offered = suggestions(ask.recent, briefOf).map(
+		(each, i) =>
+			`<li><button class="k-ask-sug" data-act="${each.answered ? 'brief-open' : 'ask-suggest'}" data-concept="${esc(each.id)}" data-index="${i}" data-key="ask-sug-${i}">${icon('question')}<span><b>${prose(each.text)}</b><span>${each.answered ? 'Answered. Open the answer' : `About ${esc(each.about)}`}</span></span></button></li>`,
+	)
+	const suggested =
+		offered.length === 0
+			? '<p class="k-muted">Open a brief, and the questions worth asking about it show here.</p>'
+			: `<ul class="k-ask-sugs">${offered.join('')}</ul>`
+	const rows = [...env.rows].reverse()
+	const earlier =
+		rows.length === 0
+			? ''
+			: `<button class="k-link k-ask-earlier" data-act="ask-earlier" data-key="ask-earlier" aria-expanded="${ask.earlier}">${ask.earlier ? 'Hide your earlier replies' : `Your earlier replies (${rows.length})`}</button>
+				${
+					ask.earlier
+						? `<ul class="k-ask-rows">${rows
+								.map(
+									(row) =>
+										`<li><button class="k-ask-row" data-act="open" data-id="${esc(row.id)}" data-key="ask-row-${esc(row.id)}"><b>${esc(row.question.split('\n')[0])}</b><span>${when(row.askedAt)}</span></button></li>`,
+								)
+								.join('')}</ul>`
+						: ''
+				}`
+	const model =
+		env.model?.kind === 'ok'
+			? `<p class="k-muted">The code ken reads for a reply goes to its model, <code>${esc(env.model.name)}</code>.</p>`
+			: ''
+	const lenses =
+		env.model?.kind === 'ok'
+			? `<div class="k-ask-lenses"><button class="k-link" data-act="lenses" data-key="lenses" aria-expanded="${env.lenses.open}">Or let ken write the question</button>${env.lenses.open ? lensHtml('drawer', env.lenses.pick) : ''}</div>`
+			: ''
+	return `<div class="k-brief-head"><h2 class="k-ask-title" id="ask-title" tabindex="-1">Ask ken</h2><button class="k-icon-btn" data-act="ask-close" data-key="ask-close" aria-label="Close Ask ken">${icon('close')}</button></div>
+		<div class="k-brief-body k-ask-body">
+			<h3 class="k-eyebrow">Worth asking</h3>
+			${suggested}
+			<form class="k-ask-form" id="ask-form" autocomplete="off">
+				<label class="k-eyebrow" for="ask-text">Your question</label>
+				<textarea id="ask-text" name="text" data-key="ask-text" rows="3" placeholder="Ask what changed, why, or how a part works">${esc(ask.text)}</textarea>
+				<button class="k-btn is-big k-run-btn" type="submit" data-key="ask-send"${env.off ? ' disabled' : ''}><span>Ask ken</span><small>${RUN_COST}</small></button>
+				${env.off ? `<p class="k-muted">${esc(env.off)}</p>` : ''}
+				${model}
+			</form>
+			${earlier}
+			${lenses}
+		</div>`
+}

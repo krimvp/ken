@@ -1,7 +1,7 @@
 // The layers of the canvas: a second reading of the same blocks. "Processes" lights the parts one drawn process
 // passes through and numbers them in order. "Changes" shows what a span of commits or one change touched. "What you
 // know" shows what ken thinks the reader knows of each part, large. A layer never moves a block.
-import { diagramPath } from '../home/state/content.js'
+import { diagramPath } from '../level/content.js'
 import { partOf } from '../project/walk.js'
 
 export const LAYER_NAMES = { processes: 'Processes', changes: 'Changes', know: 'What you know' }

@@ -5,7 +5,7 @@
 // like the page it stands for. On a first visit "Start here" is the project in two sentences and the path through
 // the pages.
 import { partId } from '../brief/concept-id.js'
-import { KNOWN, levelLabel } from '../home/state/home-state.js'
+import { KNOWN, levelLabel } from '../level/level-state.js'
 import { partClass } from '../project/part-colours.js'
 import { placeParts } from '../project/parts-picture.js'
 import { icon, KIND_ICONS, levelMark } from '../shell/icons.js'
@@ -123,13 +123,15 @@ function conceptsHtml(look, concepts, home) {
 		const level = each.level
 			? `${levelMark(each.level, 15)}<span class="visually-hidden">${esc(levelLabel(home, each.level))}</span>`
 			: ''
-		return `<li><button class="k-chip k-concept" data-act="brief-open" data-concept="${esc(each.id)}" data-key="concept-${i}">${lead}<span class="k-concept-name">${prose(each.name)}</span>${level}</button></li>`
+		const minutes = concepts.find((row) => row.id === each.id)?.minutes ?? each.minutes
+		const time = minutes ? `<span class="k-concept-min k-num">${minutes} min</span>` : ''
+		return `<li><button class="k-chip k-concept" data-act="brief-open" data-concept="${esc(each.id)}" data-key="concept-${i}">${lead}<span class="k-concept-name">${prose(each.name)}</span>${level}${time}</button></li>`
 	})
 	return `<section class="k-tile k-tile-concepts"><div class="k-tile-head"><h2 class="k-eyebrow">Concepts</h2><span class="k-tile-note">a few minutes each</span></div><ul class="k-concepts">${rows.join('')}</ul></section>`
 }
 
 // A process as a line through its stops, each in the colour of its part.
-function routeHtml(stops) {
+export function routeHtml(stops) {
 	if (stops.length === 0) return `<span class="k-route is-plain">${icon('processes')}</span>`
 	const [w, h] = [128, 40]
 	const at = (i) => ({ x: 8 + (i * (w - 16)) / Math.max(stops.length - 1, 1), y: i % 2 === 0 ? 10 : 30 })

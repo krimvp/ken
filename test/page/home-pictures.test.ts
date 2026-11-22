@@ -19,19 +19,7 @@ const {
 }: {
 	contentOf: (look: object, rows: object[], replies?: Replies, shown?: string | null) => Content
 	picturesOf: (look: object, rows: object[], replies?: Replies) => Picture[]
-} = await import(path.join(HOME, 'state/content.js'))
-const { inspectorHtml }: { inspectorHtml: (home: object, env: object) => string } = await import(
-	path.join(HOME, 'inspector/inspector.js')
-)
-const { canvasHtml }: { canvasHtml: (home: object, rows: object[]) => string } = await import(
-	path.join(HOME, 'canvas/canvas.js')
-)
-const { freshHome }: { freshHome: (stored: () => null, ui: object) => object } = await import(
-	path.join(HOME, 'state/home-state.js')
-)
-
-// What a reader sees of a piece of the page: its words in order, with the markup taken out.
-const said = (html: string) => html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ')
+} = await import(path.join(HOME, '../level/content.js'))
 
 // A command that runs a core, and a test of the core. Every request below draws this project another way, so the
 // project and its record are this file's own.
@@ -162,50 +150,6 @@ test("a level's pictures are its parts and then, newest first, each diagram ken 
 		'level',
 		'inside src the parts show, not a picture of the whole project',
 	)
-})
-
-test('a drawn picture shows its drawing on the canvas in place of the parts, and the panel tells it by the detail: the words of ken, the picked message, then the line that message quotes', () => {
-	const ui = { panel: { kind: 'checks' }, openQuotes: new Set(), openDecisions: new Set(), unfolded: new Set() }
-	const env = { off: null, running: null, seconds: 0, model: { kind: 'ok', name: 'scripted' }, rows, asked: true }
-	const home = (detail: string, selected: object | null) => ({
-		...freshHome(() => null, ui),
-		look: whole,
-		detail,
-		selected,
-		pictures: picturesOf(whole, rows, replies),
-		shown: first,
-		content: contentOf(whole, rows, replies, first),
-	})
-
-	const canvas = canvasHtml(home('big', null), rows)
-	assert.match(canvas, /sequenceDiagram/, 'the canvas holds the drawing of the diagram')
-	assert.match(
-		said(canvas),
-		/One command through the code .*"Follow one command"/,
-		'under its title, with what the reader asked',
-	)
-	assert.doesNotMatch(said(canvas), /Runs the work/, 'the parts give their place to the drawing')
-
-	const big = inspectorHtml(home('big', null), env)
-	assert.match(said(big), /The command runs the core\./)
-	assert.doesNotMatch(big, /sequenceDiagram/, 'the drawing is on the canvas, so the panel does not draw it again')
-
-	// The messages count from 1, and the two participants are names with no number.
-	const picked = { kind: 'element', number: 2 }
-	const how = said(inspectorHtml(home('how', picked), env))
-	assert.match(how, /Message 2/)
-	assert.match(
-		how,
-		/Command, Core\. .*1 From Command to Core/,
-		'the participants are named in one line over the messages',
-	)
-	assert.match(how, /2 From Core to Command: returns once it saved It rests on src\/core\/run\.ts ?, line 2/)
-	assert.match(how, /Back to message 1 From Command to Core: runs the work/, 'Back says what it goes to')
-	assert.doesNotMatch(how, /save\(\)/, 'the line itself waits for "In the code"')
-
-	const code = said(inspectorHtml(home('code', picked), env))
-	assert.match(code, /2 From Core to Command: returns once it saved .*save\(\)/)
-	assert.doesNotMatch(code, /quoted no code/, 'a participant is a name, so nothing says it quotes no code')
 })
 
 test('a level ken drew again has no tour until ken gives one for its new parts', async () => {

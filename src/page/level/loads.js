@@ -1,15 +1,7 @@
 // What the home reads from the server: the level on screen, ken's notes about the reader, and the saved replies the
 // level's content names. The server reads the level from git on every move.
-import { learnParts } from '../../project/part-colours.js'
-import { contentOf, picturesOf, repliesOf, sameList, shownDetail } from './content.js'
-import { FIRST_DETAIL } from './home-state.js'
-
-// The server gives the diff of this many files at a time.
-const DIFF_PATHS = 10
-
-export function diffKey(change, box) {
-	return `${change.range.base}..${change.range.head}\n${box.name}`
-}
+import { learnParts } from '../project/part-colours.js'
+import { contentOf, picturesOf, repliesOf, sameList } from './content.js'
 
 // app is the page: its state, render, read, which asks the server and gives back { ok, body } for any answer it
 // sends, post, and fromView, which turns a saved question into the page's own shape.
@@ -81,26 +73,6 @@ export function homeLoads({ state, render, read, post, fromView }) {
 		}
 	}
 
-	// The diff of the files a change touched in the part the reader picked, read from git once for each change and
-	// part, when the reader looks at it "In the code".
-	async function loadDiff() {
-		const home = state.home
-		const { look, selected } = home
-		if (!look?.change || home.content.kind !== 'change' || selected?.kind !== 'part') return
-		const box = look.boxes.find((each) => each.name === selected.name)
-		if (!box?.touched || shownDetail(home) !== 'code') return
-		const key = diffKey(look.change, box)
-		// A diff the server could not read is asked for again the next time the reader looks at the part.
-		if (home.diffs.has(key) && !home.diffs.get(key)?.problem) return
-		home.diffs.set(key, null)
-		const paths = box.touched.paths.slice(0, DIFF_PATHS).map((file) => file.path)
-		const query = new URLSearchParams([['change', look.change.asked], ...paths.map((file) => ['path', file])])
-		const answer = await ask(`/api/change/diff?${query}`)
-		const left = box.touched.files - paths.length
-		home.diffs.set(key, answer.ok ? { ...answer.body, left } : { problem: answer.body.message })
-		render()
-	}
-
 	// ken's notes about the reader. A server that keeps none answers 404, and the home then shows none.
 	async function loadNotes() {
 		const answer = await ask('/api/notes')
@@ -119,20 +91,10 @@ export function homeLoads({ state, render, read, post, fromView }) {
 		const home = state.home
 		if (!home.look) return
 		find()
-		// A drawn picture this level does not have gives its place to the parts, and a pick the screen does not hold
-		// is let go.
+		// A drawn picture this level does not have gives its place to the parts.
 		if (home.content.kind !== 'drawn') home.shown = null
-		const { selected } = home
-		const held = {
-			part: () => home.content.kind !== 'drawn' && home.look.boxes.some((box) => box.name === selected.name),
-			step: () => home.content.kind === 'change',
-			element: () => home.content.kind === 'drawn',
-		}
-		if (selected && !held[selected.kind]()) home.selected = null
 		render()
-		void loadDiff()
-		// shortcut: a tab names its picture by the diagram's title, which only the reply holds, so the reply of every
-		// drawn picture of the level is read. Send the title with the row when a level has more than a few dozen.
+		// The canvas's Processes layer draws each drawn picture from its diagram, which only the reply holds.
 		const named = [...repliesOf(home.content), ...home.pictures.slice(1)].map((each) => each.id)
 		const unread = [...new Set(named)].filter((id) => !home.replies.has(id))
 		if (unread.length === 0) return
@@ -152,26 +114,6 @@ export function homeLoads({ state, render, read, post, fromView }) {
 		await settle()
 	}
 
-	// Lays over the parts what a way in shows first: nothing to learn the project, what landed last to catch up, and
-	// to review a change the reader's own work, or the newest merge when they have none.
-	async function enter(wayIn) {
-		const home = state.home
-		const before = home.detail
-		Object.assign(home, { wayIn, at: '', shown: null, selected: null, change: wayIn === 'review' ? '' : 'none' })
-		if (wayIn === 'catch-up') home.change = home.changes.find((choice) => choice.kind === 'since')?.change ?? 'none'
-		if (!(await loadLayout())) return
-		// The detail of the way in comes with its level, so the panel does not show the old level at the new detail
-		// while the server reads. A detail the reader picked for every part, or picked meanwhile, stays.
-		if (home.detail === before) home.detail = home.pinned ?? FIRST_DETAIL[wayIn]
-		if (wayIn === 'review' && !home.problem && !home.look.change) {
-			const newest = home.changes.find((choice) => choice.kind === 'merge' || choice.kind === 'commit')
-			if (newest) {
-				home.change = newest.change
-				await loadLayout()
-			}
-		}
-	}
-
 	// The server brings back the picture before, and the home then reads the level as it reads any other, with the
 	// change and the commit the reader is on.
 	async function back() {
@@ -186,5 +128,5 @@ export function homeLoads({ state, render, read, post, fromView }) {
 		await refresh()
 	}
 
-	return { loadLayout, loadNotes, loadReader, loadDiff, settle, refresh, enter, back }
+	return { loadLayout, loadNotes, loadReader, settle, refresh, back }
 }

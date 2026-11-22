@@ -3,15 +3,17 @@
 // as a thread over the pages: the words on the left, and on the right the panel with what ken checked. Under 1100
 // pixels the panel goes away and the same things open in place. The page talks only to the server that sent it.
 import { archActions, freshArch } from './architecture/arch-actions.js'
+import { askActions, freshAsk } from './ask/ask-actions.js'
 import { briefActions, freshBrief } from './brief/brief-actions.js'
 import { briefStore } from './brief/briefs.js'
+import { changeActions, freshChanges } from './changes/change-actions.js'
 import { fillDrawings, markPart, numberAt } from './draw-diagrams.js'
-import { homeActions } from './home/home-actions.js'
-import { clearHome, drawCanvas, showHome } from './home/home-view.js'
-import { readReply, replyAddress } from './home/state/address.js'
-import { freshHome } from './home/state/home-state.js'
-import { DOING } from './home/state/runs.js'
+import { readReply, replyAddress } from './level/address.js'
+import { levelActions } from './level/level-actions.js'
+import { freshHome } from './level/level-state.js'
+import { DOING } from './level/runs.js'
 import { liveLook, liveViewHtml } from './live/live-view.js'
+import { freshProcesses, processActions } from './processes/process-actions.js'
 import { changeKey } from './project/change-card.js'
 import { learnParts } from './project/part-colours.js'
 import { atRest, drawPictures, lightPicture } from './project/parts-picture.js'
@@ -23,10 +25,11 @@ import { allQuotesHtml, checksHtml, quoteCardHtml } from './views/checks.js'
 import { decisionsViewHtml } from './views/decisions.js'
 import { elementKey } from './views/diagram.js'
 import { count, duration, esc, projectHtml, prose, short, when } from './views/format.js'
-import { changedLine, changedTopics, lensHtml, mapViewHtml } from './views/map.js'
+import { changedLine, changedTopics, lensHtml } from './views/map.js'
 import { openCount, openViewHtml } from './views/open.js'
 import { cardsOf, isMoved, itemsOf, knowPartHtml, LEGEND, replyHtml, stepCardsHtml } from './views/reply.js'
 import { endedHtml, noChecksPanelHtml, noModelHtml, stepsHtml, workingHtml } from './views/states.js'
+import { freshYou, youActions } from './you/you-actions.js'
 
 const $ = (selector) => document.querySelector(selector)
 const wideQuery = matchMedia('(min-width: 1100px)')
@@ -67,6 +70,9 @@ const state = {
 	shell: null,
 	arch: freshArch(),
 	brief: freshBrief(),
+	procs: freshProcesses(),
+	you: freshYou(),
+	chg: freshChanges(),
 	project: null,
 	model: null,
 	rows: [],
@@ -88,7 +94,8 @@ const state = {
 	decisions: null,
 	decisionsKey: false,
 	ui: freshUi(),
-	home: freshHome(stored, { ...freshUi(), wide: false }),
+	home: freshHome(),
+	ask: freshAsk(),
 	// What is open, with its own open decisions and quotes, the line that says what the last button saved, and the
 	// decisions the reader answered on this visit.
 	followUp: null,
@@ -128,7 +135,7 @@ function store(name, value) {
 }
 
 // The open decisions and quotes of the view on screen.
-const uiNow = () => ({ 'follow-up': state.followUi, live: state.liveUi, home: state.home.ui })[state.view] ?? state.ui
+const uiNow = () => ({ 'follow-up': state.followUi, live: state.liveUi })[state.view] ?? state.ui
 
 // What the page shows as the question until ken sends the one it wrote for a lens.
 const LENS_TITLES = {
@@ -274,7 +281,7 @@ async function send(body, onHome = null) {
 		state.thread = [...state.thread, q]
 		state.open = picked = q
 		state.menuOpen = false
-		state.home.askOpen = false
+		state.ask.open = false
 		state.view = state.base = 'question'
 		if (!body.lens) $('#question').value = ''
 		resizeBox()
@@ -335,7 +342,8 @@ async function send(body, onHome = null) {
 		const made = saved ?? (stopped ? { ...q, id: last.id } : q)
 		await shell.reread()
 		if (onHome?.kind === 'explain' || onHome?.kind === 'answer') await brief.ended(onHome, made)
-		else if (onHome !== null) await home.ended(onHome, made)
+		else if (onHome?.kind === 'draw') await procs.ended(made)
+		else if (onHome !== null) await level.ended(onHome, made)
 		else if (state.thread.includes(q) && stopped) await openQuestion(last.id)
 		state.running = null
 		render()
@@ -415,31 +423,15 @@ function firstLine(question) {
 	return old ? `Go deeper on the ${old[2]} UTC note about ${old[1]}` : first
 }
 
-// The header of the views from before the pages: the views, and ken's earlier replies in a menu. On a phone the views
-// go into the menu too, beside the questions, and the menu button carries live mode's mark, so the project's name
-// keeps its room.
+// The header over a reply: ken's earlier replies in a menu, behind one word on a phone.
 function menuHtml() {
 	const n = state.rows.length
-	const current = (view) => (state.view === view ? ' aria-current="page"' : '')
-	const waiting = openCount(state.followUp)
-	const open =
-		waiting === 0
-			? ''
-			: `<button class="link" data-act="follow-up" data-key="follow-up"${current('follow-up')}>Waiting on you (${waiting})</button>`
-	const look = liveLook(state.liveStatus)
-	const mark = look === 'off' ? '' : `<span class="live-mark is-${look}" aria-hidden="true"></span>`
-	const said = { on: ', on', paused: ', paused', writing: ', writing a note', off: '' }[look]
-	const live =
-		state.model?.kind === 'ok'
-			? `<button class="link" data-act="live" data-key="live"${current('live')} aria-label="Live${said}">${mark}Live</button>`
-			: ''
-	const views = `<button class="link" data-act="decisions" data-key="decisions"${current('decisions')}>Decisions</button><button class="link" data-act="map" data-key="map"${current('map')}>Your map</button>${live}${open}`
 	const questions =
 		n === 0
 			? ''
 			: `<button class="link top-wide" data-act="menu" data-key="menu" aria-expanded="${state.menuOpen}">Earlier replies (${n})</button>`
-	const narrow = `<button class="link top-narrow" data-act="menu" data-key="menu-narrow" aria-expanded="${state.menuOpen}" aria-label="Menu${said ? `, live${said}` : ''}">${mark}Menu</button>`
-	const bar = `<span class="top-views top-wide">${views}</span>${questions}${narrow}`
+	const narrow = `<button class="link top-narrow" data-act="menu" data-key="menu-narrow" aria-expanded="${state.menuOpen}" aria-label="Earlier replies">Menu</button>`
+	const bar = `${questions}${narrow}`
 	if (!state.menuOpen) return bar
 	const running = state.running
 		? `<button class="row" data-act="open-running" data-key="menu-running"><span class="row-q">${esc(firstLine(state.running.q.question))}</span><span class="row-meta">Running now</span></button>`
@@ -449,7 +441,7 @@ function menuHtml() {
 		n === 0 && !running
 			? ''
 			: `<p class="menu-head">ken's earlier replies to you about this project, newest first. ken keeps them on this computer, outside the project.</p>${running}${rows.join('')}`
-	return `${bar}<div class="menu"><div class="menu-views top-narrow">${views}</div>${list}</div>`
+	return `${bar}<div class="menu">${list}</div>`
 }
 
 function runLine(q, t, ui) {
@@ -518,22 +510,11 @@ function movedHtml(q, t) {
 }
 
 function threadHtml() {
-	if (state.view === 'map') return mapViewHtml(state.map, state.model?.kind === 'ok' && !state.running, state.mapSaid)
-	if (state.view === 'decisions') return decisionsViewHtml(state.decisions, state.decisionsKey)
-	if (state.view === 'live') {
-		const canAsk = state.model?.kind === 'ok' && !state.running
-		const seen = { seen: state.liveSeen, hideAsk: state.hideAsk }
-		return liveViewHtml(state.live, state.liveUi, state.unfolded, canAsk, state.liveProblem, seen)
-	}
-	if (state.view === 'follow-up') {
-		const canAsk = state.model?.kind === 'ok' && !state.running
-		return openViewHtml(state.followUp, state.followUi, canAsk, state.followSaid, state.followDecided)
-	}
 	const q = state.open
 	if (state.problem && !q)
 		return `<div class="notice" role="alert"><h3>ken did not answer</h3><p>${esc(state.problem)}</p></div>`
 	if (!q) return ''
-	const back = '<button class="link" data-act="home" data-key="back-home">Back to the picture</button>'
+	const back = '<button class="link" data-act="back-page" data-key="back-home">Back to the page</button>'
 	return `<p class="back-home">${back}</p><p class="legend">${LEGEND}</p>${state.thread.map((each, t) => turnHtml(each, t, state.ui)).join('')}`
 }
 
@@ -624,23 +605,13 @@ function render() {
 	// The frame and the page under it come first. Only a view from before the pages is drawn by what follows.
 	const env = envNow()
 	const older = shell.draw(env)
-	home.watch()
-	const onHome = older && state.view === 'home'
-	$('.skip').hidden = !onHome
-	if (!onHome) clearHome($('#home'))
+	level.watch()
 	if (!older) {
 		refocus()
 		return tipFrom(null)
 	}
 	$('#project').innerHTML = state.project ? `<span class="reads">reads </span>${projectHtml(state.project)}` : ''
 	$('#menu').innerHTML = menuHtml()
-	$('#home').hidden = !onHome
-	$('#page').hidden = onHome
-	if (onHome) {
-		showHome($('#home'), state.home, env, schedule)
-		refocus()
-		return tipFrom(null)
-	}
 	const q = state.open
 	const page = $('#page')
 	const panel = $('#panel')
@@ -877,68 +848,6 @@ async function postMap(signal, turn) {
 	render()
 }
 
-// A button on the map's own page: it appends a line, then the map is read again and a line says what was saved.
-async function mapTopic(signal, topic, said) {
-	try {
-		await post('/api/map', { signal, topics: [topic] })
-		state.map = await getJson('/api/map')
-		state.mapSaid = said
-	} catch (error) {
-		state.mapSaid = error.message
-	}
-	await loadFollowUp()
-	render()
-}
-
-async function showMap() {
-	state.view = 'map'
-	state.menuOpen = false
-	state.mapSaid = ''
-	state.map = null
-	render()
-	try {
-		state.map = await getJson('/api/map')
-	} catch (error) {
-		state.map = { file: '', states: [], problems: [error.message] }
-	}
-	render()
-	window.scrollTo({ top: 0 })
-}
-
-function closeMap() {
-	// On the You page the map is the page, so leaving it goes to Home.
-	if (state.shell.page === 'you') return shell.goPage('home')
-	state.view = state.base
-	render()
-	$('[data-key="map"]')?.focus({ preventScroll: true })
-}
-
-// at is the id of a decision to scroll to, such as the one the reader just answered.
-async function showDecisions(at) {
-	state.view = 'decisions'
-	state.menuOpen = false
-	state.decisions = null
-	render()
-	try {
-		state.decisions = (await getJson('/api/decisions')).decisions
-	} catch (error) {
-		state.problem = error.message
-		state.decisions = []
-	}
-	render()
-	const row = at && document.getElementById(`dv-${at}`)
-	if (row) {
-		row.scrollIntoView({ block: 'center' })
-		row.focus({ preventScroll: true })
-	} else window.scrollTo({ top: 0 })
-}
-
-function closeDecisions() {
-	state.view = state.base
-	render()
-	$('[data-key="decisions"]')?.focus({ preventScroll: true })
-}
-
 // A reply about a change shows the project's top level with the change laid over it. ken reads it from git once per
 // change while the page is open.
 function loadChangeLooks() {
@@ -979,7 +888,7 @@ function openChangePart(t, index) {
 	const q = state.thread[t]
 	const change = q?.reply?.change ?? q?.liveChange
 	const box = change && state.ui.changeLooks.get(changeKey(change))?.boxes?.[index]
-	if (box) return home.openAt(box, changeKey(change))
+	if (box) return level.openAt(box, changeKey(change))
 }
 
 // The Live view reads the server every few seconds, and the header's mark follows whether live mode is on.
@@ -1015,46 +924,6 @@ async function liveAction(action) {
 	render()
 }
 
-async function showLive() {
-	state.view = 'live'
-	state.menuOpen = false
-	render()
-	await loadLive()
-	state.liveSeen = stored('ken-live-seen')
-	const newest = state.live?.notes[0]?.entry.askedAt
-	if (newest) store('ken-live-seen', newest)
-	render()
-	window.scrollTo({ top: 0 })
-}
-
-function closeLive() {
-	state.view = state.base
-	render()
-	$('[data-key="live"]')?.focus({ preventScroll: true })
-}
-
-async function showFollowUp() {
-	state.view = 'follow-up'
-	state.menuOpen = false
-	state.followSaid = ''
-	state.followDecided = []
-	await loadFollowUp()
-	// Every decision shows open here: the reader came to decide.
-	state.followUi = {
-		...freshUi(),
-		wide: false,
-		openDecisions: new Set(state.followUp?.decisions.map((_, i) => `o${i}`)),
-	}
-	render()
-	window.scrollTo({ top: 0 })
-}
-
-function closeFollowUp() {
-	state.view = state.base
-	render()
-	$('[data-key="follow-up"], [data-key="map"]')?.focus({ preventScroll: true })
-}
-
 async function post(url, body) {
 	const response = await fetch(url, {
 		method: 'POST',
@@ -1079,18 +948,66 @@ async function followUpSaved(save, said) {
 }
 
 // The page as its modules see it. Each takes what it needs from here, and the modules made later are added to it.
-const app = { state, render, read, post, send, stored, store, fromView, showMap }
+const app = { state, render, read, post, send, stored, store, fromView }
 app.prefs = readerPrefs(app)
 state.shell = freshShell(app.prefs.prefs)
 app.briefs = briefStore(app)
 app.briefPaths = () => brief.readPaths()
 app.reread = () => shell.reread()
-const home = homeActions(app)
-app.home = home
+const level = levelActions(app)
+app.home = level
+app.level = level
+const ask = askActions(app)
+app.ask = ask
 const brief = briefActions(app)
 app.brief = brief
 const arch = archActions(app)
 app.arch = arch
+const procs = processActions(app)
+app.procs = procs
+const you = youActions(app)
+app.you = you
+const chg = changeActions(app)
+app.chg = chg
+
+// The two tabs of the Changes page that show a view from before the pages: what waits on the reader with the
+// record's decisions, and live mode.
+app.older = {
+	html(tab) {
+		const canAsk = state.model?.kind === 'ok' && !state.running
+		if (tab === 'live') {
+			const seen = { seen: state.liveSeen, hideAsk: state.hideAsk }
+			return liveViewHtml(state.live, state.liveUi, state.unfolded, canAsk, state.liveProblem, seen)
+		}
+		const open = openViewHtml(state.followUp, state.followUi, canAsk, state.followSaid, state.followDecided)
+		return `${open}${decisionsViewHtml(state.decisions, state.decisionsKey)}`
+	},
+	async load(tab) {
+		if (tab === 'live') {
+			await loadLive()
+			state.liveSeen = stored('ken-live-seen')
+			const newest = state.live?.notes[0]?.entry.askedAt
+			if (newest) store('ken-live-seen', newest)
+			return
+		}
+		state.followSaid = ''
+		await loadFollowUp()
+		// Every decision shows open here: the reader came to decide.
+		state.followUi = {
+			...freshUi(),
+			wide: false,
+			openDecisions: new Set(state.followUp?.decisions.map((_, i) => `o${i}`)),
+		}
+		try {
+			state.decisions = (await getJson('/api/decisions')).decisions
+		} catch (error) {
+			state.problem = error.message
+			state.decisions = []
+		}
+	},
+	waiting: () => openCount(state.followUp),
+	live: () => liveLook(state.liveStatus),
+}
 const shell = shellActions(app)
 app.shell = shell
 
@@ -1106,19 +1023,29 @@ async function showReply(id) {
 }
 
 const actions = {
-	...home.actions,
+	...level.actions,
+	...ask.actions,
 	...shell.actions,
 	...arch.actions,
 	...brief.actions,
-	map: () => (state.view === 'map' ? closeMap() : showMap()),
-	decisions: () => (state.view === 'decisions' ? closeDecisions() : showDecisions()),
+	...procs.actions,
+	...you.actions,
+	...chg.actions,
+	// What waits on the reader, the record's decisions and live mode are tabs of the Changes page now.
+	'follow-up': () => shell.goTab('decisions'),
+	decisions: () => shell.goTab('decisions'),
+	live: () => shell.goTab('live'),
+	'back-page'() {
+		state.view = state.base = 'home'
+		render()
+		$('[aria-current="page"]')?.focus()
+	},
 	'cc-open': (el) => openChangePart(Number(el.dataset.turn), Number(el.dataset.index)),
 	'dv-key'() {
 		state.decisionsKey = !state.decisionsKey
 		render()
 	},
-	'decision-show': (el) => showDecisions(el.dataset.id),
-	live: () => (state.view === 'live' ? closeLive() : showLive()),
+	'decision-show': () => shell.goTab('decisions'),
 	'live-on': () => liveAction('on'),
 	'live-off': () => liveAction('off'),
 	'live-pause': () => liveAction('pause'),
@@ -1142,7 +1069,6 @@ const actions = {
 		store('ken-hide-ask', state.hideAsk ? 'yes' : 'no')
 		render()
 	},
-	'follow-up': () => (state.view === 'follow-up' ? closeFollowUp() : showFollowUp()),
 	'explain-topic': (el) => send({ lens: { kind: 'topic', topic: el.dataset.topic } }),
 	'know-topic': (el) =>
 		followUpSaved(
@@ -1202,7 +1128,6 @@ const actions = {
 		if (uiNow().wide && !el.closest('#panel')) return choose(key, quote)
 		toggle(uiNow().openQuotes, `${key}-q${quote}`)
 		render()
-		if (state.view === 'home') home.quoted()
 		// "Show all" goes away once the lines are open, so the quote's own row takes the focus.
 		if (el.matches('.q-all')) document.querySelector(`[data-key="${key}-q${quote}"]`)?.focus({ preventScroll: true })
 	},
@@ -1258,8 +1183,7 @@ const actions = {
 		render()
 	},
 	steps(el) {
-		if (state.view === 'home') state.home.stepsOpen = !state.home.stepsOpen
-		else toggle(state.ui.openSteps, Number(el.dataset.turn))
+		toggle(state.ui.openSteps, Number(el.dataset.turn))
 		render()
 	},
 	details() {
@@ -1285,8 +1209,7 @@ document.addEventListener('click', (event) => {
 	}
 	shell.pressed(event.target)
 	if (el && !el.disabled) void actions[el.dataset.act](el)
-	else if (state.view === 'home') home.pick(event.target)
-	else if (state.thread.length > 0) chooseInDrawing(event.target)
+	else if (state.view === 'question' && state.thread.length > 0) chooseInDrawing(event.target)
 })
 
 // A file's diff is drawn when the reader opens it.
@@ -1303,12 +1226,9 @@ document.addEventListener(
 	true,
 )
 
-// The home from before the pages is on screen: the page is Processes or Changes and nothing lies over it.
-const onOldHome = () => state.view === 'home' && shell.isOlder()
-
 document.addEventListener('keydown', (event) => {
 	if (!state.menuOpen && $('#tip').hidden && shell.key(event)) return
-	if (onOldHome() && !state.menuOpen && $('#tip').hidden && home.key(event)) return
+	if (!state.menuOpen && $('#tip').hidden && ask.key(event)) return
 	if ((event.key === 'ArrowLeft' || event.key === 'ArrowRight') && state.view === 'question') {
 		const t = walkTurn()
 		if (t === null) return
@@ -1325,10 +1245,6 @@ document.addEventListener('keydown', (event) => {
 		$('[data-key="menu"]')?.focus()
 		return
 	}
-	if (state.view === 'map') return closeMap()
-	if (state.view === 'decisions') return closeDecisions()
-	if (state.view === 'live') return closeLive()
-	if (state.view === 'follow-up') return closeFollowUp()
 	if (closePanel()) return
 	if (state.ui.walkAt.size > 0) {
 		const [t, number] = [...state.ui.walkAt].at(-1)
@@ -1363,8 +1279,9 @@ $('#ask').addEventListener('submit', (event) => {
 })
 
 document.addEventListener('submit', (event) => {
-	if (brief.submit(event)) return
-	if (home.submit(event)) {
+	if (brief.submit(event) || procs.submit(event) || chg.submit(event)) return
+	if (ask.submit(event)) return
+	if (level.submit(event)) {
 		// A request sent from the canvas's tool closes the tool, so the canvas shows the run.
 		if (event.target.id === 'redraw-form' && state.home.redraw.problem === null && state.arch.drawOpen) {
 			state.arch.drawOpen = false
@@ -1393,13 +1310,15 @@ document.addEventListener('submit', (event) => {
 	if (path !== '') void send({ lens: { kind: 'area', path } })
 })
 
-document.addEventListener('input', (event) => shell.input(event) || home.input(event))
-document.addEventListener('mousedown', (event) => home.press(event))
+document.addEventListener(
+	'input',
+	(event) => shell.input(event) || chg.input(event) || ask.input(event) || level.input(event),
+)
+document.addEventListener('mousedown', (event) => level.press(event))
 window.addEventListener('popstate', () => shell.back(showReply))
 
 // The lens forms are drawn again with the rest, so the person and the span the reader picked are kept here.
 document.addEventListener('change', (event) => {
-	if (home.change(event)) return
 	const form = event.target.closest('.change-form')
 	if (!form) return
 	state.pick = { author: form.elements.author.value, since: form.elements.since.value }
@@ -1485,7 +1404,6 @@ function lightQuote(event) {
 }
 document.addEventListener('pointerover', lightQuote)
 document.addEventListener('focusin', lightQuote)
-for (const kind of ['pointerover', 'focusin']) document.addEventListener(kind, (event) => home.point(event))
 
 $('#question').addEventListener('input', resizeBox)
 new ResizeObserver(([entry]) => {
@@ -1493,11 +1411,10 @@ new ResizeObserver(([entry]) => {
 }).observe($('#ask'))
 wideQuery.addEventListener('change', render)
 window.addEventListener('resize', () => drawPictures(document.body))
-// The canvas changes width with no change of the window when its scroll bar comes or goes.
-new ResizeObserver(() => drawCanvas($('#home-canvas'))).observe($('#home-canvas'))
 setInterval(tick, 1000)
 setInterval(async () => {
-	if (state.view !== 'live' && state.liveStatus === 'off') return
+	const onLive = state.view === 'live' || (state.shell.page === 'changes' && state.chg.tab === 'live')
+	if (!onLive && state.liveStatus === 'off') return
 	if (await loadLive()) render()
 }, 3000)
 

@@ -68,6 +68,7 @@ test('a question ken wrote and nobody asked opens with no answer and with the le
 	assert.deepEqual([open.kind, open.name, open.explained, open.points], ['question', WRITTEN, false, []])
 	assert.deepEqual(open.about, { id: 'part::Core', name: 'Core' })
 	assert.deepEqual(open.explain, { lens: { kind: 'answer', concept: 'part::Core', text: WRITTEN } })
+	assert.equal(open.trust, "ken found this in git. ken's model has not explained it yet.")
 })
 
 test('an answer is kept as a brief: the saved row names it, the question opens as its answer, and the concept lists it as answered', async () => {
@@ -100,6 +101,8 @@ test('an answer is kept as a brief: the saved row names it, the question opens a
 		[['The store throws when it is full.', { kind: 'gate' }, [['src/store/db.ts', 2]]]],
 	)
 	assert.deepEqual(answer.about, { id: 'part::Core', name: 'Core' })
+	assert.deepEqual(answer.lit, ['Store'], 'its picture lights the part its answer quotes')
+	assert.equal(answer.trust, "ken's model wrote the words. ken found each quoted line in git.")
 
 	const after: Question[] = (await briefOf('part::Core')).questions
 	assert.deepEqual(
