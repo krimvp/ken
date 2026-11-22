@@ -218,7 +218,7 @@ button.brand {
 
 .pic-tab {
 	flex: 0 1 auto;
-	min-width: 6.5rem;
+	min-width: 9rem;
 	max-width: 14rem;
 	min-height: 2rem;
 	margin-bottom: -1px;
