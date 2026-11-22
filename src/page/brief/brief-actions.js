@@ -1,0 +1,243 @@
+// What the reader can do with a brief: open one from a page or from inside another, go back along the trail, take
+// one of the three ways on, open the quoted lines a thing to know rests on, correct what ken thinks they know, ask
+// ken's model to explain the concept or to answer a question about it, and close the drawer. Opening a part's brief
+// tells ken the reader opened the part, and a quoted line opened tells it they opened code.
+import { fill } from '../shell/fill.js'
+import { briefHtml, pathsOf } from './brief.js'
+import { readConcept } from './concept-id.js'
+
+// What the drawer holds while no brief is open.
+export const freshBrief = () => ({
+	id: null,
+	// The way on that shows in place of the brief: "sideways", "questions", "deeper", or null.
+	on: null,
+	// The briefs the reader came through, the open one last: [{ id, name }].
+	trail: [],
+	fixing: false,
+	// The things to know whose quoted lines are open, by their place.
+	openQuotes: new Set(),
+	problem: null,
+	saveProblem: null,
+	// The key of what the reader pressed to open the drawer, which gets the keyboard back when it closes.
+	opener: null,
+	// The id of the brief ken was last told the reader opened.
+	told: null,
+	// The level inside the open part, for "Deeper": undefined before it is asked for, null while the page reads it.
+	inner: undefined,
+})
+
+// app is the page: its state, render, post, send, the store of briefs, and home, the actions of the views from
+// before the pages, which read the level again and tell ken what the reader looked at.
+export function briefActions(app) {
+	const { state, render, post, send, briefs } = app
+	const ui = state.brief
+	const $ = (selector) => document.querySelector(selector)
+
+	const found = () => (ui.id ? briefs.get(ui.id, render) : null)
+	const open = () => {
+		const now = found()
+		return now?.kind === 'ok' ? now.brief : null
+	}
+
+	// A brief opened from a page starts a new trail. One opened from inside a brief adds a step to it, and one that is
+	// already on the trail cuts the trail back to it.
+	function show(id, { inside = false, opener = null } = {}) {
+		const at = ui.trail.findIndex((step) => step.id === id)
+		const step = { id, name: readConcept(id)?.name ?? id }
+		if (!inside || ui.id === null) Object.assign(ui, { trail: [step], opener: opener ?? ui.opener })
+		else ui.trail = at >= 0 ? ui.trail.slice(0, at + 1) : [...ui.trail, step]
+		Object.assign(ui, {
+			id,
+			on: null,
+			fixing: false,
+			openQuotes: new Set(),
+			problem: null,
+			saveProblem: null,
+			inner: undefined,
+		})
+		render()
+		$('#brief-name')?.focus({ preventScroll: true })
+	}
+
+	// The drawer closes, and the keyboard goes back to what opened it.
+	function close() {
+		if (ui.id === null) return false
+		const opener = ui.opener
+		Object.assign(ui, { id: null, on: null, trail: [], fixing: false, opener: null, told: null })
+		render()
+		const back = opener ? document.querySelector(`[data-key="${CSS.escape(opener)}"]`) : null
+		;(back ?? $('[aria-current="page"]'))?.focus({ preventScroll: true })
+		return true
+	}
+
+	// The level the open concept stands in, when the page has it: the one on the canvas, or the top one.
+	function lookOf(id) {
+		const concept = readConcept(id)
+		if (concept?.kind !== 'part') return null
+		const same = (look) => look && look.within.join(',') === concept.within.join(',')
+		return [state.home.look, state.shell.top?.look].find(same) ?? null
+	}
+
+	// Draws the drawer. Called on every render of the page.
+	function draw(env) {
+		const drawer = $('#brief')
+		const now = found()
+		drawer.hidden = now === null
+		if (now === null) return fill(drawer, '')
+		if (now.kind === 'ok') {
+			const { brief } = now
+			ui.trail = ui.trail.map((step) => (step.id === brief.id ? { ...step, name: brief.name } : step))
+			if (ui.told !== ui.id && (brief.kind === 'part' || brief.kind === 'file')) {
+				ui.told = ui.id
+				const paths = pathsOf(brief)
+				if (paths.length > 0) void app.home.tell({ did: 'opened', paths })
+			}
+		}
+		const scroll = drawer.querySelector('#brief-scroll')?.scrollTop ?? 0
+		const typed = drawer.querySelector('#brief-ask-text')?.value ?? ''
+		if (
+			!fill(
+				drawer,
+				briefHtml(ui, now, {
+					home: state.home,
+					prefs: state.shell.prefs,
+					env,
+					look: lookOf(ui.id),
+					inner: ui.inner ?? null,
+				}),
+			)
+		)
+			return
+		const body = drawer.querySelector('#brief-scroll')
+		if (body && drawer.dataset.shown === `${ui.id} ${ui.on}`) body.scrollTop = scroll
+		drawer.dataset.shown = `${ui.id} ${ui.on}`
+		const box = drawer.querySelector('#brief-ask-text')
+		if (box) box.value = typed
+	}
+
+	// The files of the open brief, for the ten seconds after which ken counts it as read.
+	const readPaths = () => {
+		const brief = open()
+		return brief ? pathsOf(brief) : null
+	}
+
+	async function saved(change) {
+		ui.saveProblem = null
+		try {
+			await change()
+		} catch (error) {
+			ui.saveProblem = `ken could not save that. ${error.message}`
+		}
+		await app.home.recorded()
+		render()
+	}
+
+	// Asks ken's model a question about the open concept. A brief the page built from what the server sends today has
+	// no stored answers: its question opens as a thread, as every question did before the brief.
+	function ask(text) {
+		const brief = open()
+		const said = text.trim()
+		if (!brief || said === '') return
+		ui.problem = null
+		const started = { trail: state.home.trail, change: state.home.change, wayIn: state.home.wayIn, concept: ui.id }
+		if (brief.builtToday) {
+			const paths = pathsOf(brief)
+			const where = paths.length > 0 ? ` (${paths.slice(0, 12).join(', ')})` : ''
+			return send({ question: `About ${brief.name}${where}: ${said}` })
+		}
+		return send({ lens: { kind: 'answer', concept: ui.id, text: said } }, { ...started, kind: 'answer', text: said })
+	}
+
+	// A run this drawer started is over: the brief is read again, and an answer opens as its own brief.
+	async function ended(started, q) {
+		briefs.forget()
+		await app.home.recorded()
+		const answered = q.outcome === 'answered'
+		const answer = q.brief ?? state.rows.find((row) => row.id === q.id)?.brief ?? null
+		if (ui.id !== started.concept) return render()
+		if (started.kind === 'answer' && answered && answer) return show(answer, { inside: true })
+		if (!answered) {
+			const why = { stopped: 'You stopped the run.', unasked: q.error }[q.outcome] ?? q.error
+			ui.problem = why ?? "ken's model gave no reply."
+		}
+		render()
+	}
+
+	const actions = {
+		'brief-open': (el) => show(el.dataset.concept, { inside: Boolean(el.closest('#brief')), opener: el.dataset.key }),
+		'brief-close': close,
+		'brief-trail': (el) => show(ui.trail[Number(el.dataset.index)].id, { inside: true }),
+		async 'brief-way'(el) {
+			const way = el.dataset.way || null
+			ui.on = ui.on === way ? null : way
+			ui.fixing = false
+			const brief = open()
+			if (ui.on === 'deeper' && brief?.deeper && ui.inner === undefined) {
+				ui.inner = null
+				void briefs.lookAt(brief.deeper.within.split(',')).then((look) => {
+					ui.inner = look ?? { boxes: [] }
+					render()
+				})
+			}
+			render()
+			$('#brief-scroll').scrollTop = 0
+			$('#brief-name')?.focus({ preventScroll: true })
+		},
+		'brief-inside'() {
+			const brief = open()
+			const concept = readConcept(ui.id)
+			if (!brief?.deeper || concept?.kind !== 'part') return
+			return app.arch.goInside(concept, brief.deeper.within.split(','))
+		},
+		'brief-quote'(el) {
+			const i = Number(el.dataset.index)
+			const opening = !ui.openQuotes.has(i)
+			if (opening) ui.openQuotes.add(i)
+			else ui.openQuotes.delete(i)
+			render()
+			const paths = opening ? (open()?.points[i]?.quotes.map((quote) => quote.path) ?? []) : []
+			if (paths.length > 0) void app.home.tell({ did: 'code', paths: [...new Set(paths)] })
+		},
+		'brief-fix'() {
+			ui.fixing = !ui.fixing
+			render()
+			$(ui.fixing ? '.k-rung[aria-pressed="true"]' : '[data-key="brief-fix"]')?.focus()
+		},
+		// The reader says what they know of the part. "You said you know it" is theirs to say, so ken writes it as said.
+		async 'brief-set'(el) {
+			const brief = open()
+			const paths = brief ? pathsOf(brief) : []
+			const { level } = el.dataset
+			ui.fixing = false
+			if (paths.length === 0) return render()
+			await saved(() => post('/api/seen', level === 'said' ? { did: 'said', paths } : { did: 'set', level, paths }))
+			$('[data-key="brief-fix"]')?.focus()
+		},
+		'brief-explain'() {
+			const brief = open()
+			if (!brief?.explain) return
+			ui.problem = null
+			const { trail, change, wayIn } = state.home
+			return send({ lens: brief.explain.lens }, { kind: 'explain', concept: ui.id, trail, change, wayIn })
+		},
+		'brief-answer': (el) => ask(open()?.questions[Number(el.dataset.index)]?.text ?? ''),
+	}
+
+	function submit(event) {
+		if (event.target.id !== 'brief-ask-form') return false
+		event.preventDefault()
+		const box = event.target.elements.text
+		const text = box.value
+		if (text.trim() === '') {
+			ui.problem = 'Write your question first.'
+			render()
+			return true
+		}
+		if (state.running || state.model?.kind !== 'ok') return true
+		box.value = ''
+		void ask(text)
+		return true
+	}
+
+	return { actions, show, close, draw, ended, submit, readPaths, open }
+}

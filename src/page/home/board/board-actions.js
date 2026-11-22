@@ -120,5 +120,5 @@ export function boardActions({ state, render, post }, loads, select) {
 		}
 	}
 
-	return { actions, whyOf, point }
+	return { actions, whyOf, point, go }
 }

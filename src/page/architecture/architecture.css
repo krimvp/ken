@@ -1,0 +1,731 @@
+/* The canvas of the Architecture page: big blocks in their part's colour, thick connectors with a verb, and the
+   tools that float over them. Sizes inside the world are in the canvas's own units and scale with the zoom. The
+   words on a block grow as the reader zooms out, so they never fall under 12.5 pixels on screen: --inv is one over
+   the zoom, set by camera.js. */
+.k-arch {
+	position: relative;
+	overflow: hidden;
+}
+
+.k-canvas {
+	position: absolute;
+	inset: 0;
+	overflow: hidden;
+	background: radial-gradient(circle, var(--k-dot) 1.5px, transparent 1.6px) 0 0 / 26px 26px;
+	cursor: grab;
+	touch-action: none;
+	user-select: none;
+}
+
+.k-canvas.is-dragging {
+	cursor: grabbing;
+}
+
+.k-world {
+	--inv: 1;
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 0;
+	height: 0;
+	transform-origin: 0 0;
+}
+
+.k-wires {
+	position: absolute;
+	overflow: visible;
+	pointer-events: none;
+}
+
+.k-wire {
+	fill: none;
+	stroke: var(--k-wire);
+	stroke-width: 5;
+	stroke-linecap: round;
+}
+
+.k-wires marker path {
+	fill: var(--k-wire);
+}
+
+.k-canvas:is(.layer-processes, .layer-changes) .k-wire {
+	opacity: 0.25;
+}
+
+.k .k-verb {
+	position: absolute;
+	z-index: 2;
+	width: max-content;
+	max-width: 190px;
+	padding: 4px 12px;
+	transform: translate(-50%, -50%);
+	border: 2.5px solid var(--k-wire);
+	border-radius: 16px;
+	background: var(--k-surface);
+	font-size: min(max(15px, calc(12.5px * var(--inv))), 24px);
+	font-weight: 650;
+	line-height: 1.15;
+	text-align: center;
+	cursor: pointer;
+}
+
+.k .k-verb:is(:hover, [aria-pressed="true"]) {
+	background: var(--k-ink);
+	color: var(--k-surface);
+}
+
+.k-canvas:is(.layer-processes, .layer-changes) .k-verb {
+	display: none;
+}
+
+.k-blk {
+	position: absolute;
+	border-radius: 30px;
+	color: var(--k-block-ink);
+}
+
+.k .k-blk-face {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	width: 100%;
+	height: 100%;
+	padding: 22px 22px 18px;
+	border-radius: 30px;
+	background: var(--k-pc);
+	box-shadow: 0 9px 0 var(--k-edge);
+	cursor: pointer;
+}
+
+.k .k-blk-face:focus-visible {
+	border-radius: 30px;
+	outline-width: calc(3px * var(--inv));
+	outline-offset: calc(3px * var(--inv));
+}
+
+.k-blk.is-picked .k-blk-face {
+	outline: calc(4px * var(--inv)) solid var(--k-ink);
+	outline-offset: calc(4px * var(--inv));
+}
+
+.k-blk-head {
+	display: flex;
+	align-items: flex-start;
+	gap: 14px;
+	padding-right: 34px;
+}
+
+.k-blk-icon {
+	display: grid;
+	flex: none;
+	place-items: center;
+	width: 46px;
+	height: 46px;
+	border-radius: 12px;
+	background: var(--k-block-ink);
+	color: var(--k-pc);
+}
+
+.k-blk-icon .k-i {
+	width: 28px;
+	height: 28px;
+	stroke-width: 2;
+}
+
+.k-blk-name {
+	font-size: min(max(25px, calc(14px * var(--inv))), 34px);
+	font-weight: 750;
+	letter-spacing: -0.01em;
+	line-height: 1.12;
+	overflow-wrap: anywhere;
+}
+
+.k-blk-job {
+	display: -webkit-box;
+	overflow: hidden;
+	font-size: 15.5px;
+	font-weight: 500;
+	line-height: 1.3;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: var(--lines, 3);
+	line-clamp: var(--lines, 3);
+}
+
+.k-blk-state {
+	font-size: 14.5px;
+	font-weight: 650;
+}
+
+.k-blk-foot {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px;
+	margin-top: auto;
+}
+
+.k-blk-level {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	font-size: min(max(16px, calc(12.5px * var(--inv))), 25px);
+	font-weight: 650;
+	line-height: 1.1;
+}
+
+.k-blk-level .k-i {
+	width: 18px;
+	height: 18px;
+}
+
+.k-blk-level b {
+	font-size: 1.7em;
+	font-weight: 760;
+	line-height: 1;
+}
+
+.k-blk-lines {
+	font-size: min(max(15px, calc(12.5px * var(--inv))), 25px);
+	font-weight: 600;
+	white-space: nowrap;
+}
+
+.k-blk .k-badge {
+	padding: 4px 13px 4px 9px;
+	font-size: min(max(17px, calc(12.5px * var(--inv))), 25px);
+}
+
+.k-blk .k-badge .k-i {
+	width: 15px;
+	height: 15px;
+}
+
+/* The corner that goes inside a part. */
+.k .k-blk-in {
+	position: absolute;
+	top: 20px;
+	right: 18px;
+	display: grid;
+	place-items: center;
+	width: max(34px, calc(24px * var(--inv)));
+	height: max(34px, calc(24px * var(--inv)));
+	border-radius: 50%;
+	background: rgb(23 26 35 / 0.16);
+	color: var(--k-block-ink);
+	cursor: pointer;
+}
+
+.k .k-blk-in:hover {
+	background: rgb(23 26 35 / 0.34);
+}
+
+.k .k-blk-in:focus-visible {
+	border-radius: 50%;
+	outline-color: var(--k-ink);
+	outline-width: calc(3px * var(--inv));
+}
+
+/* Zoomed out, a block is its icon, its name and its mark. */
+.is-far .k-blk-job,
+.is-far .k-blk-state {
+	display: none;
+}
+
+.is-far .k-blk-icon {
+	width: 40px;
+	height: 40px;
+}
+
+.k-blk .k-blk-job:is(.is-out, :empty),
+.layer-processes .k-blk:not(.is-quiet) .k-blk-job {
+	display: none;
+}
+
+/* Zoomed far out, a block is its name and its mark, and a connector is its line. */
+.is-tiny :is(.k-verb, .k-blk-words, .k-blk-lines) {
+	display: none;
+}
+
+/* A block that steps back: a soft face in its hue, and the page's own ink. */
+.k-blk.is-quiet {
+	color: var(--k-ink);
+}
+
+.k .k-blk.is-quiet .k-blk-face {
+	background: var(--k-soft);
+	box-shadow: none;
+}
+
+.k-blk.is-quiet .k-blk-icon {
+	background: var(--k-ink);
+	color: var(--k-soft);
+}
+
+.k .k-blk.is-quiet .k-blk-in {
+	color: var(--k-ink);
+}
+
+.k .k-blk.is-gone .k-blk-face {
+	border: 3px dashed var(--k-edge);
+}
+
+/* "What you know": the block fills from the foot as far as ken thinks the reader knows it. A part new to them is
+   dashed and empty. */
+.k .layer-know .k-blk .k-blk-face {
+	background: linear-gradient(
+		to top,
+		var(--k-pc) calc(var(--known) * 100%),
+		color-mix(in srgb, var(--k-pc) 30%, #ffffff) calc(var(--known) * 100%)
+	);
+	box-shadow: inset 0 0 0 3px var(--k-pc);
+}
+
+.k .layer-know .k-blk.knows-new .k-blk-face {
+	border: 3px dashed var(--k-edge);
+	box-shadow: none;
+}
+
+.k-beads {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.k-bead {
+	display: grid;
+	place-items: center;
+	min-width: 44px;
+	height: 44px;
+	padding: 0 8px;
+	border: 3px solid var(--k-surface);
+	border-radius: 22px;
+	background: var(--k-block-ink);
+	color: #ffffff;
+	font-size: min(max(22px, calc(13px * var(--inv))), 28px);
+	font-weight: 760;
+}
+
+/* Inside a part: a frame in the part's colour around its own blocks, with the part's name over them. */
+.k-frame {
+	position: absolute;
+	border: 3px solid var(--k-pc);
+	border-radius: 56px;
+	background: var(--k-tint);
+}
+
+.k-frame-head {
+	display: flex;
+	align-items: center;
+	gap: 16px;
+	margin: 36px 0 0 44px;
+	color: var(--k-ink);
+	font-size: 34px;
+	font-weight: 760;
+	letter-spacing: -0.02em;
+}
+
+.k-frame .k-frame-head .k-blk-icon {
+	background: var(--k-ink);
+	color: var(--k-surface);
+}
+
+/* What floats over the canvas. */
+.k-float {
+	position: absolute;
+	z-index: 3;
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	padding: 6px;
+	border-radius: 16px;
+	background: var(--k-surface);
+	box-shadow: var(--k-shadow);
+	cursor: default;
+	user-select: text;
+}
+
+.k .k-float > button,
+.k .k-zoom button {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 7px 11px;
+	border-radius: 10px;
+	font-size: 14px;
+	font-weight: 600;
+	white-space: nowrap;
+}
+
+.k .k-float > button:hover,
+.k .k-zoom button:hover {
+	background: var(--k-sunk);
+}
+
+.k-canvas .k-float button .k-i {
+	width: 17px;
+	height: 17px;
+}
+
+.k .k-float > button:is([aria-pressed="true"], [aria-expanded="true"]) {
+	background: var(--k-ink);
+	color: var(--k-surface);
+}
+
+.k-crumb {
+	top: 12px;
+	left: 20px;
+	max-width: calc(100% - 40px);
+	overflow-x: auto;
+}
+
+.k .k-crumb button[aria-current] {
+	background: var(--k-sunk);
+}
+
+.k-crumb-sep {
+	color: var(--k-muted);
+}
+
+/* Room beside the breadcrumb for the switch between views of the architecture. */
+.k-views-slot {
+	position: absolute;
+	top: 12px;
+	left: 20px;
+	z-index: 3;
+}
+
+.k-layers {
+	top: 12px;
+	right: 20px;
+}
+
+.k-float-label {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 0 8px 0 6px;
+	color: var(--k-muted);
+	font-size: 14px;
+	font-weight: 700;
+	letter-spacing: 0.07em;
+	text-transform: uppercase;
+}
+
+.k-canvas .k-float .k-float-label .k-i {
+	width: 16px;
+	height: 16px;
+}
+
+.k-layer-pick {
+	top: 66px;
+	right: 20px;
+	max-width: min(720px, calc(100% - 40px));
+	overflow-x: auto;
+}
+
+.k-layer-pick .k-clip {
+	display: inline-block;
+	max-width: 260px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	vertical-align: bottom;
+}
+
+.k-float-note {
+	padding: 0 8px;
+	color: var(--k-muted);
+	font-size: 14px;
+}
+
+.k-notes {
+	bottom: 20px;
+	left: 252px;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 6px;
+	max-width: min(460px, calc(100% - 272px));
+	max-height: 40%;
+	overflow-y: auto;
+	padding: 10px 14px;
+	font-size: 14px;
+}
+
+.k-notes summary {
+	cursor: pointer;
+}
+
+.k-notes code,
+.k-run code {
+	font-family: var(--font-code);
+	font-size: 14px;
+}
+
+.k-run {
+	top: 120px;
+	left: 50%;
+	gap: 12px;
+	max-width: min(620px, calc(100% - 40px));
+	padding: 10px 12px 10px 16px;
+	transform: translateX(-50%);
+	font-size: 14.5px;
+}
+
+.k-run.is-said {
+	align-items: flex-start;
+	max-height: 40%;
+	overflow-y: auto;
+}
+
+.k-spin {
+	flex: none;
+	width: 16px;
+	height: 16px;
+	border: 2.5px solid var(--k-line);
+	border-top-color: var(--k-brand);
+	border-radius: 50%;
+	animation: k-spin 0.9s linear infinite;
+}
+
+@keyframes k-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.k-spin {
+		animation: none;
+	}
+}
+
+.k-tools {
+	bottom: 20px;
+	left: 20px;
+	flex-direction: column;
+	align-items: stretch;
+	padding: 8px;
+	gap: 6px;
+}
+
+.k-zoom {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	padding-top: 6px;
+	border-top: 1px solid var(--k-line);
+}
+
+.k .k-zoom button {
+	padding: 6px 8px;
+}
+
+.k-zoom span {
+	flex: 1;
+	min-width: 48px;
+	color: var(--k-muted);
+	font-size: 14px;
+	font-weight: 600;
+	text-align: center;
+}
+
+.k-draw {
+	bottom: 20px;
+	left: 244px;
+	z-index: 4;
+	flex-direction: column;
+	align-items: stretch;
+	gap: 8px;
+	width: min(440px, calc(100% - 264px));
+	max-height: calc(100% - 100px);
+	overflow-y: auto;
+	padding: 14px 16px 16px;
+	box-shadow: var(--k-shadow-up);
+}
+
+.k-draw-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+}
+
+.k-draw-label {
+	font-size: 17px;
+	font-weight: 740;
+}
+
+.k-draw-ask {
+	display: flex;
+	gap: 8px;
+}
+
+.k-draw-ask input {
+	flex: 1;
+	min-width: 0;
+	height: 42px;
+	padding: 0 14px;
+	border: 1.5px solid var(--k-line);
+	border-radius: 12px;
+	background: var(--k-surface);
+}
+
+.k-draw-ask input::placeholder {
+	color: var(--k-muted);
+	opacity: 1;
+}
+
+.k-draw-cost {
+	color: var(--k-muted);
+	font-size: 14px;
+}
+
+.k-draw-problem {
+	font-size: 14px;
+	font-weight: 600;
+}
+
+.k-draw-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 7px;
+}
+
+.k-draw-notes li {
+	padding: 6px 0;
+	border-top: 1px solid var(--k-line);
+	font-size: 14px;
+}
+
+.k-minimap {
+	right: 20px;
+	bottom: 20px;
+	padding: 6px;
+}
+
+.k-minimap svg {
+	display: block;
+	width: 168px;
+	height: 84px;
+	cursor: pointer;
+}
+
+.k-mm {
+	fill: var(--k-pc);
+}
+
+.k-mm-view {
+	fill: color-mix(in srgb, var(--k-ink) 8%, transparent);
+	stroke: var(--k-ink);
+	stroke-width: 3;
+	vector-effect: non-scaling-stroke;
+}
+
+.k-hint {
+	position: absolute;
+	bottom: 30px;
+	left: 50%;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	transform: translateX(-50%);
+	color: var(--k-muted);
+	font-size: 14px;
+	white-space: nowrap;
+	pointer-events: none;
+}
+
+.k-arch .k-canvas .k-hint .k-i {
+	width: 16px;
+	height: 16px;
+}
+
+.k-canvas-line {
+	position: absolute;
+	top: 45%;
+	right: 24px;
+	left: 24px;
+	color: var(--k-muted);
+	font-size: 16px;
+	text-align: center;
+	cursor: default;
+}
+
+/* A brief open beside the canvas takes its right side, so what floats there moves over. */
+@media (min-width: 1000px) {
+	.k-canvas.has-brief :is(.k-layers, .k-layer-pick, .k-minimap) {
+		right: calc(var(--k-drawer) + 20px);
+	}
+
+	.k-canvas.has-brief .k-hint {
+		display: none;
+	}
+}
+
+@media (max-width: 1180px) {
+	.k-hint {
+		display: none;
+	}
+}
+
+@media (max-width: 760px) {
+	.k-crumb {
+		left: 12px;
+		max-width: calc(100% - 24px);
+	}
+
+	.k-layers {
+		top: 62px;
+		right: auto;
+		left: 12px;
+		max-width: calc(100% - 24px);
+		overflow-x: auto;
+	}
+
+	.k-float-label,
+	.k-layers .k-i {
+		display: none;
+	}
+
+	.k-layer-pick {
+		top: 112px;
+		right: auto;
+		left: 12px;
+		max-width: calc(100% - 24px);
+	}
+
+	.k-notes {
+		bottom: 72px;
+		left: 12px;
+		max-width: calc(100% - 24px);
+	}
+
+	.k-run {
+		top: 162px;
+	}
+
+	.k-tools {
+		bottom: 12px;
+		left: 12px;
+		flex-direction: row;
+		align-items: center;
+	}
+
+	.k-tool span {
+		display: none;
+	}
+
+	.k-zoom {
+		padding-top: 0;
+		border-top: 0;
+	}
+
+	.k-draw {
+		right: 12px;
+		bottom: 12px;
+		left: 12px;
+		width: auto;
+	}
+
+	.k-minimap {
+		display: none;
+	}
+}

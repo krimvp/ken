@@ -172,19 +172,6 @@ export function homeLoads({ state, render, read, post, fromView }) {
 		}
 	}
 
-	// The first load reads the level with no change, which also says which way in ken suggests and what there is to
-	// catch up on. Then the way in decides what is laid over it. placed says the home already holds where the reader
-	// is, from the page's address: then that one level is read, and nothing else decides.
-	async function start(placed) {
-		const home = state.home
-		await Promise.all([loadLayout(), loadNotes(), loadReader()])
-		if (!placed) {
-			if (!home.picked && home.suggestion) home.wayIn = home.suggestion.suggested
-			await enter(home.wayIn)
-		}
-		await settle()
-	}
-
 	// The server brings back the picture before, and the home then reads the level as it reads any other, with the
 	// change and the commit the reader is on.
 	async function back() {
@@ -199,5 +186,5 @@ export function homeLoads({ state, render, read, post, fromView }) {
 		await refresh()
 	}
 
-	return { loadLayout, loadNotes, loadReader, loadDiff, settle, refresh, enter, start, back }
+	return { loadLayout, loadNotes, loadReader, loadDiff, settle, refresh, enter, back }
 }

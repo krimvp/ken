@@ -1,0 +1,752 @@
+/* The look of ken's page: a calm, roomy shell (neutral ground, white surfaces, one brand colour, big numbers) and
+   bold blocks in a part's colour for everything that is a diagram. These tokens are the page's own. tokens.css stays
+   a copy of the public site's, and the views from before this look still read it. The reader's choice of light or
+   dark is data-theme on the root, set before the first draw, so the older tokens are stated here again for it. */
+:root {
+	--k-bg: #f3f4f7;
+	--k-surface: #ffffff;
+	--k-sunk: #eceef3;
+	--k-ink: #141821;
+	--k-muted: #566074;
+	--k-line: #dde1e9;
+	--k-brand: #0b7a69;
+	--k-brand-ink: #ffffff;
+	--k-brand-soft: #d9f2ec;
+	--k-wire: #141821;
+	/* Text on a block in its part's colour, the same in both themes: the colours are light in both. */
+	--k-block-ink: #171a23;
+	--k-dot: #dfe2ea;
+	--k-shadow: 0 1px 2px rgb(20 24 33 / 0.06), 0 8px 24px rgb(20 24 33 / 0.07);
+	--k-shadow-up: 0 2px 4px rgb(20 24 33 / 0.08), 0 18px 44px rgb(20 24 33 / 0.16);
+	--k-rail: 96px;
+	--k-bar: 64px;
+	--k-drawer: 460px;
+	color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+	--k-bg: #0d1016;
+	--k-surface: #171b23;
+	--k-sunk: #222834;
+	--k-ink: #edf0f5;
+	--k-muted: #b4bccb;
+	--k-line: #2e3542;
+	--k-brand: #3fd6bb;
+	--k-brand-ink: #04261f;
+	--k-brand-soft: #123a33;
+	--k-wire: #e3e7f0;
+	--k-dot: #1d222c;
+	--k-shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 24px rgb(0 0 0 / 0.35);
+	--k-shadow-up: 0 2px 4px rgb(0 0 0 / 0.5), 0 18px 44px rgb(0 0 0 / 0.6);
+	color-scheme: dark;
+
+	--color-bg: #0f1217;
+	--color-text: #e6e8ee;
+	--color-muted: #a0a8b7;
+	--color-border: #272c36;
+	--color-accent: #a9b0ff;
+	--color-card: #171b22;
+	--color-code-bg: #11141a;
+	--color-code-text: #d8dce5;
+	--color-line-number: #8a93a3;
+	--color-label-bg: #24274a;
+	--color-label-text: #c7cbff;
+	--color-focus: #a9b0ff;
+	--color-note: #b9c0cc;
+	--color-add: #6fd3a0;
+	--color-del: #f2a598;
+	--color-warn-bg: #2a2216;
+	--color-warn-border: #b98d3f;
+	--color-box-border: #353c48;
+	--shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+	--shadow-md: 0 1px 2px rgb(0 0 0 / 0.35), 0 8px 20px -8px rgb(0 0 0 / 0.6);
+	--shadow-lg: 0 2px 4px rgb(0 0 0 / 0.35), 0 16px 36px -12px rgb(0 0 0 / 0.7);
+	--shadow-up: 0 -6px 14px -10px rgb(0 0 0 / 0.7);
+	--color-canvas: #12161c;
+	--color-bar: rgb(15 18 23);
+	--color-add-bg: #173326;
+	--color-del-bg: #3a1f1b;
+	--color-add-ink: #8fe0b6;
+	--color-del-ink: #f6b8ad;
+	--color-dot: #2a303b;
+	--color-edge: #7a8394;
+	--part-s: 45%;
+	--part-fill-l: 17%;
+	--part-line-l: 62%;
+	--part-ink-l: 80%;
+	--part-ink-on-fill-l: 80%;
+}
+
+:root[data-theme="light"] {
+	--color-bg: #f6f7f9;
+	--color-text: #1a1e26;
+	--color-muted: #586070;
+	--color-border: #e1e4ea;
+	--color-accent: #4246c4;
+	--color-card: #ffffff;
+	--color-code-bg: #f3f4f8;
+	--color-code-text: #1f2430;
+	--color-line-number: #636a78;
+	--color-label-bg: #ebecfd;
+	--color-label-text: #3236a8;
+	--color-focus: #4246c4;
+	--color-note: #4a5160;
+	--color-add: #18794e;
+	--color-del: #a3301f;
+	--color-warn-bg: #fdf6e7;
+	--color-warn-border: #c08a2d;
+	--color-box-border: var(--color-border);
+	--shadow-sm: 0 1px 2px rgb(20 26 40 / 0.06);
+	--shadow-md: 0 1px 2px rgb(20 26 40 / 0.05), 0 6px 18px -6px rgb(20 26 40 / 0.12);
+	--shadow-lg: 0 2px 4px rgb(20 26 40 / 0.05), 0 14px 32px -10px rgb(20 26 40 / 0.2);
+	--shadow-up: 0 -6px 14px -10px rgb(20 26 40 / 0.35);
+	--color-canvas: #fbfbfd;
+	--color-bar: rgb(246 247 249);
+	--color-add-bg: #e3f3ea;
+	--color-del-bg: #fbe9e6;
+	--color-add-ink: #135f3d;
+	--color-del-ink: #8f2a1b;
+	--color-dot: #d5d9e1;
+	--color-edge: #7f8798;
+	--part-s: 62%;
+	--part-fill-l: 95.5%;
+	--part-line-l: 58%;
+	--part-ink-l: 30%;
+	--part-ink-on-fill-l: 26%;
+}
+
+/* A part's one colour, the same on every page. .pc-N is given by part-colours.js. */
+.pc-0 {
+	--k-pc: #5bc4ff;
+}
+.pc-1 {
+	--k-pc: #ff8562;
+}
+.pc-2 {
+	--k-pc: #58d9a4;
+}
+.pc-3 {
+	--k-pc: #a996ff;
+}
+.pc-4 {
+	--k-pc: #ffc940;
+}
+.pc-5 {
+	--k-pc: #4fd6dd;
+}
+.pc-6 {
+	--k-pc: #ff94c8;
+}
+.pc-7 {
+	--k-pc: #b5e05c;
+}
+
+/* A block that steps back keeps its hue as a soft face, with the page's own ink on it. */
+.k {
+	--k-pc: var(--k-sunk);
+	--k-soft: color-mix(in srgb, var(--k-pc) 26%, var(--k-surface));
+	--k-tint: color-mix(in srgb, var(--k-pc) 14%, var(--k-surface));
+	--k-edge: color-mix(in srgb, var(--k-pc) 66%, #10131a);
+}
+
+:is(.pc-0, .pc-1, .pc-2, .pc-3, .pc-4, .pc-5, .pc-6, .pc-7) {
+	--k-soft: color-mix(in srgb, var(--k-pc) 26%, var(--k-surface));
+	--k-tint: color-mix(in srgb, var(--k-pc) 14%, var(--k-surface));
+	--k-edge: color-mix(in srgb, var(--k-pc) 66%, #10131a);
+}
+
+body {
+	background: var(--k-bg);
+}
+
+.k {
+	color: var(--k-ink);
+	font-family: var(--font-text);
+	font-size: 15px;
+	line-height: 1.45;
+	-webkit-font-smoothing: antialiased;
+}
+
+:where(.k) :is(button, input, textarea) {
+	font: inherit;
+	color: inherit;
+}
+
+:where(.k) button {
+	padding: 0;
+	border: 0;
+	background: none;
+	text-align: left;
+}
+
+:where(.k) a {
+	color: inherit;
+	text-decoration: none;
+}
+
+.k :focus-visible {
+	outline: 3px solid var(--k-brand);
+	outline-offset: 2px;
+	border-radius: 8px;
+}
+
+.k-i {
+	flex: none;
+	width: 20px;
+	height: 20px;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 1.9;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
+.k-mark {
+	flex: none;
+}
+
+.k-num {
+	font-variant-numeric: tabular-nums;
+}
+
+.k-mono {
+	font-family: var(--font-code);
+	font-size: 0.93em;
+}
+
+.k-eyebrow {
+	color: var(--k-muted);
+	font-size: 14px;
+	font-weight: 700;
+	letter-spacing: 0.07em;
+	text-transform: uppercase;
+}
+
+.k-muted {
+	color: var(--k-muted);
+}
+
+/* The swatch of a part's colour beside its name. */
+.k-sw {
+	display: inline-block;
+	flex: none;
+	width: 13px;
+	height: 13px;
+	border-radius: 4px;
+	background: var(--k-pc);
+	box-shadow: inset 0 0 0 1.5px rgb(23 26 35 / 0.55);
+}
+
+:root[data-theme="dark"] .k-sw {
+	box-shadow: none;
+}
+
+.k-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	padding: 10px 16px;
+	border-radius: 12px;
+	background: var(--k-brand);
+	color: var(--k-brand-ink);
+	font-weight: 700;
+	white-space: nowrap;
+}
+
+.k .k-btn {
+	padding: 10px 16px;
+	background: var(--k-brand);
+	color: var(--k-brand-ink);
+}
+
+.k .k-btn:hover:not([disabled]) {
+	filter: brightness(1.08);
+}
+
+.k .k-btn[disabled] {
+	background: var(--k-sunk);
+	color: var(--k-muted);
+	cursor: default;
+}
+
+.k .k-btn.is-big {
+	padding: 14px 20px;
+	font-size: 16px;
+}
+
+.k .k-btn.is-quiet {
+	background: var(--k-sunk);
+	color: var(--k-ink);
+}
+
+.k .k-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	max-width: 100%;
+	padding: 6px 13px 6px 10px;
+	border-radius: 999px;
+	background: var(--k-sunk);
+	font-size: 14px;
+	font-weight: 600;
+}
+
+.k .k-chip:hover {
+	box-shadow: inset 0 0 0 2px var(--k-ink);
+}
+
+.k-chip .k-i {
+	width: 17px;
+	height: 17px;
+	color: var(--k-muted);
+}
+
+.k .k-link {
+	font-size: 14px;
+	font-weight: 600;
+	text-decoration: underline;
+	text-underline-offset: 3px;
+}
+
+.k .k-icon-btn {
+	display: grid;
+	flex: none;
+	place-items: center;
+	width: 36px;
+	height: 36px;
+	border-radius: 10px;
+	background: var(--k-sunk);
+}
+
+.k .k-icon-btn:hover {
+	box-shadow: inset 0 0 0 2px var(--k-ink);
+}
+
+.k-seg {
+	display: inline-flex;
+	gap: 2px;
+	padding: 3px;
+	border-radius: 12px;
+	background: var(--k-sunk);
+}
+
+.k .k-seg button {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 7px 12px;
+	border-radius: 9px;
+	color: var(--k-muted);
+	font-size: 14px;
+	font-weight: 600;
+	white-space: nowrap;
+}
+
+.k .k-seg button[aria-pressed="true"] {
+	background: var(--k-surface);
+	color: var(--k-ink);
+	box-shadow:
+		0 1px 3px rgb(20 24 33 / 0.18),
+		inset 0 0 0 1.5px var(--k-ink);
+}
+
+.k-badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+	padding: 2px 9px 2px 6px;
+	border-radius: 999px;
+	background: var(--k-block-ink);
+	color: #ffffff;
+	font-size: 14px;
+	font-weight: 700;
+}
+
+.k-badge .k-i {
+	width: 13px;
+	height: 13px;
+}
+
+/* ---- The frame: the rail, the bar with search, and one page under it ---- */
+
+.k-rail {
+	position: fixed;
+	inset: 0 auto 0 0;
+	z-index: 30;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 4px;
+	width: var(--k-rail);
+	padding: 16px 0 12px;
+	border-right: 1px solid var(--k-line);
+	background: var(--k-surface);
+}
+
+.k-logo {
+	display: block;
+	margin-bottom: 14px;
+}
+
+.k-rail-links {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.k-rail-foot {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.k .k-rail-btn {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 4px;
+	width: 88px;
+	padding: 9px 0 7px;
+	border-radius: 14px;
+	color: var(--k-muted);
+	font-size: 14px;
+	font-weight: 600;
+	letter-spacing: -0.01em;
+}
+
+.k-rail-btn .k-i {
+	width: 22px;
+	height: 22px;
+}
+
+.k .k-rail-btn:hover {
+	background: var(--k-sunk);
+	color: var(--k-ink);
+}
+
+.k .k-rail-btn:is([aria-current="page"], [aria-expanded="true"]) {
+	background: var(--k-brand-soft);
+	color: var(--k-ink);
+	box-shadow: inset 3px 0 0 var(--k-brand);
+}
+
+.k-rail-btn:is([aria-current="page"], [aria-expanded="true"]) .k-i {
+	color: var(--k-brand);
+}
+
+.k-main {
+	margin-left: var(--k-rail);
+}
+
+.k-bar {
+	position: sticky;
+	top: 0;
+	z-index: 20;
+	display: grid;
+	grid-template-columns: 1fr minmax(260px, 420px) 1fr;
+	align-items: center;
+	gap: 16px;
+	height: var(--k-bar);
+	padding: 0 24px;
+	background: var(--k-bg);
+}
+
+.k-bar h1 {
+	overflow: hidden;
+	font-size: 22px;
+	font-weight: 750;
+	letter-spacing: -0.01em;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.k-search {
+	position: relative;
+	display: flex;
+	align-items: center;
+}
+
+.k-bar .k-search > .k-i {
+	position: absolute;
+	left: 14px;
+	color: var(--k-muted);
+	pointer-events: none;
+}
+
+.k-search input {
+	width: 100%;
+	height: 42px;
+	padding: 0 16px 0 42px;
+	border: 1.5px solid var(--k-line);
+	border-radius: 21px;
+	background: var(--k-surface);
+}
+
+.k-search input::placeholder {
+	color: var(--k-muted);
+	opacity: 1;
+}
+
+.k .k-search input:focus-visible {
+	border-color: transparent;
+	border-radius: 21px;
+	outline-offset: 1px;
+}
+
+.k-found {
+	position: absolute;
+	top: 50px;
+	right: 0;
+	left: 0;
+	z-index: 40;
+	max-height: min(70vh, 520px);
+	overflow-y: auto;
+	padding: 8px;
+	border: 1px solid var(--k-line);
+	border-radius: 16px;
+	background: var(--k-surface);
+	box-shadow: var(--k-shadow-up);
+}
+
+.k .k-found-row {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	width: 100%;
+	padding: 9px 10px;
+	border-radius: 10px;
+}
+
+.k .k-found-row:is(:hover, [aria-selected="true"]) {
+	background: var(--k-sunk);
+}
+
+.k .k-found-row[aria-selected="true"] {
+	box-shadow: inset 3px 0 0 var(--k-brand);
+}
+
+.k-found-name {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	font-weight: 650;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.k-found-kind {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	color: var(--k-muted);
+	font-size: 14px;
+	white-space: nowrap;
+}
+
+.k-found-note {
+	padding: 8px 10px 4px;
+	color: var(--k-muted);
+	font-size: 14px;
+}
+
+.k-row-ic {
+	display: grid;
+	flex: none;
+	place-items: center;
+	width: 30px;
+	height: 30px;
+	border-radius: 9px;
+	background: var(--k-sunk);
+}
+
+/* A page is the frame of what it scrolls, so words kept for a screen reader alone stay inside it. */
+.k-pg {
+	position: relative;
+	height: calc(100dvh - var(--k-bar));
+}
+
+.k-pg[hidden] {
+	display: none;
+}
+
+/* The views from before this look keep the window's own scroll. Their header stands under the bar. */
+.k-old {
+	--top: calc(var(--k-bar) + 3.5rem);
+}
+
+.k-old > .top {
+	top: var(--k-bar);
+	min-height: 3.5rem;
+}
+
+.k-old .home {
+	height: calc(100dvh - var(--top));
+}
+
+/* ---- Settings: a panel that opens from the rail ---- */
+
+.k-settings {
+	position: fixed;
+	bottom: 14px;
+	left: calc(var(--k-rail) + 10px);
+	z-index: 45;
+	width: min(340px, calc(100vw - var(--k-rail) - 20px));
+	max-height: calc(100dvh - 28px);
+	overflow-y: auto;
+	padding: 16px;
+	border: 1px solid var(--k-line);
+	border-radius: 18px;
+	background: var(--k-surface);
+	box-shadow: var(--k-shadow-up);
+}
+
+.k-settings h2 {
+	margin: 10px 0 6px;
+}
+
+.k-settings h2:first-child {
+	margin-top: 0;
+}
+
+.k .k-pick {
+	display: grid;
+	grid-template-columns: auto 1fr auto;
+	align-items: center;
+	gap: 12px;
+	width: 100%;
+	margin-bottom: 6px;
+	padding: 10px 12px;
+	border-radius: 12px;
+	box-shadow: inset 0 0 0 1px var(--k-line);
+}
+
+.k .k-pick:hover {
+	box-shadow: inset 0 0 0 2px var(--k-ink);
+}
+
+.k .k-pick[aria-pressed="true"] {
+	background: var(--k-sunk);
+	box-shadow: inset 0 0 0 2px var(--k-ink);
+}
+
+.k-pick b {
+	display: block;
+	font-weight: 700;
+}
+
+.k-pick span {
+	color: var(--k-muted);
+	font-size: 14px;
+}
+
+.k-pick .k-tick {
+	visibility: hidden;
+}
+
+.k-pick[aria-pressed="true"] .k-tick {
+	visibility: visible;
+}
+
+.k-settings .k-seg {
+	display: flex;
+}
+
+.k-settings .k-seg button {
+	flex: 1;
+	justify-content: center;
+}
+
+.k-files {
+	color: var(--k-muted);
+	font-size: 14px;
+	overflow-wrap: anywhere;
+}
+
+.k-files code {
+	color: var(--k-ink);
+	font-family: var(--font-code);
+	font-size: 14px;
+}
+
+/* The "Ask ken" drawer keeps its form from before this look, and opens from the rail over any page. */
+.home-ask.k-ask {
+	position: fixed;
+	inset: 0 0 0 auto;
+	z-index: 44;
+	width: min(var(--k-drawer), 100vw);
+	border-left: 1px solid var(--k-line);
+	box-shadow: var(--k-shadow-up);
+}
+
+/* A narrow window: the rail lies along the foot as icons, each named for a screen reader and on a long press. */
+@media (max-width: 760px) {
+	:root {
+		--k-rail: 0px;
+		--k-foot: 58px;
+	}
+
+	.k-rail {
+		inset: auto 0 0 0;
+		flex-direction: row;
+		justify-content: space-around;
+		width: auto;
+		height: var(--k-foot);
+		padding: 4px 6px;
+		border-top: 1px solid var(--k-line);
+		border-right: 0;
+	}
+
+	.k-logo,
+	.k-rail-btn span {
+		display: none;
+	}
+
+	.k-rail-links,
+	.k-rail-foot {
+		flex: none;
+		flex-direction: row;
+		gap: 2px;
+	}
+
+	.k .k-rail-btn {
+		justify-content: center;
+		width: 48px;
+		height: 48px;
+		padding: 0;
+	}
+
+	.k .k-rail-btn:is([aria-current="page"], [aria-expanded="true"]) {
+		box-shadow: inset 0 3px 0 var(--k-brand);
+	}
+
+	.k-main {
+		padding-bottom: var(--k-foot);
+	}
+
+	.k-bar {
+		grid-template-columns: auto minmax(0, 1fr);
+		gap: 12px;
+		padding: 0 16px;
+	}
+
+	.k-bar h1 {
+		max-width: 38vw;
+	}
+
+	.k-pg {
+		height: calc(100dvh - var(--k-bar) - var(--k-foot));
+	}
+
+	.k-settings {
+		right: 10px;
+		bottom: calc(var(--k-foot) + 10px);
+		left: 10px;
+		width: auto;
+		max-height: calc(100dvh - var(--k-foot) - 20px);
+	}
+
+	.home-ask.k-ask {
+		bottom: var(--k-foot);
+	}
+}

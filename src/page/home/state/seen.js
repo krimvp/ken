@@ -1,7 +1,8 @@
 // What the page tells ken about what the reader looked at, so ken's idea of what they know grows by itself. A part
 // picked is sent at once. An explanation counts as read after ten seconds on screen with the tab in view, and code or
 // a step of a change after five. A send that fails is dropped without a word: it must never block or slow the page.
-// When ken wrote a line, the home reads the level and the record again, so the box's fill moves with no reload.
+// A brief open in its drawer counts as read the same way, on any page. When ken wrote a line, the home reads the
+// level and the record again, so the box's fill moves with no reload.
 import { cardPaths, stopTopics } from '../../project/walk.js'
 import { pathOf, placeOf, shownDetail, stepFiles, stoodOn } from './content.js'
 
@@ -40,15 +41,17 @@ export function onScreen(home) {
 	return detail === 'code' && files.length > 0 ? { did: 'code', paths: files, after: CODE_MS } : null
 }
 
-// app is the page: its state, render and post. loads reads the home again.
-export function homeSeen({ state, render, post }, loads) {
+// app is the page: its state, render and post, briefPaths, which gives the files of the brief that is open, or null,
+// and reread, which reads again what the pages keep of the project. loads reads the home again.
+export function homeSeen(app, loads) {
+	const { state, render, post } = app
 	// What the timer waits on, by what it would send: the same thing still on screen is not sent twice.
 	let waiting = null
 
 	// ken wrote something down: the level and the record are read again, unless a level is being read anyway.
 	async function recorded() {
 		if (state.home.reading) return
-		await Promise.all([loads.loadLayout(true), loads.loadReader()])
+		await Promise.all([loads.loadLayout(true), loads.loadReader(), app.reread()])
 		render()
 	}
 
@@ -67,8 +70,10 @@ export function homeSeen({ state, render, post }, loads) {
 	// Called after every draw of the home: starts the wait for what is on screen now, and drops the one before.
 	function watch() {
 		const home = state.home
-		const visible = state.view === 'home' && !home.askOpen && document.visibilityState === 'visible'
-		const seen = visible ? onScreen(home) : null
+		const inView = document.visibilityState === 'visible'
+		const brief = inView ? app.briefPaths() : null
+		const visible = state.view === 'home' && !home.askOpen && inView
+		const seen = brief?.length > 0 ? { did: 'read', paths: brief, after: READ_MS } : visible ? onScreen(home) : null
 		const key = seen ? keyOf(seen) : ''
 		if (key === (waiting?.key ?? '')) return
 		clearTimeout(waiting?.timer)

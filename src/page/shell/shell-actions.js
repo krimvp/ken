@@ -1,0 +1,351 @@
+// What the reader does with the frame: go to a page by the rail, find a concept with the search, change a setting,
+// and follow what "Start here" leads with. This module also owns the address: every page and every open brief has
+// one, so the browser's Back and a reload bring the reader to the same place. Three of the rail's pages still show a
+// view from before the pages: Processes the drawn pictures, Changes the home with "Catch up" and "Review a change",
+// and You the reader's map.
+import { partId, readConcept } from '../brief/concept-id.js'
+import { askDrawerHtml } from '../home/inspector/ask-drawer.js'
+import { WAYS, WHOLE } from '../home/state/home-state.js'
+import { learnParts } from '../project/part-colours.js'
+import { startPageHtml } from '../start/start.js'
+import { fill } from './fill.js'
+import { readPlace, writePlace } from './place.js'
+import { barTitle, findConcepts, foundHtml, railHtml, settingsHtml } from './shell.js'
+
+const OLDER = ['processes', 'changes', 'you']
+const narrow = matchMedia('(max-width: 760px)')
+
+// What the frame holds: the page, the top level of the project for the Home page, what search can find, what the
+// reader typed in it, and their settings.
+export const freshShell = (prefs) => ({
+	page: 'home',
+	// The top level as GET /api/layout sends it, with the changes it lists: null until read.
+	top: null,
+	// Commits by day, when the server sends them.
+	timeline: null,
+	concepts: [],
+	search: { text: '', at: 0, list: null, open: false },
+	settingsOpen: false,
+	prefs,
+})
+
+// app is the page: its state, render, read, the store of briefs, the reader's settings, and the actions of the
+// brief, the canvas and the views from before the pages.
+export function shellActions(app) {
+	const { state, render, read } = app
+	const shell = state.shell
+	const $ = (selector) => document.querySelector(selector)
+	const { loads } = app.home
+
+	// A reply, the decisions, the live notes or what is open lie over whichever page the reader is on.
+	const overlaid = () => state.view !== 'home' && state.view !== 'map'
+
+	const placeNow = () => ({
+		page: shell.page,
+		trail: state.home.trail,
+		layer: state.arch.layer,
+		process: state.arch.process,
+		change: state.home.change,
+		brief: state.brief.id,
+		on: state.brief.on,
+		older: state.home,
+	})
+
+	// The address follows the reader once the page has read where it starts. Another page, another level or another
+	// brief is a new entry in the browser's history, so Back goes to the one before. Anything finer rewrites the
+	// entry it is in. A reply open over the pages keeps its own address.
+	let addressed = null
+	const coarse = (place) => JSON.stringify([place.page, place.trail, place.brief, place.on])
+	function address() {
+		if (addressed === null || overlaid()) return
+		const place = placeNow()
+		const hash = writePlace(place)
+		if (hash !== location.hash) history[coarse(place) === addressed ? 'replaceState' : 'pushState'](null, '', hash)
+		addressed = coarse(place)
+	}
+
+	// The top level, for the Home page and for a part's colour on every page.
+	async function loadTop() {
+		const [top, timeline] = await Promise.all([
+			read('/api/layout').catch(() => null),
+			read('/api/timeline?days=90').catch(() => null),
+		])
+		if (top?.ok) {
+			shell.top = top.body
+			learnParts(top.body.look.boxes)
+			if (state.home.levels.length === 0 && top.body.levels) state.home.levels = top.body.levels
+		} else if (top) state.home.problem ??= { message: top.body.message, field: null }
+		shell.timeline = timeline?.ok ? timeline.body : null
+		shell.concepts = await app.briefs.concepts()
+	}
+
+	// What a page reads when the reader comes to it.
+	async function enter(page) {
+		const { home } = state
+		if (page === 'home') return loadTop()
+		if (page === 'architecture') return app.arch.enter()
+		if (page === 'you') return app.showMap()
+		Object.assign(home, { selected: null, opened: page === 'changes', why: null })
+		if (page === 'processes') {
+			home.trail = [WHOLE]
+			await loads.enter('learn')
+			home.shown = home.pictures[1]?.id ?? null
+		} else {
+			const kept = Object.keys(WAYS).find((way) => way === app.stored('ken-way-in'))
+			const way = [home.wayIn, kept, home.suggestion?.suggested].find((each) => each && each !== 'learn')
+			home.trail = [WHOLE]
+			await loads.enter(way ?? 'catch-up')
+		}
+		await loads.settle()
+	}
+
+	async function goPage(page) {
+		Object.assign(shell, { page, settingsOpen: false })
+		shell.search.open = false
+		state.menuOpen = false
+		state.view = state.base = page === 'you' ? 'map' : 'home'
+		render()
+		await enter(page)
+		render()
+	}
+
+	// A place from the address becomes where the reader is. first says the page has just opened, so everything is
+	// still to read.
+	async function goPlace(place, first) {
+		const { home, arch, brief } = state
+		Object.assign(shell, { page: place.page, settingsOpen: false })
+		Object.assign(arch, { layer: place.layer, process: place.process, drawOpen: false })
+		state.view = state.base = place.page === 'you' ? 'map' : 'home'
+		if (place.older)
+			Object.assign(home, place.older, { askOpen: false, openArrows: new Set(), opened: false, fixing: null })
+		else Object.assign(home, { trail: place.trail, change: place.change, selected: null, shown: null, at: '' })
+		if (place.brief !== brief.id) {
+			const at = brief.trail.findIndex((step) => step.id === place.brief)
+			const step = { id: place.brief, name: readConcept(place.brief ?? '')?.name ?? '' }
+			Object.assign(brief, {
+				id: place.brief,
+				trail: place.brief === null ? [] : at >= 0 ? brief.trail.slice(0, at + 1) : [step],
+				fixing: false,
+				openQuotes: new Set(),
+				inner: undefined,
+			})
+		}
+		brief.on = place.on
+		addressed = coarse(placeNow())
+		render()
+		if (first) await Promise.all([loadTop(), loads.loadNotes(), loads.loadReader(), app.prefs.load()])
+		if (place.page === 'you') await app.showMap()
+		else if (place.page === 'architecture') await app.arch.enter()
+		else if (place.older) await loads.refresh()
+		else if (place.page !== 'home') await enter(place.page)
+		else if (!first) await loadTop()
+		addressed = coarse(placeNow())
+		render()
+	}
+
+	// The page opens: at the place its address names, or at Home.
+	const start = () => goPlace(readPlace(location.hash), true)
+
+	// Back and Forward in the browser. reply is given the id of a saved reply the address names.
+	function back(reply) {
+		const place = readPlace(location.hash)
+		return place.reply ? reply(place.reply) : goPlace(place, false)
+	}
+
+	// ken wrote a line about the reader, or its model ran: what the pages show of the project is read again.
+	async function reread() {
+		app.briefs.forget()
+		await loadTop()
+	}
+
+	const briefOf = (id) => {
+		const found = app.briefs.get(id, render)
+		return found.kind === 'ok' ? found.brief : null
+	}
+
+	// Draws the frame and the page under it. It answers whether a view from before the pages is on screen, which
+	// the page then draws as it did.
+	function draw(env) {
+		const over = overlaid()
+		const older = over || OLDER.includes(shell.page)
+		const { home } = state
+		fill(
+			$('#rail'),
+			railHtml({ on: over ? null : shell.page, askOpen: home.askOpen, settingsOpen: shell.settingsOpen }),
+		)
+		const title = barTitle({ page: shell.page, view: state.view, project: state.project?.name })
+		// A narrow window has no room for the whole sentence in the box. Its label says it all the same.
+		const asks = narrow.matches ? 'Find' : 'Find a part, a process or a term'
+		if ($('#search-text').placeholder !== asks) $('#search-text').placeholder = asks
+		if ($('#bar-title').textContent !== title) $('#bar-title').textContent = title
+		const [start, canvas] = [$('#pg-home'), $('#pg-arch')]
+		start.hidden = older || shell.page !== 'home'
+		canvas.hidden = older || shell.page !== 'architecture'
+		$('#pg-old').hidden = !older
+		if (start.hidden) fill(start, '')
+		else {
+			const view = { top: shell.top, home, reader: home.reader, followUp: state.followUp, concepts: shell.concepts }
+			fill(start, startPageHtml({ ...view, timeline: shell.timeline, project: state.project?.name ?? 'ken', briefOf }))
+		}
+		// The canvas and the home from before the pages name some fields alike, so the one off screen is emptied.
+		if (canvas.hidden) fill(canvas, '')
+		else app.arch.draw(env)
+
+		const { search } = shell
+		const found = $('#found')
+		const box = $('#search-text')
+		fill(found, search.open ? foundHtml(search, home) : '')
+		found.hidden = found.innerHTML === ''
+		box.setAttribute('aria-expanded', String(!found.hidden))
+		const on = found.querySelector('[aria-selected="true"]')
+		if (on) box.setAttribute('aria-activedescendant', on.id)
+		else box.removeAttribute('aria-activedescendant')
+
+		const settings = $('#settings')
+		settings.hidden = !shell.settingsOpen
+		const own = home.reader?.file ? home.reader.file.slice(0, home.reader.file.lastIndexOf('/')) : null
+		fill(settings, shell.settingsOpen ? settingsHtml(shell.prefs, { project: state.project?.folder, own }) : '')
+
+		const ask = $('#home-ask')
+		ask.hidden = !home.askOpen
+		if (fill(ask, home.askOpen ? askDrawerHtml(home, env) : '') && home.askOpen) $('#ask-text').value = home.askText
+
+		app.brief.draw(env)
+		address()
+		return older
+	}
+
+	// "Start here" and its chips go where the server says: a part to read opens as a brief on the canvas, and a
+	// change opens on the Changes page with that change laid over the parts.
+	async function follow(item, opener) {
+		if (item.go.way === 'learn') {
+			await goPage('architecture')
+			return item.go.part ? app.brief.show(partId([], item.go.part), { opener }) : null
+		}
+		Object.assign(shell, { page: 'changes' })
+		state.view = state.base = 'home'
+		state.home.trail = [WHOLE]
+		render()
+		await app.home.goTo(item.go, item.why)
+		render()
+	}
+
+	function closeSettings() {
+		if (!shell.settingsOpen) return false
+		shell.settingsOpen = false
+		render()
+		$('[data-key="settings"]')?.focus()
+		return true
+	}
+
+	function openFound(id) {
+		Object.assign(shell.search, { text: '', open: false, at: 0 })
+		$('#search-text').value = ''
+		app.brief.show(id, { opener: 'search-text' })
+	}
+
+	const actions = {
+		'go-page': (el) => goPage(el.dataset.page),
+		'start-go': (el) => follow(shell.top.look.next.items[Number(el.dataset.index)], el.dataset.key),
+		settings() {
+			shell.settingsOpen = !shell.settingsOpen
+			render()
+			$(shell.settingsOpen ? '#settings-title' : '[data-key="settings"]')?.focus()
+		},
+		'pref-text'(el) {
+			app.prefs.setText(el.dataset.text)
+			render()
+		},
+		'pref-theme'(el) {
+			app.prefs.setTheme(el.dataset.theme)
+			render()
+		},
+		'found-open': (el) => openFound(el.dataset.concept),
+	}
+
+	// The search box: what the reader types is kept as typed, and the list of what there is to find is read once.
+	function input(event) {
+		if (event.target.id !== 'search-text') return false
+		const { search } = shell
+		Object.assign(search, { text: event.target.value, at: 0, open: true })
+		if (search.list === null) {
+			void app.briefs.concepts().then((list) => {
+				search.list = list
+				render()
+			})
+		}
+		render()
+		return true
+	}
+
+	// A press outside the search or the settings closes them.
+	function pressed(target) {
+		const { search } = shell
+		if (search.open && !target.closest('#search')) {
+			search.open = false
+			render()
+		}
+		if (shell.settingsOpen && !target.closest('#settings, [data-key="settings"]')) {
+			shell.settingsOpen = false
+			render()
+		}
+	}
+
+	function searchKey(event) {
+		const { search } = shell
+		const found = search.list ? findConcepts(search.list, search.text) : []
+		if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+			if (found.length === 0) return false
+			search.at = (search.at + (event.key === 'ArrowDown' ? 1 : found.length - 1)) % found.length
+			search.open = true
+		} else if (event.key === 'Enter' && !event.isComposing) {
+			if (!found[search.at]) return false
+			openFound(found[search.at].id)
+		} else if (event.key === 'Escape') {
+			if (!search.open || search.text === '') return false
+			search.open = false
+		} else return false
+		event.preventDefault()
+		render()
+		return true
+	}
+
+	// Escape closes what is open, the nearest first: the search, the settings, the "Ask ken" drawer, a correction,
+	// the brief, the draw tool, and then the level of the canvas, which goes up one.
+	function key(event) {
+		if (event.target.id === 'search-text' && searchKey(event)) return true
+		if (event.key !== 'Escape') return false
+		const typing = event.target.matches?.('input, textarea, select')
+		const { brief, home } = state
+		if (closeSettings()) return true
+		if (home.askOpen) return Boolean(app.home.actions['ask-close']()) || true
+		if (brief.fixing) return Boolean(app.brief.actions['brief-fix']()) || true
+		if (app.arch.closeDraw()) return true
+		if (app.brief.close()) return true
+		if (!overlaid() && shell.page === 'architecture' && home.trail.length > 1 && !typing) {
+			void app.arch.moveTo(home.trail.slice(0, -1))
+			return true
+		}
+		return false
+	}
+
+	$('#search-text').addEventListener('focus', () => {
+		if (shell.search.text.trim() === '' || shell.search.open) return
+		shell.search.open = true
+		render()
+	})
+
+	return {
+		actions,
+		start,
+		back,
+		goPage,
+		draw,
+		reread,
+		input,
+		key,
+		pressed,
+		overlaid,
+		isOlder: () => overlaid() || OLDER.includes(shell.page),
+	}
+}

@@ -10,6 +10,8 @@ export const DOING = {
 	story: ['Reading the change', "ken's model is reading the change"],
 	walk: ['Ordering the change into steps', "ken's model is ordering the change into steps"],
 	redraw: ['Drawing it another way', "ken's model is working on your request"],
+	explain: ['Explaining it', "ken's model is explaining it"],
+	answer: ['Answering it', "ken's model is answering your question"],
 }
 
 // Whether the reader is where a run started: on its level, and for a run about a change, with that change laid over.

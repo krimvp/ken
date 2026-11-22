@@ -7,39 +7,59 @@
 		<link rel="stylesheet" href="tokens.css" />
 		<link rel="stylesheet" href="page.css" />
 		<link rel="stylesheet" href="home.css" />
+		<link rel="stylesheet" href="shell/shell.css" />
+		<link rel="stylesheet" href="start/start.css" />
+		<link rel="stylesheet" href="architecture/architecture.css" />
+		<link rel="stylesheet" href="brief/brief.css" />
 		<script type="module" src="main.js"></script>
 	</head>
 	<body>
 		<button type="button" class="quiet-button skip" data-act="skip" data-key="skip">Skip to the explanation</button>
-		<header class="top">
-			<button type="button" class="brand" data-act="home" data-key="brand" aria-label="ken. Back to the picture.">ken</button>
-			<span class="project" id="project"></span>
-			<div class="top-menu" id="menu"></div>
-		</header>
-		<div class="home" id="home">
-			<div class="home-toolbar" id="home-toolbar"></div>
-			<main class="home-canvas" id="home-canvas"></main>
-			<div class="home-readout" id="home-readout"></div>
-			<div class="home-redraw" id="home-redraw"></div>
-			<div class="home-detail" id="home-detail"></div>
-			<aside class="home-inspector" id="home-inspector" aria-label="Next for you, and what ken says about what you picked"></aside>
-			<aside class="home-ask" id="home-ask" aria-label="Ask ken" hidden></aside>
+		<nav class="k k-rail" id="rail" aria-label="Pages"></nav>
+		<div class="k-main">
+			<header class="k k-bar">
+				<h1 id="bar-title">ken</h1>
+				<search class="k-search" id="search">
+					<svg class="k-i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" /><path d="M20 20l-4.500-4.500" /></svg>
+					<input id="search-text" data-key="search-text" type="search" autocomplete="off" spellcheck="false" placeholder="Find a part, a process or a term" aria-label="Find a part, a process or a term" role="combobox" aria-controls="found" aria-expanded="false" aria-autocomplete="list" />
+					<div class="k-found" id="found" role="listbox" aria-label="What search found" hidden></div>
+				</search>
+			</header>
+			<main class="k k-pg k-pg-home" id="pg-home" hidden></main>
+			<main class="k k-pg k-arch" id="pg-arch" hidden></main>
+			<div class="k-old" id="pg-old" hidden>
+				<header class="top">
+					<span class="project" id="project"></span>
+					<div class="top-menu" id="menu"></div>
+				</header>
+				<div class="home" id="home">
+					<div class="home-toolbar" id="home-toolbar"></div>
+					<main class="home-canvas" id="home-canvas"></main>
+					<div class="home-readout" id="home-readout"></div>
+					<div class="home-redraw" id="home-redraw"></div>
+					<div class="home-detail" id="home-detail"></div>
+					<aside class="home-inspector" id="home-inspector" aria-label="Next for you, and what ken says about what you picked"></aside>
+				</div>
+				<div class="page" id="page" hidden>
+					<main class="chat">
+						<div id="thread"></div>
+						<form class="composer" id="ask" autocomplete="off">
+							<label class="composer-label" for="question">Your question</label>
+							<div class="composer-row">
+								<textarea id="question" rows="1" placeholder="What changed, why was it done that way, how does a part work now?"></textarea>
+								<button type="submit" class="primary" id="send">Ask</button>
+							</div>
+							<p class="composer-cost small muted">One run of ken's model, a minute or two.</p>
+						</form>
+						<div id="after"></div>
+					</main>
+					<aside class="panel" id="panel" aria-label="What ken checked"></aside>
+				</div>
+			</div>
 		</div>
-		<div class="page" id="page" hidden>
-			<main class="chat">
-				<div id="thread"></div>
-				<form class="composer" id="ask" autocomplete="off">
-					<label class="composer-label" for="question">Your question</label>
-					<div class="composer-row">
-						<textarea id="question" rows="1" placeholder="What changed, why was it done that way, how does a part work now?"></textarea>
-						<button type="submit" class="primary" id="send">Ask</button>
-						</div>
-						<p class="composer-cost small muted">One run of ken's model, a minute or two.</p>
-				</form>
-				<div id="after"></div>
-			</main>
-			<aside class="panel" id="panel" aria-label="What ken checked"></aside>
-		</div>
+		<aside class="k k-brief" id="brief" aria-label="The brief" hidden></aside>
+		<aside class="home-ask k-ask" id="home-ask" aria-label="Ask ken" hidden></aside>
+		<div class="k k-settings" id="settings" role="dialog" aria-label="Settings" hidden></div>
 		<div id="tip" role="tooltip" hidden></div>
 		<p class="visually-hidden" id="run-status" role="status"></p>
 	</body>

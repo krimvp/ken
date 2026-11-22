@@ -1,0 +1,725 @@
+/* The brief's drawer: fixed to the right of the window, over the page the reader is on. Its head and its foot stay
+   put and its body scrolls. The setting for text is a class on the body: text-pictures shows a line beside each
+   drawing, text-balanced adds a sentence, text-words a short paragraph and the file and line. */
+.k-brief {
+	position: fixed;
+	inset: 0 0 0 auto;
+	z-index: 40;
+	display: flex;
+	flex-direction: column;
+	width: min(var(--k-drawer), 100vw);
+	border-left: 1px solid var(--k-line);
+	background: var(--k-surface);
+	box-shadow: var(--k-shadow-up);
+}
+
+.k-brief[hidden] {
+	display: none;
+}
+
+.k-brief-head {
+	display: flex;
+	flex: none;
+	align-items: center;
+	gap: 10px;
+	padding: 12px 14px 8px 20px;
+}
+
+.k-trail {
+	display: flex;
+	flex: 1;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 2px;
+	min-width: 0;
+	font-size: 14px;
+}
+
+.k .k-trail button {
+	max-width: 150px;
+	overflow: hidden;
+	color: var(--k-muted);
+	font-weight: 600;
+	text-decoration: underline;
+	text-overflow: ellipsis;
+	text-underline-offset: 3px;
+	white-space: nowrap;
+}
+
+.k-trail-here {
+	max-width: 220px;
+	overflow: hidden;
+	font-weight: 700;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.k-trail-sep {
+	width: 14px;
+	height: 14px;
+	color: var(--k-muted);
+}
+
+.k-brief-body {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	padding: 4px 20px 18px;
+}
+
+.k-brief-top {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+
+.k-kind,
+.k-min {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	color: var(--k-muted);
+	font-size: 14px;
+	font-weight: 700;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	white-space: nowrap;
+}
+
+.k-kind .k-i,
+.k-min .k-i {
+	width: 15px;
+	height: 15px;
+}
+
+.k-min {
+	padding: 3px 10px 3px 7px;
+	border-radius: 999px;
+	background: var(--k-sunk);
+	color: var(--k-ink);
+	letter-spacing: 0.02em;
+}
+
+.k-text-seg {
+	margin-left: auto;
+	padding: 2px;
+	border-radius: 10px;
+}
+
+.k .k-text-seg button {
+	padding: 5px 7px;
+	border-radius: 8px;
+}
+
+.k-text-seg button .k-i {
+	width: 17px;
+	height: 17px;
+}
+
+.k-text-seg button span {
+	display: none;
+}
+
+.k-text-seg button[aria-pressed="true"] span {
+	display: inline;
+}
+
+.k-brief-name {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	margin: 10px 0 4px;
+	font-size: 27px;
+	font-weight: 770;
+	letter-spacing: -0.02em;
+	line-height: 1.15;
+	overflow-wrap: anywhere;
+}
+
+.k-brief-name .k-sw {
+	width: 22px;
+	height: 22px;
+	border-radius: 7px;
+}
+
+.k-brief-line {
+	margin-bottom: 10px;
+	font-size: 16px;
+	line-height: 1.4;
+}
+
+.k-about {
+	margin-top: 4px;
+	color: var(--k-muted);
+	font-size: 14px;
+}
+
+.k-pic {
+	margin: 12px 0 2px;
+	padding: 14px;
+	border-radius: 16px;
+	background: var(--k-bg);
+}
+
+/* The level as a small map: each part a box where the canvas has it, the brief's own lit. */
+.k-map {
+	position: relative;
+	display: grid;
+	grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
+	gap: 14px 22px;
+}
+
+.k-map svg {
+	position: absolute;
+	inset: 14px;
+	width: calc(100% - 28px);
+	height: calc(100% - 28px);
+}
+
+.k-map svg path {
+	fill: none;
+	stroke: var(--k-muted);
+	stroke-width: 1.5;
+	vector-effect: non-scaling-stroke;
+}
+
+.k-map-box {
+	position: relative;
+	display: grid;
+	place-items: center;
+	min-height: 56px;
+	padding: 6px 8px;
+	border-radius: 10px;
+	background: var(--k-soft);
+	color: var(--k-ink);
+	font-size: 12.5px;
+	font-weight: 650;
+	line-height: 1.2;
+	text-align: center;
+}
+
+.k-map-name {
+	display: -webkit-box;
+	overflow: hidden;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 2;
+	line-clamp: 2;
+}
+
+.k-map-box.is-lit {
+	background: var(--k-pc);
+	color: var(--k-block-ink);
+	box-shadow:
+		0 0 0 2px var(--k-bg),
+		0 0 0 4.5px var(--k-ink);
+}
+
+.k-used {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 10px;
+}
+
+.k-used .k-map-box {
+	min-height: 40px;
+	padding: 6px 14px;
+	box-shadow: none;
+}
+
+.k-steps-pic {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px 0;
+}
+
+.k-steps-pic .k-bead {
+	display: grid;
+	place-items: center;
+	width: 34px;
+	height: 34px;
+	border-radius: 11px;
+	background: var(--k-pc);
+	color: var(--k-block-ink);
+	box-shadow: inset 0 0 0 1.5px var(--k-block-ink);
+	font-size: 15px;
+	font-weight: 760;
+}
+
+.k-steps-line {
+	width: 14px;
+	height: 2.5px;
+	background: var(--k-ink);
+}
+
+.k-brief-body h3 {
+	margin: 16px 0 6px;
+}
+
+.k-point {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr);
+	align-items: center;
+	gap: 14px;
+	padding: 6px 0;
+	border-top: 1px solid var(--k-line);
+}
+
+.k-point:first-child {
+	border-top: 0;
+}
+
+.k-point-draw {
+	display: grid;
+	place-items: center;
+	width: 104px;
+	padding: 2px 0;
+	border-radius: 12px;
+	background: var(--k-bg);
+}
+
+.k-drawing {
+	display: block;
+	width: 92px;
+	height: auto;
+}
+
+.k-drawing-label {
+	margin: -2px 0 4px;
+	color: var(--k-muted);
+	font-family: var(--font-code);
+	font-size: 12.5px;
+}
+
+.k-point-line {
+	font-size: 16px;
+	font-weight: 660;
+	line-height: 1.3;
+}
+
+.k-point-more {
+	margin-top: 2px;
+	color: var(--k-muted);
+	font-size: 14.5px;
+}
+
+.k-point-long {
+	margin-top: 5px;
+	font-size: 14.5px;
+	line-height: 1.5;
+}
+
+.k .k-point-ref {
+	display: block;
+	margin-top: 3px;
+	color: var(--k-muted);
+	font-size: 14px;
+	text-align: left;
+	overflow-wrap: anywhere;
+}
+
+.k-point-show {
+	font-family: var(--font-text);
+	text-decoration: underline;
+	text-underline-offset: 3px;
+}
+
+.k-point-files {
+	display: none;
+	margin-right: 8px;
+}
+
+.text-pictures :is(.k-point-more, .k-point-long),
+.text-balanced .k-point-long {
+	display: none;
+}
+
+.text-words .k-point-files {
+	display: inline;
+}
+
+.text-words .k-point {
+	align-items: start;
+}
+
+.text-words .k-point-draw {
+	width: 76px;
+	margin-top: 2px;
+}
+
+.text-words .k-drawing {
+	width: 68px;
+}
+
+.text-balanced .k-point-draw {
+	width: 92px;
+}
+
+.text-balanced .k-drawing {
+	width: 82px;
+}
+
+.k-quotes {
+	margin-top: 6px;
+}
+
+.k-quotes .q-source {
+	margin: 8px 0 2px;
+	color: var(--k-muted);
+	font-size: 14px;
+}
+
+.k-quotes .q-source code {
+	color: var(--k-ink);
+	font-family: var(--font-code);
+	font-size: 14px;
+}
+
+.k-quotes pre.code {
+	margin: 0;
+	border-radius: 10px;
+}
+
+.k-why {
+	font-size: 15.5px;
+	line-height: 1.5;
+}
+
+.k-terms {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 7px;
+}
+
+.k-trust {
+	margin-top: 18px;
+	color: var(--k-muted);
+	font-size: 14px;
+}
+
+.k-unexplained {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 10px;
+	margin-top: 14px;
+	padding: 18px;
+	border-radius: 16px;
+	background: var(--k-bg);
+}
+
+.k-working-step {
+	overflow-wrap: anywhere;
+}
+
+.k .k-run-btn {
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 0;
+	white-space: normal;
+}
+
+.k-run-btn small {
+	font-size: 14px;
+	font-weight: 500;
+}
+
+.k-unexplained .k-spin {
+	display: inline-block;
+	vertical-align: -3px;
+}
+
+/* The rows that lead to another brief. */
+.k .k-row,
+li.k-row {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	width: 100%;
+	padding: 9px 8px;
+	border-top: 1px solid var(--k-line);
+	border-radius: 12px;
+}
+
+.k button.k-row:hover {
+	background: var(--k-sunk);
+}
+
+.k-row-main {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	min-width: 0;
+}
+
+.k-row-main b {
+	font-size: 15.5px;
+	font-weight: 660;
+	line-height: 1.3;
+}
+
+.k-row-note {
+	display: -webkit-box;
+	overflow: hidden;
+	color: var(--k-muted);
+	font-size: 14px;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 2;
+	line-clamp: 2;
+}
+
+.k-row-go {
+	width: 18px;
+	height: 18px;
+	color: var(--k-muted);
+}
+
+.k-row-num {
+	display: grid;
+	flex: none;
+	place-items: center;
+	width: 34px;
+	height: 34px;
+	border-radius: 11px;
+	background: var(--k-pc);
+	color: var(--k-block-ink);
+	box-shadow: inset 0 0 0 1.5px var(--k-block-ink);
+	font-weight: 760;
+}
+
+:root[data-theme="dark"] .k-row-num:not([class*="pc-"]) {
+	color: var(--k-ink);
+	box-shadow: inset 0 0 0 1.5px var(--k-ink);
+}
+
+.k .k-back {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 2px 0;
+	color: var(--k-muted);
+	font-size: 14px;
+	font-weight: 600;
+}
+
+.k-brief .k-back .k-i {
+	width: 15px;
+	height: 15px;
+}
+
+.k-way-name {
+	margin: 6px 0 8px;
+	font-size: 21px;
+	font-weight: 750;
+	letter-spacing: -0.01em;
+	line-height: 1.2;
+	overflow-wrap: anywhere;
+}
+
+.k-none {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-top: 12px;
+	color: var(--k-muted);
+	font-size: 14px;
+}
+
+.k-brief .k-none .k-i {
+	width: 16px;
+	height: 16px;
+}
+
+.k-decision {
+	margin: 8px 0;
+	padding: 12px 14px;
+	border-radius: 14px;
+	background: var(--k-bg);
+}
+
+.k .k-decision-name {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	margin-bottom: 6px;
+	font-size: 15.5px;
+}
+
+.k-decision-name b {
+	flex: 1;
+	font-weight: 700;
+}
+
+.k-decision p {
+	padding: 4px 0;
+	font-size: 14.5px;
+	line-height: 1.4;
+}
+
+.k-decision .k-eyebrow {
+	display: block;
+}
+
+.k-askbox {
+	margin-top: 18px;
+}
+
+.k-askbox > div {
+	display: flex;
+	gap: 8px;
+	margin: 6px 0;
+}
+
+.k-askbox input {
+	flex: 1;
+	min-width: 0;
+	height: 42px;
+	padding: 0 14px;
+	border: 1.5px solid var(--k-line);
+	border-radius: 12px;
+	background: var(--k-surface);
+}
+
+.k-askbox input::placeholder {
+	color: var(--k-muted);
+	opacity: 1;
+}
+
+.k-askbox .k-muted {
+	font-size: 14px;
+}
+
+.k-ask-problem {
+	font-size: 14px;
+	font-weight: 600;
+}
+
+/* The foot: what ken thinks the reader knows, and the three ways on. */
+.k-brief-foot {
+	flex: none;
+	padding: 10px 14px 12px;
+	border-top: 1px solid var(--k-line);
+}
+
+.k-knows {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 4px 7px;
+	padding: 0 6px 4px;
+	font-size: 14px;
+}
+
+.k-knows .k-link {
+	margin-left: auto;
+}
+
+.k-knows-why {
+	padding: 0 6px 10px;
+	color: var(--k-muted);
+	font-size: 14px;
+}
+
+.k-ladder {
+	display: flex;
+	flex-direction: column;
+	gap: 5px;
+	padding: 0 6px 10px;
+}
+
+.k-ladder-q {
+	margin-bottom: 2px;
+	font-size: 15px;
+	font-weight: 700;
+}
+
+.k .k-rung {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 8px 12px;
+	border-radius: 11px;
+	background: var(--k-surface);
+	box-shadow: inset 0 0 0 1px var(--k-line);
+	font-weight: 600;
+}
+
+.k .k-rung:is(:hover, [aria-pressed="true"]) {
+	box-shadow: inset 0 0 0 2px var(--k-ink);
+}
+
+.k-rung .k-mark {
+	width: 38px;
+}
+
+.k-rung em {
+	margin-left: auto;
+	color: var(--k-muted);
+	font-size: 14px;
+	font-style: normal;
+	font-weight: 500;
+}
+
+.k-ladder .k-link {
+	align-self: flex-start;
+	padding: 4px 2px;
+	color: var(--k-muted);
+}
+
+.k-ways {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 8px;
+}
+
+.k .k-way {
+	display: grid;
+	grid-template-columns: auto 1fr;
+	align-items: center;
+	gap: 2px 8px;
+	padding: 10px 12px;
+	border-radius: 14px;
+	background: var(--k-sunk);
+}
+
+.k .k-way:hover {
+	box-shadow: inset 0 0 0 2px var(--k-ink);
+}
+
+.k .k-way[aria-pressed="true"] {
+	background: var(--k-ink);
+	color: var(--k-surface);
+}
+
+.k-way b {
+	justify-self: end;
+	font-size: 22px;
+	font-weight: 760;
+	line-height: 1;
+}
+
+.k-way-name-s {
+	grid-column: 1 / -1;
+	font-size: 16px;
+	font-weight: 700;
+}
+
+.k-way-note {
+	grid-column: 1 / -1;
+	color: var(--k-muted);
+	font-size: 14px;
+	line-height: 1.25;
+}
+
+.k-way[aria-pressed="true"] .k-way-note {
+	color: inherit;
+}
+
+@media (max-width: 760px) {
+	.k-brief {
+		bottom: var(--k-foot);
+		border-left: 0;
+	}
+}

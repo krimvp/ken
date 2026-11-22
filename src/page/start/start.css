@@ -1,0 +1,489 @@
+/* The Home page: tiles on the calm ground, each a big number over a small picture. */
+.k-home {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 16px;
+	max-width: 1400px;
+	margin: 0 auto;
+	padding: 4px 24px 24px;
+}
+
+.k-pg-home {
+	overflow-y: auto;
+}
+
+.k-home-line {
+	grid-column: 1 / -1;
+	padding: 80px 0;
+	color: var(--k-muted);
+	text-align: center;
+}
+
+.k-tile {
+	display: block;
+	min-width: 0;
+	padding: 20px 22px;
+	border-radius: 20px;
+	background: var(--k-surface);
+	box-shadow: var(--k-shadow);
+}
+
+.k-tile-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-bottom: 4px;
+}
+
+.k-tile-note {
+	color: var(--k-muted);
+	font-size: 14px;
+}
+
+.k .k-tile-go {
+	display: grid;
+	place-items: center;
+	width: 32px;
+	height: 32px;
+	border-radius: 50%;
+	background: var(--k-sunk);
+}
+
+.k .k-tile-go:hover {
+	box-shadow: inset 0 0 0 2px var(--k-ink);
+}
+
+.k-tile-go .k-i {
+	width: 17px;
+	height: 17px;
+}
+
+.k-big {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+	color: var(--k-muted);
+	font-size: 17px;
+	font-weight: 600;
+}
+
+.k-big b {
+	color: var(--k-ink);
+	font-size: 44px;
+	font-weight: 740;
+	letter-spacing: -0.02em;
+	line-height: 1;
+}
+
+/* "Start here" */
+.k-start {
+	display: grid;
+	grid-column: 1 / -1;
+	grid-template-columns: auto minmax(0, 1fr) auto;
+	align-items: center;
+	gap: 26px;
+	padding: 18px 26px;
+	background: linear-gradient(100deg, var(--k-brand-soft), var(--k-surface) 62%);
+}
+
+.k-start-pic {
+	position: relative;
+	width: 240px;
+	padding: 10px;
+	border-radius: 16px;
+	background: var(--k-surface);
+	box-shadow: var(--k-shadow);
+}
+
+.k-start-pic .k-badge {
+	position: absolute;
+	right: 10px;
+	bottom: 8px;
+}
+
+.k-start-words {
+	min-width: 0;
+}
+
+.k-start h2 {
+	margin: 2px 0;
+	font-size: 28px;
+	font-weight: 760;
+	letter-spacing: -0.02em;
+	line-height: 1.15;
+}
+
+.k-start-why {
+	color: var(--k-muted);
+	font-size: 16px;
+}
+
+.k-then {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin-top: 10px;
+}
+
+.k .k-then .k-chip {
+	background: var(--k-surface);
+	box-shadow: inset 0 0 0 1px var(--k-line);
+}
+
+.k-then .k-chip span {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.k-path {
+	display: flex;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.k-path li {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 4px;
+	width: 112px;
+	font-size: 14px;
+	font-weight: 600;
+	text-align: center;
+}
+
+.k-path li + li::before {
+	position: absolute;
+	top: 23px;
+	right: calc(50% + 24px);
+	width: 64px;
+	height: 2.5px;
+	background: var(--k-ink);
+	content: "";
+}
+
+.k-path-dot {
+	display: grid;
+	place-items: center;
+	width: 48px;
+	height: 48px;
+	border-radius: 16px;
+	background: var(--k-surface);
+	box-shadow: inset 0 0 0 2.5px var(--k-ink);
+}
+
+.k-path li.is-on .k-path-dot {
+	background: var(--k-brand);
+	color: var(--k-brand-ink);
+}
+
+/* A level as a small map. */
+.k-mini {
+	position: relative;
+	display: grid;
+	grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
+	gap: 12px 24px;
+}
+
+.k-mini svg {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+}
+
+.k-mini path {
+	fill: none;
+	stroke: var(--k-muted);
+	stroke-width: 1.5;
+	vector-effect: non-scaling-stroke;
+}
+
+.k-mini-box {
+	position: relative;
+	min-height: 34px;
+	border-radius: 8px;
+	background: var(--k-soft);
+}
+
+.k-mini-box.is-lit {
+	background: var(--k-pc);
+	box-shadow:
+		0 0 0 2px var(--k-surface),
+		0 0 0 4.5px var(--k-ink);
+}
+
+.k-mini.is-big {
+	gap: 22px 56px;
+	max-width: 560px;
+	margin: 10px auto 0;
+}
+
+.k .k-mini-box.is-level {
+	display: grid;
+	place-items: center;
+	min-height: 74px;
+	padding: 6px 10px;
+	border: 2px solid var(--k-pc);
+	border-radius: 12px;
+	background: linear-gradient(
+		to top,
+		var(--k-pc) calc(var(--known) * 100%),
+		color-mix(in srgb, var(--k-pc) 30%, #ffffff) calc(var(--known) * 100%)
+	);
+	color: var(--k-block-ink);
+	font-size: 14px;
+	font-weight: 700;
+	line-height: 1.2;
+	text-align: center;
+}
+
+.k .k-mini-box.is-level.knows-new {
+	border: 2px dashed var(--k-edge);
+}
+
+.k .k-mini-box.is-level:hover {
+	box-shadow: 0 0 0 2.5px var(--k-ink);
+}
+
+.k-tile-arch {
+	grid-column: span 2;
+}
+
+.k-concepts {
+	display: flex;
+	flex-direction: column;
+	gap: 7px;
+	margin: 8px 0 0;
+	padding: 0;
+	list-style: none;
+}
+
+.k .k-concept {
+	width: 100%;
+	padding: 9px 12px;
+	border-radius: 12px;
+	font-size: 15px;
+}
+
+.k-concept-name {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.k-procs {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	margin: 12px 0 0;
+	padding: 0;
+	list-style: none;
+}
+
+.k .k-proc {
+	display: flex;
+	align-items: center;
+	gap: 14px;
+	width: 100%;
+	padding: 6px;
+	border-radius: 12px;
+}
+
+.k .k-proc:hover {
+	background: var(--k-sunk);
+}
+
+.k-proc-words {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	color: var(--k-muted);
+	font-size: 14px;
+}
+
+.k-proc-words b {
+	color: var(--k-ink);
+	font-size: 15px;
+	font-weight: 650;
+	line-height: 1.25;
+}
+
+.k-route {
+	flex: none;
+}
+
+.k-route path {
+	fill: none;
+	stroke: var(--k-ink);
+	stroke-width: 2.5;
+	stroke-linejoin: round;
+}
+
+.k-route rect {
+	fill: var(--k-pc);
+	stroke: var(--k-ink);
+	stroke-width: 1.5;
+}
+
+.k-route.is-plain {
+	display: grid;
+	place-items: center;
+	width: 128px;
+	height: 40px;
+}
+
+.k-bars {
+	display: block;
+	width: 100%;
+	height: 84px;
+	margin-top: 12px;
+}
+
+.k-bars rect {
+	fill: var(--k-line);
+}
+
+.k-bars rect.is-since {
+	fill: var(--k-ink);
+}
+
+.k-spans {
+	display: flex;
+	align-items: flex-end;
+	gap: 18px;
+	height: 108px;
+	margin: 12px 0 0;
+	padding: 0;
+	list-style: none;
+}
+
+.k-spans li {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	align-items: center;
+	justify-content: flex-end;
+	height: 100%;
+	color: var(--k-muted);
+	font-size: 14px;
+}
+
+.k-spans b {
+	color: var(--k-ink);
+}
+
+.k-span-bar {
+	width: 100%;
+	max-width: 64px;
+	height: max(calc(var(--share) * 56px), 4px);
+	border-radius: 6px 6px 2px 2px;
+	background: var(--k-ink);
+}
+
+.k-you {
+	display: block;
+	width: 100%;
+	max-height: 170px;
+	margin-top: 4px;
+}
+
+.k-you circle {
+	fill: var(--k-ink);
+}
+
+.k-you-node path {
+	fill: none;
+	stroke: var(--k-pc);
+	stroke-linecap: round;
+}
+
+.k-you-node rect {
+	fill: color-mix(in srgb, var(--k-pc) 50%, var(--k-surface));
+	stroke: var(--k-pc);
+	stroke-width: 2;
+}
+
+.k-you-node.is-new rect {
+	fill: none;
+	stroke-dasharray: 3 3;
+}
+
+.k-you-node.is-new path {
+	stroke-dasharray: 2 5;
+}
+
+.k-you-node:is(.is-code, .is-said) rect {
+	fill: var(--k-pc);
+}
+
+.k-you-node.is-said rect {
+	stroke: var(--k-ink);
+	stroke-width: 2.5;
+}
+
+.k .k-waiting {
+	display: flex;
+	grid-column: 1 / -1;
+	align-items: center;
+	gap: 12px;
+	padding: 14px 22px;
+	font-size: 16px;
+}
+
+.k-waiting-words {
+	flex: 1;
+}
+
+@media (max-width: 1100px) {
+	.k-home {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	.k-start {
+		grid-template-columns: minmax(0, 1fr);
+		justify-items: start;
+		gap: 16px;
+	}
+}
+
+@media (max-width: 760px) {
+	.k-home {
+		grid-template-columns: minmax(0, 1fr);
+		padding: 4px 16px 20px;
+	}
+
+	.k-tile-arch {
+		grid-column: auto;
+	}
+
+	.k-start-pic {
+		width: 100%;
+	}
+
+	.k-start h2 {
+		font-size: 23px;
+	}
+
+	.k-path li {
+		width: 82px;
+	}
+
+	.k-path li + li::before {
+		right: calc(50% + 24px);
+		width: 34px;
+	}
+
+	.k-mini.is-big {
+		gap: 14px 18px;
+	}
+
+	.k-then .k-chip span {
+		white-space: normal;
+	}
+}

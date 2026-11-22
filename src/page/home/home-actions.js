@@ -4,7 +4,6 @@ import { numberAt } from '../draw-diagrams.js'
 import { stepParts, stopTopics } from '../project/walk.js'
 import { boardActions } from './board/board-actions.js'
 import { askedQuestion } from './inspector/ask-drawer.js'
-import { readAddress, writeAddress } from './state/address.js'
 import { firstUnseen, pathOf, placeOf, shownDetail, stoodOn } from './state/content.js'
 import { FIRST_DETAIL, WHOLE } from './state/home-state.js'
 import { homeLoads } from './state/loads.js'
@@ -23,39 +22,6 @@ export function homeActions(app) {
 	// From 1200 pixels the picture and the panel stand side by side, each scrolling by itself. Under that they are one
 	// column and the page scrolls.
 	const sideBySide = matchMedia('(min-width: 1200px)')
-
-	// The address follows the reader once the home has read where it starts. A new level or way in is a new entry in
-	// the browser's history, so Back goes to the one before. Anything finer rewrites the entry it is in.
-	let addressed = null
-	function address() {
-		const home = state.home
-		const hash = writeAddress(home)
-		const coarse = JSON.stringify([home.wayIn, home.trail])
-		if (addressed !== null && hash !== location.hash) {
-			history[coarse === addressed ? 'replaceState' : 'pushState'](null, '', hash)
-		}
-		if (addressed !== null) addressed = coarse
-	}
-
-	// A place from the address becomes where the reader is. With none, ken's suggestion and what this browser kept
-	// decide, as on a first visit.
-	async function start() {
-		const place = readAddress(location.hash)
-		if (place) Object.assign(state.home, place)
-		await loads.start(place !== null)
-		addressed = JSON.stringify([state.home.wayIn, state.home.trail])
-		address()
-	}
-
-	// Back and Forward in the browser: the home goes to the place the address names.
-	async function back() {
-		const place = readAddress(location.hash)
-		if (!place) return
-		Object.assign(state.home, place, { askOpen: false, openArrows: new Set(), opened: false, why: null, fixing: null })
-		addressed = JSON.stringify([place.wayIn, place.trail])
-		await show()
-		toPicture()
-	}
 
 	async function show() {
 		state.view = state.base = 'home'
@@ -369,9 +335,8 @@ export function homeActions(app) {
 			state.home.trouble = null
 			return settle()
 		},
-		async 'ask-open'() {
+		'ask-open'() {
 			const home = state.home
-			if (state.view !== 'home') await show()
 			Object.assign(home, { askOpen: !home.askOpen, askWhole: false })
 			render()
 			if (home.askOpen) $('#ask-text')?.focus()
@@ -460,11 +425,10 @@ export function homeActions(app) {
 	function key(event) {
 		const home = state.home
 		const typing = event.target.matches?.('input, textarea, select')
-		// Esc closes what is open, the nearest first: the drawer, a correction, what the panel shows in place of the
-		// board, and then the level, which goes up one.
+		// Esc closes what is open, the nearest first: a correction, what the panel shows in place of the board, and
+		// then the level, which goes up one. The frame closes the "Ask ken" drawer before this is asked.
 		if (event.key === 'Escape') {
-			if (home.askOpen) closeAsk()
-			else if (home.fixing) actions['home-fix']({ dataset: {} })
+			if (home.fixing) actions['home-fix']({ dataset: {} })
 			else if (home.selected || home.opened || home.shown !== null || home.said || home.ended || home.trouble)
 				void actions['home-board']()
 			else if (home.trail.length > 1 && !typing) void moveTo(home.trail.slice(0, -1))
@@ -486,6 +450,7 @@ export function homeActions(app) {
 
 	// A part of a change card in a thread opens the home at that part, with the same change laid over it.
 	async function openAt(box, change) {
+		state.shell.page = 'changes'
 		Object.assign(state.home, {
 			wayIn: 'review',
 			trail: [WHOLE, { name: box.name, within: box.paths }],
@@ -518,9 +483,11 @@ export function homeActions(app) {
 
 	return {
 		actions,
-		start,
-		back,
-		address,
+		loads,
+		moveTo,
+		goTo: board.go,
+		tell: seen.tell,
+		recorded: seen.recorded,
 		ended,
 		submit,
 		input,

@@ -1,31 +1,16 @@
 // The home's frame, which is the board: the strip with the ways in, the canvas with the picture, the readout line
-// under it, the "Show it another way" bar, the Detail control over the column beside the picture, and the "Ask ken"
-// drawer over them. The column is the board's own while nothing is picked, and the reading panel once something is.
+// under it, the "Show it another way" bar, and the Detail control over the column beside the picture. The column is the board's own while nothing is picked, and the reading panel once something is.
 // Each region is drawn again only when what it shows changed, so a box the reader points at and a text they type stay
 // as they are while another region updates.
 import { fillDrawings, markPart } from '../draw-diagrams.js'
 import { drawPictures } from '../project/parts-picture.js'
+import { fill } from '../shell/fill.js'
 import { readoutHtml } from './board/readout.js'
 import { detailHtml, stripHtml } from './board/strip.js'
 import { canvasHtml } from './canvas/canvas.js'
 import { fitJobs } from './canvas/part-box.js'
 import { redrawBarHtml } from './canvas/redraw-bar.js'
-import { askDrawerHtml } from './inspector/ask-drawer.js'
 import { inspectorHtml } from './inspector/inspector.js'
-
-const drawn = new WeakMap()
-
-// Draws a region again when what it shows changed. A list the reader unfolded stays unfolded: each is known by its
-// key, or by the words of its line.
-function fill(region, html) {
-	if (drawn.get(region) === html) return false
-	const key = (details) => details.dataset.key ?? details.querySelector('summary')?.textContent
-	const open = new Set([...region.querySelectorAll('details[open]')].map(key))
-	region.innerHTML = html
-	for (const details of region.querySelectorAll('details')) if (open.has(key(details))) details.open = true
-	drawn.set(region, html)
-	return true
-}
 
 // The picture's boxes and arrows are sized from where the page laid them out: after each draw of the canvas, and when
 // it changes size. The boxes come first, since the arrows start at their edges.
@@ -39,7 +24,7 @@ export function showReadout(root, home) {
 	fill(root.querySelector('#home-readout'), readoutHtml(home))
 }
 
-// Draws the home into root, the element that holds its seven regions. env is what the page around the home is doing:
+// Draws the home into root, the element that holds its six regions. env is what the page around the home is doing:
 // see inspectorHtml. redraw is called when a diagram in a card has been drawn.
 export function showHome(root, home, env, redraw) {
 	const region = (name) => root.querySelector(`#home-${name}`)
@@ -68,7 +53,6 @@ export function showHome(root, home, env, redraw) {
 	const top = () => inspector.querySelector('.path-step.is-on')?.getBoundingClientRect().top ?? null
 	const scroll = inspector.querySelector('#insp-scroll')?.scrollTop ?? 0
 	const from = top()
-	inspector.hidden = home.askOpen
 	if (fill(inspector, inspectorHtml(home, env))) {
 		const now = inspector.querySelector('#insp-scroll')
 		if (now) now.scrollTop = scroll
@@ -82,9 +66,11 @@ export function showHome(root, home, env, redraw) {
 	const tooWide = fillDrawings(inspector, redraw).filter((id) => !home.ui.tooWide.has(id))
 	for (const id of tooWide) home.ui.tooWide.add(id)
 	if (tooWide.length > 0) redraw()
-	const ask = region('ask')
-	ask.hidden = !home.askOpen
-	if (fill(ask, home.askOpen ? askDrawerHtml(home, env) : '') && home.askOpen) {
-		root.querySelector('#ask-text').value = home.askText
-	}
+}
+
+// The home is off screen: its regions are emptied, so a field the canvas of the Architecture page names alike is the
+// only one on the page.
+const REGIONS = ['toolbar', 'detail', 'readout', 'canvas', 'redraw', 'inspector']
+export function clearHome(root) {
+	for (const name of REGIONS) fill(root.querySelector(`#home-${name}`), '')
 }
