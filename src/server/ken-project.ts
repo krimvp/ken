@@ -19,8 +19,9 @@ import { fileRecordStore, type RecordStore } from '../record/index.ts'
 import { findRoot, gitRepository, type Repository } from '../repo/index.ts'
 import { projectSessions } from '../transcripts/index.ts'
 import { conceptReads } from './concepts/brief.ts'
+import { layerPlan } from './concepts/layers.ts'
 import { type LiveRunner, liveRunner } from './live-runner.ts'
-import { questionDesk } from './question-desk.ts'
+import { type DeskChats, questionDesk } from './question-desk.ts'
 
 // What "ken open" and "ken live" share for one project: its git, the reader's history, map and notes, the lines on what
 // they looked at, how much text they chose, the record, what the layout reads, the chat when a model is set, the desk that runs one model call at a time, and live mode, which writes
@@ -79,32 +80,40 @@ export async function openProject(options: {
 	const config = readModelConfig(options.flags, options.env)
 	let model: KenProject['model']
 	let notes: Chat | null = null
+	let chats: DeskChats = null
+	const parallel = parallelOf(options.env.KEN_PARALLEL)
+	if (parallel === null) return { kind: 'refused', message: 'Set KEN_PARALLEL to a whole number from 1 to 16.' }
 	if (config.kind === 'ok') {
 		const reader = { map, notes: readerNotes, prefs }
 		const chat = { directory: root, model: config.config, env: options.env, reader, snapshots: store.objects }
-		const [started, forNotes] = await Promise.all([
-			startChat({ ...chat, reader: { ...reader, readSaved: history.readSaved } }),
+		const asks = { ...chat, reader: { ...reader, readSaved: history.readSaved } }
+		const [started, forNotes, own] = await Promise.all([
+			startChat(asks),
 			startChat(chat),
+			startChat({ ...asks, thread: false }),
 		])
 		if (started.kind !== 'ok') return { kind: 'refused', message: started.message }
 		if (forNotes.kind !== 'ok') return { kind: 'refused', message: forNotes.message }
+		if (own.kind !== 'ok') return { kind: 'refused', message: own.message }
 		model = { kind: 'ok', chat: started.chat, name: config.config.model }
 		notes = forNotes.chat
+		chats = { reader: started.chat, ken: own.chat }
 	} else {
 		model = config
 	}
 	const withSnapshots = gitRepository(root, { alternate: store.objects })
 	const layout = { root, repo: withSnapshots, snapshots: store, record, map, seen }
 	const concepts = conceptReads(layout, history)
-	const desk = questionDesk(history, record, repo, map, layout, concepts)
+	const plan = layerPlan(layout, concepts, seen)
+	const background = options.env.KEN_BACKGROUND !== 'off'
+	const desk = questionDesk(history, record, repo, map, layout, concepts, { plan, chats, parallel, background })
 	const live = notes && liveRunner({ root, project: repo, withSnapshots, store, sessions, desk, chat: notes })
 	const shown = root.startsWith(`${homedir()}${path.sep}`) ? `~${root.slice(homedir().length)}` : root
 
 	async function close() {
 		await live?.off()
-		await desk.settled()
-		if (model.kind === 'ok') await model.chat.close()
-		await notes?.close()
+		await desk.close()
+		await Promise.all([chats?.reader.close(), chats?.ken.close(), notes?.close()])
 	}
 
 	return {
@@ -128,6 +137,13 @@ export async function openProject(options: {
 			close,
 		},
 	}
+}
+
+// KEN_PARALLEL is how many model runs go at once. The local endpoint answers one request at a time, so 1 unless set.
+function parallelOf(value: string | undefined): number | null {
+	if (value === undefined || value === '') return 1
+	const n = Number(value)
+	return Number.isInteger(n) && n >= 1 && n <= 16 ? n : null
 }
 
 // The project's own name: the one its package.json gives it, else the name of its folder. ken's model reads the same

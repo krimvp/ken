@@ -28,6 +28,7 @@ import {
 	viewsQuestion,
 } from '../follow-up/index.ts'
 import { entryFrom, type History, type HistoryEntry, whyNoNote } from '../history/index.ts'
+import { gaveWay, jobQueue } from '../jobs/index.ts'
 import {
 	type Change,
 	type LayoutSources,
@@ -42,6 +43,7 @@ import { type RecordStore, sameName } from '../record/index.ts'
 import { parsePath, type Repository } from '../repo/index.ts'
 import type { conceptReads } from './concepts/brief.ts'
 import { partId, questionId } from './concepts/concept.ts'
+import { type Layer, type Looking, type layerPlan, lensKey } from './concepts/layers.ts'
 
 const MAX_QUESTION_CHARS = 4000
 const MAX_TOPICS = 20
@@ -94,7 +96,7 @@ export type Spent = { notes: number; inputTokens: number; outputTokens: number }
 
 type Replied = Extract<ChatEvent, { kind: 'replied' }>
 
-// What the page receives while a question runs: "waiting" first when ken is writing a live note, then the question as
+// What the page receives while a question runs: "waiting" first when it waits for a free slot, then the question as
 // ken asks it, which for a lens ken wrote itself, each chat event, then the saved entry as the last line. A diagram
 // card carries its drawing, and the reply carries its topics' states as a view does.
 export type QuestionLine =
@@ -104,8 +106,21 @@ export type QuestionLine =
 	| (Replied & { topics: TopicState[] })
 	| { kind: 'saved'; view: QuestionView }
 
-// Runs the page's questions and live mode's notes one model run at a time, and keeps each in the reader's history,
-// together with what it ended in. A question asked while a note runs waits for it; a second question is refused.
+// What a job runs: a question or a lens, in the reader's chat or in ken's own, or a live note in live mode's chat.
+// asked is the question as ken wrote it when the reader sent it; a job ken queued writes its question when it starts,
+// from the code as it is then. layer is there for a job that fills a layer of what ken knows.
+type Work =
+	| { kind: 'ask'; body: unknown; asked: Asked | null; chat: 'reader' | 'ken'; layer: Layer | null }
+	| { kind: 'note'; chat: Chat; about: About; question: string }
+type Asked = { text: string; as?: Asking }
+
+// The chats jobs run in: the reader's own, and ken's for what it fills by itself, so the reader's thread holds only
+// what they asked. null without a model.
+export type DeskChats = { reader: Chat; ken: Chat } | null
+
+// Runs the page's questions, live mode's notes and the layers ken fills by itself through one queue, and keeps each in
+// the reader's history with what it ended in. parallel is how many model runs go at once. background says ken fills
+// what is missing by itself.
 export function questionDesk(
 	history: History,
 	record: RecordStore,
@@ -113,62 +128,94 @@ export function questionDesk(
 	map: UnderstandingMap,
 	layout: LayoutSources,
 	concepts: ReturnType<typeof conceptReads>,
+	jobs: { plan: ReturnType<typeof layerPlan>; chats: DeskChats; parallel: number; background: boolean },
 ) {
-	let running: { stop: AbortSignal; done: Promise<void> } | null = null
-	let questions = 0
-	let holder: 'question' | 'note' | null = null
-	let last: Promise<void> = Promise.resolve()
+	const { plan, chats } = jobs
+	const queue = jobQueue<Work, QuestionLine>({
+		parallel: jobs.parallel,
+		async run(job, signal, say, acted) {
+			const { work } = job
+			if (work.kind === 'note') return say({ kind: 'saved', view: await writeNote(work, signal) })
+			if (!chats) throw new Error('No model is set.')
+			const asked = work.asked ?? (await askedOf(work.body))
+			const chat = work.chat === 'reader' ? chats.reader : chats.ken
+			const sent = (line: QuestionLine) => {
+				if (line.kind === 'tool') acted()
+				say(line)
+			}
+			await run(chat, asked.text, signal, sent, asked.as)
+		},
+		fresh: async ({ key, work }) => work.kind === 'ask' && work.layer !== null && (await plan.fresh(key)),
+		rankOf: ({ concept, work }) =>
+			work.kind === 'ask' && work.layer !== null ? plan.rankOf({ layer: work.layer, concept }) : 2,
+		ended: () => void refill(),
+	})
 
-	// One run at a time, in the order they came. waiting is told when the run must wait for another.
-	async function inTurn<T>(who: 'question' | 'note', work: () => Promise<T>, waiting = () => {}): Promise<T> {
-		const before = last
-		let release = () => {}
-		last = new Promise((resolve) => (release = resolve))
-		if (holder !== null) waiting()
-		await before
-		holder = who
-		try {
-			return await work()
-		} finally {
-			holder = null
-			release()
+	// Wants each job whose thing is missing. A job that waits or runs is that job, so this may run any number of times.
+	let filling: Promise<void> = Promise.resolve()
+	let closed = false
+	function refill() {
+		if (!jobs.background || !chats || closed) return filling
+		filling = filling
+			.then(async () => {
+				for (const job of await plan.missing(new Date())) {
+					const work = {
+						kind: 'ask' as const,
+						body: { lens: job.lens },
+						asked: null,
+						chat: 'ken' as const,
+						layer: job.layer,
+					}
+					queue.want({ ...job, yields: true, work }, 'ken')
+				}
+			})
+			.catch((error: unknown) => {
+				process.stderr.write(
+					`ken could not work out what to read next: ${error instanceof Error ? error.message : error}\n`,
+				)
+			})
+		return filling
+	}
+
+	// A lens the server cannot write a question for ends the job with the reason.
+	async function askedOf(body: unknown): Promise<Asked> {
+		const asked = await questionOf(body)
+		if (asked.kind === 'refused') throw new Error(asked.problem)
+		if (asked.kind === 'empty') throw new Error("There is nothing here for ken's model to explain.")
+		return asked
+	}
+
+	// The reader's question, as a job at the front of the line, or the job already running for the same thing. send
+	// gets "waiting" while it waits for a free slot, then each line of the run. Stopping the request stops the job
+	// unless ken started it, which then goes on by itself.
+	async function ask(body: unknown, asked: Asked, stop: AbortSignal, send: (line: QuestionLine) => void) {
+		const lens = fieldOf(body, 'lens')
+		const key = (lens === undefined ? null : lensKey(lens)) ?? `ask:${randomUUID()}`
+		const kind = String(fieldOf(lens, 'kind') ?? 'question')
+		const concept = fieldOf(lens, 'concept') ?? null
+		const title = asked.text.split('\n')[0] ?? ''
+		const work = { kind: 'ask' as const, body, asked, chat: 'reader' as const, layer: null }
+		const ask = {
+			key,
+			kind,
+			concept: typeof concept === 'string' ? concept : null,
+			title,
+			order: 0,
+			yields: true,
+			work,
 		}
+		const job = queue.want(ask, 'reader')
+		if (!job) return send({ kind: 'error', message: 'ken is closing.' })
+		if (job.state.kind === 'waiting') send({ kind: 'waiting' })
+		const leave = () => queue.stop(key, 'unfollow')
+		if (stop.aborted) return leave()
+		stop.addEventListener('abort', leave)
+		const ended = await queue.follow(key, send)
+		stop.removeEventListener('abort', leave)
+		if (ended?.kind === 'failed' && !stop.aborted) send({ kind: 'error', message: ended.why })
 	}
 
-	// A question the reader stopped can still be winding down. Wait for it, so the next request finds it in the history.
-	async function settled() {
-		while (running?.stop.aborted) await running.done
-	}
-
-	// Call busy right before ask, with no await between them, so two requests cannot both start a question.
-	function busy() {
-		return questions > 0
-	}
-
-	async function ask(
-		chat: Chat,
-		question: string,
-		stop: AbortSignal,
-		send: (line: QuestionLine) => void,
-		as: Asking = { kind: 'question' },
-	) {
-		let finish = () => {}
-		questions += 1
-		running = { stop, done: new Promise((resolve) => (finish = resolve)) }
-		try {
-			await inTurn(
-				'question',
-				() => run(chat, question, stop, send, as),
-				() => send({ kind: 'waiting' }),
-			)
-		} finally {
-			questions -= 1
-			running = null
-			finish()
-		}
-	}
-
-	async function run(chat: Chat, question: string, stop: AbortSignal, send: (line: QuestionLine) => void, as: Asking) {
+	async function run(chat: Chat, question: string, stop: AbortSignal, send: (line: QuestionLine) => void, as?: Asking) {
 		const asked = {
 			id: randomUUID(),
 			question,
@@ -185,28 +232,45 @@ export function questionDesk(
 				send({ ...event, reply: drawnReply(event.reply), topics: await topicsOf(event.reply.topics) })
 			} else send(event)
 		}
+		// A job that gave way to the reader runs again from the start, so this run leaves nothing in the history.
+		if (gaveWay(stop)) return
 		const entry = entryFrom(asked, events, stop.aborted)
 		await history.add(entry)
 		send({ kind: 'saved', view: await viewOf(entry) })
 	}
 
-	// A note ken writes by itself in live mode, saved in the history with what it is about.
-	async function note(chat: Chat, about: About, question: string, stop: AbortSignal): Promise<QuestionView> {
-		return await inTurn('note', async () => {
-			const asked = {
-				id: randomUUID(),
-				question,
-				askedAt: new Date().toISOString(),
-				head: await headNow(),
-				thread: chat.thread,
-				about,
-			}
-			const events: ChatEvent[] = []
-			for await (const event of chat.ask(question, stop, { kind: 'note' })) events.push(event)
-			const entry = entryFrom(asked, events, stop.aborted)
-			await history.add(entry)
-			return await viewOf(entry)
+	// A note ken writes by itself in live mode, saved in the history with what it is about. null when live mode was
+	// turned off before the note started.
+	async function note(chat: Chat, about: About, question: string, stop: AbortSignal): Promise<QuestionView | null> {
+		const key = `note:${randomUUID()}`
+		const work = { kind: 'note' as const, chat, about, question }
+		queue.want({ key, kind: 'note', concept: null, title: 'Writing a live note', order: 0, yields: false, work }, 'ken')
+		const off = () => queue.stop(key, 'stop')
+		if (stop.aborted) off()
+		stop.addEventListener('abort', off)
+		let written: QuestionView | null = null
+		await queue.follow(key, (line) => {
+			if (line.kind === 'saved') written = line.view
 		})
+		stop.removeEventListener('abort', off)
+		return written
+	}
+
+	async function writeNote(work: Extract<Work, { kind: 'note' }>, stop: AbortSignal): Promise<QuestionView> {
+		const { chat, about, question } = work
+		const asked = {
+			id: randomUUID(),
+			question,
+			askedAt: new Date().toISOString(),
+			head: await headNow(),
+			thread: chat.thread,
+			about,
+		}
+		const events: ChatEvent[] = []
+		for await (const event of chat.ask(question, stop, { kind: 'note' })) events.push(event)
+		const entry = entryFrom(asked, events, stop.aborted)
+		await history.add(entry)
+		return await viewOf(entry)
 	}
 
 	// The notes of live mode, newest first.
@@ -228,7 +292,25 @@ export function questionDesk(
 	}
 
 	function writing() {
-		return holder === 'note'
+		return queue.view().some((job) => job.kind === 'note' && job.state.kind === 'running')
+	}
+
+	// The page says what the reader looks at now, which ranks the jobs ken queued by itself.
+	function look(looking: Looking) {
+		plan.look(looking)
+		queue.refocus()
+		void refill()
+	}
+
+	// The reader stopped a job, theirs or ken's. A job ken started is not tried again by itself until ken starts again.
+	function stop(key: string) {
+		queue.stop(key, 'stop')
+	}
+
+	async function close() {
+		closed = true
+		await queue.close()
+		await filling
 	}
 
 	async function headNow(): Promise<string | null> {
@@ -254,7 +336,7 @@ export function questionDesk(
 	}
 
 	async function rows(): Promise<QuestionRow[]> {
-		await settled()
+		await queue.settled()
 		const asked = (await history.list()).filter((entry) => entry.about === undefined)
 		return await Promise.all(
 			asked.map(async (entry) => {
@@ -520,7 +602,24 @@ export function questionDesk(
 		return { kind: 'ok', text: deeperQuestion(names, asked.slice(0, MAX_QUESTION_CHARS)) }
 	}
 
-	return { settled, busy, ask, note, notes, spentSince, writing, rows, view, questionOf }
+	return {
+		// A stopped question can still be winding down: this waits for it, so the next request finds it in the history.
+		settled: queue.settled,
+		ask,
+		note,
+		notes,
+		spentSince,
+		writing,
+		rows,
+		view,
+		questionOf,
+		look,
+		stop,
+		refill,
+		close,
+		jobs: queue.view,
+		subscribe: queue.subscribe,
+	}
 }
 
 // "Open as a question" on a live note: the full reply on the change the note was about. The first line is the title the

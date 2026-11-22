@@ -32,7 +32,8 @@ export type Chat = {
 	root: string
 	// This chat's thread. A new Chat is a new thread: its model remembers what was asked of this one alone.
 	thread: string
-	// One question at a time. Breaking out of the loop early stops the question. as says how it is asked: see Asking.
+	// Several questions may run at once, each in a session of its own. Breaking out of the loop early stops the
+	// question. as says how it is asked: see Asking.
 	ask(question: string, signal?: AbortSignal, as?: Asking): AsyncGenerator<ChatEvent>
 	close(): Promise<void>
 }
@@ -61,13 +62,15 @@ const MAX_TOOL_RESULT_CHARS = 64_000
 // such as "ken ask --json", has no reader, so it has none of them, and no tool to keep a note with.
 // env decides which saved sessions the agent may read (see projectSessions) and which values secretHider hides.
 // snapshots is ken's store of snapshots of uncommitted work (see the live module), which the agent's tools and the
-// quote check read as well as the project's own git.
+// quote check read as well as the project's own git. thread false keeps no thread: ken's own runs in the background
+// answer no one, so none of them starts with excerpts of the one before.
 export async function startChat(options: {
 	directory: string
 	model: ModelConfig
 	env: Record<string, string | undefined>
 	reader?: { map: UnderstandingMap; notes: ReaderNotes; prefs: ReaderPrefs; readSaved?: () => Promise<SavedAnswer[]> }
 	snapshots?: string
+	thread?: boolean
 }): Promise<{ kind: 'ok'; chat: Chat } | { kind: 'no-repository'; message: string }> {
 	const found = await findRoot(options.directory)
 	if (found.kind !== 'ok') {
@@ -78,15 +81,13 @@ export async function startChat(options: {
 	const sessions = projectSessions(found.root, options.env)
 	// The record reads the project alone, so its gate refuses a quote of a snapshot whatever reaches it.
 	const store = fileRecordStore(found.root, project, sessions)
-	let round: Round = freshRound({ kind: 'note' }, () => {})
-	let turnsEnded = 0
-	const withTurnsLeft = (tool: Tool): Tool => ({
+	const withTurnsLeft = (tool: Tool, run: Run): Tool => ({
 		...tool,
 		async execute(args, ctx) {
 			const result = await tool.execute(args, ctx)
-			const step = STEPS[round.step]
+			const step = STEPS[run.round.step]
 			// This call's own turn has not ended yet, so it is not left.
-			const left = step.turns - turnsEnded - 1
+			const left = step.turns - run.turnsEnded - 1
 			if (left > step.notice) return result
 			const notice = `${left} ${left === 1 ? 'turn' : 'turns'} left ${step.say}`
 			return { ...result, content: [...result.content, { type: 'text', text: notice }] }
@@ -94,30 +95,35 @@ export async function startChat(options: {
 	})
 	// A question reads the names used elsewhere and the later commits on the same files once per range, at the first log
 	// or diff of it. A note does without, and so does the second look, which has both in its question.
-	const shown = new Set<string>()
-	const elsewhere: Elsewhere = async (range, signal) => {
-		const key = `${range.base}..${range.head}`
-		if (!round.asked || round.step === 'risks' || shown.has(key)) return null
-		shown.add(key)
-		const [found, later] = await Promise.all([usedElsewhere(repo, range, signal), laterCommits(repo, range, signal)])
-		const parts = [found.kind === 'ok' ? elsewhereText(found.used) : '', laterText(later, range.head).join('\n')]
-		const text = parts.filter((part) => part !== '').join('\n\n')
-		return text === '' ? null : text
-	}
+	const elsewhereIn =
+		(run: Run): Elsewhere =>
+		async (range, signal) => {
+			const { round, shown } = run
+			const key = `${range.base}..${range.head}`
+			if (!round.asked || round.step === 'risks' || shown.has(key)) return null
+			shown.add(key)
+			const [found, later] = await Promise.all([usedElsewhere(repo, range, signal), laterCommits(repo, range, signal)])
+			const parts = [found.kind === 'ok' ? elsewhereText(found.used) : '', laterText(later, range.head).join('\n')]
+			const text = parts.filter((part) => part !== '').join('\n\n')
+			return text === '' ? null : text
+		}
 	const { reader } = options
 	const gate = { sources: { repo, sessions }, store, project, map: reader?.map ?? null }
 	const { model, baseUrl, apiKeyEnv } = options.model
 	const memory = threadMemory(reader?.readSaved)
 	// A question's own session: a lens's tools and prompt, or every tool and the whole prompt.
-	const open = (as: Asking = { kind: 'question' }) => {
+	const open = (as: Asking, run: Run) => {
 		const lens = lensOf(as)
-		const reads = explorationTools(repo, elsewhere, () => round.read)
+		const elsewhere = elsewhereIn(run)
+		const round = () => run.round
+		const shorten = shortenIn(run)
+		const reads = explorationTools(repo, elsewhere, () => run.round.read)
 		const record = recordTool(store, repo, reader?.map)
-		const remember = reader ? [rememberTool(reader.notes, () => round)] : []
+		const remember = reader ? [rememberTool(reader.notes, round)] : []
 		const tools = lens
 			? [
 					...[...reads, record, ...memory.tools(), ...remember].filter((tool) => lens.tools.includes(tool.name)),
-					showTool(gate, () => round, { fields: lens.show, shorten }),
+					showTool(gate, round, { fields: lens.show, shorten }),
 				]
 			: [
 					...reads,
@@ -126,8 +132,8 @@ export async function startChat(options: {
 					...sessionTools(sessions),
 					...(as.kind === 'note' ? [] : memory.tools()),
 					...remember,
-					showTool(gate, () => round, { shorten }),
-					reviseTool(gate, () => round),
+					showTool(gate, round, { shorten }),
+					reviseTool(gate, round),
 				]
 		return createSession({
 			model: { kind: 'openai-compatible', baseUrl, id: model, apiKeyEnv },
@@ -135,7 +141,7 @@ export async function startChat(options: {
 				{
 					name: PLUGIN,
 					description: "Reads the project's files, git history and saved sessions, and checks cards against them.",
-					tools: tools.map(withTurnsLeft),
+					tools: tools.map((tool) => withTurnsLeft(tool, run)),
 				},
 			],
 			enabled: [PLUGIN],
@@ -145,66 +151,60 @@ export async function startChat(options: {
 			systemPrompt: lens?.systemPrompt ?? SYSTEM_PROMPT,
 		})
 	}
-	// The question running now counts what the small requests to shorten a line cost.
-	let charge: (usage: { input: number; output: number }) => void = () => {}
-	const shorten: Shorten = async (lines, signal) => {
-		const helper = await createSession({
-			model: { kind: 'openai-compatible', baseUrl, id: model, apiKeyEnv },
-			plugins: [],
-			toolMode: 'native',
-			maxTurns: 1,
-			systemPrompt: SHORTEN_PROMPT,
-		})
-		const off = helper.subscribe((event) => {
-			if (event.type === 'record' && event.record.kind === 'usage') {
-				const { input, output, cacheRead, cacheWrite } = event.record
-				charge({ input: input + cacheRead + cacheWrite, output })
+	// A question counts what its small requests to shorten a line cost.
+	const shortenIn =
+		(run: Run): Shorten =>
+		async (lines, signal) => {
+			const helper = await createSession({
+				model: { kind: 'openai-compatible', baseUrl, id: model, apiKeyEnv },
+				plugins: [],
+				toolMode: 'native',
+				maxTurns: 1,
+				systemPrompt: SHORTEN_PROMPT,
+			})
+			const off = helper.subscribe((event) => {
+				if (event.type === 'record' && event.record.kind === 'usage') {
+					const { input, output, cacheRead, cacheWrite } = event.record
+					run.charge({ input: input + cacheRead + cacheWrite, output })
+				}
+			})
+			try {
+				const result = await helper.prompt(shortenQuestion(lines), { signal })
+				// One turn is all it has, so a reply ends the run at its turn limit.
+				return 'text' in result ? shortened(result.text, lines.length) : lines.map(() => null)
+			} catch {
+				return lines.map(() => null)
+			} finally {
+				off()
+				await helper.close()
 			}
-		})
-		try {
-			const result = await helper.prompt(shortenQuestion(lines), { signal })
-			// One turn is all it has, so a reply ends the run at its turn limit.
-			return 'text' in result ? shortened(result.text, lines.length) : lines.map(() => null)
-		} catch {
-			return lines.map(() => null)
-		} finally {
-			off()
-			await helper.close()
 		}
-	}
 
 	// Open once at startup so a bad model setting still fails before the first question.
-	let next: Promise<Session> | null = open()
-	await next
-	let busy = false
+	const asked = { kind: 'question' } as const
+	await (
+		await open(
+			asked,
+			freshRun(asked, () => {}),
+		)
+	).close()
 	let closed = false
 	async function* ask(
 		question: string,
 		signal?: AbortSignal,
 		as: Asking = { kind: 'question' },
 	): AsyncGenerator<ChatEvent> {
-		if (closed || busy) {
-			yield { kind: 'error', message: closed ? 'This chat has closed.' : 'The previous question is still running.' }
+		if (closed) {
+			yield { kind: 'error', message: 'This chat has closed.' }
 			return
 		}
-		busy = true
-		if (next && as.kind !== 'question') {
-			next = next.then(async (initial) => {
-				await initial.close()
-				return open(as)
-			})
-		}
-		next ??= open(as)
-		const opening = next
+		const events = eventQueue()
+		const run = freshRun(as, events.push)
+		const opening = open(as, run)
 		try {
-			yield* askIn(await opening, question, signal, as)
+			yield* askIn(await opening, question, signal, as, run, events)
 		} finally {
-			try {
-				await opening.then((session) => session.close())
-			} finally {
-				next = null
-				busy = false
-			}
+			await opening.then((session) => session.close())
 		}
 	}
 
@@ -213,18 +213,14 @@ export async function startChat(options: {
 		question: string,
 		signal: AbortSignal | undefined,
 		as: Asking,
+		run: Run,
+		events: ReturnType<typeof eventQueue>,
 	): AsyncGenerator<ChatEvent> {
-		const events = eventQueue()
-		const current = freshRound(as, events.push)
-		const most = readLimit(as)
-		current.read = most === null ? null : { used: 0, most }
-		round = current
-		turnsEnded = 0
-		shown.clear()
+		const current = run.round
 		// The second look has its own stop, so ending it at its turn limit does not end the question.
 		const stops: Record<Round['step'], AbortController> = { talk: new AbortController(), risks: new AbortController() }
 		const tokens = { input: 0, output: 0 }
-		charge = (usage) => {
+		run.charge = (usage) => {
 			tokens.input += usage.input
 			tokens.output += usage.output
 		}
@@ -261,7 +257,7 @@ export async function startChat(options: {
 				stops.risks.abort()
 			}
 			if (event.type === 'turn_end') {
-				turnsEnded += 1
+				run.turnsEnded += 1
 				const { calls } = event.turn
 				for (const { call, outcome } of calls) {
 					if (
@@ -292,7 +288,7 @@ export async function startChat(options: {
 					stops.talk.abort()
 				}
 				// aigent stops the first step at its turns; the second look has fewer, so ken stops it.
-				if (current.step === 'risks' && turnsEnded >= STEPS.risks.turns) stops.risks.abort()
+				if (current.step === 'risks' && run.turnsEnded >= STEPS.risks.turns) stops.risks.abort()
 			}
 			if (event.type === 'record' && event.record.kind === 'usage') {
 				tokens.input += event.record.input + event.record.cacheRead + event.record.cacheWrite
@@ -334,7 +330,7 @@ export async function startChat(options: {
 				}
 				const later = await laterCommits(repo, scope.range, signal)
 				current.step = 'risks'
-				turnsEnded = 0
+				run.turnsEnded = 0
 				await prompt(riskPassQuestion(held, later), stops.risks)
 				secondLook = costSince(before, tokens)
 			}
@@ -348,7 +344,7 @@ export async function startChat(options: {
 					const what = 'The project record'
 					events.push({ kind: 'step', step: { kind: 'sent-back', what, problems: ended.problems } })
 				}
-				if (as.kind !== 'note') {
+				if (as.kind !== 'note' && options.thread !== false) {
 					memory.keep(as.kind === 'answer' || as.kind === 'view' ? as.text : question, ended.reply, readPaths)
 				}
 				events.push({ kind: 'replied', reply: ended.reply, recorded: ended.recorded })
@@ -358,7 +354,7 @@ export async function startChat(options: {
 			events.push(endOf(result, current))
 		}
 		// Git and the record can fail, and the stop can land in a git call, so every way out of talk ends the question.
-		const run = talk()
+		const talking = talk()
 			.catch((error: unknown) => {
 				const message = signal?.aborted ? STOPPED : error instanceof Error ? error.message : String(error)
 				events.push({ kind: 'error', message })
@@ -369,7 +365,7 @@ export async function startChat(options: {
 		} finally {
 			unsubscribe()
 			for (const each of Object.values(stops)) each.abort()
-			await run
+			await talking
 		}
 	}
 
@@ -408,9 +404,24 @@ export async function startChat(options: {
 
 	async function close() {
 		closed = true
-		await next?.then((session) => session.close())
 	}
 	return { kind: 'ok', chat: { root: found.root, thread: randomUUID(), ask, close } }
+}
+
+// What one question keeps while it runs: its round, the turns it has had in this step, the changes whose names used
+// elsewhere it was already told, and where the small requests to shorten a line add their cost.
+type Run = {
+	round: Round
+	turnsEnded: number
+	shown: Set<string>
+	charge: (usage: { input: number; output: number }) => void
+}
+
+function freshRun(as: Asking, emit: Round['emit']): Run {
+	const round = freshRound(as, emit)
+	const most = readLimit(as)
+	round.read = most === null ? null : { used: 0, most }
+	return { round, turnsEnded: 0, shown: new Set(), charge: () => {} }
 }
 
 function accepted(outcome: ToolOutcome): boolean {

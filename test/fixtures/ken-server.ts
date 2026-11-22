@@ -16,13 +16,24 @@ export function readerHome(): string {
 	return home
 }
 
-// ken's server on one project, as "ken open" starts it. baseUrl is the scripted model's, or null for no model. The
-// server closes when the test file ends.
-export async function openKen(directory: string, home: string, baseUrl: string | null = null): Promise<KenServer> {
+// ken's server on one project, as "ken open" starts it. baseUrl is the scripted model's, or null for no model. ken fills
+// nothing by itself unless env turns it on, so a script holds only the turns a test asks for. The server closes when
+// the test file ends.
+export async function openKen(
+	directory: string,
+	home: string,
+	baseUrl: string | null = null,
+	env: Record<string, string> = {},
+): Promise<KenServer> {
 	const model = baseUrl
 		? { KEN_MODEL: 'scripted', KEN_BASE_URL: baseUrl, KEN_API_KEY_ENV: KEY_ENV, [KEY_ENV]: process.env[KEY_ENV] }
 		: {}
-	const opened = await openServer({ directory, flags: {}, env: { KEN_HOME: home, ...model }, port: 0 })
+	const opened = await openServer({
+		directory,
+		flags: {},
+		env: { KEN_HOME: home, KEN_BACKGROUND: 'off', ...model, ...env },
+		port: 0,
+	})
 	if (opened.kind !== 'ok') throw new Error(opened.message)
 	after(() => opened.server.close())
 	return opened.server

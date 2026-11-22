@@ -60,6 +60,11 @@ export const MODULES: Record<string, Module> = {
 		imports: ['repo', 'checks', 'diagram', 'live', 'map', 'record', 'transcripts'],
 		packages: ['aigent'],
 	},
+	jobs: {
+		job: 'The queue of model runs: what waits and what runs, in which order, how many at once, and which background run gives way when the reader asks for something.',
+		imports: [],
+		packages: [],
+	},
 	history: {
 		job: "The reader's own log of questions asked, notes written in live mode, and the answers shown, kept outside the project.",
 		imports: ['agent', 'live', 'record', 'repo'],
@@ -71,13 +76,14 @@ export const MODULES: Record<string, Module> = {
 		packages: ['mermaid'],
 	},
 	server: {
-		job: 'Serves the page on 127.0.0.1, builds the brief of each concept from what ken holds, runs the questions the page sends and the notes of live mode one model call at a time, and writes down what the page says the reader looked at.',
+		job: 'Serves the page on 127.0.0.1, builds the brief of each concept from what ken holds, runs the questions the page sends, the notes of live mode and the layers ken fills by itself through the queue, and writes down what the page says the reader looked at.',
 		imports: [
 			'agent',
 			'diagram',
 			'first-look',
 			'follow-up',
 			'history',
+			'jobs',
 			'layout',
 			'live',
 			'map',
