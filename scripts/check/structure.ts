@@ -61,7 +61,7 @@ export const MODULES: Record<string, Module> = {
 		packages: [],
 	},
 	page: {
-		job: "The page in the browser: plain HTML, CSS and JavaScript with a rail of pages, a canvas of the project's parts, a brief for each concept, and a thread of replies, their steps and their checked cards.",
+		job: 'The page in the browser: plain HTML, CSS and JavaScript with a rail of five pages (Home, the Architecture canvas, Processes, Changes and You), a drawer for the brief of each concept and for Ask ken, and a thread of replies with their checked cards.',
 		imports: [],
 		packages: ['mermaid'],
 	},
