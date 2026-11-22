@@ -4,7 +4,7 @@
 // line that does not parse is skipped and named, never fatal.
 import { appendFile, mkdir, readFile } from 'node:fs/promises'
 import path from 'node:path'
-import { type CommitHash, parsePath, type RepoPath, type Repository } from '../repo/index.ts'
+import { type CommitHash, parsePath, type RepoPath, type Repository } from '../../repo/index.ts'
 
 // opened: the reader picked the part. read: they stayed on its explanation, or moved on from its tour stop. code: they
 // opened its files, quoted lines or a diff. said: they pressed "I know this part". forgot: they said they do not know

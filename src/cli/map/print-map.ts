@@ -5,7 +5,9 @@ import {
 	type MapRead,
 	openMap,
 	openNotes,
+	openPrefs,
 	type ReaderNotes,
+	type ReaderPrefs,
 	stateLine,
 	type UnderstandingMap,
 } from '../../map/index.ts'
@@ -42,24 +44,26 @@ export async function printMap(directory: string, json: boolean): Promise<number
 	return 0
 }
 
-// The reader's map of the project in this directory, and their notes beside it.
+// The reader's map of the project in this directory, and their notes and their choice of how much text beside it.
 export async function mapOf(
 	directory: string,
 ): Promise<
-	{ kind: 'ok'; map: UnderstandingMap; notes: ReaderNotes; root: string } | { kind: 'refused'; message: string }
+	| { kind: 'ok'; map: UnderstandingMap; notes: ReaderNotes; prefs: ReaderPrefs; root: string }
+	| { kind: 'refused'; message: string }
 > {
 	const found = await findRoot(directory)
 	if (found.kind !== 'ok') return { kind: 'refused', message: `${directory} is not inside a git repository.` }
 	const repo = gitRepository(found.root)
 	const home = kenHome(process.env)
-	const [opened, notes] = await Promise.all([
+	const [opened, notes, prefs] = await Promise.all([
 		openMap(home, repo, fileRecordStore(found.root, repo)),
 		openNotes(home, repo),
+		openPrefs(home, repo),
 	])
-	if (opened.kind !== 'ok' || notes.kind !== 'ok') {
+	if (opened.kind !== 'ok' || notes.kind !== 'ok' || prefs.kind !== 'ok') {
 		return { kind: 'refused', message: `${found.root} has no commits yet.` }
 	}
-	return { kind: 'ok', map: opened.map, notes: notes.notes, root: found.root }
+	return { kind: 'ok', map: opened.map, notes: notes.notes, prefs: prefs.prefs, root: found.root }
 }
 
 function mapText(file: string, { states }: MapRead): string {

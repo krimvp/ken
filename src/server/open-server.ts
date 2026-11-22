@@ -11,7 +11,7 @@ import {
 	pictureBefore,
 	readLayoutAsk,
 } from '../layout/index.ts'
-import type { MapSignal } from '../map/index.ts'
+import { type MapSignal, prefsOf, TEXT_PREFS } from '../map/index.ts'
 import { MERMAID_FILE, PAGE_FOLDER } from '../page/index.ts'
 import { OUTCOMES } from '../record/index.ts'
 import { type Hunk, parsePath } from '../repo/index.ts'
@@ -23,6 +23,7 @@ import { openProject } from './ken-project.ts'
 import { fieldOf, type QuestionLine } from './question-desk.ts'
 import { readLooked } from './reader/read-looked.ts'
 import { lastVisit, readerView } from './reader/reader-view.ts'
+import { TIMELINE_DAYS, timelineOf } from './timeline.ts'
 import { suggestWayIn } from './way-in.ts'
 
 // model is the name of the model the page asks, or null when none is set and the page can only show earlier answers.
@@ -58,7 +59,7 @@ export async function openServer(options: {
 	const opened = await openProject(options)
 	if (opened.kind !== 'ok') return opened
 	const { project } = opened
-	const { root, shown, repo, history, record, map, readerNotes, seen, layout, model, desk, live } = project
+	const { root, shown, repo, history, record, map, readerNotes, seen, prefs, layout, model, desk, live } = project
 	if (options.live && !live) {
 		await project.close()
 		return {
@@ -186,6 +187,35 @@ export async function openServer(options: {
 			const brief = await reads.brief(url.searchParams.get('concept') ?? '', new Date())
 			if (!brief) return sendJson(response, 404, { message: 'ken has no such concept in this project.' })
 			return sendJson(response, 200, brief)
+		}
+		if (where === 'GET /api/concepts') return sendJson(response, 200, await reads.concepts(new Date()))
+		if (where === 'GET /api/processes') {
+			const found = await reads.processes(url.searchParams.getAll('within'), new Date())
+			if (!found) return sendJson(response, 400, { message: 'Send within: the paths of a level of this project.' })
+			return sendJson(response, 200, found)
+		}
+		if (where === 'GET /api/timeline') {
+			const { fewest, most, unasked } = TIMELINE_DAYS
+			const days = Number(url.searchParams.get('days') ?? unasked)
+			if (!Number.isInteger(days) || days < fewest || days > most) {
+				return sendJson(response, 400, { message: `Send days: a whole number from ${fewest} to ${most}.` })
+			}
+			const now = new Date()
+			const landed = await timelineOf(repo, days, now)
+			if (landed.kind !== 'ok') {
+				return sendJson(response, 400, { message: 'That span holds too many commits to read. Ask for fewer days.' })
+			}
+			return sendJson(response, 200, {
+				days: landed.days,
+				lastVisit: lastVisit((await seen.read()).lines, now)?.at ?? null,
+			})
+		}
+		if (where === 'GET /api/prefs') return sendJson(response, 200, await prefs.read())
+		if (where === 'POST /api/prefs') {
+			const body = await readJson(request)
+			const chosen = body.kind === 'ok' ? prefsOf(body.value) : null
+			if (!chosen) return sendJson(response, 400, { message: `Send text: one of ${TEXT_PREFS.join(', ')}.` })
+			return sendJson(response, 200, await prefs.write(chosen))
 		}
 		if (where === 'GET /api/change/diff') {
 			const paths = url.searchParams.getAll('path').map(parsePath)

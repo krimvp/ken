@@ -5,7 +5,16 @@ import { type Chat, type ModelFlags, type ModelUnset, readModelConfig, startChat
 import { type History, kenHome, openHistory } from '../history/index.ts'
 import type { LayoutSources } from '../layout/index.ts'
 import { openSnapshots } from '../live/index.ts'
-import { openMap, openNotes, openSeen, type ReaderNotes, type ReaderSeen, type UnderstandingMap } from '../map/index.ts'
+import {
+	openMap,
+	openNotes,
+	openPrefs,
+	openSeen,
+	type ReaderNotes,
+	type ReaderPrefs,
+	type ReaderSeen,
+	type UnderstandingMap,
+} from '../map/index.ts'
 import { fileRecordStore, type RecordStore } from '../record/index.ts'
 import { findRoot, gitRepository, type Repository } from '../repo/index.ts'
 import { projectSessions } from '../transcripts/index.ts'
@@ -13,7 +22,7 @@ import { type LiveRunner, liveRunner } from './live-runner.ts'
 import { questionDesk } from './question-desk.ts'
 
 // What "ken open" and "ken live" share for one project: its git, the reader's history, map and notes, the lines on what
-// they looked at, the record, what the layout reads, the chat when a model is set, the desk that runs one model call at a time, and live mode, which writes
+// they looked at, how much text they chose, the record, what the layout reads, the chat when a model is set, the desk that runs one model call at a time, and live mode, which writes
 // its notes in a chat of its own. live is null without a model. shown is the folder as the reader would type it, and
 // name what the page calls the project.
 export type KenProject = {
@@ -26,6 +35,7 @@ export type KenProject = {
 	map: UnderstandingMap
 	readerNotes: ReaderNotes
 	seen: ReaderSeen
+	prefs: ReaderPrefs
 	layout: LayoutSources
 	model: { kind: 'ok'; chat: Chat; name: string } | ModelUnset
 	desk: ReturnType<typeof questionDesk>
@@ -60,12 +70,15 @@ export async function openProject(options: {
 	const looked = await openSeen(home, repo)
 	if (looked.kind !== 'ok') throw new Error(`${root} has a history but no first commit`)
 	const { seen } = looked
+	const chosen = await openPrefs(home, repo)
+	if (chosen.kind !== 'ok') throw new Error(`${root} has a history but no first commit`)
+	const { prefs } = chosen
 	const store = await openSnapshots(home, repo, root)
 	const config = readModelConfig(options.flags, options.env)
 	let model: KenProject['model']
 	let notes: Chat | null = null
 	if (config.kind === 'ok') {
-		const reader = { map, notes: readerNotes }
+		const reader = { map, notes: readerNotes, prefs }
 		const chat = { directory: root, model: config.config, env: options.env, reader, snapshots: store.objects }
 		const [started, forNotes] = await Promise.all([startChat(chat), startChat(chat)])
 		if (started.kind !== 'ok') return { kind: 'refused', message: started.message }
@@ -100,6 +113,7 @@ export async function openProject(options: {
 			map,
 			readerNotes,
 			seen,
+			prefs,
 			layout,
 			model,
 			desk,

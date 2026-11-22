@@ -32,6 +32,8 @@ const written = await record.append([
 		kind: 'layout',
 		within: [],
 		at: 'HEAD',
+		about: 'A command that runs one piece of work and saves it.',
+		flows: ['How a run is saved'],
 		parts: [
 			{ name: 'Core', job: 'Runs the work', paths: ['src/core'] },
 			{ name: 'Store', job: 'Saves what the core makes', paths: ['src/store'] },
@@ -219,4 +221,64 @@ test('a level toured before ken wrote briefs opens as briefs: the stop and its c
 		{ lens: { kind: 'explain', within: [], part: 'Core' } },
 		'ken can still explain it anew',
 	)
+})
+
+test('search finds each part of the level, the term and the drawn process, and finds a part once though the record holds a topic of its name', async () => {
+	const found: { id: string; kind: string; name: string; line: string; level: string | null }[] = await json(
+		server,
+		'/api/concepts',
+	)
+	assert.deepEqual(
+		found.filter((each) => each.kind !== 'process').map((each) => [each.id, each.line, each.level]),
+		[
+			['part::Core', 'Runs the work', 'new'],
+			['part::Store', 'Saves what the core makes', 'new'],
+			['part::Command', 'The command a person types', 'new'],
+			['part::Tests', 'Tests the core', 'new'],
+			['term:save', 'Writes what the core made to the store.', null],
+		],
+		'the tour made a topic of each part, and none of them is found as a term',
+	)
+	assert.deepEqual(
+		found.filter((each) => each.kind === 'process').map((each) => [each.name, each.line, each.level]),
+		[['One run, from the command to the store', '2 steps across 3 lanes.', null]],
+	)
+})
+
+test('the processes of a level come as lanes matched to its parts and the messages between them, with the processes ken offers to draw there', async () => {
+	const { processes, offers } = await json(server, '/api/processes')
+	assert.deepEqual(offers, ['How a run is saved'])
+	const [process] = processes
+	const asked: { askedAt: string }[] = (await json(server, '/api/questions')).questions
+	assert.deepEqual(
+		[processes.length, process.name, process.steps, process.drawn],
+		[1, 'One run, from the command to the store', 2, asked.at(-1)?.askedAt.slice(0, 10)],
+		'drawn on the day the reader asked for it',
+	)
+	assert.deepEqual(
+		process.lanes,
+		[
+			{ name: 'Command', part: 'part::Command' },
+			{ name: 'Core', part: 'part::Core' },
+			{ name: 'db', part: null },
+		],
+		'a lane that is no part of the level, and has no line in one, stands for none',
+	)
+	assert.deepEqual(
+		process.messages.map(
+			(message: { n: number; from: number; to: number; line: string; quotes: { path: string }[] }) => [
+				message.n,
+				message.from,
+				message.to,
+				message.line,
+				message.quotes.map((quote) => quote.path),
+			],
+		),
+		[
+			[1, 0, 1, 'starts a run', ['src/cli/main.ts']],
+			[2, 1, 2, 'saves the plan', ['src/core/run.ts']],
+		],
+	)
+	const inside = await json(server, '/api/processes?within=test')
+	assert.deepEqual(inside, { processes: [], offers: [] }, 'no drawn process rests on a line of the tests')
 })
