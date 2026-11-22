@@ -35,14 +35,21 @@
 	color: var(--k-ink);
 }
 
-.k-jobs-now {
+/* With little room the count gives way first, so the sentence keeps its first words. */
+.k-jobs-now,
+.k-jobs-wait {
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
 
+.k-jobs-now {
+	flex: 1 1 auto;
+	min-width: 6em;
+}
+
 .k-jobs-wait {
-	flex: none;
+	flex: 0 4 auto;
 	padding-left: 8px;
 	border-left: 1px solid var(--k-line);
 }
@@ -54,6 +61,11 @@
 	border-radius: 50%;
 	background: var(--k-brand);
 	animation: k-jobs-breathe 1.6s ease-in-out infinite;
+}
+
+.k-jobs-line.is-done .k-jobs-dot {
+	background: var(--k-muted);
+	animation: none;
 }
 
 @keyframes k-jobs-breathe {
@@ -144,6 +156,7 @@
 /* A brief or Ask ken takes the right of the window, so the bar keeps the line in view beside it. */
 @media (min-width: 761px) {
 	.k-bar.has-drawer {
+		grid-template-columns: auto minmax(180px, 300px) minmax(0, 1fr);
 		padding-right: calc(var(--k-drawer) + 24px);
 	}
 }

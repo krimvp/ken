@@ -26,7 +26,7 @@ function rowHtml(box, within, depth, view) {
 		: '<span class="k-tree-recent"></span>'
 	const files = box.opens ? `${count(box.files, 'file', 'files')}, ` : ''
 	const row = `<div class="k-tree-row" style="--depth:${depth}">${twist}
-		<button class="k-tree-name" data-act="brief-open" data-concept="${esc(id)}" data-key="tree-brief-${esc(key)}" aria-pressed="${brief === id}">${icon(box.opens ? 'folder' : 'file')}<span class="k-tree-label">${esc(box.name)}</span></button>
+		<button class="k-tree-name" data-act="brief-open" data-concept="${esc(id)}" data-key="tree-brief-${esc(key)}" aria-pressed="${brief === id}">${icon(box.opens ? 'folder' : 'file')}<span class="k-tree-label" data-fit="${esc(box.name)}">${esc(box.name)}</span></button>
 		<span class="k-size-bar" style="--size:${Math.round((lines / most) * 100)}%" aria-hidden="true"></span>
 		<span class="k-tree-size k-num">${files}${count(lines, 'line', 'lines')}</span>${recent}
 		<span class="k-tree-knows">${levelMark(box.knows.level, 16)}<span class="k-tree-level">${esc(levelLabel(home, box.knows.level))}</span></span></div>`
@@ -52,7 +52,7 @@ export function folderTreeHtml({ home, tree, brief, crumb, said }) {
 	return `<div class="k-tree-page${brief ? ' has-brief' : ''}" id="arch-tree">
 		<header class="k-tree-head">${crumb}
 			<h2>Folders and files, as git keeps them</h2>
-			<p class="k-tree-why">ken's model has not named the main parts here yet, so these are not parts. Press a name for its brief, or the arrow to open a folder here.</p>
+			<p class="k-tree-why">These are the ${home.trail.length > 1 ? 'folders and files in here' : "project's folders and files"}. Press a name for its brief, or the arrow to open a folder here.</p>
 			${said}
 		</header>
 		<ul class="k-tree is-top" aria-label="Folders and files">${rows.join('')}</ul>

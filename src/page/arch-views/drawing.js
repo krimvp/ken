@@ -103,7 +103,7 @@ function partHtml(placed, view) {
 			? `<span class="k-beads">${stops.map((n) => `<span class="k-bead k-num"><span class="visually-hidden">Stop </span>${n}</span>`).join('')}</span>`
 			: ''
 	const title = placed.solo && placed.solo.name.toLowerCase() !== name.toLowerCase() ? placed.solo.name : name
-	const under = title === name ? '' : `<span class="k-rt-runs">${esc(name)}</span>`
+	const under = title === name ? '' : `<span class="k-rt-runs" data-fit="${esc(name)}">${esc(name)}</span>`
 	const foot = placed.second ? `<span>Also runs here</span>` : footOf(box, view)
 	const index = box ? view.home.look.boxes.indexOf(box) : -1
 	const inside =
@@ -113,7 +113,7 @@ function partHtml(placed, view) {
 	const known = box ? KNOWN.indexOf(box.knows.level) / (KNOWN.length - 1) : 0
 	return `<div class="${classes.filter(Boolean).join(' ')}" style="${px(placed)};--known:${known}" data-glide="part:${esc(name)}${placed.second ? ':2' : ''}">
 		<button class="k-rt-face" data-act="arch-view-pick" data-name="${esc(name)}" data-concept="${esc(id)}" data-key="rt-${esc(placed.id)}" aria-pressed="${view.brief === id}">
-			<span class="k-rt-head"><span class="k-blk-icon">${icon(partIcon(name))}</span><span class="k-rt-name">${esc(title)}</span></span>
+			<span class="k-rt-head"><span class="k-blk-icon">${icon(partIcon(name))}</span><span class="k-rt-name" data-fit="${esc(title)}">${esc(title)}</span></span>
 			${under}
 			${beads}
 			<span class="k-rt-foot">${foot}</span>
@@ -236,8 +236,7 @@ export function runtimeHtml(views, layout, view) {
 		const c = line.crossing
 		const from = view.nameOf(c.from)
 		const to = view.nameOf(c.to)
-		const said =
-			c.kind === 'call' ? `${from} calls ${to}: ${c.text}, ${howLabel(c)}` : `${from} sends ${c.topic} to ${to}`
+		const said = c.kind === 'call' ? `${from} to ${to}: ${howLabel(c)}, ${c.text}` : `${from} sends ${c.topic} to ${to}`
 		// A line inside one place has no label: a round handle in its middle, seen on a hover or a focus, opens it.
 		const mid = line.label ? null : middleOf(line.points)
 		const shape = mid ? 'k-rt-knob' : 'k-rt-label'
