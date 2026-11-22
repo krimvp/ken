@@ -3,7 +3,7 @@
 // one sentence, and gives one short fact for each way in, which the page shows under each choice.
 import { at as atMoment, type Landed } from '../follow-up/index.ts'
 import type { Asked, History } from '../history/index.ts'
-import { type Change, type LayoutSources, lookAtLayout, readLayoutAsk } from '../layout/index.ts'
+import { type Change, type LayoutLook, type LayoutSources, pullRequestOf } from '../layout/index.ts'
 import type { Repository } from '../repo/index.ts'
 
 export type WayIn = 'learn' | 'catch-up' | 'review'
@@ -19,23 +19,24 @@ const MAIN_LINE = 100
 const SUBJECT_CHARS = 40
 
 // questions are the ones the reader asked, oldest first, and spans the spans of time that hold a commit, in the order
-// the page offers them. Catching up is suggested only when commits landed since the reader last looked: since their
-// last question or their own last commit. A span of days alone does not say they looked.
+// the page offers them. own is the reader's own work, uncommitted or their branch ahead of main, and top the top
+// level at HEAD. Catching up is suggested only when commits landed since the reader last looked: since their last
+// question or their own last commit. A span of days alone does not say they looked.
 export async function suggestWayIn(
 	layout: LayoutSources,
-	reader: { history: History; questions: Pick<Asked, 'head' | 'askedAt'>[]; spans: Landed[] },
+	reader: {
+		history: History
+		questions: Pick<Asked, 'head' | 'askedAt'>[]
+		spans: Landed[]
+		own: Change | null
+		top: LayoutLook
+	},
 	now: Date,
 ): Promise<Suggested> {
-	const { repo, root } = layout
-	// With no change asked, the layout's change is the reader's own work: uncommitted, or their branch ahead of main.
-	const own = await readLayoutAsk(layout, {}, now)
-	if (own.kind !== 'ok') throw new Error(`${root} has no HEAD commit to suggest a way in from`)
-	const { at, change } = own.ask
-	const [top, work, asked] = await Promise.all([
-		lookAtLayout(layout, { at, within: [], change: null }, now),
-		change && ownWork(repo, change),
-		reader.history.list(),
-	])
+	const { repo } = layout
+	const { top } = reader
+	const at = top.head
+	const [work, asked] = await Promise.all([reader.own && ownWork(repo, reader.own), reader.history.list()])
 	const met = asked.length > 0 || (await layout.map.read(now)).states.some((state) => state.kind !== 'never-met')
 	const [first] = reader.spans
 	const facts = {
@@ -85,12 +86,6 @@ async function newestOnMainLine(repo: Repository, head: Change['range']['head'])
 	const subject =
 		newest.subject.length > SUBJECT_CHARS ? `${newest.subject.slice(0, SUBJECT_CHARS - 3)}...` : newest.subject
 	return `Newest ${merge ? 'merge' : 'commit'}: ${subject}`
-}
-
-// The number of the pull request a merge brought in, such as "#107", read from the subject GitHub writes for it. ken
-// names such a merge by that number wherever it names the change, since the subject is mostly a branch name.
-export function pullRequestOf(subject: string): string | null {
-	return /^Merge pull request (#\d+) from \S+$/.exec(subject)?.[1] ?? null
 }
 
 function count(n: number, one: string): string {

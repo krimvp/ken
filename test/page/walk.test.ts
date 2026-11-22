@@ -6,7 +6,7 @@ import { after, test } from 'node:test'
 import { checkCoverage, verifyGitQuote } from '../../src/checks/index.ts'
 import { lookAtLayout, readLayoutAsk } from '../../src/layout/index.ts'
 import { openSnapshots } from '../../src/live/index.ts'
-import { openMap } from '../../src/map/index.ts'
+import { openMap, openSeen } from '../../src/map/index.ts'
 import { fileRecordStore } from '../../src/record/index.ts'
 import { gitRepository } from '../../src/repo/index.ts'
 import { buildRepository } from '../fixtures/build-repository.ts'
@@ -39,9 +39,10 @@ after(() => rmSync(home, { recursive: true, force: true }))
 
 async function lookAndChange() {
 	const record = fileRecordStore(root, repo)
-	const opened = await openMap(home, repo, record)
-	if (opened.kind !== 'ok') assert.fail('the fixture has commits')
-	const sources = { root, repo, snapshots: await openSnapshots(home, repo, root), record, map: opened.map }
+	const [opened, looked] = await Promise.all([openMap(home, repo, record), openSeen(home, repo)])
+	if (opened.kind !== 'ok' || looked.kind !== 'ok') assert.fail('the fixture has commits')
+	const snapshots = await openSnapshots(home, repo, root)
+	const sources = { root, repo, snapshots, record, map: opened.map, seen: looked.seen }
 	const asked = await readLayoutAsk(sources, { within: ['src'], change: `${base}..${head}` }, new Date())
 	if (asked.kind !== 'ok') assert.fail(asked.message)
 	const look = await lookAtLayout(sources, asked.ask, new Date())

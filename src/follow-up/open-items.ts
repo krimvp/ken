@@ -26,7 +26,7 @@ export async function openItems(
 	states: TopicState[],
 	signal?: AbortSignal,
 ): Promise<OpenItems> {
-	const decisions = record.current.flatMap((entry) => (entry.kind === 'decision' && entry.needsOwner ? [entry] : []))
+	const decisions = openDecisions(record)
 	const changed = states.flatMap((state) =>
 		(state.kind === 'changed' || state.kind === 'long-ago') && state.changed.length > 0 ? [state] : [],
 	)
@@ -38,6 +38,11 @@ export async function openItems(
 		}),
 	)
 	return { decisions, topics }
+}
+
+// The decisions that need the owner's call and that they have not answered.
+export function openDecisions(record: RecordRead): OpenDecision[] {
+	return record.current.flatMap((entry) => (entry.kind === 'decision' && entry.needsOwner ? [entry] : []))
 }
 
 export function changeCommit(commit: Commit, userEmail: string | null): ChangeCommit {

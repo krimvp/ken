@@ -24,12 +24,11 @@ import {
 	viewQuestion,
 } from '../follow-up/index.ts'
 import { entryFrom, type History, type HistoryEntry, whyNoNote } from '../history/index.ts'
-import { type Change, type LayoutSources, lookAtLayout, readLayoutAsk } from '../layout/index.ts'
+import { type Change, type LayoutSources, lookAtLayout, pullRequestOf, readLayoutAsk } from '../layout/index.ts'
 import { type About, holdsSnapshot } from '../live/index.ts'
 import { areaQuestion, catchUpQuestion, deeperQuestion, type TopicState, type UnderstandingMap } from '../map/index.ts'
 import { type RecordStore, sameName } from '../record/index.ts'
 import { parsePath, type Repository } from '../repo/index.ts'
-import { pullRequestOf } from './way-in.ts'
 
 const MAX_QUESTION_CHARS = 4000
 const MAX_TOPICS = 20

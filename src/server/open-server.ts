@@ -77,7 +77,12 @@ export async function openServer(options: {
 			changeChoices(layout),
 		])
 		const changes: ChangeChoice[] = [...since.map((each) => each.choice), ...choices]
-		return { look, changes, wayIn: await suggestWayIn(layout, { history, questions, spans: since }, now) }
+		// The way in is suggested from the top level at HEAD, which is often the level asked.
+		const { own } = ask
+		const isTop = ask.within.length === 0 && ask.change === null && ask.at === look.head
+		const top = isTop ? look : await lookAtLayout(layout, { at: look.head, within: [], change: null, own }, now)
+		const wayIn = await suggestWayIn(layout, { history, questions, spans: since, own, top }, now)
+		return { look, changes, wayIn }
 	}
 
 	async function route(request: IncomingMessage, response: ServerResponse) {

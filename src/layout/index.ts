@@ -1,6 +1,7 @@
 // The project's layout: a level of a few boxes over its folders, at any commit, with a change laid over it and the
 // reader's map on each box. Plain code makes all of it from git, the project record and the understanding map, and no
 // model takes part. A box opens the level whose scope is its paths, so zoom is a lookup, with nothing to keep in step.
+export { under } from './folder-split.ts'
 export { type ChangeChoice, changeChoices, type RawAsk, readLayoutAsk } from './layout-ask.ts'
 export {
 	type Change,
@@ -13,5 +14,8 @@ export {
 	type Scope,
 	type Touched,
 } from './layout-look.ts'
-export type { BoxMap, BoxTopic, Mark, Next, Standing } from './reader-marks.ts'
+export { type Knows, LEVELS, type Level } from './reader/box-knows.ts'
+export type { Go, NextItem } from './reader/next-items.ts'
+export type { BoxMap, BoxTopic, Mark, Next, Standing } from './reader/reader-marks.ts'
+export { pullRequestOf } from './reader/to-review.ts'
 export { type TourPart, type TourStop, tourOrder } from './tour-order.ts'

@@ -1,30 +1,47 @@
 import { kenHome } from '../history/index.ts'
-import { type LayoutLook, type LookBox, lookAtLayout, type RawAsk, readLayoutAsk } from '../layout/index.ts'
+import {
+	type LayoutLook,
+	type LayoutSources,
+	type LookBox,
+	lookAtLayout,
+	type RawAsk,
+	readLayoutAsk,
+} from '../layout/index.ts'
 import { openSnapshots } from '../live/index.ts'
-import { openMap } from '../map/index.ts'
+import { openMap, openSeen } from '../map/index.ts'
 import { fileRecordStore } from '../record/index.ts'
 import { findRoot, gitRepository } from '../repo/index.ts'
 
 // "ken layout" prints one level of the project's layout with no model. Exit code 0 means it printed, 2 means no
 // repository, no commits, or an ask ken refused.
 export async function printLayout(directory: string, raw: RawAsk, json: boolean): Promise<number> {
-	const found = await findRoot(directory)
-	if (found.kind !== 'ok') return refuse(`${directory} is not inside a git repository.`)
-	const { root } = found
-	const project = gitRepository(root)
-	if ((await project.firstCommit()) === null) return refuse(`${root} has no commits yet.`)
-	const home = kenHome(process.env)
-	const snapshots = await openSnapshots(home, project, root)
-	const repo = gitRepository(root, { alternate: snapshots.objects })
-	const record = fileRecordStore(root, repo)
-	const opened = await openMap(home, repo, record)
-	if (opened.kind !== 'ok') return refuse(`${root} has no commits yet.`)
-	const sources = { root, repo, snapshots, record, map: opened.map }
+	const opened = await layoutSources(directory)
+	if (opened.kind !== 'ok') return refuse(opened.message)
+	const { sources } = opened
 	const read = await readLayoutAsk(sources, raw, new Date())
 	if (read.kind !== 'ok') return refuse(read.message)
 	const look = await lookAtLayout(sources, read.ask, new Date())
 	process.stdout.write(json ? `${JSON.stringify(look, null, 2)}\n` : layoutText(look))
 	return 0
+}
+
+// What the layout reads for the project in this directory: its git, the record, and the reader's own files.
+export async function layoutSources(
+	directory: string,
+): Promise<{ kind: 'ok'; sources: LayoutSources } | { kind: 'refused'; message: string }> {
+	const found = await findRoot(directory)
+	if (found.kind !== 'ok') return { kind: 'refused', message: `${directory} is not inside a git repository.` }
+	const { root } = found
+	const project = gitRepository(root)
+	const none = { kind: 'refused', message: `${root} has no commits yet.` } as const
+	if ((await project.firstCommit()) === null) return none
+	const home = kenHome(process.env)
+	const snapshots = await openSnapshots(home, project, root)
+	const repo = gitRepository(root, { alternate: snapshots.objects })
+	const record = fileRecordStore(root, repo)
+	const [map, seen] = await Promise.all([openMap(home, repo, record), openSeen(home, repo)])
+	if (map.kind !== 'ok' || seen.kind !== 'ok') return none
+	return { kind: 'ok', sources: { root, repo, snapshots, record, map: map.map, seen: seen.seen } }
 }
 
 function refuse(message: string): number {
@@ -69,9 +86,8 @@ function layoutText(look: LayoutLook): string {
 			const { files, added, removed } = box.touched
 			lines.push(`    the change: ${count(files, 'file')}, ${count(added, 'line')} added, ${removed} removed`)
 		}
-		if (box.map.line !== '') {
-			lines.push(`    ${box.map.line} Topics: ${box.topics.map((topic) => topic.topic).join(', ')}.`)
-		}
+		const topics = box.topics.length === 0 ? '' : ` Topics: ${box.topics.map((topic) => topic.topic).join(', ')}.`
+		if (box.map.line !== '') lines.push(`    ${box.map.line}${topics}`)
 	}
 	if (look.arrows.length > 0) lines.push('', 'How the parts use each other, each from a quoted line:')
 	for (const arrow of look.arrows) {

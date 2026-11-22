@@ -4,15 +4,15 @@ import { type Chat, type ModelFlags, type ModelUnset, readModelConfig, startChat
 import { type History, kenHome, openHistory } from '../history/index.ts'
 import type { LayoutSources } from '../layout/index.ts'
 import { openSnapshots } from '../live/index.ts'
-import { openMap, openNotes, type ReaderNotes, type UnderstandingMap } from '../map/index.ts'
+import { openMap, openNotes, openSeen, type ReaderNotes, type ReaderSeen, type UnderstandingMap } from '../map/index.ts'
 import { fileRecordStore, type RecordStore } from '../record/index.ts'
 import { findRoot, gitRepository, type Repository } from '../repo/index.ts'
 import { projectSessions } from '../transcripts/index.ts'
 import { type LiveRunner, liveRunner } from './live-runner.ts'
 import { questionDesk } from './question-desk.ts'
 
-// What "ken open" and "ken live" share for one project: its git, the reader's history, map and notes, the record, what
-// the layout reads, the chat when a model is set, the desk that runs one model call at a time, and live mode, which writes
+// What "ken open" and "ken live" share for one project: its git, the reader's history, map and notes, the lines on what
+// they looked at, the record, what the layout reads, the chat when a model is set, the desk that runs one model call at a time, and live mode, which writes
 // its notes in a chat of its own. live is null without a model.
 export type KenProject = {
 	root: string
@@ -22,6 +22,7 @@ export type KenProject = {
 	record: RecordStore
 	map: UnderstandingMap
 	readerNotes: ReaderNotes
+	seen: ReaderSeen
 	layout: LayoutSources
 	model: { kind: 'ok'; chat: Chat; name: string } | ModelUnset
 	desk: ReturnType<typeof questionDesk>
@@ -53,6 +54,9 @@ export async function openProject(options: {
 	const noted = await openNotes(home, repo)
 	if (noted.kind !== 'ok') throw new Error(`${root} has a history but no first commit`)
 	const readerNotes = noted.notes
+	const looked = await openSeen(home, repo)
+	if (looked.kind !== 'ok') throw new Error(`${root} has a history but no first commit`)
+	const { seen } = looked
 	const store = await openSnapshots(home, repo, root)
 	const config = readModelConfig(options.flags, options.env)
 	let model: KenProject['model']
@@ -69,7 +73,7 @@ export async function openProject(options: {
 		model = config
 	}
 	const withSnapshots = gitRepository(root, { alternate: store.objects })
-	const layout = { root, repo: withSnapshots, snapshots: store, record, map }
+	const layout = { root, repo: withSnapshots, snapshots: store, record, map, seen }
 	const desk = questionDesk(history, record, repo, map, layout)
 	const live = notes && liveRunner({ root, project: repo, withSnapshots, store, sessions, desk, chat: notes })
 	const shown = root.startsWith(`${homedir()}${path.sep}`) ? `~${root.slice(homedir().length)}` : root
@@ -83,6 +87,6 @@ export async function openProject(options: {
 
 	return {
 		kind: 'ok',
-		project: { root, shown, repo, history, record, map, readerNotes, layout, model, desk, live, close },
+		project: { root, shown, repo, history, record, map, readerNotes, seen, layout, model, desk, live, close },
 	}
 }
