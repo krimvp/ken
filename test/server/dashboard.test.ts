@@ -29,7 +29,7 @@ function commitNow(root: string, file: string, text: string, by = 'bo@example.co
 	return execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim()
 }
 
-test('back to the picture before shows the parts as they were before a redraw, back again shows the redraw, and a level with one picture has none to go back to', async () => {
+test('back to the picture before walks back one picture at a time, with the words each was drawn with, until no older picture is left', async () => {
 	const folders = ['a', 'b', 'c', 'd']
 	const { root } = buildRepository([
 		{ message: 'feat: start', files: Object.fromEntries(folders.map((each) => [`src/${each}/x.ts`, `${each}\n`])) },
@@ -47,27 +47,35 @@ test('back to the picture before shows the parts as they were before a redraw, b
 		])
 		if (drawn.kind !== 'appended') assert.fail(drawn.problems.join(' '))
 	}
+	const back = () => call(server, '/api/layout/back', { within: [] })
 	const server = await openKen(root, readerHome())
 
 	const first = { parts: folders.map((each) => part(`Part ${each}`, each)), about: 'Four folders.', asked: 'one each' }
 	await draw(first)
-	const refused = await call(server, '/api/layout/back', { within: [] })
+	const refused = await back()
 	assert.equal(refused.status, 409, refused.text)
 
 	await draw({ parts: [part('Front', 'a', 'b'), part('Back', 'c', 'd')] })
-	assert.deepEqual(names((await json(server, '/api/layout')).look), ['Front', 'Back'])
+	await draw({ parts: [part('Left', 'a', 'c'), part('Right', 'b', 'd')] })
+	assert.deepEqual(names((await json(server, '/api/layout')).look), ['Left', 'Right'])
 
-	const back = await json(server, '/api/layout/back', { within: [] })
+	const second = await json(server, '/api/layout/back', { within: [] })
+	assert.deepEqual(names(second.look), ['Front', 'Back'])
+	assert.ok(Array.isArray(second.changes), 'it answers as the layout does')
+	assert.deepEqual(names((await json(server, '/api/layout')).look), ['Front', 'Back'], 'it shows from now on')
+
+	const oldest = await json(server, '/api/layout/back', { within: [] })
 	const firstNames = first.parts.map((each) => each.name)
-	assert.deepEqual(names(back.look), firstNames)
-	assert.ok(Array.isArray(back.changes), 'it answers as the layout does')
-	const { look } = await json(server, '/api/layout')
-	assert.deepEqual(names(look), firstNames, 'the earlier picture is the one that shows from now on')
-	assert.deepEqual([look.named.about, look.named.asked], [first.about, first.asked])
-	assert.equal(back.wayIn.facts.learn, '4 parts', 'a named level counts its parts, where a folder level counts folders')
+	assert.deepEqual(names(oldest.look), firstNames)
+	assert.deepEqual([oldest.look.named.about, oldest.look.named.asked], [first.about, first.asked])
+	assert.equal(
+		oldest.wayIn.facts.learn,
+		'4 parts',
+		'a named level counts its parts, where a folder level counts folders',
+	)
 
-	const again = await json(server, '/api/layout/back', { within: [] })
-	assert.deepEqual(names(again.look), ['Front', 'Back'])
+	const none = await back()
+	assert.equal(none.status, 409, 'nothing is older than the first picture')
 })
 
 test("what landed since the reader's last commit leads the changes the layout offers, and picking it lays those commits over the picture", async () => {

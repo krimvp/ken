@@ -227,25 +227,30 @@ function fromStart(verb: string): string {
 	return /^(is|are|gets?)\b|\bby$/i.test(verb.trim()) ? 'uses' : verb
 }
 
-// The picture of a level that shows at the commit checked out, and the newest one before it whose parts or arrows
-// differ: the one "back to the picture before" brings back. null when the level has no such earlier picture.
+// The picture of a level that shows at the commit checked out, and the one "back to the picture before" brings back:
+// the newest version older than the first one drawn the same as the shown one, so going back again walks further back.
+// null when no version is older.
 export function pictureBefore(entries: RecordEntry[], within: Scope): { shown: Stored; before: Stored } | null {
-	const versions = versionsOf(entries, within)
-	if (versions.length === 0) return null
-	const shown = newest(versions)
+	const versions = oldestFirst(versionsOf(entries, within))
+	const shown = versions.at(-1)
+	if (!shown) return null
 	const drawn = (version: Stored) => JSON.stringify([version.parts, version.arrows])
-	const earlier = versions.filter((version) => version !== shown && drawn(version) !== drawn(shown))
-	return earlier.length === 0 ? null : { shown, before: newest(earlier) }
+	const before = versions[versions.findIndex((version) => drawn(version) === drawn(shown)) - 1]
+	return before ? { shown, before } : null
 }
 
 function versionsOf(entries: RecordEntry[], within: Scope): Stored[] {
 	return entries.flatMap((entry) => (entry.kind === 'layout' && sameScope(entry, within) ? [entry] : []))
 }
 
-// A merge of two clones' records can put a newer line before an older one, so the newest goes by when ken wrote each,
+// A merge of two clones' records can put a newer line before an older one, so the order goes by when ken wrote each,
 // and by the order in the file only between two written in the same moment.
 function newest(versions: Stored[]): Stored {
 	return versions.reduce((best, version) => (version.at >= best.at ? version : best))
+}
+
+function oldestFirst(versions: Stored[]): Stored[] {
+	return versions.toSorted((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0))
 }
 
 function sameScope(layout: Stored, within: Scope): boolean {
