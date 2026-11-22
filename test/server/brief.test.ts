@@ -148,7 +148,16 @@ test('a part ken has not explained opens from what ken holds: its job, the decis
 		[unexplained.id, unexplained.kind, unexplained.name, unexplained.line, unexplained.explained],
 		['part::Core', 'part', 'Core', 'Runs the work', false],
 	)
-	assert.deepEqual([unexplained.points, unexplained.terms, unexplained.questions], [[], [], []])
+	assert.deepEqual([unexplained.points, unexplained.terms], [[], []])
+	assert.deepEqual(
+		unexplained.questions.map((each: { text: string; answered: boolean }) => [each.text, each.answered]),
+		[
+			['How does Core save to Store?', false],
+			['How does Command run Core?', false],
+			['Which of its 2 files should I read first?', false],
+		],
+		'plain code asks what its arrows and its files raise',
+	)
 	assert.deepEqual(unexplained.explain, { lens: { kind: 'explain', within: [], part: 'Core' } })
 	assert.deepEqual(
 		unexplained.decisions.map((each: { question: string; chosen: string; why: string }) => [
@@ -201,7 +210,11 @@ test('Sideways lists the parts a part uses and the parts that use it, each with 
 
 test('a term opens with what it means and the place the code uses it, and names the part that holds that place', async () => {
 	const brief = await briefOf('term:save')
-	assert.deepEqual([brief.kind, brief.name, brief.line], ['term', 'save', 'Writes what the core made to the store.'])
+	assert.deepEqual(
+		[brief.kind, brief.name, brief.line, brief.note],
+		['term', 'save', 'A term the project uses in Store.', 'Writes what the core made to the store.'],
+		'before the model explains it, a plain line on where it is used, then what the record says it means',
+	)
 	assert.deepEqual(
 		brief.points.map((point: { quotes: { path: string; startLine: number; text: string }[] }) =>
 			point.quotes.map((each) => [each.path, each.startLine, each.text]),

@@ -2,6 +2,27 @@
 // ken's model has run or ken wrote a line about the reader: then a brief is read again when it is next shown, and the
 // one the page has stays on screen until the new one is here.
 
+// A brief the page makes itself, with what it has and nothing for the rest. trust says where its words come from.
+export const pageBrief = (id, kind, name, line, trust) => ({
+	id,
+	kind,
+	name,
+	line,
+	local: true,
+	minutes: Math.max(1, Math.round(line.split(/\s+/).length / 120)),
+	explained: true,
+	explain: null,
+	points: [],
+	terms: [],
+	questions: [],
+	decisions: [],
+	sideways: { uses: [], usedBy: [], processes: [] },
+	deeper: null,
+	steps: null,
+	knows: null,
+	trust,
+})
+
 // app gives read, which asks the server and answers { ok, body, status } whatever it says.
 export function briefStore(app) {
 	// By id: { kind: 'reading' }, { kind: 'ok', brief }, or { kind: 'none', message } for a concept ken has nothing on.

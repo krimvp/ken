@@ -1,5 +1,6 @@
 // What the reader should look at next, the first thing first: a decision that waits on them, a part that changed
-// since they looked, a change to review, the next stop of the tour, then the parts they never opened. For a reader
+// since they looked, a change to review, a part one commit touched since, the next stop of the tour, then the parts
+// they never opened. Parts that changed come most commits first, then most lines. For a reader
 // who has opened nothing, the tour comes before the change. Plain code ranks them from the record, what the reader
 // looked at and git, so the page can show them before the reader asks.
 import type { Knows, Level, OpensAt } from './box-knows.ts'
@@ -55,7 +56,12 @@ const SINCE: Record<Level, string> = {
 export function nextItems(facts: NextFacts): NextItem[] {
 	const { boxes, order, review } = facts
 	const inOrder = order.flatMap((name) => boxes.find((box) => box.name === name) ?? [])
-	const stale = boxes.filter((box) => box.knows.stale).toSorted((a, b) => b.knows.since - a.knows.since)
+	const size = (box: NextBox) => (box.landed ? box.landed.added + box.landed.removed : 0)
+	const stale = boxes
+		.filter((box) => box.knows.stale)
+		.toSorted((a, b) => b.knows.since - a.knows.since || size(b) - size(a))
+	// A merge the reader has not walked through outweighs one commit on a part, unless they said they know that part.
+	const small = (box: NextBox) => box.knows.since === 1 && box.knows.level !== 'said'
 	const onTour = facts.toured
 		? inOrder.find((box) => box.knows.level === 'new' || box.knows.level === 'seen')
 		: undefined
@@ -63,10 +69,11 @@ export function nextItems(facts: NextFacts): NextItem[] {
 	const tour = onTour ? [tourItem(onTour, untouched)] : []
 	const items: NextItem[] = [
 		...decisionItem(facts.decisions),
-		...stale.map(staleItem),
+		...stale.filter((box) => !small(box)).map(staleItem),
 		// A reader who has opened nothing starts with the tour: a change says little before they know the parts.
 		...(untouched ? tour : []),
 		...(review ? [reviewItem(review)] : []),
+		...stale.filter(small).map(staleItem),
 		...(untouched ? [] : tour),
 		...inOrder.filter((box) => box.knows.level === 'new' && box !== onTour).map(meetItem),
 	]

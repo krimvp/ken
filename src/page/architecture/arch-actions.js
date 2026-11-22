@@ -182,7 +182,11 @@ export function archActions(app) {
 			return box.opens ? inside(box) : app.brief.close()
 		},
 		'arch-inside': (el) => inside(state.home.look.boxes[Number(el.dataset.index)]),
-		'arch-crumb': (el) => moveTo(state.home.trail.slice(0, Number(el.dataset.index) + 1)),
+		// The project's name at the top level, where there is nowhere higher to go, opens the project's brief.
+		'arch-crumb': (el) =>
+			state.home.trail.length === 1
+				? app.brief.project(el.dataset.key)
+				: moveTo(state.home.trail.slice(0, Number(el.dataset.index) + 1)),
 		async 'arch-layer'(el) {
 			const layer = arch.layer === el.dataset.layer ? null : el.dataset.layer
 			const wasChanges = arch.layer === 'changes'

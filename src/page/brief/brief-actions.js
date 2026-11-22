@@ -3,8 +3,9 @@
 // ken's model to explain the concept or to answer a question about it, and close the drawer. Opening a part's brief
 // tells ken the reader opened the part, and a quoted line opened tells it they opened code.
 import { fill } from '../shell/fill.js'
-import { briefHtml, pathsOf } from './brief.js'
-import { readConcept } from './concept-id.js'
+import { briefHtml, partRowHtml, pathsOf } from './brief.js'
+import { pageBrief } from './briefs.js'
+import { partId, readConcept } from './concept-id.js'
 
 // What the drawer holds while no brief is open.
 export const freshBrief = () => ({
@@ -86,6 +87,16 @@ export function briefActions(app) {
 		return [state.home.look, state.shell.top?.look].find(same) ?? null
 	}
 
+	// The level inside the open part, read once, for Deeper and for a part ken's model has not explained.
+	function readInner(brief) {
+		if (!brief?.deeper || ui.inner !== undefined) return
+		ui.inner = null
+		void briefs.lookAt(brief.deeper.within.split(',')).then((look) => {
+			ui.inner = look ?? { boxes: [] }
+			render()
+		})
+	}
+
 	// Draws the drawer. Called on every render of the page.
 	function draw(env) {
 		const drawer = $('#brief')
@@ -95,6 +106,7 @@ export function briefActions(app) {
 		if (now.kind === 'ok') {
 			const { brief } = now
 			ui.trail = ui.trail.map((step) => (step.id === brief.id ? { ...step, name: brief.name } : step))
+			if (brief.kind === 'part' && !brief.explained) readInner(brief)
 			if (ui.told !== ui.id && (brief.kind === 'part' || brief.kind === 'file')) {
 				ui.told = ui.id
 				const paths = pathsOf(brief)
@@ -177,14 +189,7 @@ export function briefActions(app) {
 			const way = el.dataset.way || null
 			ui.on = ui.on === way ? null : way
 			ui.fixing = false
-			const brief = open()
-			if (ui.on === 'deeper' && brief?.deeper && ui.inner === undefined) {
-				ui.inner = null
-				void briefs.lookAt(brief.deeper.within.split(',')).then((look) => {
-					ui.inner = look ?? { boxes: [] }
-					render()
-				})
-			}
+			if (ui.on === 'deeper') readInner(open())
 			render()
 			$('#brief-scroll').scrollTop = 0
 			$('#brief-name')?.focus({ preventScroll: true })
@@ -252,5 +257,20 @@ export function briefActions(app) {
 		return true
 	}
 
-	return { actions, show, close, draw, ended, submit, readPaths, open }
+	// The project's own brief, made from the top level: what it is in two sentences, and its parts.
+	function project(opener) {
+		const look = state.shell.top?.look
+		if (!look?.named) return
+		const name = state.project?.name ?? 'The project'
+		const id = `project:${name}`
+		const parts = look.boxes.map((box, i) => ({ id: partId([], box.name), name: box.name, note: box.job, i }))
+		app.briefs.put(id, {
+			...pageBrief(id, 'project', name, look.named.about, "ken's model named the parts. ken found their files in git."),
+			lit: look.boxes.map((box) => box.name),
+			html: `<h3 class="k-eyebrow">${look.boxes.length} parts</h3><ul class="k-rows">${parts.map(partRowHtml).join('')}</ul>`,
+		})
+		show(id, { opener })
+	}
+
+	return { actions, show, close, draw, ended, submit, readPaths, open, project }
 }

@@ -179,6 +179,8 @@ export function shellActions(app) {
 		if (changes.hidden) fill(changes, '')
 		else app.chg.draw(env)
 		$('#pg-old').hidden = !older
+		// A brief or Ask ken takes the right of the window, and Home makes room for it.
+		start.classList.toggle('has-drawer', Boolean(state.brief.id) || state.ask.open)
 		if (start.hidden) fill(start, '')
 		else {
 			const view = { top: shell.top, home, reader: home.reader, followUp: state.followUp, concepts: shell.concepts }
@@ -254,6 +256,7 @@ export function shellActions(app) {
 	const actions = {
 		'go-page': (el) => goPage(el.dataset.page),
 		'start-go': (el) => follow(shell.top.look.next.items[Number(el.dataset.index)], el.dataset.key),
+		'project-brief': (el) => app.brief.project(el.dataset.key),
 		'part-changed': (el) =>
 			follow(shell.top.look.boxes.find((box) => box.name === el.dataset.name).knows, el.dataset.key),
 		settings() {

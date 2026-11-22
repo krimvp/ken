@@ -117,4 +117,5 @@ export const KIND_ICONS = {
 	decision: 'decision',
 	arrow: 'arrow',
 	change: 'changes',
+	project: 'architecture',
 }

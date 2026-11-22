@@ -667,6 +667,21 @@ li.k-row {
 	font-size: 14px;
 }
 
+.k-brief-note {
+	display: grid;
+	gap: 4px;
+	margin: 4px 0 12px;
+	color: var(--k-muted);
+	font-size: 14px;
+}
+
+.k-said {
+	display: grid;
+	gap: 6px;
+	margin: 0 0 14px;
+	padding-left: 18px;
+}
+
 .k-knows-said {
 	margin: 0 0 6px;
 	padding: 8px 10px;

@@ -178,9 +178,9 @@ test('a term is a topic of the record with one meaning: a second brief that name
 	assert.deepEqual(store.terms, [{ id: 'term:save', name: 'save' }])
 	const opened = await briefOf('term:save')
 	assert.deepEqual(
-		[opened.line, opened.explained, opened.explain?.lens.kind],
-		['Writes what a run made.', false, 'answer'],
-		'it opens with its meaning, and offers the run that explains it',
+		[opened.line, opened.note, opened.explained, opened.explain?.lens.kind],
+		['A term the project uses in Store.', 'Writes what a run made.', false, 'answer'],
+		'it opens with where it is used and its meaning, and offers the run that explains it',
 	)
 	assert.deepEqual(opened.usedIn, [{ id: 'part::Store', name: 'Store' }])
 	const topics = (await record.read()).current.filter(

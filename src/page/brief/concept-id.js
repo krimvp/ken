@@ -26,7 +26,7 @@ export function readConcept(id) {
 	// A process's id may hold a colon of its own, so a step's number is what follows the last one.
 	const last = rest.lastIndexOf(':')
 	if (kind === 'step' && last >= 0) return { kind, process: rest.slice(0, last), n: Number(rest.slice(last + 1)) }
-	if (['term', 'process', 'question', 'decision', ...VIEW_KINDS].includes(kind) && rest !== '')
+	if (['term', 'process', 'question', 'decision', 'project', ...VIEW_KINDS].includes(kind) && rest !== '')
 		return { kind, name: rest }
 	return null
 }

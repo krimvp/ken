@@ -2,6 +2,7 @@
 // at a time, pick a change to review, ask ken's model for its story or its steps, and open a step as a brief with its
 // diff. The level, its change and the runs of ken's model are the level's (src/page/level); this module lays the
 // change over the top of the project and draws the page.
+import { pageBrief } from '../brief/briefs.js'
 import { stepFiles } from '../level/content.js'
 import { WHOLE } from '../level/level-state.js'
 import { stepDiffHtml, stepParts, stepWords, walkOf } from '../project/walk.js'
@@ -12,35 +13,15 @@ import { dayAt, daysShown } from './timeline.js'
 
 const DAY = 86_400_000
 
+// What a brief made on the page says of where its words come from.
+const TRUST = "ken's model wrote the words. ken found each changed line in git."
+
 export const freshChanges = () => ({
 	tab: 'changes',
 	// The span the reader is dragging across the timeline, { from, to } as days, or null.
 	drag: null,
 	// What the reader typed in "Another change" and has not sent.
 	typed: '',
-})
-
-// What a brief made on the page says of where its words come from.
-const TRUST = "ken's model wrote the words. ken found each changed line in git."
-
-const blank = (id, kind, name, line) => ({
-	id,
-	kind,
-	name,
-	line,
-	local: true,
-	minutes: Math.max(1, Math.round(line.split(/\s+/).length / 120)),
-	explained: true,
-	explain: null,
-	points: [],
-	terms: [],
-	questions: [],
-	decisions: [],
-	sideways: { uses: [], usedBy: [], processes: [] },
-	deeper: null,
-	steps: null,
-	knows: null,
-	trust: TRUST,
 })
 
 // app is the page: its state, render, the level's reads and runs, the store of briefs and the brief's drawer, and
@@ -99,7 +80,7 @@ export function changeActions(app) {
 		const { title, body } = stepWords(step)
 		const id = `change-step:${q.id}:${n}`
 		app.briefs.put(id, {
-			...blank(id, 'step', title, body || title),
+			...pageBrief(id, 'step', title, body || title, TRUST),
 			lit: [...stepParts(step, look.boxes)].map((i) => look.boxes[i].name),
 			html: `<h3 class="k-eyebrow">The changed lines</h3>${stepDiffHtml(step, look.change.range)}`,
 		})
@@ -117,7 +98,7 @@ export function changeActions(app) {
 		const [lead = '', ...rest] = words.join('\n\n').split(/\n\s*\n/)
 		const id = `change-story:${q.id}`
 		app.briefs.put(id, {
-			...blank(id, 'change', look.change.name, lead),
+			...pageBrief(id, 'change', look.change.name, lead, TRUST),
 			lit: look.boxes.filter((box) => box.touched).map((box) => box.name),
 			html: rest.length > 0 ? `<div class="k-story">${wordsHtml(rest.join('\n\n'))}</div>` : '',
 		})

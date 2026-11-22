@@ -80,9 +80,12 @@ function startHtml({ look, reader, project }) {
 			<button class="k-btn is-big" data-act="go-page" data-page="architecture" data-key="start-primary">See the architecture${icon('right')}</button>
 		</section>`
 	}
+	const about = look.named
+		? `<p class="k-home-about">${prose(look.named.about)} <button class="k-link" data-act="project-brief" data-key="home-about">Open the project's brief</button></p>`
+		: ''
 	const [lead, ...rest] = items
 	if (!lead) {
-		return `<section class="k-tile k-start" aria-labelledby="start-title">
+		return `${about}<section class="k-tile k-start" aria-labelledby="start-title">
 			<div class="k-start-pic">${mapHtml(look, { lit: [], key: 'start-map' })}</div>
 			<div class="k-start-words"><p class="k-eyebrow">Start here</p><h2 id="start-title">Nothing new since you looked</h2><p class="k-start-why">${look.named ? 'The architecture is as you left it.' : "ken's model has not named the parts of this project yet."}</p></div>
 			<button class="k-btn is-big" data-act="go-page" data-page="architecture" data-key="start-primary">See the architecture${icon('right')}</button>
@@ -90,7 +93,7 @@ function startHtml({ look, reader, project }) {
 	}
 	const stale = lead.kind === 'stale' ? look.boxes.find((box) => box.name === lead.parts[0])?.knows.since : null
 	const badge = stale ? `<span class="k-badge">${icon('changed')}<span class="k-num">${stale}</span></span>` : ''
-	return `<section class="k-tile k-start" aria-labelledby="start-title">
+	return `${about}<section class="k-tile k-start" aria-labelledby="start-title">
 		<div class="k-start-pic">${mapHtml(look, { lit: lead.parts, key: 'start-map' })}${badge}</div>
 		<div class="k-start-words"><p class="k-eyebrow">Start here</p><h2 id="start-title">${prose(lead.title)}</h2><p class="k-start-why">${prose(lead.why)}</p>
 			<div class="k-then">${rest
@@ -130,7 +133,7 @@ function conceptsHtml(look, concepts, home) {
 		const time = minutes ? `<span class="k-concept-min k-num">${minutes} min</span>` : ''
 		return `<li><button class="k-chip k-concept" data-act="brief-open" data-concept="${esc(each.id)}" data-key="concept-${i}">${lead}<span class="k-concept-name">${prose(each.name)}</span>${level}${time}</button></li>`
 	})
-	return `<section class="k-tile k-tile-concepts"><div class="k-tile-head"><h2 class="k-eyebrow">Concepts</h2><span class="k-tile-note">a few minutes each</span></div><ul class="k-concepts">${rows.join('')}</ul></section>`
+	return `<section class="k-tile k-tile-concepts"><div class="k-tile-head"><h2 class="k-eyebrow">Concepts</h2><span class="k-tile-note">minutes to read</span></div><ul class="k-concepts">${rows.join('')}</ul></section>`
 }
 
 // A process as a line through its stops, each in the colour of its part.
