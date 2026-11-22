@@ -4,8 +4,8 @@
 // the keyboard moves to is brought into view. The camera is { x, y, z }: a point of the canvas's own units shows at
 // x + z times it.
 const ZOOM = { least: 0.25, most: 2.5, step: 1.25 }
-// Room the camera leaves around a fitted level for what floats over the canvas: its top row and its tools.
-const ROOM = { side: 28, top: 76, bottom: 96, narrowSide: 14, narrowTop: 124 }
+// Room the camera leaves at the sides of a fitted level, and between it and what floats over the canvas.
+const ROOM = { side: 28, narrowSide: 14, clear: 12 }
 const NARROW = 700
 // Under FAR a block has no room for the line of its job, and under TINY words on the canvas would be too small to
 // read, so a block keeps its name and its mark.
@@ -15,6 +15,17 @@ const TINY = 0.5
 const DRAG = 5
 
 const clamp = (z) => Math.min(ZOOM.most, Math.max(ZOOM.least, z))
+
+// The camera that shows world, a box in the canvas's own units, whole: room is the canvas's size and clear the band
+// { top, h } of it that nothing floats over. Never closer than the world's own size. A narrow room fits the world's
+// width and starts at its top: its blocks stand in one column, which the reader pans down.
+export function fitted(world, room, clear) {
+	const column = room.w < NARROW
+	const across = (room.w - 2 * (column ? ROOM.narrowSide : ROOM.side)) / world.w
+	const z = clamp(Math.min(across, column ? 1 : clear.h / world.h, 1))
+	const spare = column ? 0 : clear.h - world.h * z
+	return { z, x: (room.w - world.w * z) / 2 - world.x * z, y: clear.top + spare / 2 - world.y * z }
+}
 
 // page is the element that holds the canvas, which is drawn again inside it. arch is the canvas's state: it keeps
 // the camera as arch.cam. drawer gives the width a brief open beside the canvas takes from it. zoomed is told each
@@ -57,24 +68,58 @@ export function canvasCamera(page, arch, drawer, zoomed = () => {}) {
 		}
 	}
 
-	// The whole level in the room the canvas has, never closer than its own size. A narrow window fits the level's
-	// width and starts at its top: its blocks stand in one column, which the reader pans down.
+	// The band of the canvas between what floats on its top and what floats on its foot.
+	function band() {
+		const el = canvas()
+		const box = el.getBoundingClientRect()
+		let [top, bottom] = [0, box.height]
+		for (const float of el.querySelectorAll(':scope > .k-float, :scope > .k-under')) {
+			const r = float.getBoundingClientRect()
+			if (r.width === 0 || r.height === 0 || r.left - box.left >= view().w) continue
+			if (r.top + r.height / 2 < box.top + box.height / 2) top = Math.max(top, r.bottom - box.top)
+			else bottom = Math.min(bottom, r.top - box.top)
+		}
+		return { top: top + ROOM.clear, h: bottom - top - 2 * ROOM.clear }
+	}
+
 	function fit() {
 		if (!canvas()) return
-		const [world, room] = [worldBox(), view()]
-		const column = room.w < NARROW
-		const top = column ? ROOM.narrowTop : ROOM.top
-		const across = (room.w - 2 * (column ? ROOM.narrowSide : ROOM.side)) / world.w
-		// A drawing of where the project runs is not fitted smaller than it can be read: the reader pans the rest.
-		const legible = column ? 0 : Number(canvas().dataset.least ?? 0)
-		const z = clamp(Math.max(Math.min(across, column ? 1 : (room.h - top - ROOM.bottom) / world.h, 1), legible))
-		const spare = room.h - top - ROOM.bottom - world.h * z
-		// Too big to read whole, a drawing opens on the middle of its parts, and the reader pans to the rest.
-		const cut = legible > 0 && z === legible && (world.w * z > room.w || world.h * z > room.h - top)
-		const [fx, fy] = (canvas().dataset.focus ?? '').split(' ').map(Number)
-		arch.cam = cut
-			? { z, x: room.w / 2 - fx * z, y: top + (room.h - top - ROOM.bottom) / 2 - fy * z }
-			: { z, x: (room.w - world.w * z) / 2 - world.x * z, y: top + (column ? 0 : spare / 2) - world.y * z }
+		arch.cam = fitted(worldBox(), view(), band())
+		apply()
+	}
+
+	// What the brief open beside the canvas is about stays in sight at the reader's zoom: the camera pans just enough
+	// to show it, and steps back only when it cannot fit. A line shows with both its ends.
+	function show(concept) {
+		const el = canvas()
+		const world = el?.querySelector('#arch-world')
+		if (!world || !concept) return apply()
+		const picked = [...world.querySelectorAll(`[data-concept="${CSS.escape(concept)}"]`)]
+		const ends = picked.flatMap((each) => (each.dataset.ends ?? '').split(' ').filter(Boolean))
+		const els = [
+			...picked.map((each) => each.closest('.k-rt-frame, .k-rt-part, .k-blk') ?? each),
+			...ends.map((id) => world.querySelector(`[data-key="rt-${CSS.escape(id)}"]`)).filter(Boolean),
+		]
+		if (els.length === 0) return apply()
+		const frame = el.getBoundingClientRect()
+		const { x, y, z } = arch.cam
+		const boxes = els.map((each) => each.getBoundingClientRect())
+		const [left, top] = [
+			Math.min(...boxes.map((b) => b.left)) - frame.left,
+			Math.min(...boxes.map((b) => b.top)) - frame.top,
+		]
+		const [right, bottom] = [
+			Math.max(...boxes.map((b) => b.right)) - frame.left,
+			Math.max(...boxes.map((b) => b.bottom)) - frame.top,
+		]
+		const [room, clear] = [view(), band()]
+		const k = Math.min(1, (room.w - 2 * ROOM.side) / (right - left), clear.h / (bottom - top))
+		const [cx, cy] = [(left + right) / 2, (top + bottom) / 2]
+		const at = (v, c) => c + (v - c) * k
+		const over = (lo, hi, least, most) => (lo < least ? least - lo : hi > most ? most - hi : 0)
+		const dx = over(at(left, cx), at(right, cx), ROOM.side, room.w - ROOM.side)
+		const dy = over(at(top, cy), at(bottom, cy), clear.top, clear.top + clear.h)
+		arch.cam = { z: z * k, x: cx - (cx - x) * k + dx, y: cy - (cy - y) * k + dy }
 		apply()
 	}
 
@@ -105,7 +150,8 @@ export function canvasCamera(page, arch, drawer, zoomed = () => {}) {
 		const room = view()
 		const over = (lo, hi, least, most) => (lo < least ? least - lo : hi > most ? most - hi : 0)
 		const dx = over(box.left - frame.left, box.right - frame.left, ROOM.side, room.w - ROOM.side)
-		const dy = over(box.top - frame.top, box.bottom - frame.top, ROOM.top, room.h - ROOM.bottom)
+		const clear = band()
+		const dy = over(box.top - frame.top, box.bottom - frame.top, clear.top, clear.top + clear.h)
 		if (dx !== 0 || dy !== 0) panBy(dx, dy)
 	}
 
@@ -151,7 +197,7 @@ export function canvasCamera(page, arch, drawer, zoomed = () => {}) {
 	)
 	page.addEventListener('focusin', (event) => {
 		const el = event.target.closest?.(
-			'.k-blk, .k-verb, .k-rt-part, .k-rt-store, .k-rt-bus-head, .k-rt-out, .k-rt-person, .k-rt-fold, .k-rt-flabel, .k-rt-label, .k-rt-mark, .k-wd-tile',
+			'.k-blk, .k-verb, .k-rt-part, .k-rt-store, .k-rt-bus-head, .k-rt-out, .k-rt-person, .k-rt-fold, .k-rt-flabel, .k-rt-label, .k-rt-knob, .k-rt-mark, .k-wd-tile',
 		)
 		if (el && !drag) reveal(el)
 	})
@@ -168,5 +214,5 @@ export function canvasCamera(page, arch, drawer, zoomed = () => {}) {
 		apply()
 	}
 
-	return { apply, fit, zoomBy, panBy }
+	return { apply, fit, show, zoomBy, panBy }
 }

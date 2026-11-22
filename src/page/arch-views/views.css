@@ -3,7 +3,8 @@
    an event a dashed one, so the two differ without colour. Words grow as the reader zooms out, so they never fall
    under 12.5 pixels on screen: --inv is one over the zoom, set by camera.js. */
 
-.k-arch {
+.k-arch,
+.k-rt-pic {
 	--rt-label: 19.5px;
 	--rt-tint-0: color-mix(in srgb, var(--k-ink) 3.5%, var(--k-bg));
 	--rt-tint-1: color-mix(in srgb, var(--k-ink) 7%, var(--k-bg));
@@ -251,16 +252,6 @@
 	background: var(--rt-grey);
 }
 
-.k-key-note {
-	display: grid;
-	place-items: center;
-	width: 48px;
-	height: 26px;
-	border: 1.5px dashed var(--k-ink);
-	border-radius: 6px;
-	font-weight: 700;
-}
-
 .k .k-key-shape .k-key-call,
 .k .k-key-shape .k-key-event {
 	fill: none;
@@ -425,6 +416,19 @@
 	border-style: dashed;
 }
 
+/* The handle of a line inside one place: nothing until a hover or a focus, then a ring on the line. */
+.k .k-rt-knob {
+	position: absolute;
+	z-index: 3;
+	border-radius: 50%;
+	cursor: pointer;
+}
+
+.k .k-rt-knob:is(:hover, :focus-visible, [aria-pressed="true"]) {
+	border: 3px solid var(--k-wire);
+	background: var(--k-surface);
+}
+
 .k .k-rt-label:is(:hover, [aria-pressed="true"]) {
 	background: var(--k-ink);
 	color: var(--k-surface);
@@ -461,6 +465,8 @@
 }
 
 .k-rt-part.is-second .k-rt-face {
+	gap: 2px;
+	padding: 8px 12px;
 	border: 2.5px dashed var(--k-block-ink);
 	box-shadow: none;
 }
@@ -513,8 +519,10 @@
 	align-items: center;
 	gap: 7px;
 	margin-top: auto;
+	overflow: hidden;
 	font-size: 19.5px;
 	font-weight: 650;
+	white-space: nowrap;
 }
 
 .k-arch .k-rt-foot .k-i {
@@ -540,12 +548,59 @@
 	display: none;
 }
 
-/* The frame a part runs in alone, as a tag on the part: "2 copies". */
+.k-rt-part:is(.is-second, .is-solo) .k-rt-name {
+	-webkit-line-clamp: 1;
+	line-clamp: 1;
+}
+
+.is-second .k-blk-icon {
+	width: 28px;
+	height: 28px;
+}
+
+.k-rt-part.is-second .k-rt-foot {
+	font-size: 17px;
+}
+
+/* In a container that runs it alone, the part's own name, under the container's. */
+.k-rt-runs {
+	overflow: hidden;
+	padding-left: 44px;
+	margin-top: -8px;
+	font-size: 18px;
+	font-weight: 650;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.k-rt-part .k-blk-in {
+	top: 12px;
+	right: 12px;
+}
+
+.k-rt-part:has(.k-blk-in) .k-rt-head {
+	padding-right: 40px;
+}
+.k-rt-foot .k-rt-words {
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+/* A container's block keeps its corner for its copies: its level shows as the mark alone, as words to a reader. */
+.k-rt-part.is-solo .k-rt-words {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip-path: inset(50%);
+}
+
+/* The container a part runs in alone, as a chip in its corner: "2 copies". */
 .k .k-rt-tag {
 	position: absolute;
-	top: -17px;
-	right: 14px;
-	max-width: calc(100% - 28px);
+	right: 12px;
+	bottom: 12px;
+	max-width: calc(50% - 12px);
 	overflow: hidden;
 	white-space: nowrap;
 	text-overflow: ellipsis;
@@ -557,7 +612,7 @@
 	border-radius: 9px;
 	background: color-mix(in srgb, var(--k-pc) 70%, #ffffff);
 	color: var(--k-block-ink);
-	font-size: 19.5px;
+	font-size: 17px;
 	font-weight: 700;
 	cursor: pointer;
 }
@@ -681,7 +736,7 @@
 	position: absolute;
 	right: 8px;
 	left: 8px;
-	height: 26px;
+	height: 20px;
 	border-radius: 6px;
 	background: var(--k-sunk);
 }
@@ -1047,4 +1102,55 @@
 		max-height: 70%;
 		border-radius: 18px 18px 0 0;
 	}
+}
+
+/* "Where it runs" in small, in a brief, with what the brief is about lit. */
+.k-rt-pic svg {
+	display: block;
+	width: 100%;
+	height: auto;
+	max-height: 240px;
+}
+
+.k-rtp-frame {
+	fill: var(--rt-tint-1);
+	stroke: var(--rt-edge);
+	stroke-width: 1.5;
+	vector-effect: non-scaling-stroke;
+}
+
+.k-rtp-frame.is-dashed {
+	stroke-dasharray: 5 4;
+}
+
+.k-rtp-line {
+	fill: none;
+	stroke: var(--rt-edge);
+	stroke-width: 1.5;
+	vector-effect: non-scaling-stroke;
+}
+
+.k-rtp-thing {
+	fill: var(--k-pc);
+	opacity: 0.5;
+}
+
+.k-rtp-thing.is-other {
+	fill: var(--rt-grey);
+	stroke: var(--rt-edge);
+	stroke-width: 1.5;
+	vector-effect: non-scaling-stroke;
+}
+
+.k-rtp-thing.is-lit {
+	opacity: 1;
+	stroke: var(--k-ink);
+	stroke-width: 3;
+	vector-effect: non-scaling-stroke;
+}
+
+.k-rtp-frame.is-lit,
+.k-rtp-line.is-lit {
+	stroke: var(--k-ink);
+	stroke-width: 3;
 }
