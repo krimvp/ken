@@ -5,7 +5,7 @@ import path from 'node:path'
 import { test } from 'node:test'
 import { fileRecordStore } from '../../src/record/index.ts'
 import { gitRepository } from '../../src/repo/index.ts'
-import { buildRepository } from '../fixtures/build-repository.ts'
+import { buildRepository, OWNER } from '../fixtures/build-repository.ts'
 import { ask, call, json, openKen, readerHome } from '../fixtures/ken-server.ts'
 import { type ChatRequest, scriptedModel, type Turn } from '../fixtures/scripted-model.ts'
 
@@ -101,10 +101,12 @@ test('ken suggests learning to a reader it has not met, catching up once commits
 	assert.equal(fresh.suggested, 'learn')
 	assert.deepEqual(fresh.facts, { learn: '2 folders', 'catch-up': null, review: null })
 
+	commitNow(root, 'src/a/w.ts', 'w\n')
 	await ask(server, { question: 'What is here?' })
 	const met = await wayIn()
-	assert.equal(met.suggested, 'learn', 'nothing landed since the question')
+	assert.equal(met.suggested, 'learn', 'a commit landed in the last days, but before the question')
 	assert.notEqual(met.why, fresh.why, 'the reason no longer says ken has not met the reader')
+	assert.match(met.facts['catch-up'], /^1 commit /, 'the fact still shows what landed in the last days')
 
 	commitNow(root, 'src/a/y.ts', 'y\n')
 	commitNow(root, 'src/a/z.ts', 'z\n')
@@ -120,6 +122,17 @@ test('ken suggests learning to a reader it has not met, catching up once commits
 	assert.match(working.why, /\b1 file\b/)
 	assert.equal(working.facts.review, '1 file uncommitted')
 	assert.match(working.facts['catch-up'], /^2 commits since /, 'each way in keeps its fact, whichever ken suggests')
+})
+
+test("ken suggests catching up on what landed since the reader's own last commit, though they never asked ken a question", async () => {
+	const { root } = buildRepository([{ message: 'feat: start', files: { 'src/a/x.ts': 'x\n' } }])
+	const server = await openKen(root, readerHome())
+	commitNow(root, 'src/a/y.ts', 'y\n', OWNER.email)
+	commitNow(root, 'src/a/z.ts', 'z\n')
+
+	const { wayIn } = await json(server, '/api/layout')
+	assert.equal(wayIn.suggested, 'catch-up')
+	assert.match(wayIn.why, /\b1 commit\b/)
 })
 
 test('on a branch ahead of main ken suggests review, and says which branch and how many commits', async () => {

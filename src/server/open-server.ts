@@ -73,7 +73,7 @@ export async function openServer(options: {
 			changeChoices(layout),
 		])
 		const changes: ChangeChoice[] = [...since.map((each) => each.choice), ...choices]
-		return { look, changes, wayIn: await suggestWayIn(layout, history, since[0], now) }
+		return { look, changes, wayIn: await suggestWayIn(layout, { history, questions, spans: since }, now) }
 	}
 
 	async function route(request: IncomingMessage, response: ServerResponse) {

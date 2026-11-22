@@ -26,6 +26,7 @@ export {
 } from './open-items.ts'
 export { type Author, authorsOf, findAuthor, type PersonChanges, personChanges } from './person.ts'
 export {
+	type Anchor,
 	type Landed,
 	type Since,
 	type SinceChoice,

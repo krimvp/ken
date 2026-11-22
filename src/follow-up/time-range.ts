@@ -79,8 +79,10 @@ export async function timeRange(
 export type SinceChoice = { kind: 'since'; change: string; name: string; commits: number }
 
 // A choice with the same fact said two more ways: landed as a sentence, such as "23 commits landed since your last
-// commit, 14 Oct.", and short in a few words, such as "23 commits since 14 Oct".
-export type Landed = { choice: SinceChoice; landed: string; short: string }
+// commit, 14 Oct.", and short in a few words, such as "23 commits since 14 Oct". anchor is what the span starts at: the
+// reader's last question, their own last commit, or a number of days ago.
+export type Landed = { choice: SinceChoice; anchor: Anchor; landed: string; short: string }
+export type Anchor = 'question' | 'commit' | 'days'
 
 const SPANS_DAYS = [7, 30, 90]
 // shortcut: the reader's last commit is looked for among this many of the newest commits on HEAD's main line. Walk
@@ -105,27 +107,29 @@ export async function sinceChoices(
 		return logged.kind === 'ok' ? logged.commits.filter((commit) => commit.parents.length < 2).length : 0
 	}
 	// title heads the choice, clause says the same span inside a sentence, and short says it in the fewest words.
-	const spans: { title: string; clause: string; short: string; base: CommitHash; commits: number }[] = []
-	const since = async (what: string, moment: string, base: CommitHash) => {
+	const spans: { anchor: Anchor; title: string; clause: string; short: string; base: CommitHash; commits: number }[] =
+		[]
+	const since = async (anchor: Anchor, what: string, moment: string, base: CommitHash) => {
 		const when = day(moment, now)
 		const [title, clause, short] = [`Since ${what}, ${when}`, `since ${what}, ${when}`, `since ${when}`]
-		spans.push({ title, clause, short, base, commits: await landedSince(base) })
+		spans.push({ anchor, title, clause, short, base, commits: await landedSince(base) })
 	}
 
 	const question = await lastAskedBefore(repo, asked, head, signal)
-	if (question) await since('your last question to ken', question.askedAt, question.head)
+	if (question) await since('question', 'your last question to ken', question.askedAt, question.head)
 	const [email, line] = await Promise.all([repo.userEmail(signal), repo.mainLine(head, MAX_WALK, signal)])
 	const own =
 		email === null || line.kind !== 'ok'
 			? undefined
 			: line.commits.find((commit) => commit.email.toLowerCase() === email.toLowerCase())
-	if (own && own.hash !== head) await since('your last commit', own.date, own.hash)
+	if (own && own.hash !== head) await since('commit', 'your last commit', own.date, own.hash)
 	const bases = new Set<CommitHash>()
 	for (const days of SPANS_DAYS) {
 		const range = await timeRange(repo, { kind: 'days', days }, now, signal)
 		if (range.kind !== 'ok' || bases.has(range.range.base)) continue
 		bases.add(range.range.base)
 		spans.push({
+			anchor: 'days',
 			title: `The last ${days} days`,
 			clause: `in the last ${days} days`,
 			short: `in the last ${days} days`,
@@ -135,10 +139,11 @@ export async function sinceChoices(
 	}
 	return spans
 		.filter((span) => span.commits > 0)
-		.map(({ title, clause, short, base, commits }) => {
+		.map(({ anchor, title, clause, short, base, commits }) => {
 			const count = commits === 1 ? '1 commit' : `${commits} commits`
 			return {
 				choice: { kind: 'since', change: `${base}..${head}`, name: `${title}: ${count}`, commits },
+				anchor,
 				landed: `${count} landed ${clause}.`,
 				short: `${count} ${short}`,
 			}

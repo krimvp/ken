@@ -2,7 +2,7 @@
 // they last looked, or learn the project. Plain code picks it from git, the reader's history and their map, says why in
 // one sentence, and gives one short fact for each way in, which the page shows under each choice.
 import type { Landed } from '../follow-up/index.ts'
-import type { History } from '../history/index.ts'
+import type { Asked, History } from '../history/index.ts'
 import { type Change, type LayoutSources, lookAtLayout, readLayoutAsk } from '../layout/index.ts'
 import type { Repository } from '../repo/index.ts'
 
@@ -18,11 +18,12 @@ export type Suggested = {
 const MAIN_LINE = 100
 const SUBJECT_CHARS = 40
 
-// since is the first span of time that holds a commit, when there is one.
+// questions are the ones the reader asked, oldest first, and spans the spans of time that hold a commit, in the order
+// the page offers them. Catching up is suggested only when commits landed since the reader last looked: since their
+// last question or their own last commit. A span of days alone does not say they looked.
 export async function suggestWayIn(
 	layout: LayoutSources,
-	history: History,
-	since: Landed | undefined,
+	reader: { history: History; questions: Pick<Asked, 'head'>[]; spans: Landed[] },
 	now: Date,
 ): Promise<Suggested> {
 	const { repo, root } = layout
@@ -33,17 +34,21 @@ export async function suggestWayIn(
 	const [top, work, asked] = await Promise.all([
 		lookAtLayout(layout, { at, within: [], change: null }, now),
 		change && ownWork(repo, change),
-		history.list(),
+		reader.history.list(),
 	])
 	const met = asked.length > 0 || (await layout.map.read(now)).states.some((state) => state.kind !== 'never-met')
+	const [first] = reader.spans
 	const facts = {
 		learn: count(top.boxes.length, top.named ? 'part' : 'folder'),
-		'catch-up': since?.short ?? null,
+		'catch-up': first?.short ?? null,
 		review: work?.short ?? (await newestOnMainLine(repo, at)),
 	}
 	if (work) return { suggested: 'review', why: work.why, facts }
-	if (met && since) return { suggested: 'catch-up', why: since.landed, facts }
-	const why = met ? 'Nothing changed since you last looked.' : 'You have not looked at this project with ken yet.'
+	if (reader.questions.findLast((each) => each.head !== null)?.head === at) {
+		return { suggested: 'learn', why: 'Nothing landed since your last question to ken.', facts }
+	}
+	if (first && first.anchor !== 'days') return { suggested: 'catch-up', why: first.landed, facts }
+	const why = met ? 'Nothing landed since you last looked.' : 'You have not looked at this project with ken yet.'
 	return { suggested: 'learn', why, facts }
 }
 
