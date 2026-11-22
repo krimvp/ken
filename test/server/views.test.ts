@@ -77,7 +77,8 @@ const VIEWS = {
 			}),
 		],
 		things: [
-			{ id: 'entry', kind: 'part', part: 'Entry', frame: 'proc', quotes: at('src/main.ts', MAIN) },
+			// Models fill fields they do not use with "", as this one does with store.
+			{ id: 'entry', kind: 'part', part: 'Entry', frame: 'proc', store: '', quotes: at('src/main.ts', MAIN) },
 			{
 				id: 'engine-worker',
 				kind: 'part',

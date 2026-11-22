@@ -1,6 +1,8 @@
 // How the model sends "In its world" and "Where it runs" with show, and how ken reads them into the drafts checkViews
 // takes. Every field a kind of item does not use is optional, so a part needs no name and an outside thing no quotes;
-// checkViews says what a kind is missing.
+// checkViews says what a kind is missing. A model fills an unused field with "", and aigent refuses a whole call
+// whose enum holds "", so an optional kind (a store's, a call's way) is text here and checkViews sends back only the
+// item whose kind is not one of the list.
 import type { JsonObject, JsonValue } from 'aigent/plugin'
 import type { GitQuote } from '../../checks/index.ts'
 import {
@@ -24,6 +26,7 @@ const ID = {
 const LINE = { type: 'string', description: `What it is, in one sentence of at most ${B.line} characters` } as const
 const NAME = { type: 'string', description: `What a reader would call it, at most ${B.name} characters` } as const
 const HOW = { type: 'string', enum: HOWS, description: 'How it crosses' } as const
+const CALL_HOW = { type: 'string', description: `For a call: how it crosses, one of ${HOWS.join(', ')}` } as const
 
 // quote is the schema of one quote, as show's other cards take it.
 export function viewsSchema<Q extends JsonObject>(quote: Q) {
@@ -116,7 +119,7 @@ export function viewsSchema<Q extends JsonObject>(quote: Q) {
 								kind: { type: 'string', enum: THING_KINDS },
 								frame: { type: 'string', description: 'The id of the frame it sits in. Leave it out for none.' },
 								part: { type: 'string', description: 'For a part: its name as the level names it' },
-								store: { type: 'string', enum: STORE_KINDS, description: 'For a store: its kind' },
+								store: { type: 'string', description: `For a store: its kind, one of ${STORE_KINDS.join(', ')}` },
 								name: { ...NAME, description: `For a store: ${NAME.description}` },
 								line: { ...LINE, description: `For a store: ${LINE.description}` },
 								topics: { type: 'array', description: 'For a bus: its topics', items: { type: 'string' } },
@@ -143,7 +146,7 @@ export function viewsSchema<Q extends JsonObject>(quote: Q) {
 									type: 'string',
 									description: `What crosses, at most ${B.text} characters, such as "worker messages"`,
 								},
-								how: { ...HOW, description: 'For a call: how it crosses' },
+								how: CALL_HOW,
 								topic: { type: 'string', description: 'For an event: the topic it travels on' },
 								from_quotes: { ...quotes, description: 'The lines on the from side, such as the call or the send' },
 								to_quotes: { ...quotes, description: 'The lines on the to side, such as the handler or the read' },

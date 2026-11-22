@@ -11,10 +11,12 @@ import {
 	type Frame,
 	type FrameKind,
 	type Gap,
+	HOWS,
 	type How,
 	type Outside,
 	type OutsideKind,
 	type Runtime,
+	STORE_KINDS,
 	type StoreKind,
 	type Thing,
 	VIEWS_BOUNDS,
@@ -217,7 +219,7 @@ export async function checkViews(
 			item.done({ id: sent.id, kind: 'part', part: part ?? sent.part, frame, quotes }, runtime.things)
 			continue
 		}
-		if (sent.store === null) item.problems.push('a store needs its kind of store.')
+		if (sent.store === null) item.problems.push(`a store needs its kind, one of ${STORE_KINDS.join(', ')}.`)
 		if (sent.topics.length > B.topics)
 			item.problems.push(`it has ${sent.topics.length} topics; keep it to ${B.topics}.`)
 		const thing: Thing = {
@@ -246,7 +248,7 @@ export async function checkViews(
 		const quotes = { from, to }
 		let crossing: Crossing
 		if (sent.kind === 'call') {
-			if (sent.how === null) item.problems.push('a call needs how it crosses.')
+			if (sent.how === null) item.problems.push(`a call needs how it crosses, one of ${HOWS.join(', ')}.`)
 			crossing = { id: sent.id, kind: 'call', from: sent.from, to: sent.to, text, how: sent.how ?? 'other', quotes }
 		} else {
 			const topic = item.text('topic', sent.topic, B.topic)
