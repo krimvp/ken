@@ -94,6 +94,17 @@ export type Named = {
 export type LookArrow = Stored['arrows'][number] & { stale: boolean }
 
 type Stored = Extract<RecordEntry, { kind: 'layout' }>
+type StoredViews = NonNullable<Stored['views']>
+
+// "In its world" and "Where it runs", on the top level only. The project's block in the world says what the level's
+// about says. drawn is the day ken kept them. Each is null when ken's model has not named it.
+export type LookViews = {
+	world: (NonNullable<StoredViews['world']> & { project: { line: string | null } }) | null
+	runtime: StoredViews['runtime']
+	drawn: string | null
+}
+
+const NO_VIEWS: LookViews = { world: null, runtime: null, drawn: null }
 
 // loose names what sits in the scope at the commit asked and in no box, such as a folder HEAD no longer has or one the
 // model left out of its parts. Of a change, files counts the changed files in the level's scope and outside names
@@ -113,6 +124,7 @@ export type LayoutLook = {
 		| null
 	next: Next
 	tour: TourStop[] | null
+	views?: LookViews
 }
 
 // ken's own record is not part of the project's code, as in every change fact git gives.
@@ -196,15 +208,17 @@ export async function lookAtLayout(
 			lines: seen.lines,
 		}),
 	})
+	const { views, ...named } = level
 	return {
 		at: ask.at,
 		head: head.commit,
 		within: ask.within,
-		...level,
+		...named,
 		boxes,
 		change,
 		next: nextOf(boxes, items),
 		tour,
+		...(ask.within.length === 0 ? { views } : {}),
 	}
 }
 
@@ -232,6 +246,7 @@ type Level = {
 	boxes: (Seed & { job: string | null; state: LookBox['state'] })[]
 	arrows: LookArrow[]
 	loose: string[]
+	views: LookViews
 }
 
 // Which stored version of the level shows. At the commit checked out it is the newest, so a redraw with fewer parts
@@ -292,6 +307,13 @@ async function namedLevel(
 		boxes,
 		arrows: chosen.arrows.map((arrow) => ({ ...arrow, text: fromStart(arrow.text), stale: changed.has(arrow.from) })),
 		loose,
+		views: chosen.views
+			? {
+					world: chosen.views.world && { project: { line: chosen.about ?? null }, ...chosen.views.world },
+					runtime: chosen.views.runtime,
+					drawn: chosen.at.slice(0, 10),
+				}
+			: NO_VIEWS,
 	}
 }
 
@@ -300,7 +322,13 @@ async function folderLevel(repo: Repository, ask: LayoutAsk, head: CommitHash, s
 	const seeds = splitScope(await projectFiles(repo, head, signal), ask.within)
 	const places = seeds.flatMap((seed) => seed.paths)
 	if (ask.at === head) {
-		return { named: null, boxes: seeds.map((seed) => ({ ...seed, job: null, state: 'same' })), arrows: [], loose: [] }
+		return {
+			named: null,
+			boxes: seeds.map((seed) => ({ ...seed, job: null, state: 'same' })),
+			arrows: [],
+			loose: [],
+			views: NO_VIEWS,
+		}
 	}
 	const [idsAtHead, idsAt, files] = await Promise.all([
 		repo.objectIds(head, places, signal),
@@ -314,6 +342,7 @@ async function folderLevel(repo: Repository, ask: LayoutAsk, head: CommitHash, s
 		boxes: seeds.map((seed) => ({ ...seed, job: null, state: stateAt(seed.paths, atHead, atAsked) })),
 		arrows: [],
 		loose: looseIn(files, ask.within, places),
+		views: NO_VIEWS,
 	}
 }
 

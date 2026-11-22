@@ -12,7 +12,7 @@ import {
 	WANTS,
 	type Want,
 } from '../agent/index.ts'
-import { DIAGRAM_BOUNDS, drawn, LAYOUT_BOUNDS } from '../diagram/index.ts'
+import { DIAGRAM_BOUNDS, deployFacts, drawn, LAYOUT_BOUNDS, VIEWS_BOUNDS } from '../diagram/index.ts'
 import {
 	answerQuestion,
 	explainQuestion,
@@ -23,7 +23,9 @@ import {
 	personLens,
 	rangeLens,
 	topicQuestion,
+	type ViewsAsk,
 	viewQuestion,
+	viewsQuestion,
 } from '../follow-up/index.ts'
 import { entryFrom, type History, type HistoryEntry, whyNoNote } from '../history/index.ts'
 import {
@@ -314,6 +316,13 @@ export function questionDesk(
 		return { kind: 'ok' as const, level }
 	}
 
+	async function viewsAsk(head: string): Promise<ViewsAsk> {
+		const at = await repo.resolve(head)
+		const deploy =
+			at.kind === 'ok' ? await deployFacts(repo, at.commit) : { workloads: [], dockerfiles: [], unread: [] }
+		return { deploy, bounds: VIEWS_BOUNDS }
+	}
+
 	// The page sends a question, or a lens for ken to write the question from: catch up, an area, "Go deeper" on the
 	// topics of an answer, which also tells the map the reader needs more on them, a person, a time range, "Explain
 	// what changed" on a topic of the open list, one change, another way to show a level, the brief of a part or of
@@ -367,9 +376,29 @@ export function questionDesk(
 			const said = firstWords(note.reply.items, NOTE_CHARS)
 			return { kind: 'ok', text: deeperOnNote(note.about, note.askedAt, said, commits) }
 		}
+		// The parts of the top level are named with its two drawings, in one run.
 		if (kind === 'parts') {
 			const read = await levelOf(lens)
-			return read.kind === 'ok' ? { kind: 'ok', text: partsQuestion(read.level).text } : read
+			if (read.kind !== 'ok') return read
+			const top = read.level.within.length === 0 ? { drawings: await viewsAsk(read.level.head) } : {}
+			return { kind: 'ok', text: partsQuestion({ ...read.level, ...top }).text }
+		}
+		if (kind === 'views') {
+			const read = await levelOf(lens)
+			if (read.kind !== 'ok') return read
+			const { level } = read
+			if (level.within.length > 0) {
+				return {
+					kind: 'refused',
+					problem: 'ken draws where a project runs for the whole project only: send within [].',
+				}
+			}
+			if (!level.named) {
+				const problem =
+					"ken's model has not named the parts of this project yet. Ask ken to name them: that run draws these too."
+				return { kind: 'refused', problem }
+			}
+			return { kind: 'ok', text: viewsQuestion({ ...level, drawings: await viewsAsk(level.head) }).text }
 		}
 		if (kind === 'view') {
 			const said = fieldOf(lens, 'text')
@@ -476,7 +505,7 @@ export function questionDesk(
 			return {
 				kind: 'refused',
 				problem:
-					'Send a question, or a lens: answer, catch-up, area with a path, change, deeper, explain, parts, person, range, topic, view or note.',
+					'Send a question, or a lens: answer, catch-up, area with a path, change, deeper, explain, parts, person, range, topic, view, views or note.',
 			}
 		}
 		await map.learn('deeper', names, new Date())

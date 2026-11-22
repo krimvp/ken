@@ -5,6 +5,8 @@
 // at any commit, which parts changed since the model named them.
 import { type GitQuote, type VerifiedGitQuote, verifyGitQuote } from '../checks/index.ts'
 import { type CommitHash, type ObjectId, parsePath, type RepoPath, type Repository } from '../repo/index.ts'
+import { checkViews, type ViewsDraft, viewsDraft } from './views/check-views.ts'
+import type { Views } from './views/views.ts'
 
 export type Place = { path: RepoPath; id: ObjectId }
 export type Part = { name: string; job: string; places: Place[] }
@@ -26,6 +28,7 @@ export type Layout = {
 	about?: string
 	asked?: string
 	flows?: string[]
+	views?: Views
 }
 
 // at is the commit the model read, HEAD when left out.
@@ -37,6 +40,7 @@ export type LayoutDraft = {
 	about?: string | undefined
 	asked?: string | undefined
 	flows?: string[] | undefined
+	views?: ViewsDraft | undefined
 }
 
 export const LAYOUT_BOUNDS = {
@@ -170,6 +174,11 @@ export async function checkLayout(
 		if (from && to) arrows.push({ from: from.name, to: to.name, text: arrow.text.trim(), quotes })
 	}
 
+	// The record holds only checked items, so a stored layout with one item that no longer passes is refused whole.
+	const views = draft.views && (await checkViews(repo, draft.views, { parts: parts.map((part) => part.name) }, signal))
+	if (views && within.length > 0) say('only the top level has the drawings "In its world" and "Where it runs".')
+	for (const each of views?.sentBack ?? []) problems.push(...each.problems.map((problem) => `${where}: ${problem}`))
+
 	if (problems.length > 0) return { kind: 'refused', problems }
 	const places = parts.flatMap((part) => part.paths)
 	const ids = await repo.objectIds(at.commit, places, signal)
@@ -190,6 +199,7 @@ export async function checkLayout(
 			...(about ? { about } : {}),
 			...(asked ? { asked } : {}),
 			...(flows.length > 0 ? { flows } : {}),
+			...(views ? { views: views.views } : {}),
 		},
 	}
 }
@@ -214,6 +224,7 @@ export function layoutDraft(layout: Layout): LayoutDraft {
 		about: layout.about,
 		asked: layout.asked,
 		flows: layout.flows,
+		views: layout.views && viewsDraft(layout.views),
 	}
 }
 
