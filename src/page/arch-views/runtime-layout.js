@@ -31,13 +31,13 @@ export function foldedAt(zoom, folded) {
 	return folded ? zoom < UNFOLD_AT : zoom < FOLD_AT
 }
 
-// A label's words, in lines of at most twelve letters where the words allow, and the size it takes.
+// A label's words, in lines of at most twelve letters (or most) where the words allow, and the size it takes.
 const LABEL = { line: 25, pad: 10, char: 11.5, side: 26, least: 60, most: 12 }
-export function labelOf(text) {
+export function labelOf(text, most = LABEL.most) {
 	const lines = ['']
 	for (const word of text.split(/\s+/)) {
 		const line = lines.at(-1)
-		if (line !== '' && line.length + 1 + word.length > LABEL.most) lines.push(word)
+		if (line !== '' && line.length + 1 + word.length > most) lines.push(word)
 		else lines[lines.length - 1] = line === '' ? word : `${line} ${word}`
 	}
 	const w = Math.max(LABEL.least, Math.max(...lines.map((line) => line.length)) * LABEL.char + LABEL.side)

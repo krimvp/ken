@@ -2,11 +2,12 @@
 // people above it, the outside systems that only send to it on its left, those it only sends to on its right, and
 // those that go both ways below it. One line per crossing, with what crosses and how, and an arrow for its direction.
 import { routeLines } from './route.js'
-import { SIZE } from './runtime-layout.js'
+import { labelOf, SIZE } from './runtime-layout.js'
 
-const TILE = { w: 176, h: 64, gap: 14 }
-const HEAD = 84
-const GAP = { side: 300, row: 170, between: 56 }
+const TILE = { w: 232, h: 76, gap: 16 }
+// Room for the project's name and two lines of what it is.
+const HEAD = 128
+const GAP = { side: 340, row: 200, between: 64 }
 // More than this many on one side and the rest go below.
 const MOST_ON_SIDE = 3
 
@@ -22,17 +23,10 @@ const HOW_WORDS = {
 	other: '',
 }
 
-// What a crossing's label says, in lines short enough for a small label.
+// What a crossing's label says: what crosses, and how.
 export function crossingWords(crossing) {
 	const how = HOW_WORDS[crossing.how] ?? ''
-	const words = (how === '' ? crossing.text : `${crossing.text}, ${how}`).split(/\s+/)
-	const lines = ['']
-	for (const word of words) {
-		const line = lines.at(-1)
-		if (line !== '' && line.length + 1 + word.length > 22) lines.push(word)
-		else lines[lines.length - 1] = line === '' ? word : `${line} ${word}`
-	}
-	return lines
+	return how === '' ? crossing.text : `${crossing.text}, ${how}`
 }
 
 // world is "In its world" as the server sends it, and parts the names of the top level's parts. The answer is in the
@@ -86,15 +80,13 @@ export function worldLayout(world, parts) {
 	const rectOf = new Map(placed.map((each) => [each.id, each]))
 	const crossings = world.crossings.filter((c) => rectOf.has(c.outside))
 	const asks = crossings.map((c) => {
-		const lines = crossingWords(c)
-		const size = { w: Math.max(...lines.map((l) => l.length)) * 7.8 + 26, h: lines.length * 18 + 12 }
-		return { from: { rect: rectOf.get(c.outside) }, to: { rect: project }, label: size }
+		return { from: { rect: rectOf.get(c.outside) }, to: { rect: project }, label: labelOf(crossingWords(c), 18) }
 	})
 	const routes = routeLines([project, ...placed], [], asks)
 	const lines = routes.map((route, i) => ({
 		id: crossings[i].id,
 		crossing: crossings[i],
-		words: crossingWords(crossings[i]),
+		words: labelOf(crossingWords(crossings[i]), 18).lines,
 		points: route.points,
 		label: route.label,
 	}))

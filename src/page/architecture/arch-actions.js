@@ -2,6 +2,9 @@
 // breadcrumb, turn a layer on and pick what it shows, zoom and fit, and open the tool that asks ken's model to draw
 // the level another way. The level itself, its change and the runs of ken's model are the home's, from before the
 // pages: this module moves them and draws the canvas.
+import { glide, gliders } from '../arch-views/glide.js'
+import { foldedAt } from '../arch-views/runtime-layout.js'
+import { viewOfConcept, viewOn, viewsOffered } from '../arch-views/switch.js'
 import { WHOLE } from '../home/state/home-state.js'
 import { fill } from '../shell/fill.js'
 import { architectureHtml, processesOf } from './architecture.js'
@@ -17,6 +20,14 @@ export const freshArch = () => ({
 	cam: { x: 0, y: 0, z: 1 },
 	drawOpen: false,
 	fitted: null,
+	// The drawing the reader chose last ("world", "runtime" or "parts"), whether the key is open, whether a crowded
+	// frame of "Where it runs" is folded, and what the last run to draw them left to say.
+	view: null,
+	keyOpen: false,
+	folded: true,
+	viewsProblem: null,
+	// The drawing on screen when the canvas was last drawn, so a switch glides.
+	shown: null,
 })
 
 const narrow = matchMedia('(max-width: 760px)')
@@ -30,13 +41,41 @@ export function archActions(app) {
 	const page = $('#pg-arch')
 	// A brief open beside the canvas takes its right side on a wide window, and lies over all of it on a narrow one.
 	const drawer = () => (state.brief.id !== null && wide.matches ? $('#brief').offsetWidth : 0)
-	const camera = canvasCamera(page, arch, drawer)
+	arch.view = app.stored('ken-arch-view')
+	const onShow = () => viewOn(arch, viewsOffered(state.home))
+	// Zooming in past 100% opens a folded drawing, and zooming well out folds it again, about the same point.
+	const camera = canvasCamera(page, arch, drawer, (z) => {
+		if (onShow() !== 'runtime') return
+		const folded = foldedAt(z, arch.folded)
+		if (folded === arch.folded) return
+		const before = worldSize()
+		arch.folded = folded
+		render()
+		const after = worldSize()
+		const room = page.querySelector('#arch-canvas')
+		const [cx, cy] = [room.clientWidth / 2, room.clientHeight / 2]
+		const { x, y } = arch.cam
+		arch.cam = {
+			z,
+			x: cx - ((cx - x) * after.w) / before.w,
+			y: cy - ((cy - y) * after.h) / before.h,
+		}
+		camera.apply()
+	})
+	function worldSize() {
+		const [, , w, h] = (page.querySelector('#arch-canvas')?.dataset.world ?? '0 0 1 1').split(' ').map(Number)
+		return { w, h }
+	}
 
 	// Draws the canvas. The camera fits the level when the level, the window or the room beside a brief changed, and
 	// stays where the reader left it otherwise.
 	function draw(env) {
 		const { home } = state
 		const column = narrow.matches
+		const view = onShow()
+		const switched = arch.shown !== null && arch.shown !== view && page.querySelector('#arch-world')
+		const before = switched ? gliders(page) : new Map()
+		arch.shown = view
 		const drawn = fill(page, architectureHtml({ home, arch, env, brief: state.brief.id, column }))
 		if (drawn && arch.drawOpen) {
 			const box = page.querySelector('#redraw-text')
@@ -44,11 +83,12 @@ export function archActions(app) {
 		}
 		if (!page.querySelector('#arch-world')) return
 		if (drawn) fitJobs(page)
-		const key = [home.look?.within.join(','), column, drawer(), page.clientWidth, page.clientHeight].join('|')
+		const key = [home.look?.within.join(','), view, column, drawer(), page.clientWidth, page.clientHeight].join('|')
 		if (arch.fitted !== key) {
 			arch.fitted = key
 			camera.fit()
 		} else if (drawn) camera.apply()
+		if (switched) glide(page, before, arch.cam.z)
 	}
 
 	// The level changed under the reader, so the keyboard goes to the breadcrumb, which names where they are.
@@ -80,7 +120,60 @@ export function archActions(app) {
 		await app.home.loads.settle()
 	}
 
+	// A press on a part in a drawing does what a press on its block does: its brief, then inside it.
+	function pickPart(el) {
+		const box = state.home.look.boxes.find((each) => each.name === el.dataset.name)
+		if (state.brief.id !== el.dataset.concept) return app.brief.show(el.dataset.concept, { opener: el.dataset.key })
+		return box?.opens ? inside(box) : app.brief.close()
+	}
+
+	function showView(view) {
+		arch.view = view
+		app.store('ken-arch-view', view)
+		render()
+	}
+
+	// From search: the drawing that holds the concept is shown, on the Architecture page at the top of the project.
+	async function showConcept(id) {
+		const view = viewOfConcept(id, state.shell.top?.look?.views ?? state.home.look?.views)
+		if (!view) return
+		if (state.shell.page !== 'architecture') await app.shell.goPage('architecture')
+		if (state.home.trail.length > 1) await moveTo([WHOLE])
+		arch.view = view
+	}
+
+	// The run that draws where the project runs ended: the level is read again, and "Where it runs" opens.
+	async function viewsEnded(q) {
+		await app.home.loads.refresh()
+		const views = state.home.look?.views
+		const drew = Boolean(views?.runtime || views?.world)
+		arch.viewsProblem = drew
+			? null
+			: (q.error ?? "ken's model drew nothing ken could check against the repository. Its reply says why.")
+		if (drew) arch.view = views.runtime ? 'runtime' : 'world'
+		render()
+	}
+
 	const actions = {
+		'arch-view': (el) => showView(el.dataset.view),
+		'arch-view-pick': pickPart,
+		'arch-key'() {
+			arch.keyOpen = !arch.keyOpen
+			render()
+			$(arch.keyOpen ? '#key-title' : '[data-key="view-key"]')?.focus()
+		},
+		'arch-unfold'() {
+			arch.folded = false
+			render()
+		},
+		'arch-draw-views'() {
+			arch.viewsProblem = null
+			const { home } = state
+			return app.send(
+				{ lens: { kind: 'views', within: [] } },
+				{ kind: 'views', trail: home.trail, change: home.change, wayIn: home.wayIn },
+			)
+		},
 		// The first press on a block opens its brief. A press on the block whose brief is open goes inside it, and
 		// closes the brief of a block that has nothing inside.
 		'arch-pick'(el) {
@@ -139,5 +232,13 @@ export function archActions(app) {
 	wide.addEventListener('change', render)
 	window.addEventListener('resize', () => state.shell.page === 'architecture' && render())
 
-	return { actions, draw, enter, goInside, moveTo, closeDraw }
+	function closeKey() {
+		if (!arch.keyOpen) return false
+		arch.keyOpen = false
+		render()
+		$('[data-key="view-key"]')?.focus()
+		return true
+	}
+
+	return { actions, draw, enter, goInside, moveTo, closeDraw, closeKey, showConcept, viewsEnded }
 }

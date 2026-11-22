@@ -387,14 +387,6 @@
 	color: var(--k-muted);
 }
 
-/* Room beside the breadcrumb for the switch between views of the architecture. */
-.k-views-slot {
-	position: absolute;
-	top: 12px;
-	left: 20px;
-	z-index: 3;
-}
-
 .k-layers {
 	top: 12px;
 	right: 20px;
@@ -677,6 +669,16 @@
 
 	.k-canvas.has-brief .k-hint {
 		display: none;
+	}
+
+	/* Beside a brief the layers are their icons, so they clear the card of views on the left. */
+	.k-canvas.has-brief .k-layers .k-float-label {
+		display: none;
+	}
+
+	.k .k-canvas.has-brief .k-layers > button {
+		gap: 0;
+		font-size: 0;
 	}
 
 	.k-canvas.has-brief .k-under {

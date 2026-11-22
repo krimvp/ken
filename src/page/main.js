@@ -2,6 +2,8 @@
 // (src/page/shell), and a concept pressed on any page opens its brief in a drawer (src/page/brief). A question opens
 // as a thread over the pages: the words on the left, and on the right the panel with what ken checked. Under 1100
 // pixels the panel goes away and the same things open in place. The page talks only to the server that sent it.
+
+import { VIEWS_RUN } from './arch-views/switch.js'
 import { archActions, freshArch } from './architecture/arch-actions.js'
 import { briefActions, freshBrief } from './brief/brief-actions.js'
 import { briefStore } from './brief/briefs.js'
@@ -10,7 +12,7 @@ import { homeActions } from './home/home-actions.js'
 import { clearHome, drawCanvas, showHome } from './home/home-view.js'
 import { readReply, replyAddress } from './home/state/address.js'
 import { freshHome } from './home/state/home-state.js'
-import { DOING } from './home/state/runs.js'
+import { DOING as HOME_RUNS } from './home/state/runs.js'
 import { liveLook, liveViewHtml } from './live/live-view.js'
 import { changeKey } from './project/change-card.js'
 import { learnParts } from './project/part-colours.js'
@@ -130,6 +132,9 @@ function store(name, value) {
 // The open decisions and quotes of the view on screen.
 const uiNow = () => ({ 'follow-up': state.followUi, live: state.liveUi, home: state.home.ui })[state.view] ?? state.ui
 
+// What each run the page starts is doing, by its kind.
+const DOING = { ...HOME_RUNS, views: VIEWS_RUN }
+
 // What the page shows as the question until ken sends the one it wrote for a lens.
 const LENS_TITLES = {
 	'catch-up': 'Catch me up: what differs from what I understood?',
@@ -143,6 +148,7 @@ const LENS_TITLES = {
 	view: 'Show it another way',
 	explain: 'Explain it',
 	answer: 'Answer a question about it',
+	views: 'Draw where it runs and what it talks to',
 }
 
 // The same for the questions about one change, by what the reader wants of it.
@@ -335,6 +341,7 @@ async function send(body, onHome = null) {
 		const made = saved ?? (stopped ? { ...q, id: last.id } : q)
 		await shell.reread()
 		if (onHome?.kind === 'explain' || onHome?.kind === 'answer') await brief.ended(onHome, made)
+		else if (onHome?.kind === 'views') await arch.viewsEnded(made)
 		else if (onHome !== null) await home.ended(onHome, made)
 		else if (state.thread.includes(q) && stopped) await openQuestion(last.id)
 		state.running = null

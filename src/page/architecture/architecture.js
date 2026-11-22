@@ -3,6 +3,7 @@
 // map of it. A press on a block opens its brief. A second press, or the block's corner, opens the part in place into
 // its own blocks, and then into files, and a breadcrumb says how deep they are. The layers lay a second reading over
 // the same blocks, and one tool asks ken's model to draw the level another way.
+import { keyHtml, switchCardHtml, viewDrawing, viewOn, viewsOffered } from '../arch-views/switch.js'
 import { arrowId, partId, processId } from '../brief/concept-id.js'
 import { diagramOf } from '../home/state/content.js'
 import { colourOf, projectName } from '../home/state/home-state.js'
@@ -189,13 +190,18 @@ function toolsHtml(arch) {
 	</div>`
 }
 
-function minimapHtml(layout, world, classes) {
+// rects are what the small map shows: [{ x, y, w, h, cls }].
+function minimapHtml(rects, world) {
 	const pad = 40
-	const rects = layout.blocks.map(
-		(at, i) => `<rect class="k-mm ${classes[i]}" x="${at.x}" y="${at.y}" width="${at.w}" height="${at.h}" rx="34"/>`,
+	const shapes = rects.map(
+		(at) =>
+			`<rect class="k-mm ${at.cls}" x="${at.x}" y="${at.y}" width="${at.w}" height="${at.h}" rx="${at.rx ?? 12}"/>`,
 	)
-	return `<div class="k-float k-minimap"><svg id="arch-minimap" viewBox="${world.x - pad} ${world.y - pad} ${world.w + 2 * pad} ${world.h + 2 * pad}" aria-hidden="true">${rects.join('')}<rect class="k-mm-view" id="arch-mm-view" rx="16"/></svg></div>`
+	return `<div class="k-float k-minimap"><svg id="arch-minimap" viewBox="${world.x - pad} ${world.y - pad} ${world.w + 2 * pad} ${world.h + 2 * pad}" aria-hidden="true">${shapes.join('')}<rect class="k-mm-view" id="arch-mm-view" rx="16"/></svg></div>`
 }
+
+// The least zoom a drawing of where the project runs is fitted at: its words are 19.5 units, 12.5 pixels at 65%.
+const LEGIBLE = 0.65
 
 const READING = '<p class="k-canvas-line" role="status">Reading the project from git.</p>'
 
@@ -203,7 +209,9 @@ const READING = '<p class="k-canvas-line" role="status">Reading the project from
 // page around it is doing, the id of the open brief, and whether the window is narrow.
 export function architectureHtml({ home, arch, env, brief, column }) {
 	const { look, problem } = home
-	const top = `${crumbHtml(home)}<div class="k-views-slot" id="arch-views"></div>`
+	const offered = viewsOffered(home)
+	const on = viewOn(arch, offered)
+	const top = switchCardHtml({ home, arch, env, crumb: crumbHtml(home), offered, on })
 	if (!look || home.reading === 'level') return `<div class="k-canvas">${top}${problem ? '' : READING}</div>`
 	if (problem && !problem.keeps) {
 		return `<div class="k-canvas">${top}<p class="k-canvas-line" role="alert">ken could not show this. ${prose(problem.message)} <button class="k-link" data-act="home-reset" data-key="home-reset">Show where you are now</button></p></div>`
@@ -216,6 +224,38 @@ export function architectureHtml({ home, arch, env, brief, column }) {
 	const process = processes.find((each) => each.id === arch.process) ?? null
 	const stops = arch.layer === 'processes' && process?.diagram ? processStops(process.diagram, look.boxes) : null
 	const classes = look.boxes.map((box) => colour(box.name))
+	if (on !== 'parts') {
+		const drawn = viewDrawing({
+			home,
+			arch,
+			on,
+			projectName: projectName(home),
+			view: {
+				home,
+				layer: arch.layer,
+				process: arch.process,
+				brief,
+				colour,
+				boxes: new Map(look.boxes.map((box) => [box.name, box])),
+				stops: new Map(look.boxes.map((box, i) => [box.name, stops?.byBlock[i] ?? []])),
+			},
+		})
+		return canvasHtml({
+			home,
+			arch,
+			env,
+			brief,
+			view: on,
+			world: drawn.world,
+			focus: drawn.focus,
+			inner: drawn.html,
+			top,
+			notes: notesHtml(home, env, arch, stops),
+			processes,
+			minimap: minimapHtml(drawn.rects, drawn.world),
+			hint: "Press a block, a frame's name or a line's label for its brief.",
+		})
+	}
 	const blocks = look.boxes.map((box, i) =>
 		blockHtml(box, i, layout.blocks[i], {
 			home,
@@ -231,31 +271,63 @@ export function architectureHtml({ home, arch, env, brief, column }) {
 		const id = arrowId(look.within, link.index + 1)
 		return `<button class="k-verb" style="left:${link.mid.x}px;top:${link.mid.y}px" data-act="brief-open" data-concept="${esc(id)}" data-key="verb-${link.index}" aria-pressed="${brief === id}" aria-label="${esc(`${arrow.from} ${arrow.text} ${arrow.to}`)}">${esc(arrow.text)}</button>`
 	})
-	const frame = inside
+	const framed = inside
 		? `<div class="k-frame ${colour('')}" style="left:${world.x}px;top:${world.y}px;width:${world.w}px;height:${world.h}px"><h2 class="k-frame-head"><span class="k-blk-icon">${icon(partIcon(home.trail.at(-1).name))}</span>${esc(home.trail.at(-1).name)}</h2></div>`
 		: ''
 	const empty = look.boxes.length === 0 ? '<p class="k-canvas-line">Nothing is here at this commit.</p>' : ''
-	const notes = notesHtml(home, env, arch, stops)
-	const hint =
-		look.boxes.length === 0 || notes !== '' || env.running?.onHome
-			? ''
-			: `<p class="k-hint">Press a block for its brief. Press ${icon('inside')} to go inside it.</p>`
-	return `<div class="k-canvas${arch.layer ? ` layer-${arch.layer}` : ''}${brief ? ' has-brief' : ''}" id="arch-canvas" data-world="${world.x} ${world.y} ${world.w} ${world.h}">
+	const svg = `<svg class="k-wires" width="${world.w}" height="${world.h}" viewBox="${world.x} ${world.y} ${world.w} ${world.h}" style="left:${world.x}px;top:${world.y}px" aria-hidden="true"><defs><marker id="k-head" viewBox="0 0 12 12" refX="10.500" refY="6" markerWidth="4.200" markerHeight="4.200" orient="auto"><path d="M0 0.500L12 6L0 11.500z"/></marker></defs>${wires.join('')}</svg>`
+	return canvasHtml({
+		home,
+		arch,
+		env,
+		brief,
+		view: 'parts',
+		world,
+		inner: `${framed}${svg}${blocks.join('')}${verbs.join('')}`,
+		empty,
+		top,
+		notes: notesHtml(home, env, arch, stops),
+		processes,
+		minimap: minimapHtml(
+			layout.blocks.map((at, i) => ({ ...at, cls: classes[i], rx: 34 })),
+			world,
+		),
+		hint: look.boxes.length === 0 ? '' : `Press a block for its brief. Press ${icon('inside')} to go inside it.`,
+	})
+}
+
+// The canvas around a drawing: the world the camera moves, and what floats over it.
+function canvasHtml({
+	home,
+	arch,
+	env,
+	brief,
+	view,
+	world,
+	focus,
+	inner,
+	empty = '',
+	top,
+	notes,
+	processes,
+	minimap,
+	hint,
+}) {
+	const shownHint = hint === '' || notes !== '' || env.running?.onHome ? '' : `<p class="k-hint">${hint}</p>`
+	return `<div class="k-canvas view-${view}${arch.layer ? ` layer-${arch.layer}` : ''}${brief ? ' has-brief' : ''}" id="arch-canvas" data-world="${world.x} ${world.y} ${world.w} ${world.h}"${view === 'parts' ? '' : ` data-least="${LEGIBLE}" data-focus="${focus.x} ${focus.y}"`}>
 		<div class="k-world" id="arch-world"${home.reading ? ' inert' : ''}>
-			${frame}
-			<svg class="k-wires" width="${world.w}" height="${world.h}" viewBox="${world.x} ${world.y} ${world.w} ${world.h}" style="left:${world.x}px;top:${world.y}px" aria-hidden="true"><defs><marker id="k-head" viewBox="0 0 12 12" refX="10.500" refY="6" markerWidth="4.200" markerHeight="4.200" orient="auto"><path d="M0 0.500L12 6L0 11.500z"/></marker></defs>${wires.join('')}</svg>
-			${blocks.join('')}
-			${verbs.join('')}
+			${inner}
 		</div>
 		${empty}
 		${top}
 		${layersHtml(arch)}
 		${layerPickHtml(home, arch, processes)}
+		${keyHtml(arch)}
 		<div class="k-under">${runHtml(home, env)}${notes}</div>
 		${home.reading ? READING : ''}
 		${toolsHtml(arch)}
 		${arch.drawOpen ? drawToolHtml(home, env.off) : ''}
-		${minimapHtml(layout, world, classes)}
-		${hint}
+		${minimap}
+		${shownHint}
 	</div>`
 }
