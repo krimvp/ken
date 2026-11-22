@@ -172,7 +172,7 @@ button {
 }
 
 /* A row fills its box, so its ring goes inside, where no neighbour or scroll edge can hide it. */
-:is(.q-row, .d-row, .fold-head, .row, .file summary):focus-visible {
+:is(.q-row, .d-row, .row, .file summary):focus-visible {
 	outline-offset: -3px;
 }
 
@@ -543,12 +543,6 @@ html {
 	font-weight: 400;
 }
 
-.stream {
-	margin-top: var(--space-4);
-	line-height: 1.6;
-	overflow-wrap: anywhere;
-}
-
 .who {
 	display: block;
 	color: var(--color-note);
@@ -773,54 +767,12 @@ html {
 	scroll-margin-top: calc(var(--top) + var(--space-4));
 }
 
-.strip {
-	margin-top: var(--space-3);
-	padding: var(--space-2) var(--space-3);
-	border-radius: var(--radius-sm);
-	background: var(--color-code-bg);
-	color: var(--color-note);
-	font-size: var(--text-note);
-	line-height: 1.5;
-}
-
-a.strip {
-	color: var(--color-accent);
-	text-underline-offset: 0.18em;
-}
-
-.list-head {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: baseline;
-	justify-content: space-between;
-	gap: var(--space-1) var(--space-4);
-	margin-top: var(--space-5);
-	padding-bottom: var(--space-2);
-	border-bottom: 1px solid var(--color-border);
-}
-
-.list-head h3 {
-	font-size: var(--text-md);
-	font-weight: 650;
-}
-
-.list-note {
-	flex-basis: 100%;
-	color: var(--color-note);
-	font-size: var(--text-note);
-}
-
 /* Risks are the agent's predictions, so they sit apart from the statements, behind a rule in the colour of a warning. */
 .risks {
 	margin-top: var(--space-5);
 	padding: 0 var(--space-4) var(--space-1);
 	border-left: 3px solid var(--color-warn-border);
 	background: var(--color-warn-bg);
-}
-
-.risks .list-head {
-	margin-top: 0;
-	padding-top: var(--space-3);
 }
 
 .risks .st:last-child {
@@ -904,8 +856,7 @@ span.label-from-the-session {
 .st-text .label,
 .d-line .label,
 .dv-head .label,
-.diagram-title .label,
-.list-head h3 .label {
+.diagram-title .label {
 	margin-right: var(--space-2);
 }
 
@@ -1084,50 +1035,9 @@ span.label-from-the-session {
 	border-bottom: 1px solid var(--color-border);
 }
 
-.fold-head {
-	display: flex;
-	align-items: baseline;
-	gap: var(--space-3);
-	width: 100%;
-	padding: var(--space-3) 0;
-	border: 0;
-	background: none;
-	color: var(--color-text);
-	font-size: var(--text-md);
-	font-weight: 650;
-	text-align: left;
-}
-
-.fold-head::before {
-	content: "";
-	flex: none;
-	border-width: 0.3em 0 0.3em 0.45em;
-	border-style: solid;
-	border-color: transparent transparent transparent var(--color-muted);
-}
-
-.fold-head[aria-expanded="true"]::before {
-	transform: rotate(90deg);
-}
-
-.fold-head:hover {
-	text-decoration: underline;
-	text-underline-offset: 0.18em;
-}
-
-.fold-body {
-	padding-bottom: var(--space-4);
-}
-
 /* The risks the second look withdrew: a line beside the caption on left-out points, quieter than a group of the answer. */
 .folds.withdrawn {
 	margin-top: var(--space-3);
-}
-
-.withdrawn .fold-head,
-.left-out .fold-head {
-	font-size: var(--text-note);
-	font-weight: 600;
 }
 
 /* The points the draft left out: the model's own words, as a plain list under its caption. */
@@ -1139,11 +1049,6 @@ ul.left-out {
 	margin: var(--space-2) 0 0;
 	padding-left: 1.25em;
 	list-style: disc;
-}
-
-.fold-body > .list-head:first-child,
-.fold-body > .risks:first-child {
-	margin-top: 0;
 }
 
 /* Decisions: the question and the option taken, in at most two lines each. A row opens in place. */
@@ -1218,11 +1123,6 @@ ul.left-out {
 	padding: 0 0 var(--space-4) 1.25rem;
 }
 
-/* A decision shown on the first view with its reason: the row of quotes under it opens the rest in place. */
-.decision.reasoned {
-	padding: var(--space-2) 0 var(--space-3);
-}
-
 .d-why {
 	margin: var(--space-1) 0 0;
 	line-height: 1.5;
@@ -1232,10 +1132,6 @@ ul.left-out {
 	margin-top: var(--space-1);
 }
 
-.decision.reasoned .d-card {
-	padding: var(--space-2) 0 0;
-}
-
 .d-card .quotes {
 	margin-top: var(--space-3);
 }
@@ -1243,15 +1139,6 @@ ul.left-out {
 .map-foot {
 	margin-top: var(--space-5);
 	overflow-wrap: anywhere;
-}
-
-.d-call {
-	margin-bottom: var(--space-2);
-	font-weight: 600;
-}
-
-.d-undo {
-	margin-top: var(--space-2);
 }
 
 .facts {
@@ -1667,10 +1554,6 @@ ul.left-out {
 
 	.code {
 		tab-size: 2;
-	}
-
-	.wide-only {
-		display: none;
 	}
 
 	#thread {
@@ -2810,27 +2693,6 @@ q.subject {
 .ln-tag {
 	margin-left: var(--space-2);
 	font-weight: 400;
-}
-
-.ln-sub {
-	font-size: var(--text-note);
-	font-weight: 650;
-}
-
-/* A note's risks are amber, as in an answer, with the room of a note. */
-.ln-risks {
-	margin-top: var(--space-3);
-	padding: var(--space-3) var(--space-4);
-}
-
-.ln-risks .st {
-	padding: var(--space-2) 0 0;
-	border-bottom: 0;
-}
-
-.ln-list {
-	display: grid;
-	gap: var(--space-3);
 }
 
 .st.alone {
