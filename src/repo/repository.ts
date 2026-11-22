@@ -102,6 +102,8 @@ export interface Repository {
 	branch(signal?: AbortSignal): Promise<string | null>
 	// The project's local branches, the one with the newest commit first.
 	branches(signal?: AbortSignal): Promise<string[]>
+	// Whether the name is a branch: a local one, or one fetched from a remote, such as origin/feature.
+	isBranch(name: string, signal?: AbortSignal): Promise<boolean>
 	// git's id of the tree or file at each path at the commit, null where the path is not there. One git call.
 	objectIds(commit: CommitHash, paths: RepoPath[], signal?: AbortSignal): Promise<(ObjectId | null)[]>
 	// The files with uncommitted changes, ken's own .ken/ left out. It reads the working tree and the index and writes

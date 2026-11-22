@@ -21,7 +21,6 @@ export function replyAddress(id) {
 	return `#${new URLSearchParams({ reply: id })}`
 }
 
-// The id of the reply an address names, or null.
 export function readReply(hash) {
 	return new URLSearchParams(hash.replace(/^#/, '')).get('reply')
 }

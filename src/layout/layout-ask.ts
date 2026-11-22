@@ -79,9 +79,9 @@ async function changeOf(
 	}
 	// With no "..", a branch is what it has that the main branch lacks, and any other commit is the change that one
 	// commit made: for a merge, what it brought to the line it merged into.
-	const alone = !text.includes('..') && !(await repo.branches(signal)).includes(text)
-	const kind = text.includes('..') || alone ? 'range' : 'branch'
-	const [base, head, ...rest] = alone
+	const oneCommit = !text.includes('..') && !(await repo.isBranch(text, signal))
+	const kind = text.includes('..') || oneCommit ? 'range' : 'branch'
+	const [base, head, ...rest] = oneCommit
 		? [`${text}^`, text]
 		: kind === 'range'
 			? text.split('..')
@@ -100,12 +100,17 @@ async function changeOf(
 	if (range.kind === 'ok') return { kind: 'ok', change: { kind, name, asked: text, range: range.range } }
 	if (range.kind === 'unrelated') return { kind: 'refused', message: `${base} and ${head} share no history.` }
 	// The first commit of a project has no commit before it to compare with.
-	if (alone && range.kind === 'no-commit' && range.ref === base && (await repo.resolve(text, signal)).kind === 'ok') {
+	if (
+		oneCommit &&
+		range.kind === 'no-commit' &&
+		range.ref === base &&
+		(await repo.resolve(text, signal)).kind === 'ok'
+	) {
 		return { kind: 'refused', message: `"${text}" is the first commit of this project, so it has no change to show.` }
 	}
 	return {
 		kind: 'refused',
-		message: `"${range.kind === 'no-commit' && !alone ? range.ref : text}" is not a commit of this project.`,
+		message: `"${range.kind === 'no-commit' && !oneCommit ? range.ref : text}" is not a commit of this project.`,
 	}
 }
 

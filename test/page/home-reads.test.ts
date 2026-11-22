@@ -104,7 +104,7 @@ test('each of the six switches between the three ways in shows a level, with wha
 	}
 })
 
-test('after a read the server never answered, the next way in the reader presses shows its level', async () => {
+test('after a read that failed, the next way in the reader presses shows its level', async () => {
 	const { root } = buildRepository([
 		{ message: 'feat: start', files: { 'src/core/run.ts': 'run()\n', 'src/store/db.ts': 'save()\n' } },
 	])

@@ -194,6 +194,11 @@ export function gitRepository(root: string, options: { alternate?: string } = {}
 			return run.kind === 'ok' ? run.stdout.split('\n').filter((name) => name !== '') : []
 		},
 
+		async isBranch(name, signal) {
+			const run = await git(['for-each-ref', '--format=%(refname:short)', 'refs/heads', 'refs/remotes'], signal)
+			return run.kind === 'ok' && run.stdout.split('\n').includes(name)
+		},
+
 		// cat-file reads "<commit>:<path>" exactly, where ls-tree would read a path as a pattern and list a folder's
 		// children. It answers one line per line it reads, so the answers pair up with the paths by position. A path
 		// with a line break in it cannot be sent that way, so it reads as not there.

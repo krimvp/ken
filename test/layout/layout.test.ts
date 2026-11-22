@@ -148,6 +148,19 @@ test("a branch's change counts from where it left main, lands its files in their
 	assert.deepEqual(uncommitted.change?.outside, [])
 })
 
+test('a branch fetched from a remote and never checked out shows all it has that main lacks, as a local branch does', async () => {
+	const { root, hashes } = buildRepository([
+		{ message: 'feat: start', files: { 'src/a/x.ts': 'x\n' } },
+		{ message: 'feat: first on the branch', files: { 'src/a/y.ts': 'y\n' } },
+		{ message: 'feat: second on the branch', files: { 'src/a/z.ts': 'z\n' } },
+	])
+	git(root, ['update-ref', 'refs/remotes/origin/feature', hashes[2] ?? ''])
+	git(root, ['reset', '--quiet', '--hard', hashes[0] ?? ''])
+
+	const fetched = await look(await sourcesFor(root), { within: [], change: 'origin/feature' })
+	assert.deepEqual(fetched.change?.range, { base: hashes[0], head: hashes[2] }, 'both commits, not only the last')
+})
+
 test("with no change asked, the view lays the reader's uncommitted work over the boxes, else their branch against main, else nothing", async () => {
 	const { root, hashes } = buildRepository([
 		{ message: 'feat: start', files: { 'src/a/x.ts': 'x\n', 'src/b/y.ts': 'y\n' } },
