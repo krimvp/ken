@@ -15,7 +15,6 @@ import { type MapSignal, prefsOf, TEXT_PREFS } from '../map/index.ts'
 import { MERMAID_FILE, PAGE_FOLDER } from '../page/index.ts'
 import { OUTCOMES } from '../record/index.ts'
 import { type Hunk, parsePath } from '../repo/index.ts'
-import { conceptReads } from './concepts/brief.ts'
 import { decisionRows } from './decision-list.ts'
 import { refusal } from './http/guard-request.ts'
 import { type PageFile, readPageFiles } from './http/page-files.ts'
@@ -60,6 +59,7 @@ export async function openServer(options: {
 	if (opened.kind !== 'ok') return opened
 	const { project } = opened
 	const { root, shown, repo, history, record, map, readerNotes, seen, prefs, layout, model, desk, live } = project
+	const reads = project.concepts
 	if (options.live && !live) {
 		await project.close()
 		return {
@@ -68,7 +68,6 @@ export async function openServer(options: {
 		}
 	}
 	const openNow = async () => openItems(repo, await record.read(), (await map.read(new Date())).states)
-	const reads = conceptReads(layout, history)
 	const files = await readPageFiles(PAGE_FOLDER, { '/mermaid.min.js': MERMAID_FILE })
 	let port = 0
 

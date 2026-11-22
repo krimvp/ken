@@ -18,6 +18,7 @@ import {
 import { fileRecordStore, type RecordStore } from '../record/index.ts'
 import { findRoot, gitRepository, type Repository } from '../repo/index.ts'
 import { projectSessions } from '../transcripts/index.ts'
+import { conceptReads } from './concepts/brief.ts'
 import { type LiveRunner, liveRunner } from './live-runner.ts'
 import { questionDesk } from './question-desk.ts'
 
@@ -37,6 +38,7 @@ export type KenProject = {
 	seen: ReaderSeen
 	prefs: ReaderPrefs
 	layout: LayoutSources
+	concepts: ReturnType<typeof conceptReads>
 	model: { kind: 'ok'; chat: Chat; name: string } | ModelUnset
 	desk: ReturnType<typeof questionDesk>
 	live: LiveRunner | null
@@ -90,7 +92,8 @@ export async function openProject(options: {
 	}
 	const withSnapshots = gitRepository(root, { alternate: store.objects })
 	const layout = { root, repo: withSnapshots, snapshots: store, record, map, seen }
-	const desk = questionDesk(history, record, repo, map, layout)
+	const concepts = conceptReads(layout, history)
+	const desk = questionDesk(history, record, repo, map, layout, concepts)
 	const live = notes && liveRunner({ root, project: repo, withSnapshots, store, sessions, desk, chat: notes })
 	const shown = root.startsWith(`${homedir()}${path.sep}`) ? `~${root.slice(homedir().length)}` : root
 
@@ -115,6 +118,7 @@ export async function openProject(options: {
 			seen,
 			prefs,
 			layout,
+			concepts,
 			model,
 			desk,
 			live,

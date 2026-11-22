@@ -47,7 +47,8 @@ export type Gate = {
 // "risks" while the second look runs, and passRejections counts the revisions it refused. tour is the parts the
 // question asks ken to explain, each as a brief, which the reader's map learns from the page as the reader reaches
 // them. view is the level the reader asked to see another way, with their words, which ken keeps with a layout the
-// reply shows for that level. want is what the reader asked of a change through its lens, or null.
+// reply shows for that level. want is what the reader asked of a change through its lens, or null. answers is the
+// question about one concept that the reply answers as a brief, or null.
 // typed is true when the round starts from the reader's own words, the only round in which ken keeps a note about them,
 // so text in a diff or a saved session cannot make the model keep one.
 export type Round = {
@@ -56,6 +57,7 @@ export type Round = {
 	tour: Tour | null
 	view: { within: string[]; text: string } | null
 	want: Want | null
+	answers: { concept: string; text: string } | null
 	step: 'talk' | 'risks'
 	passRejections: number
 	scope: { range: Range; work: string | null; hunks: Promise<ChangedHunk[]> | null } | null
@@ -71,12 +73,14 @@ export type Round = {
 // it. note: ken writes by itself in live mode, which tells the reader's map nothing. explain: the briefs of the parts
 // of a level, or of one of them, which tells the map nothing either, since the page marks each part as the reader
 // reaches it. change: a question about one change that plain code picked, so the reply is about that range whether or
-// not the model sends a scope, with what the reader wants of it.
+// not the model sends a scope, with what the reader wants of it. answer: a question about one concept, which the
+// reader pressed or typed in its brief, answered as a brief.
 // view: the reader asked, in the words of text, for another way to show the level whose paths are within.
 export type Asking =
 	| { kind: 'question' }
 	| { kind: 'note' }
 	| { kind: 'explain'; tour: Tour }
+	| { kind: 'answer'; concept: string; text: string }
 	| { kind: 'change'; range: Range; want: Want }
 	| { kind: 'view'; within: string[]; text: string }
 
@@ -87,6 +91,7 @@ export function freshRound(as: Asking, emit: Round['emit']): Round {
 		tour: as.kind === 'explain' ? as.tour : null,
 		view: as.kind === 'view' ? { within: as.within, text: as.text } : null,
 		want: as.kind === 'change' ? as.want : null,
+		answers: as.kind === 'answer' ? { concept: as.concept, text: as.text } : null,
 		step: 'talk',
 		passRejections: 0,
 		scope: as.kind === 'change' ? { range: as.range, work: null, hunks: null } : null,

@@ -290,35 +290,88 @@ export function explainQuestion(level: ExplainLevel): LensQuestion {
 	const part = (each: ExplainLevel['parts'][number], k: number) =>
 		`- Part ${k + 1}, ${each.name} (${each.paths.join(', ')})${each.job ? `: ${each.job}` : ''}`
 	const uses = arrows.map((arrow) => `${arrow.from} ${arrow.text} ${arrow.to}`)
-	const kinds = Object.entries(level.drawings).map(([kind, shows]) => `${kind} (${shows})`)
+	const others = beside.map((each) => `${each.name}${each.job ? ` (${each.job})` : ''}`)
 	return {
 		text: [
 			one ? `Explain ${one.name}, a part of ${where}` : `Explain the parts of ${where}`,
 			LIST_SAID,
 			...parts.map(part),
-			...(beside.length > 0
-				? [
-						`- Beside ${one ? 'it' : 'them'}: ${beside.map((each) => `${each.name}${each.job ? ` (${each.job})` : ''}`).join('; ')}.`,
-					]
-				: []),
+			...(others.length > 0 ? [`- Beside ${one ? 'it' : 'them'}: ${others.join('; ')}.`] : []),
 			...(uses.length > 0 ? [`- How the parts use each other: ${uses.join('; ')}.`] : []),
 			'',
 			`Read the code at HEAD (${level.head}) first. Then send one show call for each part above, in that order, with brief: the part's number and what follows.`,
-			'I think in pictures. I read a brief beside a picture of the parts: each thing to know is a short line with a small drawing, and I open the longer telling when I want words. Write short, literal words: the short word, the active verb, the name the code uses. No figure of speech.',
+			PICTURES,
 			'line: one sentence on what the part does for whoever uses it.',
-			`points: ${bounds.fewestPoints} to ${bounds.points} things to know, the ones a maintainer would tell a newcomer first: the main path from what comes in to what goes out, what the part refuses, what it keeps, and the one choice in its design. One idea each. Give each a line of at most ${bounds.lineWords} words that is a whole sentence; more, one sentence that says it in full; long, two or three sentences; a drawing; and quotes.`,
-			'A point says only what its quoted lines show. Quote code where the work happens: the loop, the check, the table, or the function with its body. Not a comment, and not a signature alone: ken sends back a point that quotes only comments. Give each quote its path. Name a file or a function in more or long, never in line.',
-			`drawing: pick the kind that shows the point: ${kinds.join('; ')}. Give count for steps and loop, lit for steps, and a label of at most ${bounds.label} characters when one word helps. Pick dot when no kind fits. Never change what a point says so that a drawing fits it.`,
-			`terms: up to ${bounds.terms} words the code uses that a newcomer would not know, such as the name of a type, a step or a kind of file. Give each its name as the code spells it, means: what it means in at most ${bounds.meansWords} words, and quote: one line where the code uses it. Leave out the names of the parts.`,
+			`points: ${bounds.fewestPoints} to ${bounds.points} things to know, the ones a maintainer would tell a newcomer first: the main path from what comes in to what goes out, what the part refuses, what it keeps, and the one choice in its design. ${pointRule(bounds)}`,
+			...pointRules(level),
+			`terms: up to ${bounds.terms} words the code uses that a newcomer would not know, such as the name of a type, a step or a kind of file. ${termRule(bounds)} Leave out the names of the parts.`,
 			`questions: ${bounds.fewestQuestions} or ${bounds.questions} questions I would ask next about the part, one sentence each, that the code can answer: what happens when something fails, why it is built this way, what a change would break.`,
 			'Say how two parts connect in the words of the arrows, such as "Tests runs scenarios through Eval harness". Never use the order of the list for it, such as "the next part": I open each brief on its own.',
-			'Never write that I understand, know or have learned something. Say what the code does.',
-			'If ken sends a point or a term back, fix it and send it again alone, in a brief with the same number.',
-			`Write nothing before the first brief, and one sentence after the last at most.`,
+			...LAST_RULES,
+			'Write nothing before the first brief, and one sentence after the last at most.',
 		].join('\n'),
 		empty: false,
 	}
 }
+
+// A question about one concept, pressed or typed in its brief. about is the concept as its brief names it: what kind
+// of thing it is, its name, its one line, the paths it holds when it is a part, and the lines its brief already tells,
+// so the answer does not say them again.
+export type AnswerAbout = {
+	asked: string
+	head: string
+	about: { kind: string; name: string; line: string; paths: string[]; told: string[] }
+	bounds: ExplainLevel['bounds']
+	drawings: Record<string, string>
+}
+
+export function answerQuestion(question: AnswerAbout): LensQuestion {
+	const { about, bounds } = question
+	const places = about.paths.length > 0 ? ` (${about.paths.join(', ')})` : ''
+	return {
+		text: [
+			question.asked,
+			LIST_SAID,
+			`- You ask this about the ${about.kind} ${about.name}${places}${about.line ? `: ${about.line}` : '.'}`,
+			...(about.told.length > 0 ? [`- Its brief already says: ${about.told.join(' ')}`] : []),
+			'',
+			`Read the code at HEAD (${question.head}) that decides the answer. Then answer with one show call, with brief: number 1 and what follows.`,
+			PICTURES,
+			'line: the answer in one sentence.',
+			`points: ${bounds.fewestPoints} to ${bounds.points} things to know that make up the answer, in the order they happen when the answer is a run of events. ${pointRule(bounds)}`,
+			...pointRules(question),
+			`terms: only a word the answer uses that a newcomer would not know, three at most. ${termRule(bounds)}`,
+			'Send no questions. Do not say again what the brief already says.',
+			'If the code does not decide the answer, say so in line, and send as points what the code does show.',
+			...LAST_RULES,
+			'Write nothing before the brief, and one sentence after it at most.',
+		].join('\n'),
+		empty: false,
+	}
+}
+
+// What every brief is told, whoever asks for it, so a part's brief and an answer read alike.
+const PICTURES =
+	'I think in pictures. I read a brief beside a picture of the parts: each thing to know is a short line with a small drawing, and I open the longer telling when I want words. Write short, literal words: the short word, the active verb, the name the code uses. No figure of speech.'
+
+const pointRule = (bounds: ExplainLevel['bounds']) =>
+	`One idea each. Give each a line of at most ${bounds.lineWords} words that is a whole sentence; more, one sentence that says it in full; long, two or three sentences; a drawing; and quotes.`
+
+function pointRules({ bounds, drawings }: Pick<ExplainLevel, 'bounds' | 'drawings'>): string[] {
+	const kinds = Object.entries(drawings).map(([kind, shows]) => `${kind} (${shows})`)
+	return [
+		'A point says only what its quoted lines show. Quote code where the work happens: the loop, the check, the table, or the function with its body. Not a comment, and not a signature alone: ken sends back a point that quotes only comments. Give each quote its path. Name a file or a function in more or long, never in line.',
+		`drawing: pick the kind that shows the point: ${kinds.join('; ')}. Give count for steps and loop, lit for steps, and a label of at most ${bounds.label} characters when one word helps. Pick dot when no kind fits. Never change what a point says so that a drawing fits it.`,
+	]
+}
+
+const termRule = (bounds: ExplainLevel['bounds']) =>
+	`Give each its name as the code spells it, means: what it means in at most ${bounds.meansWords} words, and quote: one line where the code uses it.`
+
+const LAST_RULES = [
+	'Never write that I understand, know or have learned something. Say what the code does.',
+	'If ken sends a point or a term back, fix it and send it again alone, in a brief with the same number.',
+]
 
 export function sinceWords(since: Since): string {
 	if (since.kind === 'days') return since.days === 1 ? 'in the last day' : `in the last ${since.days} days`

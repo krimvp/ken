@@ -4,6 +4,8 @@
 export { commitsSince } from './commits-since.ts'
 export { decide } from './decide.ts'
 export {
+	type AnswerAbout,
+	answerQuestion,
 	type ExplainLevel,
 	explainQuestion,
 	type LensFacts,
