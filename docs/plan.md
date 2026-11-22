@@ -85,6 +85,35 @@ The hash is what replaces the cursor. When the code under a topic changes, the e
 
 The map is a plain file the reader can open and correct, because it will sometimes be wrong. A question asked is evidence of interest, not proof of understanding.
 
+### What the reader looked at
+
+The map learns only from what the reader says: a question, a button, a tour stop. A part with no topic has nothing. So ken also keeps what the reader looked at, in `seen.jsonl` beside the map: a plain file on their machine that only grows, which they can open and correct. The page sends a line as the reader moves, and ken stamps it with the time and with HEAD. Each line says what they did and the paths they looked at:
+
+- `opened`: they picked the part;
+- `read`: they stayed on its explanation, or moved on from its tour stop;
+- `code`: they opened its files, quoted lines or a diff;
+- `said`: they pressed "I know this part";
+- `forgot`: they pressed "Not right", which takes back every line before it;
+- `change`: they read a step or a diff of a change that touched the paths. It keeps the change's range.
+
+A line counts for a box when one of its paths is the box's path or inside it. From the lines that count, and from the map's topics in the box, plain code gives every box one level, the strongest thing the reader did there:
+
+| Level  | On the page          | What put the reader there                                                           |
+| ------ | -------------------- | ----------------------------------------------------------------------------------- |
+| `new`  | New to you           | Nothing yet                                                                         |
+| `seen` | Seen                 | Opened the part, read a change that touched it, or pressed "Not right"              |
+| `read` | Read                 | Stayed on its explanation, moved on from its tour stop, or asked ken about it       |
+| `code` | Read the code        | Opened its files, quoted lines or a diff                                            |
+| `said` | You said you know it | Pressed "I know this part", or said "I know this" on every topic ken has in the box |
+
+Beside the level the box says why, in one sentence built by code that names what the reader did and the day. It says the day they last looked, and how many commits, merges left out, touched the box after the commit they last looked at. A box they looked at that commits touched since is stale. When history was rewritten and that commit is gone, the count is 0 and the sentence says ken could not find the commit.
+
+Looking is never understanding. ken says the reader read a part or opened its code. It says they know a part only when they said so.
+
+Opening a part does not move the commit they last looked at: only reading does. For a change the reader walked through, that commit is the change's own last commit when HEAD has it. The map keeps a day and no commit, so for a box that only the map speaks of, ken counts from where the reader's understanding of a changed topic starts.
+
+These lines also order what the page offers next, at most five things: the decisions that wait on the reader, each stale box with the most commits first, the reader's own work or the newest merge they have not walked through, the next stop of the tour, then the parts they never opened. No model takes part.
+
 ### Reader notes
 
 A reader note is one plain sentence ken keeps about the reader: how they want things shown, or what they already know. The model writes it to the reader, since the page shows it to them: "You are new to TypeScript, so I explain language features as they come up." The notes are personal, so they sit beside the map, in a plain file that only grows. A line adds a note, and another line removes it by its id.
@@ -99,7 +128,7 @@ The owner asked on 2026-11-17 for ken to "show me the state of the repo architec
 - **A picture on a wide screen.** Where the picture has room, 680 pixels on the home, the boxes sit in a grid of up to three columns, placed by trying every cell: a part that uses another sits above it where it can, the part with the most arrows goes to the middle, and an arrow through a box or across another arrow costs more. The arrows are drawn between the boxes with their heads, each with the number of its row in the list beside the picture, and a click on an arrow opens the line it rests on. On a narrow screen the boxes stand in one column, ordered so the fewest arrows cross, and each arrow bends out to the right of the column with its number on it. A label sits beside its arrow's line where there is room. It covers no box, no other label and no arrow's head, and at most half of its own line. A label that finds no such place shows its number alone. An arrow that is not part of the selection or the change is dashed and thinner, never fainter. To a screen reader the boxes and the arrows are two lists.
 - **Any commit.** The boxes are the folders at HEAD, or the named parts that fit the commit best. At another commit, git's own ids say which boxes hold the same content as now, which are different then from now, and which are not there yet. What sat in the scope then and in no box now is named.
 - **A change laid over it.** A range, a branch from where it left the main branch, one commit, or the reader's uncommitted work, through live mode's snapshot. With no change asked, the view shows where the reader is: their uncommitted work if there is any, else the branch HEAD is on against the main branch, else nothing. Another change sits behind "Another change", and the project at an older commit behind "See the project at an older commit". A change can also be asked as a span of time, `since:14d` or `since:2026-11-01`, and a span with no commit is refused. Each box shows the files it touched and the lines added and removed, and lists up to 20 of them with their own counts. A changed file in no box is named. Inside a part, the change counts only the files under that part. The change lists its commits, newest first and without merges, up to 50. The page can ask for the diff of up to 10 of its files, as hunks with their line numbers, cut after 400 changed lines. All of it comes from git, with no model.
-- **The reader's map on each box.** Each topic in the record sits in the boxes that hold a file it quotes. From its topics each box gets one standing: code the reader understood there changed since, they asked about none of it, they asked and have not said they understand all of it, or they said they understand it. The box's line and the one line over the view are written from that standing, so they never disagree. The line over the view names where to look next: first the boxes whose code changed since the reader understood it, then the boxes they never asked about, then the ones they have not finished.
+- **The reader's map on each box.** Each topic in the record sits in the boxes that hold a file it quotes. Each box says what ken thinks the reader knows of it, as "What the reader looked at" describes, and gets one standing from that same answer: the reader said they know it and commits touched it since, they never looked at it, they looked and have not said they know it, or they said they know it. The box's line and the one line over the view are written from that standing, so they never disagree. The line over the view names where to look next: first the boxes that changed since the reader said they know them, then the boxes they never looked at, then the ones they have not finished.
 
 - **ken's model names the parts.** "Ask ken to name these parts" on a folder level sends a question into the reader's thread with the folder split as the starting point and the layout rules. The model reads the project's own maps first (the README, design docs, a glossary, a table of modules) and sends `show` with a layout: 2 to 6 parts, each a name the owner would use, a one-sentence job and its paths, and at most 8 arrows. The rules ask it to file a file by what it does and not by its folder, to spend the parts on the code a user runs, with one part at most for what only keeps the repository going, and to draw the relation that matters when the code runs, with a verb that says only what its quoted lines show. ken checks it like any card, and a layout that fails goes back alone. Every path must hold a file at the commit and sit inside the level, and no two parts share a file. Every arrow quotes lines from a file of the part it starts at, and those lines name a folder or file of the part it ends at, as an import line does. Lines that are all comments do not count: a line whose trimmed start is //, /*, *, #, -- or ; is a comment, except C's #include and #import. ken checks the quote in git and the name by plain text, with no parser. An arrow the model cannot quote that way is left out: no arrow is a guess.
 - **Every version is kept.** A named level is a `layout` entry in the record, with git's id of each path at the commit it was named at. A new one replaces the one before and the old one stays. At the commit checked out the view shows the newest version, so a level drawn again with fewer parts shows as drawn. At an older commit it picks the version with the largest share of its parts the same there by those ids, the newest on a tie. With none, it shows the folder split.
@@ -109,7 +138,7 @@ The owner asked on 2026-11-17 for ken to "show me the state of the repo architec
 - **It says when it no longer fits.** A part whose ids differ from when it was named says so, one line over the view says the arrows that start at it may be out of date, and a folder that is new and in no part is named ("src/extra is new and in no part"). The view says who named the parts and at which commit, and offers "Name them again".
 - **The model speaks in the reader's names.** Each question's first message lists the top named level, one line per part, so the model's words use the parts the reader sees.
 
-Looking at the layout takes no model: each look reads git, the record and the map again. Only naming a level, or drawing it again, asks the model.
+Looking at the layout takes no model: each look reads git, the record, the map and what the reader looked at again. Only naming a level, or drawing it again, asks the model.
 
 This touches "no code index". The layout is not an index: it is a few folders per level, read from git when the reader looks, with no symbols, no call graph and no cache. A drawn level adds a few named boxes and quoted arrows, still not an index of the code.
 
@@ -238,7 +267,7 @@ The chat agent reads the repository and the stores directly. Anything it or a co
 | Chat agent        | An `aigent` session with one plugin, run by a small local server that also serves the page. It answers questions, picks the depth from the understanding map, and writes entries through tools.                                   |
 | Exploration tools | Tools inside the plugin: read a file at a commit, search the code, read git history, diffs and blame. They never change the project.                                                                                              |
 | Checks            | The quote checker, the git change facts with hunk coverage, and the validation of every store entry.                                                                                                                              |
-| Stores            | The project record and the understanding map, as plain append-only files.                                                                                                                                                         |
+| Stores            | The project record, the understanding map and what the reader looked at, as plain append-only files.                                                                                                                              |
 | Decision command  | A small command that any coding agent can call during its work to log a decision. It writes through the same checks.                                                                                                              |
 | Layout            | The project as a few boxes per level, at any commit, with a change and the reader's map laid over them. A level is the folders, or the parts ken's model named, with checked arrows.                                              |
 
@@ -343,6 +372,7 @@ Changed on 2026-11-22, for the owner to confirm.
 | Question       | Answer                                                                                                                                                                                                        |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | The tour order | From "outermost first, by the arrows" to the order ken's model lists the parts in, the heart of the product first, with tests and upkeep last. Two fresh reviewers found the old order put the product third. |
+| What ken keeps on the reader | ken now records what the reader looks at, on their machine, in `seen.jsonl` beside the map: the parts they open, the explanations they stay on, the code and the changes they read. Before, the map learned only from a question, a button or a tour stop. The page says where the file is, and every belief built from it has a "Not right" press. |
 
 ## Out of scope for the first version
 

@@ -46,7 +46,7 @@ export const MODULES: Record<string, Module> = {
 		packages: [],
 	},
 	layout: {
-		job: "The project's layout at a commit: a few boxes per level, the parts ken's model named or else the folders, which of them changed or are gone, what a change touched, and what the reader's map says about each.",
+		job: "The project's layout at a commit: a few boxes per level, the parts ken's model named or else the folders, which of them changed or are gone, what a change touched, what ken thinks the reader knows of each, and what they should look at next.",
 		imports: ['follow-up', 'live', 'map', 'record', 'repo'],
 		packages: [],
 	},
@@ -66,7 +66,7 @@ export const MODULES: Record<string, Module> = {
 		packages: ['mermaid'],
 	},
 	server: {
-		job: 'Serves the page on 127.0.0.1, runs the questions it sends and the notes of live mode one model call at a time.',
+		job: 'Serves the page on 127.0.0.1, runs the questions it sends and the notes of live mode one model call at a time, and writes down what the page says the reader looked at.',
 		imports: [
 			'agent',
 			'diagram',
