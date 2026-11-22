@@ -238,7 +238,9 @@ button.brand {
 	box-shadow: var(--shadow-sm);
 }
 
-.home-picture.is-reading {
+.home-picture.is-reading,
+.insp-scroll.is-reading,
+.insp-foot.is-reading {
 	opacity: 0.55;
 	pointer-events: none;
 	transition: opacity 0.15s 0.3s;

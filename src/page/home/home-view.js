@@ -72,12 +72,17 @@ export function showHome(root, home, env, redraw) {
 	fillDrawings(canvas, redraw)
 	if (home.selected?.kind === 'element') markPart(canvas, home.content.id, home.selected.number)
 	if (fill(region('redraw'), redrawBarHtml(home, env.off))) root.querySelector('#redraw-text').value = home.redraw.text
+	// The panel keeps its place when it is drawn again. With a stop open, that stop stays where it is on screen, also
+	// when words arrive over it, as a tour's do a moment after its level.
 	const inspector = region('inspector')
+	const open = () => inspector.querySelector('.path-step.is-on')
 	const scroll = inspector.querySelector('#insp-scroll')?.scrollTop ?? 0
+	const from = open()?.offsetTop ?? null
 	inspector.hidden = home.askOpen
 	if (fill(inspector, inspectorHtml(home, env))) {
 		const now = inspector.querySelector('#insp-scroll')
-		if (now) now.scrollTop = scroll
+		const to = open()?.offsetTop ?? null
+		if (now) now.scrollTop = from !== null && to !== null ? scroll + to - from : scroll
 	}
 	// A drawing that does not fit gives its place to its numbered list, as in a thread.
 	const tooWide = fillDrawings(inspector, redraw).filter((id) => !home.ui.tooWide.has(id))
