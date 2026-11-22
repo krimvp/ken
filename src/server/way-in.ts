@@ -1,7 +1,7 @@
 // The way in ken suggests when the reader opens the project: review their own work, catch up on what landed since
 // they last looked, or learn the project. Plain code picks it from git, the reader's history and their map, says why in
 // one sentence, and gives one short fact for each way in, which the page shows under each choice.
-import type { Landed } from '../follow-up/index.ts'
+import { at as atMoment, type Landed } from '../follow-up/index.ts'
 import type { Asked, History } from '../history/index.ts'
 import { type Change, type LayoutSources, lookAtLayout, readLayoutAsk } from '../layout/index.ts'
 import type { Repository } from '../repo/index.ts'
@@ -23,12 +23,12 @@ const SUBJECT_CHARS = 40
 // last question or their own last commit. A span of days alone does not say they looked.
 export async function suggestWayIn(
 	layout: LayoutSources,
-	reader: { history: History; questions: Pick<Asked, 'head'>[]; spans: Landed[] },
+	reader: { history: History; questions: Pick<Asked, 'head' | 'askedAt'>[]; spans: Landed[] },
 	now: Date,
 ): Promise<Suggested> {
 	const { repo, root } = layout
 	// With no change asked, the layout's change is the reader's own work: uncommitted, or their branch ahead of main.
-	const own = await readLayoutAsk(layout, {})
+	const own = await readLayoutAsk(layout, {}, now)
 	if (own.kind !== 'ok') throw new Error(`${root} has no HEAD commit to suggest a way in from`)
 	const { at, change } = own.ask
 	const [top, work, asked] = await Promise.all([
@@ -44,11 +44,17 @@ export async function suggestWayIn(
 		review: work?.short ?? (await newestOnMainLine(repo, at)),
 	}
 	if (work) return { suggested: 'review', why: work.why, facts }
-	if (reader.questions.findLast((each) => each.head !== null)?.head === at) {
-		return { suggested: 'learn', why: 'Nothing landed since your last question to ken.', facts }
+	// When that question was says why ken thinks so, to a reader who is back after weeks.
+	const last = reader.questions.findLast((each) => each.head !== null)
+	if (last?.head === at) {
+		const why = `Nothing landed since your last question to ken, ${atMoment(last.askedAt, now)}.`
+		return { suggested: 'learn', why, facts }
 	}
 	if (first && first.anchor !== 'days') return { suggested: 'catch-up', why: first.landed, facts }
-	const why = met ? 'Nothing landed since you last looked.' : 'You have not looked at this project with ken yet.'
+	// A span of days is no sign of when the reader looked, so with a history and no other span ken says it cannot tell.
+	const why = met
+		? 'ken cannot tell when you last looked, so it shows the project as it is.'
+		: 'You have not looked at this project with ken yet.'
 	return { suggested: 'learn', why, facts }
 }
 
@@ -74,11 +80,17 @@ async function newestOnMainLine(repo: Repository, head: Change['range']['head'])
 	const merge = commits.find((commit) => commit.parents.length > 1)
 	const newest = merge ?? commits[0]
 	if (!newest) return null
-	const pull = merge && /^Merge pull request (#\d+) from \S+$/.exec(merge.subject)
-	if (pull) return `Newest merge: pull request ${pull[1]}`
+	const pull = merge && pullRequestOf(merge.subject)
+	if (pull) return `Newest merge: pull request ${pull}`
 	const subject =
 		newest.subject.length > SUBJECT_CHARS ? `${newest.subject.slice(0, SUBJECT_CHARS - 3)}...` : newest.subject
 	return `Newest ${merge ? 'merge' : 'commit'}: ${subject}`
+}
+
+// The number of the pull request a merge brought in, such as "#107", read from the subject GitHub writes for it. ken
+// names such a merge by that number wherever it names the change, since the subject is mostly a branch name.
+export function pullRequestOf(subject: string): string | null {
+	return /^Merge pull request (#\d+) from \S+$/.exec(subject)?.[1] ?? null
 }
 
 function count(n: number, one: string): string {

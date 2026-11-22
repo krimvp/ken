@@ -10,6 +10,7 @@ export {
 	readModelConfig,
 } from './model-config.ts'
 export { type NoteFacts, noteQuestion } from './note-question.ts'
+export { changedHunks } from './reply/check-card.ts'
 export {
 	CARD_KINDS,
 	type Card,
@@ -22,7 +23,9 @@ export {
 	type Risk,
 	type Tour,
 	type TourStop,
+	WANTS,
+	type Want,
 	type Withdrawn,
 } from './reply/reply.ts'
-export type { Asking } from './reply/show-tool.ts'
+export { type Asking, TOUR_WORDS } from './reply/show-tool.ts'
 export { type Chat, startChat } from './start-chat.ts'

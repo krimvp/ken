@@ -23,16 +23,21 @@ export type TimeRange = {
 const DAY_MS = 86_400_000
 const MAX_DAYS = 3650
 
-// Reads "14d" or "2026-11-01" as the reader types it, and "question" as since their last question.
+// Reads "14", "14d" or "2026-11-01" as the reader types it, and "question" as since their last question.
 export function sinceOf(
 	text: string,
 	lastQuestion: { askedAt: string; head: string | null } | undefined,
 ): { kind: 'ok'; since: Since } | { kind: 'refused'; problem: string } {
-	const days = /^(\d+)d$/.exec(text.trim())
+	const days = /^(\d+)d?$/.exec(text.trim())
 	if (days && Number(days[1]) >= 1 && Number(days[1]) <= MAX_DAYS) {
 		return { kind: 'ok', since: { kind: 'days', days: Number(days[1]) } }
 	}
-	if (/^\d{4}-\d{2}-\d{2}$/.test(text.trim()) && !Number.isNaN(Date.parse(text.trim()))) {
+	if (/^\d{4}-\d{2}-\d{2}$/.test(text.trim())) {
+		// Date reads 2026-02-30 as the second of March, so a day counts only when it reads back as written.
+		const read = new Date(`${text.trim()}T00:00:00Z`)
+		if (Number.isNaN(read.getTime()) || read.toISOString().slice(0, 10) !== text.trim()) {
+			return { kind: 'refused', problem: `${text.trim()} is not a day in the calendar. Name one that is.` }
+		}
 		return { kind: 'ok', since: { kind: 'day', day: text.trim() } }
 	}
 	if (text.trim() === 'question') {
@@ -44,7 +49,7 @@ export function sinceOf(
 	}
 	return {
 		kind: 'refused',
-		problem: `Name a day such as 2026-11-01, or a number of days such as 14d, up to ${MAX_DAYS}d.`,
+		problem: `Name a day such as 2026-11-01, or a number of days such as 14, up to ${MAX_DAYS}.`,
 	}
 }
 

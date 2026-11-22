@@ -2,7 +2,7 @@
 // line that says ken hid the cards of a topic the reader knows, and the "Your map" view. ken works out each topic's state from the map
 // file and the code at HEAD; the page only shows it.
 import { partClass } from '../project/part-colours.js'
-import { day, esc, list, WHO, withCost } from './format.js'
+import { day, esc, list, RUN_COST, WHO, withCost } from './format.js'
 
 // A map line holds a day and no time: "on 16 Nov", or "earlier today". Its twin is onDay in src/follow-up/when.ts.
 export function onDay(date) {
@@ -97,7 +97,7 @@ export function mapBarHtml(q, t, ui, running) {
 		`<button class="link" data-act="map-${act}" data-turn="${t}" data-key="map-${act}-${t}" title="${means}"${off ? ' disabled' : ''}>${text}</button>`
 	return `<section class="map-bar small" aria-label="Your map">
 		<p>Tell ken how well you know ${named} now.</p>
-		<p class="map-buttons-line">${button('know', 'I know it', 'Later replies hide its cards until its code changes.')} <span aria-hidden="true">·</span> ${button('too-much', 'Too much detail', 'The next reply on it is shorter.')} <span aria-hidden="true">·</span> ${button('deeper', 'Go deeper', 'Asks for more detail. One model run.', running)}</p>
+		<p class="map-buttons-line">${button('know', 'I know it', 'Later replies hide its cards until its code changes.')} <span aria-hidden="true">·</span> ${button('too-much', 'Too much detail', 'The next reply on it is shorter.')} <span aria-hidden="true">·</span> ${button('deeper', 'Go deeper', `Asks for more detail. ${RUN_COST}`, running)}</p>
 		${said}
 	</section>`
 }
@@ -192,6 +192,6 @@ export function lensHtml(where, pick) {
 			<span class="area-row"><select id="who-${where}" name="author">${option('', 'by everyone', pick.author)}${people.join('')}</select><select name="since" aria-label="When">${spans.map(([value, text]) => option(value, text, since)).join('')}</select><button class="quiet-button" type="submit"${off}>Explain</button></span>
 		</form>
 		${pick.author ? '<p class="small muted lens-note">For one person, ken lists only the topics you know that their commits touched.</p>' : ''}
-		<p class="small muted lens-note">Each of these is one run of ken's model.</p>
+		<p class="small muted lens-note">Each of these is ${RUN_COST.replace(/^One/, 'one')}</p>
 	</div>`
 }

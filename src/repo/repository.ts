@@ -78,6 +78,14 @@ export interface Repository {
 	// The email of the person who runs ken in this repository, from git config. Null when none is set.
 	userEmail(signal?: AbortSignal): Promise<string | null>
 	log(range: Range, signal?: AbortSignal): Promise<{ kind: 'ok'; commits: Commit[] } | TooLarge>
+	// The range's newest commits without merges, at most limit of them, without their paths, so a long range stays under
+	// git's output limit. more counts the ones left out, and merges the merge commits of the range, which are counted
+	// apart since the commits a merge brings are listed themselves.
+	commitsIn(
+		range: Range,
+		limit: number,
+		signal?: AbortSignal,
+	): Promise<{ kind: 'ok'; commits: Omit<Commit, 'paths'>[]; more: number; merges: number } | TooLarge>
 	// The newest commit head reaches whose author has this email, whatever its case. Merged branches count. Null when
 	// there is none.
 	lastCommitBy(head: CommitHash, email: string, signal?: AbortSignal): Promise<Commit | null>
@@ -94,6 +102,8 @@ export interface Repository {
 	branch(signal?: AbortSignal): Promise<string | null>
 	// The project's local branches, the one with the newest commit first.
 	branches(signal?: AbortSignal): Promise<string[]>
+	// Whether the name is a branch: a local one, or one fetched from a remote, such as origin/feature.
+	isBranch(name: string, signal?: AbortSignal): Promise<boolean>
 	// git's id of the tree or file at each path at the commit, null where the path is not there. One git call.
 	objectIds(commit: CommitHash, paths: RepoPath[], signal?: AbortSignal): Promise<(ObjectId | null)[]>
 	// The files with uncommitted changes, ken's own .ken/ left out. It reads the working tree and the index and writes

@@ -1,42 +1,7 @@
-// The states of a question with no reply to show: the first visit, the model at work, and each way a question can end
-// without a reply. Also the list of steps, which the working state and "Show the steps" share.
-import { count, duration, esc, folderHtml, list, prose, withCost } from './format.js'
-
-const EXAMPLES = [
-	'What did the last commit do?',
-	'What did this branch do, and why?',
-	'What changed this week, and who changed it?',
-	'Why is the code laid out the way it is?',
-]
-
-// named says ken's model named the project's parts, so someone new can take a tour of them first.
-export function emptyHtml(project, canAsk, named) {
-	const tour =
-		canAsk && named
-			? `<div class="welcome-tour">
-		<button class="primary" data-act="tour" data-level="top" data-key="welcome-tour">Show me around</button>
-		<p class="welcome-tour-line">New here? ken's model shows you each part of the project in turn, with its code.</p>
-	</div>`
-			: ''
-	return `<section class="welcome">
-		<h1>${canAsk ? 'Ask about this project.' : 'ken has no model to ask.'}</h1>
-		<p class="lead">ken reads the code and the git history of ${folderHtml(project)}. ken's model answers as a colleague would. When a claim needs proof, it shows a card with the code it rests on, quoted from git.</p>
-		${tour}
-	</section>`
-}
-
-export function emptyAfterHtml(lenses) {
-	return `<section class="welcome-after">
-		<div class="limit">
-			<p>ken checks that every line a card quotes is in git, at the commit the card names.</p>
-			<p class="muted">It cannot check that a sentence about the code is true. The quote is there so you can judge.</p>
-		</div>
-		<h2>You could start with</h2>
-		<ul class="starts">${EXAMPLES.map((q) => `<li><button data-act="example" data-key="ex-${esc(q)}">${esc(q)}</button></li>`).join('')}</ul>
-		<h2>Or let ken write the question</h2>
-		${lenses}
-	</section>`
-}
+// The states of a question with no reply to show: the model at work, and each way a question can end without a reply.
+// Also the list of what the model did, which the working state and "Show the actions" share. The page calls each
+// thing the model did an action, since a walkthrough of a change has steps.
+import { count, duration, esc, list, prose, withCost } from './format.js'
 
 // The project record is ken's own word, so the first step that names it says what it is.
 const RECORD = 'the project record'
@@ -59,16 +24,17 @@ export function stepsHtml(steps, live = false) {
 
 const SHOWN_WHILE_WORKING = 8
 
-// typing is what the model writes now, before ken knows whether it is working text or the reply.
-export function workingHtml(q, t, open, seconds) {
+// typing is what the model writes now, before ken knows whether it is working text or the reply. doing says what the
+// run is for, where the page knows.
+export function workingHtml(q, t, open, seconds, doing = "ken's model is reading the project") {
 	const tools = q.steps.filter((step) => step.kind === 'tool').length
 	const hidden = open ? 0 : Math.max(0, q.steps.length - SHOWN_WHILE_WORKING)
 	const earlier =
 		hidden === 0
 			? ''
-			: `<p class="small"><button class="link" data-act="steps" data-turn="${t}" data-key="steps-${t}">Show ${count(hidden, 'earlier step', 'earlier steps')}</button></p>`
+			: `<p class="small"><button class="link" data-act="steps" data-turn="${t}" data-key="steps-${t}">Show ${count(hidden, 'earlier action', 'earlier actions')}</button></p>`
 	const steps = [...q.steps.slice(hidden), ...(q.typing ? [{ kind: 'text', text: q.typing }] : [])]
-	return `<div class="working"><p class="working-head" aria-live="polite"><span>ken's model is reading the project</span><span class="small muted" id="working-clock">${duration(seconds)} so far, ${count(tools, 'step', 'steps')}</span></p>
+	return `<div class="working"><p class="working-head"><span>${doing}</span><span class="small muted" id="working-clock">${duration(seconds)} so far, ${count(tools, 'action', 'actions')}</span></p>
 		${earlier}
 		${steps.length === 0 ? '<p class="small muted">Starting.</p>' : stepsHtml(steps, Boolean(q.typing))}
 		<p class="actions"><button class="quiet-button" data-act="stop" data-key="stop">Stop</button></p></div>`
@@ -122,7 +88,7 @@ export function endedHtml(q, t) {
 		</div>`
 	}
 	if (q.outcome === 'unasked') {
-		return `<div class="notice" role="status"><h3>ken did not ask its model</h3><p>${esc(q.error)}</p></div>`
+		return `<div class="notice" role="status"><h3>ken did not start its model for this request</h3>${q.error ? `<p>${esc(q.error)}</p>` : ''}</div>`
 	}
 	const said = {
 		stopped: ['You stopped this question', ''],
@@ -166,6 +132,6 @@ export function noModelHtml(model, hasHistory, heading) {
 			<li>Stop ken with Ctrl-C in the terminal where it runs.</li>
 			${settings}
 		</ol>
-		${hasHistory ? '<p class="muted">Until then you can still read your earlier questions under Your questions.</p>' : ''}
+		${hasHistory ? '<p class="muted">Until then you can still read what ken told you before, under Earlier replies.</p>' : ''}
 	</div>`
 }

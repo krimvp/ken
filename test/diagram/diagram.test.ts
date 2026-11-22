@@ -154,12 +154,25 @@ test('the Mermaid text of each kind has one line per element with its number, an
 			}
 		}
 		const collapsed = HOSTILE.map((name) => name.replaceAll(/\s+/g, ' '))
-		const expected = [
-			...collapsed.slice(0, 4).map((name, index) => `${index + 1}. ${name}`),
-			...collapsed.map((name, index) => `${index + 5}. ${name}`),
-		]
-		const numbered = labels.filter((label) => /^\d+\. /.test(label))
-		assert.deepEqual(numbered.sort(), expected.sort(), `${kind}: one label per element, with its number`)
+		const nodes = collapsed.slice(0, 4)
+		const isNumbered = (label: string) => /^\d+\. /.test(label)
+		// A sequence counts its messages from 1 and names its participants without a number.
+		const expected =
+			kind === 'sequence'
+				? collapsed.map((name, index) => `${index + 1}. ${name}`)
+				: [
+						...nodes.map((name, index) => `${index + 1}. ${name}`),
+						...collapsed.map((name, index) => `${index + 5}. ${name}`),
+					]
+		assert.deepEqual(
+			labels.filter(isNumbered).toSorted(),
+			expected.toSorted(),
+			`${kind}: one label per numbered element, with its number`,
+		)
+		if (kind === 'sequence') {
+			const named = labels.filter((label) => !isNumbered(label))
+			assert.deepEqual(named.toSorted(), nodes.toSorted(), 'a participant is labelled by its name alone')
+		}
 	}
 })
 

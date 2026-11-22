@@ -47,7 +47,7 @@ export const MODULES: Record<string, Module> = {
 	},
 	layout: {
 		job: "The project's layout at a commit: a few boxes per level, the parts ken's model named or else the folders, which of them changed or are gone, what a change touched, and what the reader's map says about each.",
-		imports: ['live', 'map', 'record', 'repo'],
+		imports: ['follow-up', 'live', 'map', 'record', 'repo'],
 		packages: [],
 	},
 	agent: {
@@ -61,7 +61,7 @@ export const MODULES: Record<string, Module> = {
 		packages: [],
 	},
 	page: {
-		job: "The page in the browser: plain HTML, CSS and JavaScript that shows a thread of replies, their steps and their checked cards, and the project's layout.",
+		job: "The page in the browser: plain HTML, CSS and JavaScript that shows the picture of the project's parts as its home, and a thread of replies, their steps and their checked cards.",
 		imports: [],
 		packages: ['mermaid'],
 	},

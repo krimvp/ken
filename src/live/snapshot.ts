@@ -80,6 +80,14 @@ export async function takeSnapshot(
 	}
 }
 
+// ken writes a snapshot's objects loose into its own folder and never packs them, so a file there says whether the store
+// holds a commit, with no git call.
+export async function holdsSnapshot(store: SnapshotStore, commit: string): Promise<boolean> {
+	if (!/^[0-9a-f]{40}(?:[0-9a-f]{24})?$/.test(commit)) return false
+	const file = path.join(store.objects, commit.slice(0, 2), commit.slice(2))
+	return (await stat(file).catch(() => null)) !== null
+}
+
 type Kept = Uncommitted & { mode: '100644' | '100755' }
 
 // The files a snapshot takes in, in the order git listed them, and how many it leaves out.

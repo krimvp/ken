@@ -168,7 +168,14 @@ export async function endReply(
 	const topics = [...new Set([...stops, ...items.flatMap(topicsOf)])]
 	if (round.asked) await gate.map?.learn('asked', topics, new Date(), signal)
 	return {
-		reply: { items, change, topics, ...(round.tour ? { tour: round.tour } : {}) },
+		reply: {
+			items,
+			change,
+			topics,
+			...(round.tour ? { tour: round.tour } : {}),
+			...(round.view ? { view: { within: round.view.within, asked: round.view.text } } : {}),
+			...(round.want ? { want: round.want } : {}),
+		},
 		recorded: recorded.kind === 'recorded' ? recorded.entries : [],
 		problems: recorded.kind === 'draft' ? [] : recorded.problems,
 	}
