@@ -124,8 +124,8 @@ export function lensPrompt(kind: 'brief' | 'answer' | 'typed' | 'layout', memory
 					'list_files lists the files under a folder, and search reads files.',
 				)
 			: LENS_EXPLORE
-	if (kind === 'layout') return [LENS_KEN, explore, ...asks, LAYOUT_REPLY, LENS_QUOTES, LENS_NOTES].join('\n\n')
-	if (kind === 'brief') return [LENS_KEN, explore, ...asks, LENS_BRIEF, LENS_QUOTES, LENS_NOTES].join('\n\n')
+	if (kind === 'layout') return [LENS_KEN, explore, ...asks, LAYOUT_REPLY, LENS_QUOTES].join('\n\n')
+	if (kind === 'brief') return [LENS_KEN, explore, ...asks, LENS_BRIEF, LENS_QUOTES].join('\n\n')
 	const quotes = LENS_QUOTES.replace('from read_file or search output', 'from read_file, search or memory_known output')
 	return [LENS_KEN, explore, ...asks, LENS_RECORD, LENS_BRIEF, quotes, kind === 'typed' ? NOTES : LENS_NOTES].join(
 		'\n\n',

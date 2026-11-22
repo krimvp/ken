@@ -3,8 +3,10 @@ import { test } from 'node:test'
 import { type JobAsk, type JobView, jobQueue, type Rank } from '../../src/jobs/index.ts'
 
 // A run the test ends by hand: each start is logged, and each run waits until the test lets it finish, or until the
-// queue stops it.
-function harness(options: { parallel?: number; fresh?: string[]; ranks?: Record<string, Exclude<Rank, 1>> } = {}) {
+// queue stops it. windDown is how long a run takes to end once stopped, as a git call or a model request does.
+function harness(
+	options: { parallel?: number; fresh?: string[]; ranks?: Record<string, Exclude<Rank, 1>>; windDown?: number } = {},
+) {
 	const started: string[] = []
 	const finishers = new Map<string, () => void>()
 	const ended: JobView[] = []
@@ -15,8 +17,10 @@ function harness(options: { parallel?: number; fresh?: string[]; ranks?: Record<
 			say(`${job.key} said`)
 			await new Promise<void>((resolve, reject) => {
 				finishers.set(job.key, resolve)
-				signal.addEventListener('abort', () => reject(new Error('aborted')))
+				const stopped = () => reject(new Error('aborted'))
+				signal.addEventListener('abort', () => setTimeout(stopped, options.windDown ?? 0))
 			})
+			return { kind: 'ran' }
 		},
 		fresh: async (job) => options.fresh?.includes(job.key) ?? false,
 		rankOf: (job) => options.ranks?.[job.key] ?? 4,
@@ -148,4 +152,147 @@ test('a reader who follows a job gets what it said so far; stopping stops their 
 	queue.want(ask('queued'), 'ken')
 	queue.stop('queued', 'stop')
 	assert.equal(queue.want(ask('queued'), 'ken'), null, 'ken does not queue again what the reader stopped before it ran')
+})
+
+test('a background job that gave way and takes time to stop holds nothing up: settled waits for its run alone, and close ends it', async () => {
+	const inTime = async (promise: Promise<unknown>) =>
+		await Promise.race([promise.then(() => 'ended'), new Promise((resolve) => setTimeout(resolve, 500, 'hung'))])
+	const first = harness({ windDown: 30 })
+	first.queue.want(first.ask('bg'), 'ken')
+	await first.settle()
+	first.queue.want(first.ask('asked'), 'reader')
+	assert.equal(await inTime(first.queue.settled()), 'ended', 'settled waits for the stopped run, not for the job')
+	assert.equal(first.state('asked'), 'running')
+	assert.equal(first.state('bg'), 'waiting')
+
+	const second = harness({ windDown: 30 })
+	second.queue.want(second.ask('bg'), 'ken')
+	await second.settle()
+	second.queue.want(second.ask('asked'), 'reader')
+	const following = second.queue.follow('bg', () => {})
+	assert.equal(await inTime(second.queue.close()), 'ended', 'close returns while the job winds down')
+	assert.deepEqual(await inTime(following), 'ended', 'whoever followed the job that gave way hears it end')
+	assert.deepEqual(second.state('bg'), 'failed')
+})
+
+test("a job the model refused is tried again after a growing wait, with the model's reason, and not given up", async (t) => {
+	t.mock.timers.enable({ apis: ['setTimeout', 'Date'] })
+	const started: string[] = []
+	let refuse = true
+	const queue = jobQueue<null, string>({
+		parallel: 1,
+		async run(job) {
+			started.push(job.key)
+			return refuse ? { kind: 'model-error', why: 'The model endpoint is busy: 429.' } : { kind: 'ran' }
+		},
+		fresh: async () => false,
+		rankOf: () => 4,
+	})
+	const flush = () => new Promise((resolve) => setImmediate(resolve))
+	const brief = { key: 'brief', kind: 'explain', concept: null, title: 'brief', order: 0, yields: true, work: null }
+	const shown = () => queue.view().findLast((job) => job.key === 'brief')
+	queue.want(brief, 'ken')
+	await flush()
+	assert.deepEqual(
+		[shown()?.state.kind, shown()?.reason, shown()?.retryIn],
+		['failed', 'The model endpoint is busy: 429.', 30],
+	)
+	assert.equal(queue.want(brief, 'ken'), null, 'ken does not queue it again before the wait')
+	t.mock.timers.tick(29_000)
+	await flush()
+	assert.equal(started.length, 1)
+	t.mock.timers.tick(1_000)
+	await flush()
+	assert.deepEqual([started.length, shown()?.retryIn], [2, 120], 'the second wait is longer')
+	refuse = false
+	t.mock.timers.tick(120_000)
+	await flush()
+	assert.deepEqual([started.length, shown()?.state.kind], [3, 'done'])
+})
+
+test('on an endpoint that serves one request at a time, KEN_PARALLEL above 1 fails a few runs, not every job', async () => {
+	const { ask, settle } = harness()
+	const finishing = new Map<string, () => void>()
+	let inFlight = 0
+	const busy = jobQueue<null, string>({
+		parallel: 3,
+		async run(job, signal) {
+			inFlight += 1
+			try {
+				if (inFlight > 1) return { kind: 'model-error', why: 'The model endpoint is busy: 429.' }
+				await new Promise<void>((resolve, reject) => {
+					finishing.set(job.key, resolve)
+					signal.addEventListener('abort', () => reject(new Error('aborted')))
+				})
+				return { kind: 'ran' }
+			} finally {
+				inFlight -= 1
+			}
+		},
+		fresh: async () => false,
+		rankOf: () => 4,
+	})
+	for (const key of ['a', 'b', 'c', 'd', 'e']) busy.want(ask(key), 'ken')
+	await settle()
+	const states = () => busy.view().map((job) => `${job.key}:${job.state.kind}`)
+	assert.equal(states().filter((each) => each.endsWith('failed')).length, 2, 'the two that found it busy')
+	assert.deepEqual(
+		states().filter((each) => each.endsWith('waiting')),
+		['d:waiting', 'e:waiting'],
+	)
+	finishing.get('a')?.()
+	await settle()
+	assert.ok(states().includes('d:running'), 'one runs at a time from then on')
+	assert.ok(states().includes('e:waiting'))
+})
+
+test('a background run that has gone on 20 seconds is not thrown away for the reader, who runs next', async (t) => {
+	t.mock.timers.enable({ apis: ['setTimeout', 'Date'] })
+	const flush = () => new Promise((resolve) => setImmediate(resolve))
+	const { queue, ask, started, state } = harness()
+	queue.want(ask('long'), 'ken')
+	await flush()
+	t.mock.timers.tick(20_000)
+	queue.want(ask('asked'), 'reader')
+	t.mock.timers.tick(1)
+	await flush()
+	assert.deepEqual([state('long'), state('asked'), started], ['running', 'waiting', ['long']])
+	assert.equal(queue.view().find((job) => job.key === 'asked')?.place, 1)
+})
+
+test('the queue says when each waiting job starts and when all end, from how long the last runs of a kind took', async (t) => {
+	t.mock.timers.enable({ apis: ['setTimeout', 'Date'] })
+	const flush = () => new Promise((resolve) => setImmediate(resolve))
+	const { queue, ask, finish } = harness()
+	queue.want(ask('first'), 'ken')
+	await flush()
+	assert.deepEqual(queue.left(), { jobs: 1, seconds: 60 }, 'a guess before any run of the kind')
+	t.mock.timers.tick(30_000)
+	const finished = finish('first')
+	t.mock.timers.tick(5)
+	await finished
+	for (const key of ['a', 'b', 'c']) queue.want(ask(key), 'ken')
+	await flush()
+	assert.deepEqual(
+		queue.view().flatMap((job) => (job.key === 'first' ? [] : [[job.key, job.startsIn]])),
+		[
+			['a', null],
+			['b', 30],
+			['c', 60],
+		],
+	)
+	assert.deepEqual(queue.left(), { jobs: 3, seconds: 90 })
+	t.mock.timers.tick(10_000)
+	assert.deepEqual(queue.left(), { jobs: 3, seconds: 80 })
+})
+
+test('no job starts while a running job makes one of the same things, as two briefs of one part would', async () => {
+	const { queue, ask, started, finish, settle } = harness({ parallel: 2 })
+	queue.want({ ...ask('every', 0), holds: ['part::Core', 'part::Command'] }, 'ken')
+	queue.want({ ...ask('core', 1), holds: ['part::Core'] }, 'ken')
+	queue.want({ ...ask('store', 2), holds: ['part::Store'] }, 'ken')
+	await settle()
+	assert.deepEqual(started, ['every', 'store'])
+	await finish('every')
+	assert.deepEqual(started, ['every', 'store', 'core'])
 })

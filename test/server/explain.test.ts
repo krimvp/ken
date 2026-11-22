@@ -224,6 +224,11 @@ test('explaining one part asks for that part alone, with the others beside it, a
 	assert.equal(question.split('\n')[0], 'Explain Store, a part of this project')
 	assert.deepEqual(question.match(/^- Part \d+, .+$/gm), ['- Part 1, Store (src/store): Saves what the core makes'])
 	assert.match(question, /^- Beside it: Core \(Runs the work\); Command .*; Tests .*\.$/m)
+	assert.match(
+		question,
+		/^questions: .*a person new to the part would ask.*in plain words.*Name a function, a field or a table only when/m,
+		'the questions a brief lists are for a newcomer, not about code names',
+	)
 
 	assert.equal((await briefOf('part::Store')).line, 'Holds the one function that saves.')
 	assert.deepEqual(await briefOf('part::Core'), core, 'the core keeps the brief of the run before')
