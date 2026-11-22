@@ -1,44 +1,67 @@
 // The runs of ken's model that the home starts. Each stays on the home: the page holds the run, and this module decides
-// what the home shows when it ends.
+// what the home shows when it ends. A run remembers where it started, as { kind, trail, change, wayIn }, and is judged
+// against that, since the reader may have moved on while it ran.
 import { besideCanvas, firstUnseen, pathOf, picturesOf } from './content.js'
+
+const same = (a, b) => a.length === b.length && a.every((each, i) => each === b[i])
+
+// Whether the reader is where a run started: on its level, and for a run about a change, with that change laid over.
+export function isThere(started, home) {
+	const onLevel =
+		started.trail.length === home.trail.length &&
+		started.trail.every((each, i) => same(each.within, home.trail[i].within))
+	const aboutChange = started.kind === 'story' || started.kind === 'walk'
+	return onLevel && (!aboutChange || started.change === home.change)
+}
+
+// Whether the saved question holds what its run was started for. Plain code on the server marks a tour and what a
+// run about a change was asked for, so this reads the reply and not the screen.
+function made(started, q) {
+	if (q.outcome !== 'answered' || !q.reply) return false
+	const has = (kind) => q.reply.items.some((item) => item.kind === kind)
+	return {
+		name: () => q.reply.items.some((item) => item.kind === 'card' && item.card.kind === 'layout'),
+		tour: () => Boolean(q.reply.tour),
+		story: () => q.reply.want === 'story',
+		walk: () => q.reply.want === 'walk' && has('step'),
+		redraw: () => true,
+	}[started.kind]()
+}
 
 // app is the page: its state, render, and send, which asks ken's model a question. loads reads the home again, and
 // stepTo opens a stop of the reading path.
 export function homeRuns({ state, render, send }, loads, stepTo) {
-	// A run of ken's model that stays on the home. The page calls ended when it is over.
 	function run(kind, lens) {
-		Object.assign(state.home, { ended: null, stepsOpen: false })
-		return send({ lens }, kind)
+		const home = state.home
+		Object.assign(home, { ended: null, stepsOpen: false })
+		return send({ lens }, { kind, trail: home.trail, change: home.change, wayIn: home.wayIn })
 	}
 
 	// A run the home started is over. The home reads the level, the questions and the notes again. What the run made
-	// shows in its place, and a run that made nothing the home can show says so, with the way to its full reply.
-	async function ended(kind, q) {
+	// shows in its place. A run that made nothing says so, with the way to its full reply. When the reader has moved to
+	// another level or change, the home says the run finished and where, and leaves them where they are.
+	async function ended(started, q) {
 		const home = state.home
-		// A diagram ken drew for the request opens on the canvas in place of the parts. A request that left only a note,
-		// or failed, changes no picture. Every other run is about the parts.
-		const drew = kind === 'redraw' && picturesOf(home.look, state.rows).some((picture) => picture.id === q.id)
-		const aboutParts = kind !== 'redraw' || state.rows.find((row) => row.id === q.id)?.view?.drew === 'parts'
-		const next = drew ? q.id : aboutParts ? null : home.shown
-		if (home.shown !== next) Object.assign(home, { shown: next, selected: null })
+		const ok = made(started, q)
+		const there = isThere(started, home)
+		// A diagram ken drew for a request opens on the canvas in place of the parts, and parts drawn again take the
+		// place of a drawn picture. A request that left only a note changes no picture.
+		const drew = ok && picturesOf(home.look, state.rows).some((picture) => picture.id === q.id)
+		if (ok && there && started.kind === 'redraw') {
+			const again = state.rows.find((row) => row.id === q.id)?.view?.drew === 'parts'
+			const next = drew ? q.id : again ? null : home.shown
+			if (home.shown !== next) Object.assign(home, { shown: next, selected: null })
+		}
 		await Promise.all([loads.loadLayout(), loads.loadNotes()])
 		await loads.settle()
-		const { content } = home
-		const made =
-			q.outcome === 'answered' &&
-			q.reply &&
-			{
-				name: () => q.reply.items.some((item) => item.kind === 'card' && item.card.kind === 'layout'),
-				tour: () => content.tour?.id === q.id,
-				story: () => content.story?.id === q.id,
-				walk: () => content.walk?.id === q.id,
-				redraw: () => true,
-			}[kind]()
-		if (!made) home.ended = { outcome: q.outcome, error: q.error, id: q.id }
-		else if (kind === 'redraw') home.said = { asked: home.redraw.asked, q: besideCanvas(q, drew) }
-		else if (kind === 'tour' && home.detail === 'big') {
+		if (!ok) home.ended = { kind: 'nothing', outcome: q.outcome, error: q.error, id: q.id }
+		else if (!there) {
+			const level = started.trail.length === 1 ? 'the whole project' : started.trail.at(-1).name
+			home.ended = { kind: 'elsewhere', run: started.kind, level, started }
+		} else if (started.kind === 'redraw') home.said = { asked: home.redraw.asked, q: besideCanvas(q, drew) }
+		else if (started.kind === 'tour' && home.detail === 'big') {
 			home.detail = 'how'
-			await stepTo(firstUnseen(home.look, pathOf(home.look, content)))
+			await stepTo(firstUnseen(home.look, pathOf(home.look, home.content)))
 		}
 		render()
 	}

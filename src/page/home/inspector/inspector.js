@@ -8,6 +8,7 @@ import { noModelHtml, workingHtml } from '../../views/states.js'
 import { changeName, stateLine } from '../canvas/canvas.js'
 import { besideCanvas, diagramOf, firstUnseen, pathOf, placeOf, shownDetail, stoodOn } from '../state/content.js'
 import { colourOf, DETAILS, levelName } from '../state/home-state.js'
+import { isThere } from '../state/runs.js'
 import { asksHtml, elementsView, factCard, lookInside, pathView, pickedElementHtml, usesHtml } from './reading-path.js'
 
 const LEGEND = "Plain text is what ken's model says. ken has not checked it. A boxed card is checked against git."
@@ -254,8 +255,8 @@ const DOING = {
 
 // A run of ken's model that the reader started here, while it runs: what ken is doing, for how long, and its steps.
 function workingView(home, running, seconds) {
-	const [title, doing] = DOING[running.onHome]
-	const asked = running.onHome === 'redraw' ? `<p class="insp-asked">"${esc(home.redraw.asked)}"</p>` : ''
+	const [title, doing] = DOING[running.onHome.kind]
+	const asked = running.onHome.kind === 'redraw' ? `<p class="insp-asked">"${esc(home.redraw.asked)}"</p>` : ''
 	return {
 		where: "A run of ken's model",
 		title,
@@ -273,9 +274,25 @@ const ENDED = {
 	answered: "ken's model replied, but with nothing this page can show here.",
 }
 
-// A run that ended with nothing to show here, in plain words, with the way to its full reply in the thread.
+// What a run made, said to a reader who has left the level or the change it was for.
+const FINISHED = {
+	name: (level) => `ken's model named the parts of ${level}.`,
+	tour: (level) => `ken finished the tour of ${level}.`,
+	story: () => "ken's model said what the change did.",
+	walk: () => "ken's model walked through the change.",
+	redraw: (level) => `ken answered your request about ${level}.`,
+}
+
+// A run of ken's model for another level or change than the one on screen: one quiet line, and the way back to it.
+function awayHtml(said, key) {
+	return `<p class="insp-away" role="status">${esc(said)} <button class="link" data-act="home-run-go" data-key="${key}-go">Go there</button>${key === 'ended' ? ' <button class="link" data-act="home-ended-close" data-key="ended-close">Close</button>' : ''}</p>`
+}
+
+// A run that ended and needs a word. One that made nothing to show says so, with the way to its full reply in the
+// thread. One that made it for a level the reader has left says where.
 function endedHtml(ended) {
 	if (!ended) return ''
+	if (ended.kind === 'elsewhere') return awayHtml(FINISHED[ended.run](ended.level), 'ended')
 	const open = ended.id
 		? `<button class="quiet-button" data-act="open" data-id="${esc(ended.id)}" data-key="ended-open">Open the full reply</button>`
 		: ''
@@ -308,6 +325,19 @@ function saidHtml(home) {
 	</section>`
 }
 
+// Something the server could not do that leaves the picture as it is, in plain words.
+function troubleHtml(trouble) {
+	if (!trouble) return ''
+	const again = trouble.again
+		? '<button class="quiet-button" data-act="home-retry" data-key="trouble-retry">Try again</button>'
+		: ''
+	return `<div class="notice insp-ended" role="alert">
+		<h3>${esc(trouble.said)}</h3>
+		<p>${esc(trouble.message)} The picture is from git, and is as it was.</p>
+		<p class="insp-actions">${again}<button class="quiet-button" data-act="home-trouble-close" data-key="trouble-close">Close</button></p>
+	</div>`
+}
+
 function viewOf(home, off) {
 	const { look, content, selected } = home
 	const big = shownDetail(home) === 'big'
@@ -329,7 +359,10 @@ function viewOf(home, off) {
 // setting, and asked whether the reader has saved questions.
 export function inspectorHtml(home, env) {
 	if (!home.look) return `<div class="insp-scroll"><p class="muted">Reading the project from git.</p></div>`
-	const working = env.running?.onHome
+	// A run shows in place of what it will fill only while the reader is where it started.
+	const run = env.running?.onHome ?? null
+	const working = run !== null && isThere(run, home)
+	const away = run !== null && !working ? awayHtml(`${DOING[run.kind][1]}, where you started it.`, 'run') : ''
 	const view = working ? workingView(home, env.running, env.seconds) : viewOf(home, env.off)
 	const whole =
 		home.content.kind === 'drawn'
@@ -341,7 +374,7 @@ export function inspectorHtml(home, env) {
 					: `Show all of ${esc(levelName(home))}`
 	const clear =
 		view.picked && !working ? `<button class="link" data-act="home-clear" data-key="home-clear">${whole}</button>` : ''
-	const notices = working ? '' : `${endedHtml(home.ended)}${saidHtml(home)}`
+	const notices = working ? '' : `${away}${troubleHtml(home.trouble)}${endedHtml(home.ended)}${saidHtml(home)}`
 	const noModel = env.model?.kind === 'unset' ? noModelHtml(env.model, env.asked, true) : ''
 	return `<div class="insp-scroll" id="insp-scroll">
 			<p class="insp-head"><span class="insp-detail">${DETAILS[shownDetail(home)]}</span><span class="insp-where">${view.where}</span>${clear}</p>

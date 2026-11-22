@@ -4,7 +4,7 @@ import { test } from 'node:test'
 import { fileRecordStore } from '../../src/record/index.ts'
 import { gitRepository } from '../../src/repo/index.ts'
 import { buildRepository } from '../fixtures/build-repository.ts'
-import { ask, json, openKen, readerHome } from '../fixtures/ken-server.ts'
+import { ask, call, json, openKen, readerHome } from '../fixtures/ken-server.ts'
 import { scriptedModel, type Turn } from '../fixtures/scripted-model.ts'
 
 // The page is plain JavaScript in the browser, so the test loads it by path and says what it expects to find.
@@ -26,9 +26,25 @@ const { inspectorHtml }: { inspectorHtml: (home: object, env: object) => string 
 const { canvasHtml }: { canvasHtml: (home: object, rows: object[]) => string } = await import(
 	path.join(HOME, 'canvas/canvas.js')
 )
-const { freshHome }: { freshHome: (stored: () => null, ui: object) => object } = await import(
+type Place = { name: string; within: string[] }
+type Home = {
+	trail: Place[]
+	change: string
+	look: { change: { range: { head: string } } | null } | null
+	reading: string | null
+	ended: { kind: string; level?: string } | null
+}
+const { freshHome }: { freshHome: (stored: () => null, ui: object) => Home } = await import(
 	path.join(HOME, 'state/home-state.js')
 )
+type Answer = { ok: boolean; body: object }
+type Loads = { loadLayout: () => Promise<boolean>; refresh: () => Promise<void> }
+const { homeLoads }: { homeLoads: (app: object) => Loads } = await import(path.join(HOME, 'state/loads.js'))
+const {
+	homeRuns,
+}: {
+	homeRuns: (app: object, loads: Loads, stepTo: () => void) => { ended: (started: object, q: object) => Promise<void> }
+} = await import(path.join(HOME, 'state/runs.js'))
 
 // A command that runs the core, a core that saves to a store, and a test of the core. The second commit touches only
 // the store, and the last one, the change the reader reviews, makes the core wait and the store keep.
@@ -191,7 +207,7 @@ test('for a toured level the inspector offers the stored tour at the big picture
 	assert.match(inspectorHtml(how, ENV), /data-key="home-nav-Next, stop 3"[\s\S]*?nav-name">Command</)
 	assert.match(
 		canvasHtml(how, rows),
-		/aria-pressed="true"><span class="home-badge">Stop 2<\/span>\s*<span class="pv-name">Core</,
+		/aria-pressed="true"><span class="pv-badge">Stop 2<\/span>\s*<span class="pv-name">Core</,
 	)
 
 	const code = open(inspectorHtml(await homeOn('change=none', 'code', picked), ENV))
@@ -224,6 +240,74 @@ test('for a walked change the inspector tells its story at the big picture, open
 	const code = open(inspectorHtml(await homeOn(`change=${REVIEWED}`, 'code', picked), ENV))
 	assert.match(code, /<span class="lc add">.*keep\(\)/)
 	assert.doesNotMatch(code, /wait\(\)/, "the other step's diff stays with its step")
+})
+
+// The page's own state around the home, with the server asked the way the page asks it.
+function pageOn(read: (url: string) => Promise<Answer>) {
+	const state = { home: freshHome(() => null, {}), rows }
+	const app = {
+		state,
+		render() {},
+		read,
+		send() {},
+		fromView: (view: { entry: object }) => view.entry,
+		stored: () => null,
+	}
+	const loads = homeLoads(app)
+	return { home: state.home, loads, runs: homeRuns(app, loads, () => {}) }
+}
+
+test('a level the server answers late does not replace the one the reader asked for after it', async () => {
+	const answers = { none: await lookAt('change=none'), reviewed: await lookAt(`change=${REVIEWED}`) }
+	const waiting: { url: string; answer: (answer: Answer) => void }[] = []
+	const { home, loads } = pageOn((url) => new Promise((answer) => waiting.push({ url, answer })))
+
+	home.change = 'none'
+	const first = loads.loadLayout()
+	home.change = REVIEWED
+	const second = loads.loadLayout()
+	assert.deepEqual(
+		waiting.map((each) => new URL(each.url, 'http://ken.invalid').searchParams.get('change')),
+		['none', REVIEWED],
+		'each request asks for what the reader wanted when they asked',
+	)
+	waiting[1]?.answer({ ok: true, body: answers.reviewed })
+	await second
+	waiting[0]?.answer({ ok: true, body: answers.none })
+	await first
+
+	assert.equal(home.look?.change?.range.head, head, 'the change the reader asked for last is the one on screen')
+	assert.equal(home.reading, null, 'and the home no longer says it is reading')
+})
+
+test('a run is judged against the level it started on: a reader who looked inside a part meanwhile is told it finished there, and one who stayed sees what it made', async () => {
+	const read = async (url: string) => {
+		const { status, text } = await call(server, url)
+		return { ok: status === 200, body: JSON.parse(text) }
+	}
+	const whole = { name: 'Whole project', within: [] }
+	const started = { kind: 'tour', trail: [whole], change: 'none' }
+	const tour = await saved(tourRow?.id ?? '')
+
+	const moved = pageOn(read)
+	moved.home.trail = [whole, { name: 'Core', within: ['src/core'] }]
+	await moved.loads.refresh()
+	await moved.runs.ended(started, tour)
+	assert.deepEqual(
+		[moved.home.ended?.kind, moved.home.ended?.level],
+		['elsewhere', 'the whole project'],
+		'the tour was made, so the home says where, and shows no failure',
+	)
+
+	const stayed = pageOn(read)
+	await stayed.loads.refresh()
+	await stayed.runs.ended(started, tour)
+	assert.equal(stayed.home.ended, null, 'the reader is where the tour is, so nothing needs saying')
+
+	const stopped = pageOn(read)
+	await stopped.loads.refresh()
+	await stopped.runs.ended(started, { ...tour, outcome: 'stopped', reply: null })
+	assert.equal(stopped.home.ended?.kind, 'nothing', 'a run that made nothing says so')
 })
 
 test('a level ken drew again has no tour until ken gives one for its new parts', async () => {

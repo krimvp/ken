@@ -198,10 +198,15 @@ function addEvent(q, event) {
 	}
 }
 
-async function getJson(url) {
+// What the server answers, whether or not it is ok. It throws only when the server sends no answer at all.
+async function read(url) {
 	const response = await fetch(url)
-	const body = await response.json()
-	if (!response.ok) throw new Error(body.message ?? `${url} answered ${response.status}`)
+	return { ok: response.ok, body: await response.json(), status: response.status }
+}
+
+async function getJson(url) {
+	const { ok, body, status } = await read(url)
+	if (!ok) throw new Error(body.message ?? `${url} answered ${status}`)
 	return body
 }
 
@@ -220,7 +225,7 @@ async function* linesOf(body) {
 }
 
 // body is a question, {question}, or a lens for ken to write the question from, {lens}. A question opens its thread.
-// onHome names a run the home started: the reader stays on the home, which shows the run and what it made.
+// onHome is where a run the home started began: the reader stays on the home, which shows the run and what it made.
 async function send(body, onHome = null) {
 	const question = body.lens ? LENS_TITLES[body.lens.kind] : body.question.trim()
 	if (question === '' || state.running || state.model?.kind !== 'ok') return
@@ -300,7 +305,7 @@ async function send(body, onHome = null) {
 	} finally {
 		q.live = false
 		q.typing = ''
-		state.running = null
+		// The run stays the running one until its result is on screen, so no other run can start in between.
 		await Promise.all([loadRows(), loadFollowUp()])
 		// ken saves a stopped question a moment after the page lets go of it, so the list is read once more.
 		if (controller.signal.aborted && state.rows.at(-1)?.question !== q.question) {
@@ -312,6 +317,7 @@ async function send(body, onHome = null) {
 		const stopped = controller.signal.aborted && last?.question === q.question
 		if (onHome !== null) await home.ended(onHome, saved ?? (stopped ? { ...q, id: last.id } : q))
 		else if (state.thread.includes(q) && stopped) await openQuestion(last.id)
+		state.running = null
 		render()
 	}
 }
@@ -1009,7 +1015,7 @@ async function followUpSaved(save, said) {
 	render()
 }
 
-const home = homeActions({ state, render, getJson, post, send, stored, store, fromView })
+const home = homeActions({ state, render, read, post, send, stored, store, fromView })
 
 const actions = {
 	...home.actions,

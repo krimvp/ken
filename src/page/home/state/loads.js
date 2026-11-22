@@ -4,43 +4,51 @@ import { learnParts } from '../../project/part-colours.js'
 import { contentOf, picturesOf, repliesOf } from './content.js'
 import { DETAILS, FIRST_DETAIL } from './home-state.js'
 
-// app is the page: its state, render, getJson, which reads from the server, fromView, which turns a saved question
-// into the page's own shape, and stored, which reads a value this browser kept.
-export function homeLoads({ state, render, getJson, fromView, stored }) {
-	const level = () => state.home.trail.at(-1)
+const same = (a, b) => a.length === b.length && a.every((each, i) => each === b[i])
+
+// app is the page: its state, render, read, which asks the server and gives back { ok, body } for any answer it
+// sends, fromView, which turns a saved question into the page's own shape, and stored, which reads a value this
+// browser kept.
+export function homeLoads({ state, render, read, fromView, stored }) {
+	// The number of the newest request for a level. An answer to an older one is dropped: the reader has moved on.
+	let asked = 0
+	// A request the server never answered is an answer too: one that is not ok, with the reason.
+	const ask = (url) => read(url).catch((error) => ({ ok: false, body: { message: error.message } }))
+
+	// A level as the server sent it becomes the level on screen.
+	function showLevel({ look, changes, wayIn }) {
+		const home = state.home
+		if (look.within.length === 0 && look.at === look.head) learnParts(look.boxes)
+		Object.assign(home, { look, changes, problem: null, change: look.change?.asked ?? 'none' })
+		if (wayIn) home.suggestion = wayIn
+	}
 
 	// One level from the server, for where the reader is now. A level the server refuses takes the last one off the
-	// screen and shows the reason in its place.
+	// screen and shows the reason in its place. While the server reads, the home says so: reading is "level" when the
+	// level on screen is another one, and "overlay" when it is the same level with another change or commit to come.
+	// False means a newer request took this one's place.
 	async function loadLayout() {
 		const home = state.home
+		const { within } = home.trail.at(-1)
 		const query = new URLSearchParams()
 		if (home.at.trim() !== '') query.set('at', home.at.trim())
-		for (const path of level().within) query.append('within', path)
+		for (const path of within) query.append('within', path)
 		if (home.change !== '') query.set('change', home.change)
-		try {
-			const response = await fetch(`/api/layout?${query}`)
-			const body = await response.json()
-			if (!response.ok) {
-				home.problem = { message: body.message, field: body.field ?? null }
-				return
-			}
-			const { look, changes, wayIn } = body
-			if (home.trail.length === 1 && home.at.trim() === '') learnParts(look.boxes)
-			Object.assign(home, { look, changes, problem: null, change: look.change?.asked ?? 'none' })
-			if (wayIn) home.suggestion = wayIn
-		} catch (error) {
-			home.problem = { message: error.message, field: null }
-		}
+		const mine = ++asked
+		home.reading = home.look && same(home.look.within, within) ? 'overlay' : 'level'
+		render()
+		const answer = await ask(`/api/layout?${query}`)
+		if (mine !== asked) return false
+		home.reading = null
+		if (answer.ok) showLevel(answer.body)
+		else home.problem = { message: answer.body.message, field: answer.body.field ?? null }
+		return true
 	}
 
 	// ken's notes about the reader. A server that keeps none answers 404, and the home then shows none.
 	async function loadNotes() {
-		try {
-			const response = await fetch('/api/notes')
-			state.home.notes = response.ok ? (await response.json()).notes : []
-		} catch {
-			state.home.notes = []
-		}
+		const answer = await ask('/api/notes')
+		state.home.notes = answer.ok ? answer.body.notes : []
 	}
 
 	// What ken has to say about the level on screen, from the saved questions, and the replies it names once read.
@@ -70,11 +78,9 @@ export function homeLoads({ state, render, getJson, fromView, stored }) {
 		if (unread.length === 0) return
 		await Promise.all(
 			unread.map(async (id) => {
-				try {
-					home.replies.set(id, fromView(await getJson(`/api/questions/${encodeURIComponent(id)}`)))
-				} catch (error) {
-					home.problem = { message: error.message, field: null }
-				}
+				const answer = await ask(`/api/questions/${encodeURIComponent(id)}`)
+				if (answer.ok) home.replies.set(id, fromView(answer.body))
+				else home.trouble = { said: 'ken could not read a reply it saved.', message: answer.body.message, again: true }
 			}),
 		)
 		find()
@@ -100,7 +106,7 @@ export function homeLoads({ state, render, getJson, fromView, stored }) {
 			change: wayIn === 'review' ? '' : 'none',
 		})
 		if (wayIn === 'catch-up') home.change = home.changes.find((choice) => choice.kind === 'since')?.change ?? 'none'
-		await loadLayout()
+		if (!(await loadLayout())) return
 		if (wayIn === 'review' && !home.problem && !home.look.change) {
 			const newest = home.changes.find((choice) => choice.kind === 'merge' || choice.kind === 'commit')
 			if (newest) {
@@ -120,5 +126,5 @@ export function homeLoads({ state, render, getJson, fromView, stored }) {
 		await settle()
 	}
 
-	return { loadLayout, loadNotes, settle, refresh, enter, start }
+	return { loadLayout, loadNotes, showLevel, settle, refresh, enter, start }
 }

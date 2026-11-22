@@ -94,7 +94,7 @@ function boxHtml(box, i, { look, detail, colour, badge, chosen }) {
 			? '<span class="cc-quiet">Not touched</span>'
 			: ''
 	const paths = !look.named || detail === 'code' ? pathsLine(box) : ''
-	const body = `${badge ? `<span class="home-badge">${badge}</span>` : ''}
+	const body = `${badge ? `<span class="pv-badge">${badge}</span>` : ''}
 		<span class="pv-name">${esc(box.name)}</span>
 		${box.job ? `<span class="pv-job">${prose(box.job)}</span>` : ''}
 		${paths}

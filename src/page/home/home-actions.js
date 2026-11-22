@@ -48,7 +48,7 @@ export function homeActions(app) {
 		try {
 			await post('/api/map', { signal, topics: stopTopics(step) })
 		} catch (error) {
-			state.problem = error.message
+			state.home.trouble = { said: 'ken could not save that to your map.', message: error.message, again: false }
 		}
 		await loadLayout()
 		render()
@@ -193,15 +193,16 @@ export function homeActions(app) {
 		'run-tour': () => run('tour', levelLens('tour')),
 		'run-story': () => run('story', { kind: 'change', change: state.home.look.change.asked, want: 'story' }),
 		'run-walk': () => run('walk', { kind: 'change', change: state.home.look.change.asked, want: 'walk' }),
+		// The server answers with the level as it is after the step back, so the home does not ask for it again.
 		async 'home-back'() {
 			const home = state.home
 			try {
-				await post('/api/layout/back', { within: level().within })
+				loads.showLevel(await post('/api/layout/back', { within: level().within }))
 				Object.assign(home, { backProblem: null, said: null })
 			} catch (error) {
 				home.backProblem = error.message
 			}
-			await refresh()
+			await settle()
 		},
 		async 'note-remove'(el) {
 			try {
@@ -229,6 +230,21 @@ export function homeActions(app) {
 		'home-ended-close'() {
 			state.home.ended = null
 			render()
+		},
+		// The way back to where a run started: the one under way, or the one that ended while the reader was elsewhere.
+		'home-run-go'() {
+			const home = state.home
+			const { trail, change, wayIn } = state.running?.onHome ?? home.ended.started
+			Object.assign(home, { trail, change, wayIn, at: '', shown: null, selected: null, ended: null })
+			return refresh()
+		},
+		'home-trouble-close'() {
+			state.home.trouble = null
+			render()
+		},
+		'home-retry'() {
+			state.home.trouble = null
+			return settle()
 		},
 		async 'ask-open'() {
 			const home = state.home

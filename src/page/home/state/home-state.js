@@ -23,6 +23,9 @@ export function freshHome(stored, ui) {
 		change: 'none',
 		at: '',
 		look: null,
+		// While the server reads a level: "level" when the one on screen is another, "overlay" when it is the same one
+		// with another change or commit to come.
+		reading: null,
 		changes: [],
 		suggestion: null,
 		problem: null,
@@ -39,9 +42,13 @@ export function freshHome(stored, ui) {
 		redraw: { text: '', asked: '', problem: null },
 		redrawOpen: false,
 		backProblem: null,
-		// ken's reply to the last request to show a level another way, and a run that ended with nothing to show.
+		// ken's reply to the last request to show a level another way.
 		said: null,
+		// A run that ended and needs a word: { kind: 'nothing', outcome, error, id } when it made nothing to show, and
+		// { kind: 'elsewhere', run, level, started } when it made it for a level or change the reader has left.
 		ended: null,
+		// Something the server could not do that leaves the picture as it is: { said, message, again }.
+		trouble: null,
 		stepsOpen: false,
 		storyOpen: false,
 		formOpen: false,

@@ -1,16 +1,18 @@
-// A level of parts as a picture: the boxes in a grid, the part with the most arrows in the middle, and the arrows drawn
-// between them once the page has laid the boxes out. The boxes stay a list in the page, so on a narrow screen and to a
-// screen reader the picture is the list of boxes and the numbered list of arrows under it. On a phone the boxes stand
-// in one column and the arrows bend out to its right. A level holds at most 6 parts and 8 arrows, so trying every
-// place for every box is cheap.
+// A level of parts as a picture: the boxes in a grid, a part that uses another above it, the part with the most arrows
+// in the middle, and the arrows drawn between them once the page has laid the boxes out. The boxes stay a list in the
+// page, so on a narrow screen and to a screen reader the picture is the list of boxes and the numbered list of arrows
+// under it. On a phone the boxes stand in one column and the arrows bend out to its right. A level holds at most 6
+// parts and 8 arrows, so trying every place for every box is cheap.
 
 const SVG = 'http://www.w3.org/2000/svg'
 
-// What a layout pays, in grid steps, for an arrow through a box, for two arrows that cross, and for a busy part away
-// from the middle. Length costs 1 per step.
-const COST = { through: 50, cross: 10, offCenter: 2 }
+// What a layout pays, in grid steps, for an arrow through a box, for two arrows that cross, for a busy part away from
+// the middle, for an arrow that points up, and for one that runs level. Length costs 1 per step. An arrow points from
+// the part that uses to the part it uses, so a reader finds the parts the others stand on in the bottom row.
+const COST = { through: 50, cross: 10, offCenter: 2, up: 20, level: 1 }
 
-// links are [from, to] pairs of box indexes. cells[i] is the row and column of box i.
+// links are [from, to] pairs of box indexes, from the part that uses to the part it uses. cells[i] is the row and
+// column of box i.
 export function placeParts(count, links) {
 	const rows = count <= 3 ? 1 : 2
 	const cols = count <= 3 ? Math.max(count, 1) : 3
@@ -36,7 +38,8 @@ export function placeParts(count, links) {
 }
 
 // The order of the boxes in one column, for a phone: the arrows bend out to the right of the column, so the order
-// pays for each arrow's length and for two arrows whose ends interleave, since those cross.
+// pays for each arrow's length and for two arrows whose ends interleave, since those cross. Of two orders that pay the
+// same, the one with fewer arrows pointing up wins.
 export function placeColumn(count, links) {
 	let best = null
 	const tryFrom = (order, free) => {
@@ -47,6 +50,7 @@ export function placeColumn(count, links) {
 			for (const [i, [a, b]] of spans.entries()) {
 				for (const [c, d] of spans.slice(i + 1)) if ((a < c && c < b && b < d) || (c < a && a < d && d < b)) cost += 3
 			}
+			cost += 0.01 * links.filter(([a, b]) => at.get(a) > at.get(b)).length
 			if (!best || cost < best.cost) best = { cost, order: [...order] }
 			return
 		}
@@ -79,6 +83,8 @@ function costOf(cells, links, degree, middle) {
 	for (const [a, b] of links) {
 		const [p, q] = [center(cells[a]), center(cells[b])]
 		const length = Math.hypot(q.x - p.x, q.y - p.y)
+		if (p.y > q.y) cost += COST.up
+		else if (p.y === q.y) cost += COST.level
 		if (around([a, b])) {
 			cost += length + 1
 			continue
@@ -188,7 +194,7 @@ export function drawPictures(root) {
 		svg.setAttribute('aria-hidden', 'true')
 		svg.setAttribute('width', `${frame.width}`)
 		svg.setAttribute('height', `${frame.height}`)
-		svg.innerHTML = `<defs>${['', 'hot', 'faded'].map(head).join('')}</defs>`
+		svg.innerHTML = `<defs>${['', 'hot'].map(head).join('')}</defs>`
 		for (const [i, link] of links.entries()) {
 			const curve = curves[i]
 			if (!curve) continue
@@ -198,10 +204,11 @@ export function drawPictures(root) {
 			const group = document.createElementNS(SVG, 'g')
 			group.setAttribute('class', `pv-link${link.open ? ' is-open' : ''}${faded ? ' is-faded' : ''}`)
 			group.dataset.index = `${i}`
-			group.innerHTML = `<path d="${path}" class="pv-line" marker-end="url(#pv-head${faded ? '-faded' : ''})"/><path d="${path}" class="pv-line-hot" marker-end="url(#pv-head-hot)"/>`
+			group.innerHTML = `<path d="${path}" class="pv-line" marker-end="url(#pv-head)"/><path d="${path}" class="pv-line-hot" marker-end="url(#pv-head-hot)"/>`
 			svg.append(group)
 		}
 		picture.prepend(svg)
+		placeBadges(picture, curves, frame)
 		if (picture.dataset.numbered === 'true') placeLabels(picture, links, curves, rects, frame, draw === 'column')
 		if (picture.dataset.still !== 'true') wire(picture, links)
 		atRest(picture)
@@ -337,61 +344,101 @@ function bezier([p0, p1, p2, p3], t) {
 	return { x: f('x'), y: f('y') }
 }
 
-// Each arrow's number and verb sit on its line: at the middle, or the point along it where the label covers the least
-// of the boxes, of the labels already placed and of the other lines, inside the picture. On a phone a label is the
-// number alone, as is one that finds no free spot, and the page lists the verbs beside the picture.
+// A box may carry a badge, such as its stop on a tour. It sits on the top right corner of the box, unless an arrow's
+// head lands there: then it takes the first corner where none does.
+function placeBadges(picture, curves, frame) {
+	const heads = curves.flatMap((curve) => (curve ? [curve[3]] : []))
+	for (const badge of picture.querySelectorAll('.pv-badge')) {
+		for (const corner of ['', ' is-left', ' is-under', ' is-under is-left']) {
+			badge.className = `pv-badge${corner}`
+			const r = badge.getBoundingClientRect()
+			const box = {
+				x: r.left - frame.left - HEAD,
+				y: r.top - frame.top - HEAD,
+				w: r.width + 2 * HEAD,
+				h: r.height + 2 * HEAD,
+			}
+			if (!heads.some((p) => inside(p, box))) break
+		}
+	}
+}
+
+// The length of an arrow's head, in pixels, and how close a label may come to a box.
+const HEAD = 14
+const CLEAR = 3
+
+// Each arrow's number and verb sit beside its line where there is room, and on it where there is none. A label never
+// covers an arrow's head, more than half of its own line, a box, or another label, and stays inside the picture. It
+// tries first on one line, then folded to a narrow column, then as the number alone. On a phone every label is the
+// number alone. The page lists every arrow's verb under the same number.
 function placeLabels(picture, links, curves, rects, frame, compact) {
 	const layer = document.createElement('div')
 	layer.className = 'pv-labels'
 	layer.setAttribute('aria-hidden', 'true')
 	picture.append(layer)
-	const taken = rects.map((r) => ({ x: r.x - 8, y: r.y - 8, w: r.w + 16, h: r.h + 16 }))
+	const taken = rects.map((r) => ({ x: r.x - CLEAR, y: r.y - CLEAR, w: r.w + 2 * CLEAR, h: r.h + 2 * CLEAR }))
+	const lines = curves.map((curve) => (curve ? samples(curve) : []))
+	const heads = lines.flatMap((line, k) =>
+		line.filter((p) => Math.hypot(p.x - curves[k][3].x, p.y - curves[k][3].y) <= HEAD),
+	)
+	const area = { w: frame.width, h: frame.height }
 	for (const [i, link] of links.entries()) {
 		if (!curves[i]) continue
 		const label = document.createElement('span')
-		label.className = `pv-label${link.open ? ' is-open' : ''}${compact ? ' is-compact' : ''}`
 		label.dataset.act = 'pv-arrow'
 		label.dataset.index = `${i}`
 		label.innerHTML = `<span class="pv-label-n">${i + 1}</span><span class="pv-label-text"></span>`
 		label.lastChild.textContent = link.text ?? ''
 		label.title = link.text ?? ''
 		layer.append(label)
-		// A label that finds no free spot on one line tries again folded to a narrow column.
-		const lines = curves.flatMap((curve, k) => (k === i || !curve ? [] : samples(curve)))
-		const area = { w: frame.width, h: frame.height }
-		const wide = spotFor(label, curves[i], taken, lines, area)
-		label.classList.add('is-narrow')
-		const narrow = wide.cover === 0 || compact ? wide : spotFor(label, curves[i], taken, lines, area)
-		let best = narrow.cover < wide.cover ? narrow : wide
-		label.classList.toggle('is-narrow', best === narrow && best !== wide)
-		// A label that still covers a quarter of its own size of boxes, lines or other labels shows its number alone.
-		// The page lists every arrow's verb under the same number.
-		if (best.cover > 0.25 * best.box.w * best.box.h && !compact) {
-			label.classList.add('is-compact')
-			const alone = spotFor(label, curves[i], taken, lines, area)
-			if (alone.cover < best.cover) best = alone
-			else label.classList.remove('is-compact')
+		const others = lines.flatMap((line, k) => (k === i ? [] : line))
+		let spot = null
+		for (const form of compact ? [' is-compact'] : ['', ' is-narrow', ' is-compact']) {
+			label.className = `pv-label${link.open ? ' is-open' : ''}${form}`
+			spot = spotFor(label, curves[i], { taken, own: lines[i], others, heads, area })
+			if (spot.fits) break
 		}
-		label.style.left = `${round(best.box.x)}px`
-		label.style.top = `${round(best.box.y)}px`
-		taken.push(best.box)
+		label.style.left = `${round(spot.box.x)}px`
+		label.style.top = `${round(spot.box.y)}px`
+		taken.push(spot.box)
 	}
 }
 
-// A label that sits over another arrow's line hides that line, so a point of another line under it costs as much as
-// a large overlap. A label past the picture's edge is cut off, so that costs more still.
-function spotFor(label, curve, taken, lines, area) {
+// The best place for a label along its arrow: beside the line on either side, or on it. A place fits when the label
+// there is inside the picture, covers no head and at most half of its own line, and touches no box and no other label.
+// Among places that fit, one that hides none of its own line and no other line wins, then one near the middle.
+function spotFor(label, curve, { taken, own, others, heads, area }) {
 	const w = label.offsetWidth
 	const h = label.offsetHeight
-	const spots = [0.5, 0.42, 0.58, 0.34, 0.66, 0.26, 0.74, 0.2, 0.8].map((t) => {
+	const spots = [0.5, 0.42, 0.58, 0.34, 0.66, 0.26, 0.74, 0.2, 0.8].flatMap((t) => {
 		const p = bezier(curve, t)
-		const box = { x: p.x - w / 2, y: p.y - h / 2, w, h }
-		const under = lines.filter((q) => q.x > box.x - 2 && q.x < box.x + w + 2 && q.y > box.y - 2 && q.y < box.y + h + 2)
-		const outside = box.x < 0 || box.y < 0 || box.x + w > area.w || box.y + h > area.h ? 1e6 : 0
-		const cover = taken.reduce((sum, r) => sum + overlap(box, r), 0) + 400 * under.length + outside
-		return { box, cover }
+		const along = bezier(curve, t + 0.01)
+		const length = Math.hypot(along.x - p.x, along.y - p.y) || 1
+		const across = { x: -(along.y - p.y) / length, y: (along.x - p.x) / length }
+		// Far enough across the line that the label's nearest edge clears it.
+		const out = (Math.abs(across.x) * w) / 2 + (Math.abs(across.y) * h) / 2 + 5
+		return [out, -out, 0].map((by) => {
+			const box = { x: p.x + across.x * by - w / 2, y: p.y + across.y * by - h / 2, w, h }
+			const under = (points) => points.filter((q) => inside(q, box)).length
+			const hidden = under(own)
+			const fits =
+				box.x >= 0 &&
+				box.y >= 0 &&
+				box.x + w <= area.w &&
+				box.y + h <= area.h &&
+				under(heads) === 0 &&
+				hidden <= own.length / 2 &&
+				taken.every((r) => overlap(box, r) === 0)
+			const cover = taken.reduce((sum, r) => sum + overlap(box, r), 0)
+			return { box, fits, cost: cover + 400 * under(others) + 100 * hidden + 40 * Math.abs(t - 0.5) }
+		})
 	})
-	return spots.find((spot) => spot.cover === 0) ?? spots.reduce((a, b) => (b.cover < a.cover ? b : a))
+	const fitting = spots.filter((spot) => spot.fits)
+	return (fitting.length > 0 ? fitting : spots).reduce((a, b) => (b.cost < a.cost ? b : a))
+}
+
+function inside(p, box) {
+	return p.x > box.x - 2 && p.x < box.x + box.w + 2 && p.y > box.y - 2 && p.y < box.y + box.h + 2
 }
 
 function samples(curve) {
@@ -413,8 +460,9 @@ export function atRest(picture) {
 }
 
 // Lights the boxes given and the arrows hot gives, by default those between two of them, or on a still picture those
-// that touch one. The other boxes lose their colour and their arrows fade. An empty set puts the picture back as it
-// was drawn.
+// that touch one. The other boxes lose their colour. An arrow that is not lit while others are, or that joins two
+// parts a change left alone, is drawn apart: dashed and thinner, never fainter. When that would be every arrow of the
+// picture, none is. An empty set puts the picture back as it was drawn.
 export function lightPicture(picture, boxes, hot = null) {
 	const links = JSON.parse(picture.dataset.links)
 	const still = picture.dataset.still === 'true'
@@ -425,8 +473,12 @@ export function lightPicture(picture, boxes, hot = null) {
 	for (const [i, each] of picture.querySelectorAll(':scope > .pv-boxes > li').entries()) {
 		each.classList.toggle('is-near', boxes.has(i))
 	}
+	const unlit = (each) => lit.size > 0 && !lit.has(Number(each.dataset.index))
+	const arrows = [...picture.querySelectorAll('.pv-link')]
+	const some = arrows.some((each) => !each.classList.contains('is-faded') && !unlit(each))
 	for (const each of picture.querySelectorAll('.pv-link, .pv-label')) {
 		each.classList.toggle('is-hot', lit.has(Number(each.dataset.index)))
+		each.classList.toggle('is-apart', some && (each.classList.contains('is-faded') || unlit(each)))
 	}
 }
 

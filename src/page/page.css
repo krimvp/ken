@@ -21,7 +21,8 @@
 	--color-add-ink: #135f3d;
 	--color-del-ink: #8f2a1b;
 	--color-dot: #d5d9e1;
-	--color-edge: #8b93a3;
+	/* An arrow's line: at least 3 to 1 against the canvas in both themes. */
+	--color-edge: #7f8798;
 	/* A part's colour, set by its .pc-N class: a soft fill, a line, and text that reads on the fill. */
 	--part-s: 62%;
 	--part-fill-l: 95.5%;
@@ -2096,9 +2097,11 @@ ul.left-out {
 	stroke: var(--color-accent);
 }
 
-.pv-link.is-faded .pv-line {
-	stroke: var(--color-box-border);
-	stroke-dasharray: 4 5;
+/* An arrow apart from what is lit, or between two parts a change left alone: dashed and thinner, in the same colour,
+   so it can still be followed. */
+.pv-link.is-apart .pv-line {
+	stroke-dasharray: 3 5;
+	stroke-width: 1.25;
 }
 
 .pv-head {
@@ -2107,10 +2110,6 @@ ul.left-out {
 
 .pv-head.hot {
 	fill: var(--color-accent);
-}
-
-.pv-head.faded {
-	fill: var(--color-box-border);
 }
 
 .pv-link:not(.is-open, .is-hot) .pv-line-hot {
@@ -2295,6 +2294,32 @@ button.pv-box:hover {
 	font-weight: 600;
 }
 
+/* A badge on a box, such as its stop on a tour: a pill in the accent colour, where an arrow's number is a dark
+   circle. It hangs on a corner of the box, and parts-picture.js picks the corner no arrow's head lands on. */
+.pv-badge {
+	position: absolute;
+	top: -0.8rem;
+	right: var(--space-3);
+	max-width: calc(100% - var(--space-5));
+	padding: 0 0.6em;
+	border-radius: 999px;
+	background: var(--color-accent);
+	color: var(--color-card);
+	font-size: var(--text-sm);
+	font-weight: 700;
+	line-height: 1.5;
+}
+
+.pv-badge.is-left {
+	right: auto;
+	left: var(--space-3);
+}
+
+.pv-badge.is-under {
+	top: auto;
+	bottom: -0.8rem;
+}
+
 /* The change card: what a change touched, over the project's top level of parts, at the top of a reply about it. The
    same picture as the home, smaller: the parts the change touched in their colour, the rest faded. */
 .change-card {
@@ -2403,7 +2428,7 @@ button.pv-box:hover {
 }
 
 /* Pointing at a box lights it, its arrows and the boxes they join, each ringed in its colour. The rest lose their
-   colour, ring and shadow, and their arrows fade but stay easy to follow. Every word keeps its full contrast. */
+   colour, ring and shadow, and their arrows turn dashed. Every word and every line keeps its full contrast. */
 .pv-picture.is-lit .pv-cell.is-near .pv-box {
 	border-color: var(--part-line);
 	box-shadow:
@@ -2419,24 +2444,11 @@ button.pv-box:hover {
 	box-shadow: none;
 }
 
-.pv-picture.is-lit .pv-link:not(.is-hot) {
-	opacity: 0.55;
-}
-
-/* Beside a walkthrough the picture shows only the arrows of the lit part, and the others faintly. */
-.pv-picture[data-still="true"]:not(.is-lit) .pv-link {
-	opacity: 0;
-}
-
-.pv-picture[data-still="true"].is-lit .pv-link:not(.is-hot) {
-	opacity: 0.12;
-}
-
-.pv-picture.is-lit .pv-label:not(.is-hot) {
+.pv-label.is-apart {
 	box-shadow: none;
 }
 
-.pv-picture.is-lit .pv-label:not(.is-hot) .pv-label-n {
+.pv-label.is-apart .pv-label-n {
 	background: none;
 	box-shadow: inset 0 0 0 1px var(--color-box-border);
 	color: var(--color-note);

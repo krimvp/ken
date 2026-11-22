@@ -523,26 +523,6 @@ button.brand {
 	outline-offset: 6px;
 }
 
-/* A box's stop on the tour, or the steps of the walkthrough that quote its files. */
-.home-badge {
-	position: absolute;
-	top: -0.8rem;
-	right: var(--space-3);
-	padding: 0 0.6em;
-	border: 1px solid var(--color-accent);
-	border-radius: 999px;
-	background: var(--color-label-bg);
-	color: var(--color-label-text);
-	font-size: var(--text-sm);
-	font-weight: 700;
-	line-height: 1.5;
-}
-
-.is-chosen .home-badge {
-	background: var(--color-accent);
-	color: var(--color-card);
-}
-
 .home-touched {
 	font-size: var(--text-note);
 	font-weight: 600;
