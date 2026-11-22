@@ -8,7 +8,7 @@ import { findRoot, gitRepository } from '../repo/index.ts'
 import { projectSessions } from '../transcripts/index.ts'
 import { SHORTEN_PROMPT, type Shorten, shortened, shortenQuestion } from './brief/shorten-lines.ts'
 import type { ChatEvent, Cost } from './chat-event.ts'
-import { briefPaths, type Lens, lensOf, readLimit } from './lens/lens.ts'
+import { briefParts, type Lens, lensOf, readLimit } from './lens/lens.ts'
 import { plainFacts } from './lens/plain-facts.ts'
 import type { ModelConfig } from './model-config.ts'
 import { readerIndex, readerNotes } from './reader-index.ts'
@@ -331,11 +331,11 @@ export async function startChat(options: {
 
 	// A brief's question ends with what plain code knows of its files and the most it may read.
 	async function briefFacts(as: Asking, signal?: AbortSignal): Promise<string> {
-		const paths = briefPaths(as)
+		const parts = briefParts(as)
 		const most = readLimit(as)
 		const head = await repo.resolve('HEAD', signal)
-		if (paths.length === 0 || head.kind !== 'ok') return ''
-		const facts = await plainFacts(repo, head.commit, paths, signal)
+		if (parts.length === 0 || head.kind !== 'ok') return ''
+		const facts = await plainFacts(repo, head.commit, parts, signal)
 		const limit =
 			most === null
 				? ''

@@ -26,10 +26,10 @@ export function readLimit(as: Asking): number | null {
 	return null
 }
 
-// The paths a brief is about, whose files plain code outlines for it.
-export function briefPaths(as: Asking): string[] {
-	if (as.kind === 'explain') return as.tour.stops.flatMap((stop) => stop.paths)
-	if (as.kind === 'answer') return as.paths
+// The parts a brief is about, whose files plain code outlines for it.
+export function briefParts(as: Asking): { name: string; paths: string[] }[] {
+	if (as.kind === 'explain') return as.tour.stops
+	if (as.kind === 'answer') return as.paths.length > 0 ? [{ name: as.concept, paths: as.paths }] : []
 	return []
 }
 

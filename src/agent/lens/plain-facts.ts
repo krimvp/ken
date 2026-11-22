@@ -4,6 +4,7 @@
 // quote 36, and every line it read was sent again with each later request.
 import { type CommitHash, parsePath, type Repository } from '../../repo/index.ts'
 
+// Per part, so each part of a level gets its share: a part of tests and vendored skills once filled the whole list.
 const MAX_FILES = 40
 const MAX_NAMES = 48
 const MAX_CHARS = 12_000
@@ -27,34 +28,57 @@ const DECLARATIONS: [RegExp, RegExp[]][] = [
 ]
 const NOT_NAMES = new Set(['if', 'for', 'while', 'switch', 'catch', 'function', 'return', 'else', 'with'])
 
+// parts are the parts a brief is about, each with its paths. Code comes before other files in each part's list.
 export async function plainFacts(
 	repo: Repository,
 	head: CommitHash,
-	paths: string[],
+	parts: { name: string; paths: string[] }[],
 	signal?: AbortSignal,
 ): Promise<string> {
 	const listed = await repo.listFiles(head, signal)
 	if (listed.kind !== 'ok') return ''
-	const inside = listed.paths.filter((file) => paths.some((each) => file === each || file.startsWith(`${each}/`)))
-	const lines: string[] = []
-	let chars = 0
-	for (const file of inside.slice(0, MAX_FILES)) {
-		const line = await fileLine(repo, head, file, signal)
-		if (chars + line.length > MAX_CHARS) break
-		lines.push(line)
-		chars += line.length
+	const share = Math.floor(MAX_CHARS / Math.max(1, parts.length))
+	const names = Math.max(8, Math.floor(MAX_NAMES / parts.length))
+	const told: string[] = []
+	for (const [at, part] of parts.entries()) {
+		const inside = listed.paths.filter((file) =>
+			part.paths.some((each) => file === each || file.startsWith(`${each}/`)),
+		)
+		const ordered = [...inside].sort((a, b) => rank(a) - rank(b))
+		const lines: string[] = []
+		let chars = 0
+		for (const file of ordered.slice(0, MAX_FILES)) {
+			const line = await fileLine(repo, head, file, names, signal)
+			if (chars + line.length > share) break
+			lines.push(line)
+			chars += line.length
+		}
+		const left = inside.length - lines.length
+		const named = parts.length > 1 ? [`Part ${at + 1}, ${part.name}:`] : []
+		told.push(...named, ...lines, ...(left > 0 ? [`- and ${left} more files`] : []))
 	}
-	const left = inside.length - lines.length
 	const words = await glossaryWords(repo, head, listed.paths, signal)
 	return [
 		'What plain code read of these files at HEAD: each file, its lines, and what it declares at which line.',
-		...lines,
-		...(left > 0 ? [`- and ${left} more files`] : []),
+		...told,
 		...(words ? ['', `The words the project's glossary (${words.file}) defines: ${words.words.join(', ')}.`] : []),
 	].join('\n')
 }
 
-async function fileLine(repo: Repository, head: CommitHash, file: string, signal?: AbortSignal): Promise<string> {
+// The project's own code first, then its other files, then what sits in a hidden or vendored folder.
+function rank(file: string): number {
+	const aside = file.split('/').some((part) => part.startsWith('.') || /^(third_party|vendor|node_modules)$/.test(part))
+	const code = DECLARATIONS.some(([kind]) => kind.test(file))
+	return (aside ? 2 : 0) + (code ? 0 : 1)
+}
+
+async function fileLine(
+	repo: Repository,
+	head: CommitHash,
+	file: string,
+	most: number,
+	signal?: AbortSignal,
+): Promise<string> {
 	const read = await readText(repo, head, file, signal)
 	if (read.kind === 'too-large') return `- ${file}, too large to read`
 	if (read.kind !== 'ok') return `- ${file}`
@@ -66,7 +90,7 @@ async function fileLine(repo: Repository, head: CommitHash, file: string, signal
 		const name = patterns.map((pattern) => line.match(pattern)?.[1]).find((each) => each && !NOT_NAMES.has(each))
 		if (name) names.push(`${name} ${at + 1}`)
 	}
-	const shown = names.slice(0, MAX_NAMES)
+	const shown = names.slice(0, most)
 	const more = names.length > shown.length ? `, and ${names.length - shown.length} more` : ''
 	return `- ${file}, ${text.length} lines${shown.length > 0 ? `: ${shown.join(', ')}${more}` : ''}`
 }
