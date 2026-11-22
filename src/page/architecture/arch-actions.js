@@ -2,11 +2,10 @@
 // breadcrumb, turn a layer on and pick what it shows, zoom and fit, and open the tool that asks ken's model to draw
 // the level another way. The level itself, its change and the runs of ken's model are the home's, from before the
 // pages: this module moves them and draws the canvas.
-import { isFile } from '../home/canvas/part-box.js'
 import { WHOLE } from '../home/state/home-state.js'
 import { fill } from '../shell/fill.js'
 import { architectureHtml, processesOf } from './architecture.js'
-import { fitJobs } from './blocks.js'
+import { fitJobs, isFileBlock } from './blocks.js'
 import { canvasCamera } from './camera.js'
 import { changeChoices } from './layers.js'
 
@@ -59,7 +58,7 @@ export function archActions(app) {
 		$('.k-crumb [aria-current]')?.focus({ preventScroll: true })
 		const { look } = state.home
 		// A level of files is as deep as the canvas goes: the reader came to the part's code.
-		if (trail.length > 1 && look?.boxes.length > 0 && look.boxes.every(isFile)) {
+		if (trail.length > 1 && look?.boxes.length > 0 && look.boxes.every((box) => isFileBlock(box, look))) {
 			void app.home.tell({ did: 'code', paths: trail.at(-1).within })
 		}
 	}

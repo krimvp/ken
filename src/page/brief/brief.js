@@ -124,10 +124,17 @@ function pictureHtml(brief, look) {
 function pointHtml(point, i, ui) {
 	const open = ui.openQuotes.has(i)
 	const refs = point.quotes.map((quote) => `${quote.path}:${quote.startLine}`)
+	const show = open
+		? 'Hide the lines'
+		: point.quotes.length === 1
+			? 'Show the line it rests on'
+			: `Show the ${point.quotes.length} quotes it rests on`
+	// In "Pictures first" the way to the quoted lines is the small mark at the end of the line, named for a screen
+	// reader, so no words stand under the line.
 	const ref =
 		point.quotes.length === 0
 			? ''
-			: `<button class="k-point-ref k-mono" data-act="brief-quote" data-index="${i}" data-key="point-${i}" aria-expanded="${open}"><span class="k-point-files">${esc(refs.join(', '))}</span><span class="k-point-show">${open ? 'Hide the lines' : point.quotes.length === 1 ? 'Show the line it rests on' : `Show the ${point.quotes.length} quotes it rests on`}</span></button>`
+			: `<button class="k-point-ref" data-act="brief-quote" data-index="${i}" data-key="point-${i}" aria-expanded="${open}" aria-label="${show}" title="${show}"><span class="k-point-files k-mono">${esc(refs.join(', '))}</span><span class="k-point-show">${show}</span>${icon('code', 'k-point-mark')}</button>`
 	const label = point.drawing?.label ? `<span class="k-drawing-label">${esc(point.drawing.label)}</span>` : ''
 	return `<li class="k-point">
 		<span class="k-point-draw">${drawingHtml(point.drawing)}${label}</span>
@@ -355,5 +362,5 @@ export function briefHtml(ui, found, ctx) {
 				: ui.on === 'deeper'
 					? deeperHtml(brief, ctx.inner)
 					: mainHtml(brief, { ui, env: ctx.env, prefs: ctx.prefs, look: ctx.look })
-	return `${head}<div class="k-brief-body text-${ctx.prefs.text} ${colourOf(brief)}" id="brief-scroll">${body}</div>${footHtml(brief, ctx.home, ui)}`
+	return `${head}<div class="k-brief-body text-${ctx.prefs.text} ${colourOf(brief) || 'is-plain'}" id="brief-scroll">${body}</div>${footHtml(brief, ctx.home, ui)}`
 }

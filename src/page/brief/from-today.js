@@ -97,7 +97,7 @@ export function fromToday({ read, rows, levelName }) {
 		const box = look?.boxes.find((each) => each.name === name)
 		if (!box) return null
 		const stop = (await tourOf(look)).find((each) => each.part === name) ?? null
-		const file = isFile(box)
+		const file = !look.named && isFile(box)
 		const points = stop ? pointsOf(stop) : []
 		const passing = (await processesOf(look)).filter((process) =>
 			diagramPath(process.diagram).some((step) => partOfStep(step, look) === box),
@@ -341,7 +341,7 @@ export function fromToday({ read, rows, levelName }) {
 		const parts = all.flatMap((look) =>
 			look.boxes.map((box) => ({
 				id: partId(look.within, box.name),
-				kind: isFile(box) ? 'file' : 'part',
+				kind: !look.named && isFile(box) ? 'file' : 'part',
 				name: box.name,
 				line: box.job ?? box.paths.join(', '),
 				level: box.knows.level,

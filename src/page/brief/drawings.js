@@ -80,7 +80,7 @@ const DRAW = {
 		return `<path d="M8 28H36C52 28 52 12 70 12M36 28C52 28 52 44 70 44" ${INK}/>${head(72, 12)}${head(72, 44)}<circle cx="82" cy="12" r="6" ${FULL}/><circle cx="82" cy="44" r="6" ${HOLLOW}/><circle cx="12" cy="28" r="5" ${HOLLOW}/>`
 	},
 	link() {
-		return `<rect x="10" y="17" width="42" height="22" rx="11" ${HOLLOW}/><rect x="44" y="17" width="42" height="22" rx="11" fill="none" stroke="currentColor" stroke-width="2"/><rect x="44" y="24" width="8" height="8" fill="var(--k-pc)" stroke="none"/><path d="M44 17a11 11 0 0 0 0 22" ${INK}/>`
+		return `<path d="M34 23H62M34 33H62" ${INK}/><rect x="10" y="16" width="24" height="24" rx="5" ${FULL}/><rect x="62" y="16" width="24" height="24" rx="5" ${HOLLOW}/>`
 	},
 	dot() {
 		return `<circle cx="48" cy="28" r="9" ${FULL}/>`

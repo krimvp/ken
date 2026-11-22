@@ -67,6 +67,11 @@
 	padding: 4px 20px 18px;
 }
 
+/* A concept that belongs to no part takes the brand's colour for its drawings. */
+.k-brief-body.is-plain {
+	--k-pc: color-mix(in srgb, var(--k-brand) 55%, var(--k-surface));
+}
+
 .k-brief-top {
 	display: flex;
 	align-items: center;
@@ -319,8 +324,13 @@
 	overflow-wrap: anywhere;
 }
 
+.k-point-mark {
+	display: none;
+	width: 17px;
+	height: 17px;
+}
+
 .k-point-show {
-	font-family: var(--font-text);
 	text-decoration: underline;
 	text-underline-offset: 3px;
 }
@@ -328,6 +338,41 @@
 .k-point-files {
 	display: none;
 	margin-right: 8px;
+}
+
+.k-quotes {
+	margin-top: 6px;
+}
+
+/* "Pictures first": a line beside its drawing, and a small mark that opens the lines it rests on. */
+.text-pictures .k-point-words {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: center;
+	gap: 0 8px;
+}
+
+.k .text-pictures .k-point-ref {
+	display: grid;
+	place-items: center;
+	width: 32px;
+	height: 32px;
+	margin: 0;
+	border-radius: 9px;
+	background: var(--k-sunk);
+	color: var(--k-ink);
+}
+
+.text-pictures .k-point-mark {
+	display: block;
+}
+
+.text-pictures .k-point-show {
+	display: none;
+}
+
+.text-pictures .k-quotes {
+	grid-column: 1 / -1;
 }
 
 .text-pictures :is(.k-point-more, .k-point-long),
@@ -352,16 +397,16 @@
 	width: 68px;
 }
 
+.text-words .k-map .k-map-box {
+	min-height: 42px;
+}
+
 .text-balanced .k-point-draw {
 	width: 92px;
 }
 
 .text-balanced .k-drawing {
 	width: 82px;
-}
-
-.k-quotes {
-	margin-top: 6px;
 }
 
 .k-quotes .q-source {
@@ -715,6 +760,15 @@ li.k-row {
 
 .k-way[aria-pressed="true"] .k-way-note {
 	color: inherit;
+}
+
+/* A question with no answer yet: its button stands under its words. */
+li.k-row.is-open {
+	flex-wrap: wrap;
+}
+
+.k .k-row.is-open .k-run-btn {
+	margin-left: 42px;
 }
 
 @media (max-width: 760px) {

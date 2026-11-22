@@ -8,10 +8,14 @@ import { KNOWN, levelLabel } from '../home/state/home-state.js'
 import { icon, levelMark, partIcon } from '../shell/icons.js'
 import { count, esc, prose } from '../views/format.js'
 
-// The icon of a block: a file, a folder where nobody named the parts, or the part's own.
+// A block is a file where git lists the level and the box holds that one file. A part ken's model named is a part,
+// also when one file is all it holds.
+export const isFileBlock = (box, look) => !look.named && isFile(box)
+
+// The icon of a block: the part's own, or a file or a folder where nobody named the parts.
 function iconOf(box, look) {
-	if (isFile(box)) return 'file'
-	return look.named ? partIcon(box.name) : 'folder'
+	if (look.named) return partIcon(box.name)
+	return isFile(box) ? 'file' : 'folder'
 }
 
 const sinceBadge = (knows) =>
@@ -38,7 +42,7 @@ function footHtml(box, { home, layer, stops }) {
 export function blockHtml(box, i, at, view) {
 	const { home, layer, stops, colour, picked } = view
 	const { look } = home
-	const file = isFile(box)
+	const file = isFileBlock(box, look)
 	const quiet = (layer === 'changes' && !box.touched) || (layer === 'processes' && stops.length === 0)
 	const classes = [
 		'k-blk',
