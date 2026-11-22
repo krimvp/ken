@@ -465,3 +465,10 @@
 		white-space: normal;
 	}
 }
+
+.k-concept-min {
+	flex: none;
+	margin-left: 8px;
+	color: var(--k-muted);
+	font-size: 14px;
+}

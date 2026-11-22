@@ -1,0 +1,108 @@
+// What the reader does on the You page: open a part's brief from their map, and correct what ken recorded, by taking
+// a line back or by saying what they know of its part. The parts inside each part they read are read from git once.
+import { KNOWN } from '../level/level-state.js'
+import { fill } from '../shell/fill.js'
+import { youPageHtml } from './you.js'
+
+export const freshYou = () => ({
+	// The line of what ken recorded whose "Not right" is open, or -1.
+	fixing: -1,
+	all: false,
+	problem: null,
+	// The names of the parts inside each part, by its name: null while read.
+	inside: new Map(),
+})
+
+// app is the page: its state, render, post, the store of briefs, and level, which reads what ken recorded again.
+export function youActions(app) {
+	const { state, render, post } = app
+	const you = state.you
+	const $ = (selector) => document.querySelector(selector)
+	const page = $('#pg-you')
+	const look = () => state.shell.top?.look ?? null
+
+	// The parts inside each part the reader has read, for its inner branches.
+	function readInside() {
+		for (const box of look()?.boxes ?? []) {
+			const read = KNOWN.indexOf(box.knows.level) >= KNOWN.indexOf('read')
+			if (!read || !box.opens || you.inside.has(box.name)) continue
+			you.inside.set(box.name, null)
+			void app.briefs.lookAt(box.paths).then((inner) => {
+				you.inside.set(box.name, inner?.boxes.map((each) => each.name) ?? [])
+				render()
+			})
+		}
+	}
+
+	async function enter() {
+		you.fixing = -1
+		const { loads } = app.level
+		await Promise.all([state.shell.top ? null : app.reread(), loads.loadReader(), loads.loadNotes()])
+		render()
+	}
+
+	function draw() {
+		readInside()
+		const inside = new Map([...you.inside].map(([name, names]) => [name, names ?? []]))
+		const project = state.project?.name ?? 'ken'
+		fill(page, youPageHtml({ look: look(), inside, home: state.home, you, project }))
+	}
+
+	async function saved(change) {
+		you.problem = null
+		try {
+			await change()
+		} catch (error) {
+			you.problem = `ken could not save that. ${error.message}`
+		}
+		you.fixing = -1
+		await Promise.all([app.reread(), app.level.loads.loadReader()])
+		render()
+		$('#recorded-title')?.focus({ preventScroll: true })
+	}
+
+	const lineAt = (el) => state.home.reader.learned[Number(el.dataset.index)]
+
+	const actions = {
+		'you-fix'(el) {
+			you.fixing = Number(el.dataset.index)
+			render()
+			$(you.fixing < 0 ? '#recorded-title' : '[data-key="you-undo"]')?.focus({ preventScroll: true })
+		},
+		'you-all'() {
+			you.all = !you.all
+			render()
+		},
+		// A line of the reader's map is taken back by its topic, and a line on what they looked at by its moment.
+		'you-undo'(el) {
+			const line = lineAt(el)
+			return saved(() =>
+				line.topic
+					? post('/api/map', { signal: 'forgot', topics: [line.topic] })
+					: post('/api/seen', { did: 'undo', at: line.at }),
+			)
+		},
+		// "You said you know it" is the reader's to say, so ken writes it as said.
+		'you-set'(el) {
+			const box = look()?.boxes.find((each) => each.name === el.dataset.name)
+			if (!box) return
+			const { level } = el.dataset
+			return saved(() =>
+				post(
+					'/api/seen',
+					level === 'said' ? { did: 'said', paths: box.paths } : { did: 'set', level, paths: box.paths },
+				),
+			)
+		},
+	}
+
+	function closeFix() {
+		if (you.fixing < 0) return false
+		you.fixing = -1
+		render()
+		$('#recorded-title')?.focus({ preventScroll: true })
+		return true
+	}
+
+	return { actions, enter, draw, closeFix }
+}

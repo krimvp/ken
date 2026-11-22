@@ -2,7 +2,7 @@
 // breadcrumb, turn a layer on and pick what it shows, zoom and fit, and open the tool that asks ken's model to draw
 // the level another way. The level itself, its change and the runs of ken's model are the home's, from before the
 // pages: this module moves them and draws the canvas.
-import { WHOLE } from '../home/state/home-state.js'
+import { WHOLE } from '../level/level-state.js'
 import { fill } from '../shell/fill.js'
 import { architectureHtml, processesOf } from './architecture.js'
 import { fitJobs, isFileBlock } from './blocks.js'

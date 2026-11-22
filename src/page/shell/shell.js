@@ -1,7 +1,7 @@
 // The frame of ken's page: a rail on the left with a page for each job, a bar on top with the page's name and the
 // search, and a panel for the settings. Under 760 pixels the rail lies along the foot as icons.
 import { TEXTS } from '../brief/brief.js'
-import { levelLabel } from '../home/state/home-state.js'
+import { levelLabel } from '../level/level-state.js'
 import { partClass, partOfFile } from '../project/part-colours.js'
 import { esc, prose } from '../views/format.js'
 import { icon, KIND_ICONS, LOGO, levelMark } from './icons.js'
@@ -29,6 +29,11 @@ export function railHtml({ on, askOpen, settingsOpen }) {
 			<button class="k-rail-btn" data-act="ask-open" data-key="ask-open" title="Ask ken" aria-expanded="${askOpen}">${icon('ask')}<span>Ask ken</span></button>
 			<button class="k-rail-btn" data-act="settings" data-key="settings" title="Settings" aria-expanded="${settingsOpen}">${icon('settings')}<span>Settings</span></button>
 		</div>`
+}
+
+// On a phone the rail holds the five pages along the foot, and "Ask ken" and the settings move up into the bar.
+export function barActsHtml({ askOpen, settingsOpen }) {
+	return `<button class="k-icon-btn" data-act="ask-open" data-key="bar-ask" aria-label="Ask ken" aria-expanded="${askOpen}">${icon('ask')}</button><button class="k-icon-btn" data-act="settings" data-key="bar-settings" aria-label="Settings" aria-expanded="${settingsOpen}">${icon('settings')}</button>`
 }
 
 export function barTitle({ page, view, project }) {

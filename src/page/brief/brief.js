@@ -4,8 +4,8 @@
 // always in the same place: what ken thinks the reader knows of it with "Not right", and the three ways on,
 // Sideways, Questions and Deeper. The setting for text decides how much stands under each line. A concept ken's
 // model has not explained yet still opens, with what git says of it and one button for the rest.
-import { KNOWN, levelLabel } from '../home/state/home-state.js'
-import { DOING } from '../home/state/runs.js'
+import { KNOWN, levelLabel } from '../level/level-state.js'
+import { DOING } from '../level/runs.js'
 import { partClass, partOfFile } from '../project/part-colours.js'
 import { placeParts } from '../project/parts-picture.js'
 import { icon, KIND_ICONS, levelMark } from '../shell/icons.js'
@@ -24,6 +24,7 @@ const KINDS = {
 	question: 'Question',
 	decision: 'Decision',
 	arrow: 'Arrow',
+	change: 'Change',
 }
 export const WAYS = {
 	sideways: ['Sideways', 'What it is next to'],
@@ -94,7 +95,7 @@ function mapHtml(brief, look) {
 	const lines = links.map(([a, b]) => `<path d="M${mid(cells[a])}L${mid(cells[b])}"/>`)
 	const inner = look.within.length > 0 ? partClass(partOfFile(look.within[0]) ?? '') : null
 	const boxes = look.boxes.map((box, i) => {
-		const lit = box.name === brief.name
+		const lit = brief.lit ? brief.lit.includes(box.name) : box.name === brief.name
 		return `<span class="k-map-box ${inner ?? partClass(box.name)}${lit ? ' is-lit' : ''}" style="grid-row:${cells[i].row + 1};grid-column:${cells[i].col + 1}"><span class="k-map-name">${esc(box.name)}</span></span>`
 	})
 	return `<div class="k-pic k-map" style="--cols:${cols}" role="img" aria-label="${esc(brief.name)} among the ${look.boxes.length} parts of its level"><svg viewBox="0 0 ${cols * 100} ${rows * 100}" preserveAspectRatio="none" aria-hidden="true">${lines.join('')}</svg>${boxes.join('')}</div>`
@@ -110,7 +111,7 @@ function stepsPicHtml(brief) {
 
 function pictureHtml(brief, look) {
 	if (brief.steps?.length > 0) return stepsPicHtml(brief)
-	if ((brief.kind === 'part' || brief.kind === 'file') && look) return mapHtml(brief, look)
+	if ((brief.kind === 'part' || brief.kind === 'file' || brief.lit) && look) return mapHtml(brief, look)
 	if (brief.usedIn?.length > 0) {
 		const parts = brief.usedIn.map(
 			(part) =>
@@ -222,6 +223,7 @@ function mainHtml(brief, { ui, env, prefs, look }) {
 		<p class="k-brief-line">${prose(brief.line)}</p>
 		${about}
 		${pictureHtml(brief, look)}
+		${brief.html ?? ''}
 		${brief.explained ? '' : unexplainedHtml(brief, env, ui)}
 		${points}
 		${steps}
@@ -342,6 +344,7 @@ function knowsHtml(brief, home, ui) {
 }
 
 function footHtml(brief, home, ui) {
+	if (brief.local) return ''
 	const counts = waysCount(brief)
 	const ways = Object.entries(WAYS).map(
 		([way, [name, note]]) =>

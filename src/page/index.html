@@ -6,15 +6,17 @@
 		<title>ken</title>
 		<link rel="stylesheet" href="tokens.css" />
 		<link rel="stylesheet" href="page.css" />
-		<link rel="stylesheet" href="home.css" />
 		<link rel="stylesheet" href="shell/shell.css" />
 		<link rel="stylesheet" href="start/start.css" />
 		<link rel="stylesheet" href="architecture/architecture.css" />
 		<link rel="stylesheet" href="brief/brief.css" />
+		<link rel="stylesheet" href="processes/processes.css" />
+		<link rel="stylesheet" href="you/you.css" />
+		<link rel="stylesheet" href="changes/changes.css" />
+		<link rel="stylesheet" href="ask/ask.css" />
 		<script type="module" src="main.js"></script>
 	</head>
 	<body>
-		<button type="button" class="quiet-button skip" data-act="skip" data-key="skip">Skip to the explanation</button>
 		<nav class="k k-rail" id="rail" aria-label="Pages"></nav>
 		<div class="k-main">
 			<header class="k k-bar">
@@ -24,23 +26,19 @@
 					<input id="search-text" data-key="search-text" type="search" autocomplete="off" spellcheck="false" placeholder="Find a part, a process or a term" aria-label="Find a part, a process or a term" role="combobox" aria-controls="found" aria-expanded="false" aria-autocomplete="list" />
 					<div class="k-found" id="found" role="listbox" aria-label="What search found" hidden></div>
 				</search>
+				<div class="k-bar-acts" id="bar-acts"></div>
 			</header>
 			<main class="k k-pg k-pg-home" id="pg-home" hidden></main>
 			<main class="k k-pg k-arch" id="pg-arch" hidden></main>
+			<main class="k k-pg k-procs" id="pg-proc" hidden></main>
+			<main class="k k-pg k-you-pg" id="pg-you" hidden></main>
+			<main class="k k-pg k-chg-pg" id="pg-changes" hidden></main>
 			<div class="k-old" id="pg-old" hidden>
 				<header class="top">
 					<span class="project" id="project"></span>
 					<div class="top-menu" id="menu"></div>
 				</header>
-				<div class="home" id="home">
-					<div class="home-toolbar" id="home-toolbar"></div>
-					<main class="home-canvas" id="home-canvas"></main>
-					<div class="home-readout" id="home-readout"></div>
-					<div class="home-redraw" id="home-redraw"></div>
-					<div class="home-detail" id="home-detail"></div>
-					<aside class="home-inspector" id="home-inspector" aria-label="Next for you, and what ken says about what you picked"></aside>
-				</div>
-				<div class="page" id="page" hidden>
+				<div class="page" id="page">
 					<main class="chat">
 						<div id="thread"></div>
 						<form class="composer" id="ask" autocomplete="off">
@@ -58,7 +56,7 @@
 			</div>
 		</div>
 		<aside class="k k-brief" id="brief" aria-label="The brief" hidden></aside>
-		<aside class="home-ask k-ask" id="home-ask" aria-label="Ask ken" hidden></aside>
+		<aside class="k k-brief k-ask" id="ask-drawer" aria-label="Ask ken" hidden></aside>
 		<div class="k k-settings" id="settings" role="dialog" aria-label="Settings" hidden></div>
 		<div id="tip" role="tooltip" hidden></div>
 		<p class="visually-hidden" id="run-status" role="status"></p>

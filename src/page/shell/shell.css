@@ -669,21 +669,16 @@ body {
 	font-size: 14px;
 }
 
-/* The "Ask ken" drawer keeps its form from before this look, and opens from the rail over any page. */
-.home-ask.k-ask {
-	position: fixed;
-	inset: 0 0 0 auto;
-	z-index: 44;
-	width: min(var(--k-drawer), 100vw);
-	border-left: 1px solid var(--k-line);
-	box-shadow: var(--k-shadow-up);
+.k-bar-acts {
+	display: none;
 }
 
-/* A narrow window: the rail lies along the foot as icons, each named for a screen reader and on a long press. */
+/* A phone: the rail lies along the foot as the five pages, each an icon over its name, and "Ask ken" and the
+   settings move up into the bar. */
 @media (max-width: 760px) {
 	:root {
 		--k-rail: 0px;
-		--k-foot: 58px;
+		--k-foot: 62px;
 	}
 
 	.k-rail {
@@ -698,22 +693,41 @@ body {
 	}
 
 	.k-logo,
-	.k-rail-btn span {
+	.k-rail-logo,
+	.k-rail-foot {
 		display: none;
 	}
 
-	.k-rail-links,
-	.k-rail-foot {
-		flex: none;
-		flex-direction: row;
+	.k-rail-links {
+		display: grid;
+		flex: 1;
+		grid-template-columns: repeat(5, minmax(0, 1fr));
 		gap: 2px;
 	}
 
 	.k .k-rail-btn {
 		justify-content: center;
-		width: 48px;
-		height: 48px;
+		width: auto;
+		min-width: 0;
+		height: 54px;
 		padding: 0;
+		font-size: 12.5px;
+	}
+
+	.k-rail-btn span {
+		max-width: 100%;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.k-bar-acts {
+		display: flex;
+		gap: 4px;
+	}
+
+	.k .k-bar-acts .k-icon-btn {
+		width: 44px;
+		height: 44px;
 	}
 
 	.k .k-rail-btn:is([aria-current="page"], [aria-expanded="true"]) {
@@ -725,8 +739,8 @@ body {
 	}
 
 	.k-bar {
-		grid-template-columns: auto minmax(0, 1fr);
-		gap: 12px;
+		grid-template-columns: auto minmax(0, 1fr) auto;
+		gap: 8px;
 		padding: 0 16px;
 	}
 
@@ -744,9 +758,5 @@ body {
 		left: 10px;
 		width: auto;
 		max-height: calc(100dvh - var(--k-foot) - 20px);
-	}
-
-	.home-ask.k-ask {
-		bottom: var(--k-foot);
 	}
 }

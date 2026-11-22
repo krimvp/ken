@@ -12,6 +12,7 @@ export const DOING = {
 	redraw: ['Drawing it another way', "ken's model is working on your request"],
 	explain: ['Explaining it', "ken's model is explaining it"],
 	answer: ['Answering it', "ken's model is answering your question"],
+	draw: ['Drawing a process', "ken's model is drawing the process"],
 }
 
 // Whether the reader is where a run started: on its level, and for a run about a change, with that change laid over.

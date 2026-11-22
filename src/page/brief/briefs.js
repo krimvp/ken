@@ -50,10 +50,15 @@ export function briefStore(app) {
 		return answer.ok ? answer.body.look : null
 	}
 
+	// A brief the page made itself, such as a step of a change with its diff. The server has none to read again.
+	function put(id, brief) {
+		kept.set(id, { kind: 'ok', brief })
+	}
+
 	function forget() {
-		for (const [id, have] of kept) kept.set(id, { ...have, old: have.kind !== 'reading' })
+		for (const [id, have] of kept) kept.set(id, { ...have, old: have.kind !== 'reading' && !have.brief?.local })
 		listed = null
 	}
 
-	return { get, concepts, forget, lookAt }
+	return { get, put, concepts, forget, lookAt }
 }

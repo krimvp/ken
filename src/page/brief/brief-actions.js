@@ -46,6 +46,8 @@ export function briefActions(app) {
 	function show(id, { inside = false, opener = null } = {}) {
 		const at = ui.trail.findIndex((step) => step.id === id)
 		const step = { id, name: readConcept(id)?.name ?? id }
+		app.ask.remember(id)
+		state.ask.open = false
 		if (!inside || ui.id === null) Object.assign(ui, { trail: [step], opener: opener ?? ui.opener })
 		else ui.trail = at >= 0 ? ui.trail.slice(0, at + 1) : [...ui.trail, step]
 		Object.assign(ui, {
@@ -75,6 +77,7 @@ export function briefActions(app) {
 	// The level the open concept stands in, when the page has it: the one on the canvas, or the top one.
 	function lookOf(id) {
 		const concept = readConcept(id)
+		if (open()?.lit) return state.shell.top?.look ?? null
 		if (concept?.kind !== 'part') return null
 		const same = (look) => look && look.within.join(',') === concept.within.join(',')
 		return [state.home.look, state.shell.top?.look].find(same) ?? null

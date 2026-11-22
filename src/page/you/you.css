@@ -1,0 +1,361 @@
+/* The You page: the reader's mind map of the project, large, and beside it what ken recorded. */
+.k-you-pg {
+	overflow-y: auto;
+}
+
+.k-you-page {
+	box-sizing: border-box;
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) 360px;
+	gap: 16px;
+	width: 100%;
+	max-width: 1400px;
+	margin: 0 auto;
+	padding: 4px 24px 24px;
+}
+
+.k-you-map {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	align-content: space-between;
+	align-self: start;
+	min-height: calc(100dvh - var(--k-bar) - 28px);
+	gap: 8px;
+	min-width: 0;
+}
+
+.k-mind {
+	position: relative;
+	justify-self: center;
+	width: min(100%, calc((100dvh - 250px) * 1000 / 640));
+	aspect-ratio: 1000 / 640;
+	font-size: 15px;
+}
+
+.k-mind-lines {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+}
+
+.k-mind-lines path {
+	fill: none;
+	stroke: var(--k-pc);
+	stroke-linecap: round;
+}
+
+.k-mind-lines path.is-new {
+	stroke: var(--k-edge);
+	stroke-dasharray: 2 7;
+}
+
+.k-mind-lines path.is-inner {
+	stroke-width: 2.5;
+}
+
+.k-mind-root,
+.k .k-mind-node,
+.k-mind-in {
+	position: absolute;
+	top: var(--y);
+	left: var(--x);
+	transform: translate(-50%, -50%);
+}
+
+.k-mind-root {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	width: 118px;
+	height: 118px;
+	border-radius: 50%;
+	background: var(--k-ink);
+	color: var(--k-surface);
+	text-align: center;
+}
+
+.k-mind-root b {
+	font-size: 20px;
+	line-height: 1.1;
+}
+
+.k-mind-root span {
+	font-size: 14px;
+}
+
+.k .k-mind-node {
+	display: grid;
+	gap: 3px;
+	width: 200px;
+	min-height: 64px;
+	padding: 10px 18px;
+	border: 3px solid var(--k-pc);
+	border-radius: 999px;
+	background: var(--k-soft);
+	color: var(--k-block-ink);
+	text-align: left;
+}
+
+.k .k-mind-node b {
+	overflow: hidden;
+	font-size: 16px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.k .k-mind-node.is-new {
+	border: 3px dashed var(--k-edge);
+	background: var(--k-surface);
+	color: var(--k-ink);
+}
+
+.k .k-mind-node.is-seen {
+	color: var(--k-ink);
+}
+
+.k .k-mind-node:is(.is-read, .is-code, .is-said) {
+	background: var(--k-pc);
+}
+
+.k .k-mind-node.is-code {
+	border-color: var(--k-edge);
+	box-shadow: 0 0 0 3px var(--k-edge);
+}
+
+.k .k-mind-node.is-said {
+	border: 4px solid var(--k-ink);
+}
+
+.k .k-mind-node:hover {
+	outline: 3px solid var(--k-ink);
+	outline-offset: 3px;
+}
+
+.k-mind-level {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 14px;
+	font-weight: 600;
+}
+
+.k-mind-badge {
+	position: absolute;
+	top: -14px;
+	left: 14px;
+}
+
+.k-mind-tick {
+	position: absolute;
+	top: -12px;
+	right: 6px;
+	display: grid;
+	place-items: center;
+	width: 28px;
+	height: 28px;
+	border-radius: 50%;
+	background: var(--k-ink);
+	color: var(--k-surface);
+}
+
+.k-mind-tick .k-i {
+	width: 16px;
+	height: 16px;
+	stroke-width: 3;
+}
+
+.k-mind-in {
+	max-width: 130px;
+	padding: 3px 12px;
+	overflow: hidden;
+	border: 2px solid var(--k-pc);
+	border-radius: 999px;
+	background: var(--k-tint);
+	font-size: 13px;
+	font-weight: 600;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.k-mind-key ul {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px 20px;
+	margin: 8px 0 0;
+	padding: 0;
+	list-style: none;
+	font-size: 14px;
+	font-weight: 600;
+}
+
+.k-mind-key li {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.k-mind-sample {
+	width: 40px;
+	height: 20px;
+	border: 2.5px solid var(--k-brand);
+	border-radius: 999px;
+	background: color-mix(in srgb, var(--k-brand) 22%, var(--k-surface));
+}
+
+.k-mind-sample.is-new {
+	border-style: dashed;
+	border-color: var(--k-muted);
+	background: none;
+}
+
+.k-mind-sample:is(.is-read, .is-code, .is-said) {
+	background: var(--k-brand);
+}
+
+.k-mind-sample.is-code {
+	box-shadow: 0 0 0 2.5px var(--k-brand);
+}
+
+.k-mind-sample.is-said {
+	border: 3.5px solid var(--k-ink);
+}
+
+.k-you-side {
+	display: grid;
+	align-content: start;
+	align-self: start;
+	max-height: calc(100dvh - var(--k-bar) - 28px);
+	overflow-y: auto;
+	gap: 12px;
+	min-width: 0;
+}
+
+.k-you-title {
+	margin: 0;
+	font-size: 20px;
+}
+
+.k-recs,
+.k-you-notes {
+	display: grid;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.k-rec {
+	display: grid;
+	grid-template-columns: 56px minmax(0, 1fr);
+	gap: 2px 10px;
+	padding: 10px 0;
+	border-bottom: 1px solid var(--k-line);
+}
+
+.k-rec .k-link {
+	grid-column: 2;
+	justify-self: start;
+	min-height: 32px;
+}
+
+.k-rec-day {
+	color: var(--k-muted);
+	font-size: 14px;
+}
+
+.k-rec-text .k-sw {
+	display: inline-block;
+	margin-right: 6px;
+	vertical-align: -1px;
+}
+
+.k-rec.is-fixing {
+	margin: 4px -10px;
+	padding: 10px;
+	border-radius: 14px;
+	background: var(--k-sunk);
+}
+
+.k-rec .k-ladder {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	grid-column: 1 / -1;
+	gap: 6px;
+	margin-top: 8px;
+}
+
+.k-rec-none {
+	display: grid;
+	justify-items: center;
+	padding: 24px 8px;
+	color: var(--k-muted);
+	text-align: center;
+}
+
+.k-rec-none p {
+	margin: 4px 0;
+}
+
+.k .k-rec-none b {
+	color: var(--k-ink);
+}
+
+.k-rec-none .k-i {
+	width: 36px;
+	height: 36px;
+}
+
+.k-you-notes li {
+	display: flex;
+	justify-content: space-between;
+	gap: 10px;
+	padding: 6px 0;
+}
+
+@media (max-width: 1100px) {
+	.k-you-page {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
+
+/* On a phone the map is one column: the project, then each part with its inner branches under it. */
+@media (max-width: 760px) {
+	.k-you-page {
+		padding: 4px 16px 20px;
+	}
+
+	.k-mind {
+		display: grid;
+		gap: 10px;
+		aspect-ratio: auto;
+	}
+
+	.k-mind-lines {
+		display: none;
+	}
+
+	.k-mind-root,
+	.k .k-mind-node,
+	.k-mind-in {
+		position: relative;
+		top: auto;
+		left: auto;
+		transform: none;
+	}
+
+	.k-mind-root {
+		justify-self: center;
+	}
+
+	.k .k-mind-node {
+		width: 100%;
+		margin-top: 8px;
+	}
+
+	.k-mind-in {
+		justify-self: start;
+		margin-left: 28px;
+		max-width: calc(100% - 28px);
+	}
+}
