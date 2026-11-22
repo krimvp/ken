@@ -110,7 +110,8 @@ const NO_VIEWS: LookViews = { world: null, runtime: null, drawn: null }
 // model left out of its parts. Of a change, files counts the changed files in the level's scope and outside names
 // those no box holds. commits are its commits, newest first, without merges, since the commits a merge brings are
 // listed themselves, and merges counts those merges. Uncommitted work has none: it ends at ken's snapshot, which is no
-// commit of the project. It lists at most MAX_COMMITS, and moreCommits counts the rest.
+// commit of the project. It lists at most MAX_COMMITS, moreCommits counts the rest, and oldest is the date of the
+// oldest commit, listed or not.
 export type LayoutLook = {
 	at: CommitHash
 	head: CommitHash
@@ -120,7 +121,14 @@ export type LayoutLook = {
 	arrows: LookArrow[]
 	loose: string[]
 	change:
-		| (Change & { files: number; outside: string[]; commits: LandedCommit[]; moreCommits: number; merges: number })
+		| (Change & {
+				files: number
+				outside: string[]
+				commits: LandedCommit[]
+				moreCommits: number
+				merges: number
+				oldest: string | null
+		  })
 		| null
 	next: Next
 	tour: TourStop[] | null
@@ -186,6 +194,7 @@ export async function lookAtLayout(
 					commits: commits.commits,
 					moreCommits: commits.more,
 					merges: commits.merges,
+					oldest: commits.oldest,
 				}
 			: null
 	const tour = level.named ? tourOrder(boxes.filter((box) => box.state !== 'gone')) : null
@@ -426,16 +435,16 @@ async function changedFiles(repo: Repository, range: Range, signal?: AbortSignal
 	return diff.files
 }
 
-type Landed = { commits: LandedCommit[]; more: number; merges: number }
+type Landed = { commits: LandedCommit[]; more: number; merges: number; oldest: string | null }
 
-const NO_COMMITS: Landed = { commits: [], more: 0, merges: 0 }
+const NO_COMMITS: Landed = { commits: [], more: 0, merges: 0, oldest: null }
 
 // A range git cannot list even without file names shows no commits rather than no layout.
 async function landedCommits(repo: Repository, range: Range, signal?: AbortSignal): Promise<Landed> {
 	const listed = await repo.commitsIn(range, MAX_COMMITS, signal)
 	if (listed.kind !== 'ok') return NO_COMMITS
 	const commits = listed.commits.map(({ hash, subject, author, date }) => ({ hash, subject, author, date }))
-	return { commits, more: listed.more, merges: listed.merges }
+	return { commits, more: listed.more, merges: listed.merges, oldest: listed.oldest }
 }
 
 function touchedIn(paths: string[], diff: FileDiff[]): Touched | null {

@@ -15,7 +15,7 @@ export type ReaderView = { file: string; learned: Learned[]; lastVisit: string |
 type Part = { name: string; paths: string[] }
 
 const MOST = 20
-// A line this old was written on an earlier visit, not on this one.
+// A gap this long between two lines ends a visit.
 const VISIT_MS = 30 * 60 * 1000
 
 const LOOKED: Record<Exclude<SeenLine['did'], 'set'>, (where: string) => string> = {
@@ -44,10 +44,15 @@ const SIGNALLED: Record<Evidence, (topic: string) => string> = {
 	toured: (topic) => `You met ${topic} on a tour.`,
 }
 
-// The newest line written on an earlier visit, or null on a first visit.
+// The last line of the visit before this one, or null on a first visit. This visit runs back from now through the
+// lines no more than VISIT_MS apart, so a long visit stays one visit.
 export function lastVisit(lines: SeenLine[], now: Date): SeenLine | null {
-	const earlier = lines.filter((line) => now.getTime() - Date.parse(line.at) > VISIT_MS)
-	return earlier.reduce<SeenLine | null>((best, line) => (best === null || line.at >= best.at ? line : best), null)
+	let after = now.getTime()
+	for (const line of lines.toSorted((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0))) {
+		if (after - Date.parse(line.at) > VISIT_MS) return line
+		after = Date.parse(line.at)
+	}
+	return null
 }
 
 // states is the map read now, which holds the newest line of each topic. parts are the top-level parts.

@@ -75,7 +75,10 @@ export function briefSchema<Q extends JsonObject>(quote: Q) {
 				items: {
 					type: 'object',
 					properties: {
-						name: { type: 'string', description: 'The word as the code spells it' },
+						name: {
+							type: 'string',
+							description: 'The word as people say it, in lower case with spaces, never a code name',
+						},
 						means: { type: 'string', description: `What it means, in at most ${meansWords} words` },
 						quote: quote,
 					},

@@ -3,7 +3,7 @@
 // up to HEAD, or the reader's uncommitted work, which live mode's snapshot turns into a commit ken can diff. With no change asked,
 // the view shows where the reader is: their uncommitted work if there is any, else the branch HEAD is on against the
 // main branch, else none.
-import { sinceOf, sinceWords, timeRange } from '../follow-up/index.ts'
+import { type SinceChoice, sinceOf, sinceWords, timeRange } from '../follow-up/index.ts'
 import { takeSnapshot } from '../live/index.ts'
 import { type CommitHash, parsePath, type Repository, resolveRange } from '../repo/index.ts'
 import type { Change, LayoutAsk, LayoutSources } from './layout-look.ts'
@@ -153,7 +153,7 @@ async function mainBranch(repo: Repository, signal?: AbortSignal): Promise<strin
 // commits it holds. The follow-up module makes those, and the server puts them before the ones made here.
 export type ChangeChoice =
 	| { kind: 'uncommitted' | 'merge' | 'commit' | 'branch'; change: string; name: string }
-	| { kind: 'since'; change: string; name: string; commits: number }
+	| SinceChoice
 
 // The changes the page offers to lay over the boxes: the reader's uncommitted work, the newest merges on the main line
 // (or its newest commits when it has no merge), and the branches other than the main one.

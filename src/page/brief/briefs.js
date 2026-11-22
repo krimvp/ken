@@ -2,6 +2,27 @@
 // ken's model has run or ken wrote a line about the reader: then a brief is read again when it is next shown, and the
 // one the page has stays on screen until the new one is here.
 
+// A brief the page makes itself, with what it has and nothing for the rest. trust says where its words come from.
+export const pageBrief = (id, kind, name, line, trust) => ({
+	id,
+	kind,
+	name,
+	line,
+	local: true,
+	minutes: Math.max(1, Math.round(line.split(/\s+/).length / 120)),
+	explained: true,
+	explain: null,
+	points: [],
+	terms: [],
+	questions: [],
+	decisions: [],
+	sideways: { uses: [], usedBy: [], processes: [] },
+	deeper: null,
+	steps: null,
+	knows: null,
+	trust,
+})
+
 // app gives read, which asks the server and answers { ok, body, status } whatever it says.
 export function briefStore(app) {
 	// By id: { kind: 'reading' }, { kind: 'ok', brief }, or { kind: 'none', message } for a concept ken has nothing on.
@@ -38,9 +59,14 @@ export function briefStore(app) {
 		return kept.get(id)
 	}
 
-	// Everything search can find: [{ id, kind, name, line, level }].
+	// Everything search can find: [{ id, kind, name, line, level }], or null when ken could not say. A failed read is
+	// not kept, so the next asks again.
 	function concepts() {
-		listed ??= ask('/api/concepts').then((answer) => (answer.ok ? answer.body : []))
+		listed ??= ask('/api/concepts').then((answer) => {
+			if (answer.ok) return answer.body
+			listed = null
+			return null
+		})
 		return listed
 	}
 
@@ -55,8 +81,9 @@ export function briefStore(app) {
 		kept.set(id, { kind: 'ok', brief })
 	}
 
+	// A read in flight is marked too, since it may have left before the change it must show.
 	function forget() {
-		for (const [id, have] of kept) kept.set(id, { ...have, old: have.kind !== 'reading' && !have.brief?.local })
+		for (const [id, have] of kept) kept.set(id, { ...have, old: !have.brief?.local })
 		listed = null
 	}
 

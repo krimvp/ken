@@ -194,21 +194,6 @@ export function stepCardsHtml(q, t, step, ui, shown = null) {
 	return step.cards.map(({ card, j }) => cardHtml(card, t, j, rows)).join('')
 }
 
-// A reply's words and the cards that belong to no step, in the order the model gave them, for the home: no chips,
-// no map buttons, and no checks. t names the reply in the keys of its cards.
-export function storyHtml(q, t, ui) {
-	const rows = rowsInPlace(q, ui)
-	return q.reply.items
-		.map((item, j) =>
-			item.kind === 'words'
-				? wordsHtml(item.text)
-				: item.kind === 'card' && item.step === undefined
-					? cardHtml(item.card, t, j, rows)
-					: '',
-		)
-		.join('')
-}
-
 // The model writes plain text: paragraphs, now and then a list or a block of code. Each becomes its own element, and
 // everything in it is escaped.
 export function wordsHtml(text) {

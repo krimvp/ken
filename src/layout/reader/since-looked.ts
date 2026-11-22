@@ -31,37 +31,45 @@ export async function sinceLooked(
 	}
 	const asked = await Promise.all(
 		drawn.map(async ({ inBox, looks }) => {
-			if (looks.lookedAt.length > 0) return { first: looks.lookedAt, any: [] }
+			if (looks.lookedAt.length > 0) return { looked: looks.lookedAt, any: [] }
 			const changed = inBox.flatMap(({ state }) =>
 				(state.kind === 'changed' || state.kind === 'long-ago') && state.changed.length > 0 ? [startOf(state)] : [],
 			)
-			return { first: [], any: (await Promise.all(changed)).flatMap((commit) => commit ?? []) }
+			return { looked: [], any: (await Promise.all(changed)).flatMap((commit) => commit ?? []) }
 		}),
 	)
-	const commits = [...new Set(asked.flatMap(({ first, any }) => [...first, ...any]))]
+	const commits = [...new Set(asked.flatMap(({ looked, any }) => [...looked.flat(), ...any]))]
 	if (commits.length === 0) return drawn.map(() => null)
 	const listed = await repo.landedAfter(head, commits, signal)
 	// shortcut: a log past git's output limit counts no commit since the reader looked. Say so on the box if a
 	// project ever reaches it.
 	if (listed.kind !== 'ok') return drawn.map(() => null)
 	return drawn.map(({ box }, index) => {
-		const { first, any } = asked[index] ?? { first: [], any: [] }
-		if (first.length > 0) return sinceOf(box.paths, first, listed.landed)
+		const { looked, any } = asked[index] ?? { looked: [], any: [] }
+		if (looked.length > 0) return sinceOf(box.paths, looked, listed.landed)
 		const counted = any.flatMap((commit) => {
-			const since = sinceOf(box.paths, [commit], listed.landed)
+			const since = sinceOf(box.paths, [[commit]], listed.landed)
 			return since === null || since === 'gone' ? [] : [since]
 		})
 		return counted.toSorted((a, b) => b.commits - a.commits)[0] ?? null
 	})
 }
 
-// landed is the repository's answer for every commit asked, null where HEAD does not reach it. Of lookedAt, the first
-// commit HEAD reaches counts.
-function sinceOf(paths: string[], lookedAt: string[], landed: Map<string, Commit[] | null>): Since {
+// landed is the repository's answer for every commit asked, null where HEAD does not reach it. Of each line's commits
+// the first HEAD reaches counts, and of the lines the one the reader saw the box newest at: the fewest commits landed
+// after it. So a change read today that ended a week ago does not undo the code read at HEAD yesterday. When HEAD
+// does not reach the newest line, ken cannot tell what the reader saw last.
+function sinceOf(paths: string[], lookedAt: string[][], landed: Map<string, Commit[] | null>): Since {
 	if (lookedAt.length === 0) return null
-	const commit = lookedAt.find((each) => landed.get(each))
-	const after = commit === undefined ? null : landed.get(commit)
-	if (commit === undefined || !after) return 'gone'
-	const commits = after.filter((each) => each.paths.some((file) => paths.some((place) => under(file, place)))).length
-	return { commit, commits }
+	const reached = lookedAt.map((line) => line.find((each) => landed.get(each)))
+	if (reached[0] === undefined) return 'gone'
+	const after = reached
+		.flatMap((commit) => {
+			const list = commit === undefined ? null : landed.get(commit)
+			return commit === undefined || !list ? [] : [{ commit, list }]
+		})
+		.toSorted((a, b) => a.list.length - b.list.length)[0]
+	if (!after) return 'gone'
+	const touched = (each: Commit) => each.paths.some((file) => paths.some((place) => under(file, place)))
+	return { commit: after.commit, commits: after.list.filter(touched).length }
 }

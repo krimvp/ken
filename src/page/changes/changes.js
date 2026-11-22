@@ -17,12 +17,23 @@ const SHOWN_OFFERS = 4
 const today = () => new Date().toISOString().slice(0, 10)
 const pullOf = (name) => name.match(/Merge pull request #(\d+)/)?.[1] ?? null
 
-// The span a change covers on the timeline: from its oldest commit to its newest, and to today for a span of time.
-// toToday says the change is a span of time.
-export function spanOf(change, toToday) {
-	const days = (change?.commits ?? []).map((commit) => commit.date.slice(0, 10)).sort()
-	if (days.length === 0) return null
-	return { from: days[0], to: toToday ? today() : days.at(-1) }
+const DAY = 86_400_000
+const dayOf = (time) => new Date(time).toISOString().slice(0, 10)
+
+// The span the change on show covers on the timeline, { from, to } as days. A span of time runs from the day it
+// begins to today; any other change from its oldest commit to its newest.
+export function spanOf(home) {
+	const change = home.look?.change
+	if (!change) return null
+	const choice = home.changes.find((each) => each.kind === 'since' && each.change === home.change)
+	const asked = home.change.match(/^since:(?:(\d{4}-\d{2}-\d{2})|(\d+)d?)$/)
+	const start = choice?.start ?? asked?.[1] ?? (asked?.[2] ? dayOf(Date.now() - Number(asked[2]) * DAY) : null)
+	if (start) return { from: start, to: today() }
+	const days = [...change.commits.map((commit) => commit.date), change.oldest ?? []]
+		.flat()
+		.map((date) => date.slice(0, 10))
+		.sort()
+	return days.length === 0 ? null : { from: days[0], to: days.at(-1) }
 }
 
 // Whether the change on show is a span of time, which runs to today.
@@ -30,17 +41,17 @@ export const isSpan = (home) =>
 	home.change.startsWith('since:') ||
 	home.changes.some((choice) => choice.kind === 'since' && choice.change === home.change)
 
-// The spans the page offers over the timeline: since the reader last looked, when anything landed since, the last 7
-// and 30 days, and the newest merge.
-export function spanChoices(changes, timeline) {
-	const looked = timeline?.lastVisit?.slice(0, 10)
-	const landed = looked && timeline.days.some((each) => each.day >= looked && each.commits > 0)
+// The spans the page offers over the timeline: the spans of time the server offers but the 90 days the whole
+// timeline shows, named by their days or by the moment they start, and the newest merge.
+export function spanChoices(changes) {
 	const since = changes
-		.filter((choice) => choice.kind === 'since' && !/90 days/.test(choice.name))
-		.map((choice) => ({ change: choice.change, name: choice.name.replace(/^The last (\d+ days).*$/, '$1') }))
+		.filter((choice) => choice.kind === 'since' && choice.days !== 90)
+		.map((choice) => ({
+			change: choice.change,
+			name: choice.days === null ? choice.name.slice(0, choice.name.lastIndexOf(': ')) : `${choice.days} days`,
+		}))
 	const merge = changes.find((choice) => choice.kind === 'merge')
 	return [
-		...(landed ? [{ change: `since:${looked}`, name: 'Since you looked' }] : []),
 		...since,
 		...(merge
 			? [
@@ -76,7 +87,8 @@ function numbersHtml(look, span, toToday) {
 				? dayText(span.from)
 				: `${dayText(span.from)} to ${dayText(span.to)}`
 	const big = (n, one, many) => `<p class="k-big"><b class="k-num">${n}</b> ${n === 1 ? one : many}</p>`
-	return `<div class="k-chg-numbers">${big(change.commits?.length ?? 0, 'commit', 'commits')}${big(parts, 'part', 'parts')}${big(change.files, 'file', 'files')}<span class="k-chg-when">${esc(when)}</span></div>`
+	const commits = change.commits.length + change.moreCommits
+	return `<div class="k-chg-numbers">${big(commits, 'commit', 'commits')}${big(parts, 'part', 'parts')}${big(change.files, 'file', 'files')}<span class="k-chg-when">${esc(when)}</span></div>`
 }
 
 function blocksHtml(look) {
@@ -98,6 +110,16 @@ function blocksHtml(look) {
 		${outside > 0 ? `<p class="k-muted k-chg-outside">${count(outside, 'changed file is', 'changed files are')} in no part.</p>` : ''}`
 }
 
+// The files a step shows only part of: their lines in the step beside all the change did to them. files are the
+// step's own counts.
+export function shownInPart(look, files) {
+	const all = look.boxes.flatMap((box) => box.touched?.paths ?? [])
+	return files.flatMap((file) => {
+		const whole = all.find((each) => each.path === file.path)
+		return whole && (whole.added > file.added || whole.removed > file.removed) ? [{ ...file, whole }] : []
+	})
+}
+
 // The story and the steps of the change on show, from what ken's model said of it before, or the offers to ask.
 function storyHtml(home, env) {
 	const { content, look } = home
@@ -106,8 +128,9 @@ function storyHtml(home, env) {
 		run && (run.kind === 'story' || run.kind === 'walk')
 			? `<p class="k-chg-run" role="status"><span class="k-spin" aria-hidden="true"></span> ${run.kind === 'walk' ? "ken's model is ordering the change into steps" : "ken's model is reading the change"}. <span class="k-num k-clock">${Math.round(env.seconds)} s so far</span> <button class="k-link" data-act="stop" data-key="chg-stop">Stop</button></p>`
 			: ''
-	const story = content.story?.q
-		? `<button class="k-chg-story" data-act="chg-story" data-key="chg-story">${icon('words')}<span><b>Its story</b><span>What it did, and why</span></span>${icon('right')}</button>`
+	// A saved story opens as it is, once its reply is read. Telling it again is a run of its own.
+	const story = content.story
+		? `<button class="k-chg-story" data-act="chg-story" data-key="chg-story"${content.story.q ? '' : ' disabled'}>${icon('words')}<span><b>Its story</b><span>${content.story.q ? 'What it did, and why' : 'Reading the story ken saved'}</span></span>${icon('right')}</button>`
 		: ''
 	const steps = content.walk?.q ? walkOf(content.walk.q.reply) : []
 	const rows = steps.map((step) => {
@@ -117,11 +140,13 @@ function storyHtml(home, env) {
 		const removed = files.reduce((sum, file) => sum + file.removed, 0)
 		const where =
 			parts.length > 0 ? `<span class="k-sw ${partClass(parts[0])}"></span>${esc(parts.join(', '))}` : 'In no part'
-		return `<li><button class="k-chg-step" data-act="chg-step" data-n="${step.number}" data-key="chg-step-${step.number}"><span class="k-chg-n k-num ${parts[0] ? partClass(parts[0]) : ''}">${step.number}</span><span class="k-chg-step-words"><b>${prose(stepWords(step).title)}</b><span>${where} &middot; ${count(files.length, 'file', 'files')} <span class="k-num">+${added} &minus;${removed}</span></span></span></button></li>`
+		const part = shownInPart(look, files).map((file) => file.path.split('/').at(-1))
+		const some = part.length > 0 ? `, part of ${esc(part.join(', '))}` : ''
+		return `<li><button class="k-chg-step" data-act="chg-step" data-n="${step.number}" data-key="chg-step-${step.number}"><span class="k-chg-n k-num ${parts[0] ? partClass(parts[0]) : ''}">${step.number}</span><span class="k-chg-step-words"><b>${prose(stepWords(step).title)}</b><span>${where} &middot; ${count(files.length, 'file', 'files')}${some} <span class="k-num">+${added} &minus;${removed}</span></span></span></button></li>`
 	})
 	const offers = [
-		...(content.walk?.q ? [] : [['run-walk', 'Walk me through it', 'chg-run-walk']]),
-		...(content.story?.q ? [] : [['run-story', 'Tell its story', 'chg-run-story']]),
+		...(content.walk ? [] : [['run-walk', 'Walk me through it', 'chg-run-walk']]),
+		content.story ? ['run-story', 'Tell it again', 'chg-run-story'] : ['run-story', 'Tell its story', 'chg-run-story'],
 	].map(
 		([act, text, key]) =>
 			`<button class="k-btn${act === 'run-walk' ? '' : ' is-quiet'} k-run-btn" data-act="${act}" data-key="${key}"${env.off ? ' disabled' : ''}><span>${text}</span><small>${RUN_COST}</small></button>`,
@@ -134,15 +159,23 @@ function storyHtml(home, env) {
 function commitsHtml(change, open) {
 	const commits = change.commits ?? []
 	if (commits.length === 0) return ''
+	const total = commits.length + change.moreCommits
 	const rows = commits
 		.slice(0, SHOWN_COMMITS)
 		.map(
 			(commit) =>
 				`<li><span class="k-chg-day">${esc(dayText(commit.date.slice(0, 10)))}</span><span class="k-chg-subject">${prose(commit.subject)}</span><code class="k-chg-hash">${esc(short(commit.hash))}</code></li>`,
 		)
-	const more =
-		commits.length > SHOWN_COMMITS ? `<li class="k-muted">and ${commits.length - SHOWN_COMMITS} more</li>` : ''
-	return `<details class="k-chg-commits" data-key="chg-commits"${open ? ' open' : ''}><summary><span class="k-eyebrow">${count(commits.length, 'commit', 'commits')}</span></summary><ul>${rows.join('')}${more}</ul></details>`
+	const shown = Math.min(commits.length, SHOWN_COMMITS)
+	const more = total > shown ? `<li class="k-muted">and ${total - shown} more</li>` : ''
+	return `<details class="k-chg-commits" data-key="chg-commits"${open ? ' open' : ''}><summary><span class="k-eyebrow">${count(total, 'commit', 'commits')}</span></summary><ul>${rows.join('')}${more}</ul></details>`
+}
+
+// The change on show as the reader would call it: "Pull request #107", a span of time, or what the server named it.
+export function changeName(home) {
+	const chosen = home.changes.find((choice) => choice.change === home.change)
+	const said = chosen?.name ?? home.look?.change?.name ?? ''
+	return pullOf(said) ? `Pull request #${pullOf(said)}` : chosen?.kind === 'since' ? said.replace(/:.*$/, '') : said
 }
 
 function sideHtml(home, chg, env) {
@@ -151,13 +184,7 @@ function sideHtml(home, chg, env) {
 			`<button class="k-chip" data-act="chg-pick" data-change="${esc(choice.change)}" data-key="chg-offer-${i}" aria-pressed="${home.change === choice.change}">${icon(choice.kind === 'uncommitted' ? 'pencil' : 'merge')}<span>${esc(choice.name)}</span></button>`,
 	)
 	const { look } = home
-	const chosen = home.changes.find((choice) => choice.change === home.change)
-	const said = chosen?.name ?? look?.change?.name ?? ''
-	const name = pullOf(said)
-		? `Pull request #${pullOf(said)}`
-		: chosen?.kind === 'since'
-			? said.replace(/:.*$/, '')
-			: said
+	const name = changeName(home)
 	return `<aside class="k-tile k-chg-side" aria-labelledby="chg-name">
 		<h2 class="k-eyebrow">Review a change</h2>
 		<div class="k-chg-choices">${choices.join('')}</div>
@@ -197,8 +224,8 @@ export function changesPageHtml({ home, chg, env, timeline, waiting, live, older
 		const said = home.problem ? esc(home.problem.message) : 'Reading what landed, from git.'
 		return `<div class="k-chg-page">${tabs}<p class="k-home-line" role="status">${said}</p></div>`
 	}
-	const span = chg.drag ?? (look.change ? spanOf(look.change, isSpan(home)) : null)
-	const presets = spanChoices(home.changes, timeline).map(
+	const span = chg.drag ?? spanOf(home)
+	const presets = spanChoices(home.changes).map(
 		(choice, i) =>
 			`<button data-act="chg-pick" data-change="${esc(choice.change)}" data-key="chg-span-${i}" aria-pressed="${home.change === choice.change}">${choice.merge ? icon('merge') : ''}${esc(choice.name)}</button>`,
 	)

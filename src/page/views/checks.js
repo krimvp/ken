@@ -311,11 +311,6 @@ function titleOf({ kind, item }) {
 	return kind === 'element' ? `Part ${item.number} of the diagram` : TITLES[kind]
 }
 
-function textOf({ kind, item }) {
-	if (kind === 'decision') return `${prose(item.question)} <span class="d-field">Chosen</span> ${prose(item.chosen)}`
-	return prose(item.text)
-}
-
 function quoteHtml(quote, j, chosen, copies, tag) {
 	const source = isSession(quote) || quote.path === null ? quoteSource(quote) : `<code>${esc(quote.path)}</code>`
 	const where = `${tagHtml(tag)}${source}, ${lineSpan(quote.startLine, quote.endLine)}. `
@@ -347,19 +342,4 @@ export function quoteCardHtml(ui, items) {
 			</div></div>
 		${quotesHtml(q, item.quotes, '', ui.panel.quote)}
 		${means === null ? '' : `<p class="label-means">${label(means)}<span>${prose(LABELS[means]?.means ?? '')}</span></p>`}`
-}
-
-// The panel when the reader opened all quotes: every item of the thread that carries quotes, in its order.
-export function allQuotesHtml(items) {
-	return `<div class="panel-head"><h2>All quotes</h2>
-			<div class="panel-nav"><button class="quiet-button" data-act="close" data-key="close">Close</button></div></div>
-		${items
-			.map(
-				(shown) => `<section class="all-item">
-					<h3>${titleOf(shown)}</h3>
-					<p class="card-text">${textOf(shown)}</p>
-					${quotesHtml(shown.q, shown.item.quotes, `${shown.key}-`, -1)}
-				</section>`,
-			)
-			.join('')}`
 }

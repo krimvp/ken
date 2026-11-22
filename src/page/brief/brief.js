@@ -22,7 +22,6 @@ import {
 } from './view-kinds.js'
 
 export const TEXTS = { pictures: 'Pictures first', balanced: 'Balanced', words: 'More words' }
-const TEXT_ICONS = { pictures: 'pictures', balanced: 'balanced', words: 'words' }
 const KINDS = {
 	part: 'Part',
 	file: 'File',
@@ -33,6 +32,7 @@ const KINDS = {
 	decision: 'Decision',
 	arrow: 'Arrow',
 	change: 'Change',
+	project: 'Project',
 }
 export const WAYS = {
 	sideways: ['Sideways', 'What it is next to'],
@@ -65,11 +65,7 @@ export function colourOf(brief) {
 const waysCount = (brief) => ({
 	sideways: byPart(brief.sideways.uses).length + byPart(brief.sideways.usedBy).length + brief.sideways.processes.length,
 	questions: brief.questions.length + brief.decisions.length,
-	deeper: isViewKind(brief.kind)
-		? viewDeeperCount(brief)
-		: brief.deeper
-			? (brief.deeper.parts ?? brief.deeper.files)
-			: 0,
+	deeper: isViewKind(brief.kind) ? viewDeeperCount(brief) : brief.deeper ? brief.deeper.parts || brief.deeper.files : 0,
 })
 
 // A row that opens another brief.
@@ -83,6 +79,10 @@ function rowHtml({ id, name, note, key, swatch = null, number = null }) {
 				: `<span class="k-row-ic">${icon(KIND_ICONS[concept?.kind] ?? 'term')}</span>`
 	return `<li><button class="k-row" data-act="brief-open" data-concept="${esc(id)}" data-key="${key}">${lead}<span class="k-row-main"><b>${prose(name)}</b>${note ? `<span class="k-row-note">${prose(note)}</span>` : ''}</span>${icon('right', 'k-row-go')}</button></li>`
 }
+
+// A part of the project as a row that opens its brief.
+export const partRowHtml = ({ id, name, note, i }) =>
+	rowHtml({ id, name, note, key: `brief-part-${i}`, swatch: partClass(name) })
 
 const swatchOf = (id) => {
 	const concept = readConcept(id)
@@ -184,10 +184,10 @@ function workingHtml(run, env) {
 	return `<div class="k-unexplained" role="status"><p><span class="k-spin" aria-hidden="true"></span> <b>${DOING[run.kind][1]}.</b></p><p class="k-muted k-num k-clock">${Math.round(env.seconds)} s so far, ${count(tools, 'action', 'actions')}</p>${newest ? `<p class="k-muted k-working-step">${prose(newest)}</p>` : ''}<button class="k-link" data-act="stop" data-key="brief-stop">Stop</button></div>`
 }
 
-function mainHtml(brief, { ui, env, prefs, look, views }) {
+function mainHtml(brief, { ui, env, prefs, look, views, inner }) {
 	const texts = Object.entries(TEXTS).map(
 		([text, name]) =>
-			`<button data-act="pref-text" data-text="${text}" data-key="brief-text-${text}" aria-pressed="${prefs.text === text}" aria-label="${name}" title="${name}">${icon(TEXT_ICONS[text])}<span>${name}</span></button>`,
+			`<button data-act="pref-text" data-text="${text}" data-key="brief-text-${text}" aria-pressed="${prefs.text === text}">${name}</button>`,
 	)
 	const about = brief.about
 		? `<p class="k-about">About <button class="k-link" data-act="brief-open" data-concept="${esc(brief.about.id)}" data-key="brief-about">${esc(brief.about.name)}</button></p>`
@@ -235,10 +235,12 @@ function mainHtml(brief, { ui, env, prefs, look, views }) {
 		</div>
 		<h2 class="k-brief-name" id="brief-name" tabindex="-1"><span class="k-sw"></span><span>${prose(brief.name)}</span></h2>
 		<p class="k-brief-line">${prose(brief.line)}</p>
+		${brief.note ? `<p class="k-brief-note"><span class="k-eyebrow">What the record says it means</span>${prose(brief.note)}</p>` : ''}
 		${about}
 		${isViewKind(brief.kind) ? viewMainHtml(brief, views) : pictureHtml(brief, look)}
 		${brief.html ?? ''}
 		${brief.explained ? '' : unexplainedHtml(brief, env, ui)}
+		${fromGitHtml(brief, inner)}
 		${points}
 		${steps}
 		${why}
@@ -317,26 +319,47 @@ function questionsHtml(brief, { ui, env }) {
 }
 
 // inner is the level inside the part, once the page has read it: null while it reads.
+// What is inside a part, one row each, with the sentence ken's model wrote of a file when it wrote one.
+const insideRows = (brief, inner, key) =>
+	(inner?.boxes ?? []).map((box, i) =>
+		rowHtml({
+			id: `part:${brief.deeper.within}:${box.name}`,
+			name: box.name,
+			note: box.told ?? box.job ?? count(box.files, 'file', 'files'),
+			key: `${key}-${i}`,
+			swatch: colourOf(brief),
+		}),
+	)
+
+// What plain code shows of a part ken's model has not explained: its arrows in words and what is inside it.
+function fromGitHtml(brief, inner) {
+	if (brief.explained || brief.kind !== 'part') return ''
+	const { uses, usedBy } = brief.sideways
+	const said = [
+		...uses.map((to) => `${brief.name} ${to.verb} ${to.name}.`),
+		...usedBy.map((by) => `${by.name} ${by.verb} ${brief.name}.`),
+	]
+	const arrows =
+		said.length > 0
+			? `<h3 class="k-eyebrow">How it connects</h3><ul class="k-said">${said.map((line) => `<li>${prose(line)}</li>`).join('')}</ul>`
+			: ''
+	const rows = brief.deeper && inner ? insideRows(brief, inner, 'brief-file') : []
+	const files =
+		rows.length > 0 ? `<h3 class="k-eyebrow">What is inside it</h3><ul class="k-rows">${rows.join('')}</ul>` : ''
+	return `${arrows}${files}`
+}
+
 function deeperHtml(brief, inner) {
 	const { deeper } = brief
 	if (!deeper) {
 		return `${backHtml}${icon('left')}The brief</button><h2 class="k-way-name" id="brief-name" tabindex="-1">Inside ${prose(brief.name)}</h2><p class="k-none">Nothing is inside it: it is one file, or one thing.</p>`
 	}
-	const colour = colourOf(brief)
-	const rows = (inner?.boxes ?? []).map((box, i) =>
-		rowHtml({
-			id: `part:${deeper.within}:${box.name}`,
-			name: box.name,
-			note: box.job ?? count(box.files, 'file', 'files'),
-			key: `brief-in-${i}`,
-			swatch: colour,
-		}),
-	)
+	const rows = insideRows(brief, inner, 'brief-in')
 	const size = `${deeper.parts ? `${count(deeper.parts, 'part', 'parts')}, ` : ''}${count(deeper.files, 'file', 'files')}`
 	return `${backHtml}${icon('left')}The brief</button>
 		<h2 class="k-way-name" id="brief-name" tabindex="-1">Inside ${prose(brief.name)}</h2>
 		<p class="k-brief-line">${size}.</p>
-		<button class="k-btn" data-act="brief-inside" data-key="brief-inside">${icon('inside')}Open it on the canvas</button>
+		${brief.kind === 'part' ? `<button class="k-btn" data-act="brief-inside" data-key="brief-inside">${icon('inside')}Open it on the canvas</button>` : ''}
 		${inner === null ? '<p class="k-none">Reading what is inside, from git.</p>' : `<ul class="k-rows">${rows.join('')}</ul>`}
 		<p class="k-none">${icon('deeper')}Then its files, and then the lines.</p>`
 }
@@ -354,7 +377,8 @@ function knowsHtml(brief, home, ui) {
 	const since = knows.stale ? ` ${count(knows.since, 'commit', 'commits')} landed there since.` : ''
 	const why = knows.why || since ? `<p class="k-knows-why">${esc(knows.why ?? '')}${since}</p>` : ''
 	const problem = ui.saveProblem ? `<p class="k-ask-problem" role="alert">${esc(ui.saveProblem)}</p>` : ''
-	return `<p class="k-knows"><span class="k-muted">ken thinks:</span>${levelMark(knows.level, 16)}<b>${esc(levelLabel(home, knows.level))}</b><button class="k-link" data-act="brief-fix" data-key="brief-fix">Not right</button></p>${why}${problem}`
+	const said = ui.said ? `<p class="k-knows-said" role="status">ken wrote: ${esc(ui.said)}</p>` : ''
+	return `${said}<p class="k-knows"><span class="k-muted">ken thinks:</span>${levelMark(knows.level, 16)}<b>${esc(levelLabel(home, knows.level))}</b><button class="k-link" data-act="brief-fix" data-key="brief-fix">Not right</button></p>${why}${problem}`
 }
 
 function footHtml(brief, home, ui) {
@@ -398,7 +422,7 @@ export function briefHtml(ui, found, ctx) {
 					? view
 						? viewDeeperHtml(brief, back)
 						: deeperHtml(brief, ctx.inner)
-					: mainHtml(brief, { ui, env: ctx.env, prefs: ctx.prefs, look: ctx.look, views: ctx.views })
+					: mainHtml(brief, { ui, env: ctx.env, prefs: ctx.prefs, look: ctx.look, views: ctx.views, inner: ctx.inner })
 	// A frame, a store, an outside thing or a crossing is no part, so it takes no part's colour.
 	const colour = view ? '' : colourOf(brief)
 	return `${head}<div class="k-brief-body text-${ctx.prefs.text} ${colour || 'is-plain'}${view ? ' is-view' : ''}" id="brief-scroll">${body}</div>${footHtml(brief, ctx.home, ui)}`

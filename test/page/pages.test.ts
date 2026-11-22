@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { test } from 'node:test'
 import { fileRecordStore } from '../../src/record/index.ts'
 import { gitRepository } from '../../src/repo/index.ts'
-import { buildRepository } from '../fixtures/build-repository.ts'
+import { buildRepository, OWNER } from '../fixtures/build-repository.ts'
 import { call, json, openKen, readerHome } from '../fixtures/ken-server.ts'
 
 // The page is plain JavaScript in the browser, so the test loads it by path and says what it expects to find.
@@ -45,6 +47,18 @@ const { briefHtml }: { briefHtml: (ui: object, found: Found, ctx: object) => str
 const { architectureHtml }: { architectureHtml: (view: object) => string } = await import(
 	path.join(PAGE, 'architecture/architecture.js')
 )
+
+const { changesPageHtml }: { changesPageHtml: (view: object) => string } = await import(
+	path.join(PAGE, 'changes/changes.js')
+)
+const { startPageHtml }: { startPageHtml: (view: object) => string } = await import(path.join(PAGE, 'start/start.js'))
+const {
+	changedParts,
+	openViewHtml,
+}: {
+	changedParts: (look: object) => object[]
+	openViewHtml: (...view: unknown[]) => string
+} = await import(path.join(PAGE, 'views/open.js'))
 
 const WHOLE = { name: 'Whole project', within: [] }
 const ENGINE = { name: 'Plugin engine', within: ['src/engine.ts', 'src/hooks.ts'] }
@@ -234,10 +248,9 @@ test('Sideways shows a part two arrows join once, with both verbs, and counts it
 	if (found.kind !== 'ok') assert.fail(`the part has no brief: ${JSON.stringify(found)}`)
 	const ctx = { home: freshHome(() => null, { unfolded: new Set() }), prefs: { text: 'pictures' }, env: {}, look: null }
 	const ui = { trail: [{ id: 'part::store', name: 'store' }], openQuotes: new Set(), on: 'sideways' }
-	const html = briefHtml(ui, found, { ...ctx, inner: null })
-	assert.equal(html.match(/data-concept="part::core"/g)?.length, 1, 'core is one row')
-	assert.match(html, /starts it, and waits on it/, 'that says both arrows')
-	assert.match(html, /data-way="sideways"[^>]*>.*?<b class="k-num">1<\/b>/s, 'and Sideways counts one part')
+	const text = textOf(briefHtml(ui, found, { ...ctx, inner: null }))
+	assert.match(text, /Used by core starts it, and waits on it (?!core)/, 'core is one row that says both arrows')
+	assert.match(text, / 1 Sideways /, 'and Sideways counts one part')
 })
 
 test('the canvas draws a level it read from a real server, and the changes layer says what each part changed', async () => {
@@ -257,11 +270,12 @@ test('the canvas draws a level it read from a real server, and the changes layer
 	const draw = () => architectureHtml({ home: state.home, arch, env, brief: null, column: false })
 
 	await loads.refresh()
-	const parts = draw()
-	for (const name of ['core', 'store']) {
-		assert.match(parts, new RegExp(`data-concept="part::${name}"`), `${name} is a block that opens its brief`)
-	}
-	assert.match(parts, /New to you/, 'each says what ken thinks the reader knows of it')
+	const parts = textOf(draw())
+	assert.match(
+		parts,
+		/core New to you .*store New to you/,
+		'each part is a block that says what ken thinks the reader knows of it',
+	)
 
 	const landed = state.home.changes.find((choice) => (choice as { kind: string }).kind === 'since') as {
 		change: string
@@ -269,12 +283,107 @@ test('the canvas draws a level it read from a real server, and the changes layer
 	Object.assign(state.home, { change: landed.change })
 	arch.layer = 'changes'
 	await loads.refresh()
-	const changed = draw()
-	assert.match(changed, /<b class="k-num">1<\/b>.*?file/s, 'the part the commit touched says how many files')
-	assert.match(changed, /No change/, 'and the other says it did not change')
+	const changed = textOf(draw())
+	assert.match(changed, /store .*1 file/, 'the part the commit touched says how many files')
+	assert.match(changed, /core .*No change/, 'and the other says it did not change')
 
 	Object.assign(state.home, { trail: [WHOLE, { name: 'store', within: ['src/store'] }], change: 'none' })
 	arch.layer = null
 	await loads.refresh()
-	assert.match(draw(), /db\.ts/, 'inside a part nobody named, the blocks are what git lists')
+	assert.match(textOf(draw()), /db\.ts/, 'inside a part nobody named, the blocks are what git lists')
+})
+
+// What a reader reads on a page: its text without the markup.
+const textOf = (html: string) =>
+	html
+		.replace(/<[^>]*>/g, ' ')
+		.replace(/&minus;/g, '-')
+		.replace(/\s+/g, ' ')
+
+const DAY = 86_400_000
+const dayText = (time: number) =>
+	new Date(time).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' })
+
+// Commits n changes to one file now, by the reader, as a project where their work landed today.
+function landNow(root: string, n: number) {
+	for (let i = 0; i < n; i += 1) {
+		writeFileSync(path.join(root, 'src/core/run.ts'), `run(${i})\n`)
+		execFileSync('git', ['-c', 'commit.gpgsign=false', 'commit', '--quiet', '--all', '--message', `edit ${i}`], {
+			cwd: root,
+			env: { ...process.env, GIT_AUTHOR_EMAIL: OWNER.email, GIT_COMMITTER_EMAIL: OWNER.email },
+		})
+	}
+}
+
+// The reader looked at paths on an earlier visit, minutes ago, when the project was at head.
+function lookedBefore(home: string, root: string, minutes: number, line: object) {
+	const first = execFileSync('git', ['rev-list', '--max-parents=0', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim()
+	const file = path.join(home, 'projects', first, 'seen.jsonl')
+	mkdirSync(path.dirname(file), { recursive: true })
+	const at = new Date(Date.now() - minutes * 60_000).toISOString()
+	writeFileSync(file, `${JSON.stringify({ at, ...line })}\n`)
+}
+
+// The page as the reader meets it on a real server: the top level, what waits, the commits by day, and the Changes
+// page with the change pick() chooses from what the server offers.
+async function pagesOf(root: string, home: string, pick: (changes: { kind: string; change: string }[]) => string) {
+	const server = await openKen(root, home)
+	const read = async (url: string): Promise<Answer> => {
+		const { status, text } = await call(server, url)
+		return { ok: status === 200, status, body: JSON.parse(text) }
+	}
+	const state = { home: freshHome(() => null, { unfolded: new Set() }), rows: [] }
+	const app = { state, render() {}, read, post: () => null, fromView: () => null, stored: () => null }
+	const top = await json(server, '/api/layout?change=none')
+	const timeline = await json(server, '/api/timeline')
+	const followUp = await json(server, '/api/open')
+	Object.assign(state.home, { change: pick(top.changes) })
+	await homeLoads(app).refresh()
+	const chg = { tab: 'changes', drag: null, typed: '' }
+	const env = { off: null, running: null, seconds: 0 }
+	const changes = changesPageHtml({ home: state.home, chg, env, timeline, waiting: 0, live: 'off', older: '' })
+	const view = {
+		top,
+		home: state.home,
+		reader: null,
+		followUp,
+		concepts: [],
+		timeline,
+		project: 'p',
+		briefOf: () => null,
+	}
+	const waiting = openViewHtml(followUp, {}, false, '', [], changedParts(top.look))
+	return { changes: textOf(changes), home: textOf(startPageHtml(view)), waiting: textOf(waiting) }
+}
+
+test('Changes counts every commit of a span of days and starts it on the day the span starts, though it lists only the newest', async () => {
+	const { root } = buildRepository([{ message: 'feat: start', files: { 'src/core/run.ts': 'run()\n' } }])
+	landNow(root, 60)
+	const span = (changes: { kind: string; change: string }[]) =>
+		changes.find((choice) => choice.kind === 'since')?.change ?? ''
+	const { changes } = await pagesOf(root, readerHome(), span)
+	assert.equal(changes.match(/\b60 commits\b/g)?.length, 2, 'in the numbers on top and over the list')
+	assert.match(changes, new RegExp(`${dayText(Date.now() - 7 * DAY)} to today`), 'the last 7 days start 7 days ago')
+})
+
+test('Changes offers what landed since the reader last looked once, as the server counts it from the commit they looked at', async () => {
+	const { root, hashes } = buildRepository([{ message: 'feat: start', files: { 'src/core/run.ts': 'run()\n' } }])
+	const home = readerHome()
+	lookedBefore(home, root, 120, { did: 'read', paths: ['src/core'], head: hashes[0] })
+	landNow(root, 1)
+	const { changes } = await pagesOf(root, home, () => 'none')
+	assert.equal(changes.match(/Since you( last)? looked/g)?.length, 1)
+})
+
+test('a part that changed since the reader looked at it is counted the same on Home, in what waits on them, and by the server', async () => {
+	const { root, hashes } = buildRepository([
+		{ message: 'feat: start', files: { 'src/core/run.ts': 'run()\n', 'src/store/db.ts': 'save()\n' } },
+	])
+	const home = readerHome()
+	lookedBefore(home, root, 120, { did: 'read', paths: ['src/core'], head: hashes[0] })
+	landNow(root, 2)
+	const pages = await pagesOf(root, home, () => 'none')
+	assert.match(pages.home, /\b1 part changed since you looked/)
+	assert.match(pages.home, /\b1 thing waits on you/)
+	assert.match(pages.waiting, /Changed since you looked \(1\) .* src 2 commits touched it/)
 })

@@ -102,6 +102,15 @@ test('an answer is kept as a brief: the saved row names it, the question opens a
 	)
 	assert.deepEqual(answer.about, { id: 'part::Core', name: 'Core' })
 	assert.deepEqual(answer.lit, ['Store'], 'its picture lights the part its answer quotes')
+	assert.deepEqual(
+		[answer.sideways.uses.map((each: { name: string }) => each.name), answer.deeper?.within],
+		[['Store'], 'src/store/db.ts'],
+		'Sideways goes to the part its answer quotes, and Deeper to the file',
+	)
+	assert.ok(
+		answer.questions.every((each: { id: string }) => each.id !== written.id) && answer.questions.length > 0,
+		'its Questions are the other questions about Core',
+	)
 	assert.equal(answer.trust, "ken's model wrote the words. ken found each quoted line in git.")
 
 	const after: Question[] = (await briefOf('part::Core')).questions

@@ -422,9 +422,12 @@ export function questionDesk(
 			if (read.kind !== 'ok') return read
 			const { level } = read
 			const part = fieldOf(lens, 'part') ?? null
-			// The order a tour took: the order the parts were named in, with tests and upkeep last.
+			// The order a tour took: the order the parts were named in, with tests and upkeep last. Asked for the whole
+			// level, the model explains the parts it has not explained yet, or all of them when none is left.
 			const order = tourOrder(level.boxes.filter((box) => box.state !== 'gone'))
-			const stops = part === null ? order : order.filter((stop) => stop.name === part)
+			const { explained } = await concepts.levelTold(level)
+			const rest = order.filter((stop) => !explained.includes(stop.name))
+			const stops = part === null ? (rest.length > 0 ? rest : order) : order.filter((stop) => stop.name === part)
 			if (stops.length === 0) {
 				const problem = part === null ? 'There is no part here to explain.' : `There is no part "${String(part)}" here.`
 				return { kind: 'refused', problem }
@@ -592,6 +595,7 @@ function changeLines(change: Change, want: Want): string[] {
 		...(want === 'walk'
 			? [
 					'Walk me through the change in steps, in the order a reviewer should read them. A step holds one change. Two changes make two steps.',
+					'The first sentence of a step is its title, read alone in a list: say what changed, such as "The live suite no longer runs in npm test". Never a sentence that points elsewhere, such as "This is the one product fix".',
 					'After the last step, and only there, write one line that names what the steps leave out and a reviewer should still open, such as a changed rule or boundary table, a test of new behaviour, or docs. If the steps leave nothing out, say so.',
 				]
 			: [
