@@ -194,27 +194,6 @@ function briefOf(store: { get: (id: string, then: () => void) => Found }, id: st
 	})
 }
 
-test('while the server has no briefs, a part still opens as one, built from what git and the record say of it', async () => {
-	const { read } = await namedProject()
-	const store = briefStore({ read, rows: () => [], levelName: () => null })
-
-	const found = await briefOf(store, 'part::core')
-	if (found.kind !== 'ok') assert.fail(`the part has no brief: ${JSON.stringify(found)}`)
-	const { brief } = found
-	assert.deepEqual(
-		[brief.kind, brief.name, brief.line],
-		['part', 'core', 'Does the work of core'],
-		'it says the part and its job',
-	)
-	assert.deepEqual(brief.deeper, { within: 'src/core', parts: null, files: 2 }, 'and where to go deeper')
-	assert.equal(brief.knows?.level, 'new', 'with what ken thinks the reader knows')
-	assert.equal(brief.explained, false, "ken's model said nothing of it yet")
-	assert.deepEqual(brief.explain, { lens: { kind: 'tour', within: [], name: null } }, 'so one button asks for the tour')
-
-	const missing = await briefOf(store, 'part::no such part')
-	assert.equal(missing.kind, 'none', 'a part that is not there opens as nothing, with a reason')
-})
-
 test('a brief the server sends is shown as sent: the page builds its own only on a 404', async () => {
 	const sent = { id: 'part::store', kind: 'part', name: 'store', line: 'From the server' }
 	const asked: string[] = []

@@ -2,6 +2,7 @@ import { styleText } from 'node:util'
 import type { Card, ChatEvent, Cost, Item, Reply, Risk } from '../../agent/index.ts'
 import { when } from '../../follow-up/index.ts'
 import { type Decision, entryLine } from '../../record/index.ts'
+import { briefPrinter } from './print-brief.ts'
 import { formatDiagram, formatQuote } from './print-diagram.ts'
 
 export type Paint = (format: Parameters<typeof styleText>[0], text: string) => string
@@ -9,12 +10,18 @@ export type Paint = (format: Parameters<typeof styleText>[0], text: string) => s
 // Said once, at the top of a chat, so no card has to say it again.
 export const LEGEND = "Plain text is what ken's model says. A part marked [checked] is what ken checked against git."
 
-// Prints one question's events as they arrive: the model's working steps dim, then its reply, words and cards in the
-// order it gave them. Colour only reaches a terminal: styleText leaves it out for a pipe.
+// Prints one question's events as they arrive: the model's working steps dim, then its reply, words, cards and briefs
+// in the order it gave them. Colour only reaches a terminal: styleText leaves it out for a pipe.
 export async function printQuestion(events: AsyncIterable<ChatEvent>, out: NodeJS.WriteStream): Promise<boolean> {
 	const paint: Paint = (format, text) => styleText(format, text, { stream: out })
 	let answered = false
 	const line = (text: string) => out.write(`${text}\n`)
+	const briefs = briefPrinter(paint, (item) => formatItem(item, paint))
+	// A brief's questions print when something ends the brief, and the end of the reply ends the last one.
+	const endBrief = () => {
+		const rest = briefs.end()
+		if (rest !== '') line(rest)
+	}
 	for await (const event of events) {
 		switch (event.kind) {
 			case 'text':
@@ -31,9 +38,10 @@ export async function printQuestion(events: AsyncIterable<ChatEvent>, out: NodeJ
 				} else if (event.step.kind === 'text') line(paint('dim', `  ${event.step.text.replaceAll('\n', '\n  ')}`))
 				break
 			case 'item':
-				line(`\n${formatItem(event.item, paint)}`)
+				line(`\n${briefs.format(event.item)}`)
 				break
 			case 'replied':
+				endBrief()
 				if (event.reply.change) line(`\n${formatChange(event.reply.change, paint)}`)
 				if (event.recorded.length > 0) {
 					line(paint('bold', `\nAdded to the project record (${event.recorded.length}):`))
@@ -53,6 +61,7 @@ export async function printQuestion(events: AsyncIterable<ChatEvent>, out: NodeJ
 				}
 				break
 			case 'error':
+				endBrief()
 				line(paint('red', `Error: ${event.message}`))
 				break
 			default:
@@ -64,7 +73,8 @@ export async function printQuestion(events: AsyncIterable<ChatEvent>, out: NodeJ
 
 // A whole reply, as a live note prints it.
 export function formatReply(reply: Reply, paint: Paint): string {
-	const parts = reply.items.map((item) => formatItem(item, paint))
+	const briefs = briefPrinter(paint, (item) => formatItem(item, paint))
+	const parts = [...reply.items.map((item) => briefs.format(item)), briefs.end()].filter((part) => part !== '')
 	return [...parts, ...(reply.change ? [formatChange(reply.change, paint)] : [])].join('\n\n')
 }
 

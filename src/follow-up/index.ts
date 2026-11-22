@@ -4,6 +4,10 @@
 export { commitsSince } from './commits-since.ts'
 export { decide } from './decide.ts'
 export {
+	type AnswerAbout,
+	answerQuestion,
+	type ExplainLevel,
+	explainQuestion,
 	type LensFacts,
 	type LensQuestion,
 	openQuestion,
@@ -13,9 +17,7 @@ export {
 	rangeLens,
 	rangeQuestion,
 	sinceWords,
-	type TourLevel,
 	topicQuestion,
-	tourQuestion,
 	viewQuestion,
 } from './lens-questions.ts'
 export {
