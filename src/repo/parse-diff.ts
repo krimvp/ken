@@ -21,7 +21,8 @@ function parseNumstat(numstat: string) {
 	const tokens = numstat.split('\0')
 	const entries: { binary: boolean; path: string; oldPath: string }[] = []
 	for (let index = 0; index < tokens.length; index++) {
-		const [added, , path = ''] = (tokens[index] ?? '').split('\t')
+		const [added, , ...name] = (tokens[index] ?? '').split('\t')
+		const path = name.join('\t')
 		if (added === undefined || added === '') continue
 		// A rename leaves the path field empty and puts the old and new paths in the next two tokens.
 		if (path === '') {

@@ -2,7 +2,7 @@ import path from 'node:path'
 import type { RepoPath } from '../repo/index.ts'
 
 // A box before git marks it: its name, its paths, and how many files sit under them.
-export type Seed = { name: string; paths: RepoPath[]; files: number }
+export type Seed = { name: string; paths: RepoPath[]; files: number; file?: RepoPath }
 
 // A level holds at most this many boxes, as the plan's layout does.
 export const MAX_BOXES = 6
@@ -20,6 +20,7 @@ export function splitScope(files: string[], scope: RepoPath[]): Seed[] {
 			name: path.posix.basename(each),
 			paths: [each],
 			files: countUnder(files, [each]),
+			...(files.includes(each) ? { file: each } : {}),
 		}))
 		const allFiles = scope.every((each) => files.includes(each))
 		const allFolders = !scope.some((each) => files.includes(each))
@@ -41,7 +42,12 @@ export function splitScope(files: string[], scope: RepoPath[]): Seed[] {
 	}))
 	if (folderSeeds.length === 0) {
 		return fit(
-			here.map((file) => ({ name: path.posix.basename(file), paths: [file as RepoPath], files: 1 })),
+			here.map((file) => ({
+				name: path.posix.basename(file),
+				paths: [file as RepoPath],
+				files: 1,
+				file: file as RepoPath,
+			})),
 			'files',
 		)
 	}

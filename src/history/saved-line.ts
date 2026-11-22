@@ -2,7 +2,17 @@
 // statements, risks, diagrams and a closing note. This is the one place that knows that shape. It turns such a line
 // into the reply the page and the terminal show now: the summary and the note become words, everything checked
 // becomes a card, in the order the page showed them. ken does not check an old card again: it passed when it was saved.
-import type { Card, Change, Claim, Item, Reply, Risk, Step, Withdrawn } from '../agent/index.ts'
+import {
+	briefCoverage,
+	type Card,
+	type Change,
+	type Claim,
+	type Item,
+	type Reply,
+	type Risk,
+	type Step,
+	type Withdrawn,
+} from '../agent/index.ts'
 import type { Decision, RecordEntry } from '../record/index.ts'
 import type { HistoryEntry } from './history-entry.ts'
 
@@ -19,7 +29,16 @@ type OldAnswer = {
 	withdrawn?: Withdrawn[]
 }
 
-const OUTCOMES = new Set(['answered', 'rejected', 'no-answer', 'out-of-turns', 'stopped', 'error'])
+const OUTCOMES = new Set([
+	'answered',
+	'rejected',
+	'no-answer',
+	'incomplete',
+	'partial',
+	'out-of-turns',
+	'stopped',
+	'error',
+])
 
 // shortcut: checks only the fields the list of questions shows and trusts the rest of the line, because only add
 // writes this file. Check every field if people start to edit it by hand. decisions are the record's entries, for
@@ -55,10 +74,95 @@ export function parseLine(line: string, decisions: RecordEntry[]): HistoryEntry 
 		const reply = replyOf(answer as OldAnswer, typeof note === 'string' ? note : '', [...stored, ...kept])
 		return { ...rest, outcome: 'answered', reply, recorded: named } as HistoryEntry
 	}
+	if (outcome === 'answered' || outcome === 'partial') {
+		const reply = value.reply
+		if (!isObject(reply) || !Array.isArray(reply.items) || !strings(reply.topics)) return null
+		if (reply.tour !== undefined || reply.answers !== undefined) {
+			const { tour, answers } = reply
+			if (
+				tour !== undefined &&
+				(!isObject(tour) ||
+					!strings(tour.within) ||
+					!Array.isArray(tour.stops) ||
+					!tour.stops.every(
+						(stop) =>
+							isObject(stop) && typeof stop.name === 'string' && typeof stop.job === 'string' && strings(stop.paths),
+					))
+			)
+				return null
+			if (
+				answers !== undefined &&
+				(!isObject(answers) || typeof answers.concept !== 'string' || typeof answers.text !== 'string')
+			)
+				return null
+			if (!reply.items.every(briefItem)) return null
+		}
+	}
 	// A change saved before ken had walkthrough steps has none.
 	const change = isObject(value.reply) ? value.reply.change : null
 	if (isObject(change) && !Array.isArray(change.stepHunks)) change.stepHunks = []
-	return value as HistoryEntry
+	const entry = value as HistoryEntry
+	if (entry.outcome === 'answered' && (entry.reply?.answers || entry.reply?.tour)) {
+		const { reply, recorded: _recorded, ...base } = entry
+		const { answers, tour } = reply
+		const { outcome, missing } = briefCoverage(reply.items, tour?.stops.map((part) => part.name) ?? ['answer'])
+		if (outcome === 'answered') return entry
+		if (answers) return { ...base, outcome: 'incomplete', retry: { kind: 'answer', ...answers } }
+		if (tour) {
+			const retry = {
+				kind: 'explain' as const,
+				within: tour.within,
+				part: tour.stops.length === 1 ? (tour.stops[0]?.name ?? null) : null,
+			}
+			return outcome === 'partial'
+				? { ...entry, outcome: 'partial', reply: { ...reply, missingParts: missing }, retry }
+				: { ...base, outcome: 'incomplete', retry }
+		}
+	}
+	return entry
+}
+
+function strings(value: unknown): boolean {
+	return Array.isArray(value) && value.every((line) => typeof line === 'string')
+}
+
+function savedQuote(value: unknown): boolean {
+	if (
+		!isObject(value) ||
+		typeof value.text !== 'string' ||
+		!Number.isInteger(value.startLine) ||
+		!Number.isInteger(value.endLine)
+	)
+		return false
+	return (
+		typeof value.session === 'string' ||
+		(typeof value.commit === 'string' && (value.path === null || typeof value.path === 'string'))
+	)
+}
+
+// The numbered steps and checked claims that older replies use as their brief.
+function briefItem(value: unknown): boolean {
+	if (!isObject(value)) return false
+	if (value.kind === 'words') return typeof value.text === 'string'
+	if (value.kind === 'step')
+		return (
+			Number.isInteger(value.number) &&
+			typeof value.text === 'string' &&
+			(value.questions === undefined || strings(value.questions))
+		)
+	const card = value.card
+	if (value.kind !== 'card' || !isObject(card) || typeof card.kind !== 'string') return false
+	const data = card[card.kind]
+	if (!isObject(data)) return false
+	if (card.kind !== 'topic' && card.kind !== 'claim') return true
+	if (!Array.isArray(data.quotes) || !data.quotes.length || !data.quotes.every(savedQuote)) return false
+	if (card.kind === 'topic') return typeof data.name === 'string'
+	const point = data.point
+	return (
+		typeof data.text === 'string' &&
+		(point === undefined ||
+			(isObject(point) && typeof point.line === 'string' && typeof point.long === 'string' && isObject(point.drawing)))
+	)
 }
 
 function stepOf(step: unknown): Step {

@@ -26,13 +26,11 @@ export async function staleFiles(repo: Repository, head: CommitHash | undefined,
 	return gone.length ? [...new Set(gone.flatMap((quote) => quote.path ?? []))] : undefined
 }
 
-type Answered = Extract<HistoryEntry, { outcome: 'answered' }>
+type Answered = Extract<HistoryEntry, { reply: Reply }>
 
 // Newest first, live notes left out: a note explains a change, never a concept.
 export function answeredOf(history: HistoryEntry[]): Answered[] {
-	return history
-		.flatMap((entry) => (entry.outcome === 'answered' && entry.about === undefined ? [entry] : []))
-		.reverse()
+	return history.flatMap((entry) => ('reply' in entry && entry.about === undefined ? [entry] : [])).reverse()
 }
 
 // The newest reply that explains the part, by the level it was asked for and the part's name. A reply that sent

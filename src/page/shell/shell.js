@@ -113,5 +113,5 @@ export function settingsHtml(prefs, files) {
 		<h2 class="k-eyebrow">Light or dark</h2>
 		<div class="k-seg" role="group" aria-label="Light or dark">${theme('light', 'Light', 'sun')}${theme('dark', 'Dark', 'moon')}</div>
 		<h2 class="k-eyebrow">Where ken keeps its files</h2>
-		${kept}`
+		${kept}<button class="k-link" data-act="settings" data-key="settings-close">Close settings</button>`
 }

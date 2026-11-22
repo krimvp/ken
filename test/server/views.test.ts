@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
+import { writeFileSync } from 'node:fs'
+import path from 'node:path'
 import { test } from 'node:test'
 import { fileRecordStore } from '../../src/record/index.ts'
 import { gitRepository } from '../../src/repo/index.ts'
@@ -218,6 +221,18 @@ test('a frame opens as a brief with the lines that make it, the parts in it and 
 	for (const id of ['frame:proc', 'frame:worker', 'store:db', 'outside:user']) assert.ok(found.includes(id), id)
 })
 
+test('a changed worker call marks its drawing and brief until they are redrawn; moving another quoted line leaves it current', async () => {
+	writeFileSync(path.join(root, 'src/main.ts'), `// Entry point\n${MAIN}\nqueue.send()\nwork()\n`)
+	execFileSync('git', ['-c', 'commit.gpgsign=false', 'commit', '--quiet', '-am', 'Queue the work'], { cwd: root })
+	const look = await top()
+	assert.deepEqual(ids(look.views.stale).sort(), ['to-worker', 'worker'])
+	const crossing = await json(server, '/api/brief?concept=crossing:to-worker')
+	assert.deepEqual(crossing.staleFiles, ['src/main.ts'])
+	assert.equal(crossing.checkedAt, look.head)
+	assert.deepEqual(crossing.explain.lens, { kind: 'views', within: [] })
+	assert.equal((await json(server, '/api/brief?concept=frame:proc')).staleFiles, undefined)
+})
+
 test('naming the parts of the top level names its drawings in the same run, against the new parts', async () => {
 	await ask(server, { lens: { kind: 'parts', within: [] } })
 	const views = (await top()).views
@@ -226,4 +241,5 @@ test('naming the parts of the top level names its drawings in the same run, agai
 		['Core'],
 	)
 	assert.equal(views.world, null)
+	assert.deepEqual(views.stale, [])
 })

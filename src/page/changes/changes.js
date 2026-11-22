@@ -6,13 +6,14 @@ import { partId } from '../brief/concept-id.js'
 import { stepFiles } from '../level/content.js'
 import { partClass } from '../project/part-colours.js'
 import { placeParts } from '../project/parts-picture.js'
-import { stepParts, stepWords, walkOf } from '../project/walk.js'
+import { stepDiffHtml, stepParts, stepWords, walkOf } from '../project/walk.js'
 import { icon, partIcon } from '../shell/icons.js'
 import { count, esc, prose, RUN_COST, short } from '../views/format.js'
 import { dayText, timelineHtml } from './timeline.js'
 
 const SHOWN_COMMITS = 40
 const SHOWN_OFFERS = 4
+const SHOWN_OUTSIDE_FILES = 20
 
 const today = () => new Date().toISOString().slice(0, 10)
 const pullOf = (name) => name.match(/Merge pull request #(\d+)/)?.[1] ?? null
@@ -103,11 +104,17 @@ function blocksHtml(look) {
 		const said = touched
 			? `<span class="k-chg-count">${icon('changed')}<b class="k-num">${touched.files}</b> ${touched.files === 1 ? 'file' : 'files'}<span class="k-chg-lines k-num">+${touched.added} &minus;${touched.removed}</span></span>`
 			: '<span class="k-chg-count is-none">No change</span>'
-		return `<button class="k-chg-blk ${partClass(box.name)}${touched ? ' is-touched' : ''}" style="--r:${cell.row + 1};--c:${cell.col + 1}" data-act="brief-open" data-concept="${esc(partId(look.within, box.name))}" data-key="chg-blk-${i}"><span class="k-chg-name"><span class="k-chg-ic">${icon(partIcon(box.name))}</span><b>${esc(box.name)}</b></span>${said}</button>`
+		return `<button class="k-chg-blk ${partClass(box.name)}${touched ? ' is-touched' : ''}" style="--r:${cell.row + 1};--c:${cell.col + 1}" ${touched ? `data-act="chg-part" data-name="${esc(box.name)}"` : `data-act="brief-open" data-concept="${esc(partId(look.within, box.name))}"`} data-key="chg-blk-${i}"><span class="k-chg-name"><span class="k-chg-ic">${icon(partIcon(box.name))}</span><b>${esc(box.name)}</b></span>${said}</button>`
 	})
-	const outside = look.change.outside?.length ?? 0
-	return `<div class="k-chg-map" style="--cols:${placed.cols};--rows:${placed.rows}"><svg viewBox="0 0 ${placed.cols * 100} ${placed.rows * 100}" preserveAspectRatio="none" aria-hidden="true">${lines.join('')}</svg>${blocks.join('')}</div>
-		${outside > 0 ? `<p class="k-muted k-chg-outside">${count(outside, 'changed file is', 'changed files are')} in no part.</p>` : ''}`
+	const outside = look.change.outside ?? []
+	const names = outside.slice(0, SHOWN_OUTSIDE_FILES).map((path) => `<li><code>${esc(path)}</code></li>`)
+	const rest = outside.length - names.length
+	const loose = names.length
+		? `<details class="k-chg-outside"${outside.length === 1 ? ' open' : ''}>
+		<summary>${count(outside.length, 'changed file is', 'changed files are')} in no part</summary><ul>${names.join('')}</ul>
+		${rest ? `<p>and ${count(rest, 'more file', 'more files')}</p>` : ''}</details>`
+		: ''
+	return `<div class="k-chg-map" style="--cols:${placed.cols};--rows:${placed.rows}"><svg viewBox="0 0 ${placed.cols * 100} ${placed.rows * 100}" preserveAspectRatio="none" aria-hidden="true">${lines.join('')}</svg>${blocks.join('')}</div>${loose}`
 }
 
 // The files a step shows only part of: their lines in the step beside all the change did to them. files are the
@@ -212,6 +219,29 @@ function tabsHtml(chg, waiting, live) {
 		.join('')}</div>`
 }
 
+function partChangeHtml({ part, partDiff }) {
+	const heading = `<button class="k-link" data-act="chg-part" data-key="chg-all">All changes in this range</button><h2 id="chg-name" tabindex="-1">Changes in ${esc(part)}</h2>`
+	if (!partDiff || partDiff.message || partDiff.tooLarge) {
+		const why =
+			partDiff?.message ??
+			(partDiff?.tooLarge ? 'This diff is too large to show.' : 'Reading the changed lines from git.')
+		return `${heading}<p role="status">${esc(why)}</p>`
+	}
+	const { files, hunks, binary, range } = partDiff
+	const shownPaths = new Set(hunks.map((hunk) => hunk.path))
+	const other = files.filter((file) => !shownPaths.has(file.path))
+	const paths = other.map(({ path, oldPath }) => {
+		const name = path === oldPath ? esc(path) : `${esc(oldPath)} to ${esc(path)}`
+		return `<li><code>${name}</code>${binary.includes(path) || binary.includes(oldPath) ? ' (binary file)' : ''}</li>`
+	})
+	return `${heading}<p>${count(files.length, 'changed file', 'changed files')} · <code>${esc(short(range.base))}..${esc(short(range.head))}</code></p>
+		${partDiff.historyTooLarge ? '<p>Too many commits to list.</p>' : commitsHtml(partDiff, true)}
+		${hunks.length ? stepDiffHtml(partDiff, range) : ''}
+		${partDiff.cut ? '<p>Only the first 400 changed lines are shown.</p>' : ''}
+		${paths.length ? `<ul>${paths.join('')}</ul>` : ''}
+		${files.length ? '' : '<p>The files in this part are the same at both ends of the range.</p>'}`
+}
+
 // view is { home, chg, env, timeline, waiting, live, older }: the level with the change laid over it, the page's own
 // state, what the page is doing, the commits by day, how many things wait on the reader, the state of live mode, and
 // the views of the two other tabs, drawn by the page.
@@ -219,6 +249,8 @@ export function changesPageHtml({ home, chg, env, timeline, waiting, live, older
 	const tabs = tabsHtml(chg, waiting, live)
 	if (chg.tab !== 'changes')
 		return `<div class="k-chg-page">${tabs}<section class="k-tile k-chg-older">${older}</section></div>`
+	if (chg.part)
+		return `<div class="k-chg-page">${tabs}<section class="k-tile k-chg-older">${partChangeHtml(chg)}</section></div>`
 	const { look } = home
 	if (!look) {
 		const said = home.problem ? esc(home.problem.message) : 'Reading what landed, from git.'

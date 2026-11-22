@@ -177,9 +177,9 @@ function hunkHtml({ path, oldPath, hunk }, change) {
 		const text = esc(line.slice(1)) || ' '
 		const mark =
 			sign === '-'
-				? '<span class="visually-hidden">Removed: </span>'
+				? '<span class="visually-hidden">Removed: </span><span aria-hidden="true">− </span>'
 				: sign === '+'
-					? '<span class="visually-hidden">Added: </span>'
+					? '<span class="visually-hidden">Added: </span><span aria-hidden="true">+ </span>'
 					: ''
 		return `<span class="ln">${old}</span><span class="ln">${now}</span><span class="lc ${kind}">${mark}${text}</span>`
 	})

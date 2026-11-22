@@ -234,3 +234,27 @@ test('work sent with no claim tells the model that the piece of work needs one, 
 	const work = replyIn(events).recorded.find((entry) => entry.kind === 'work')
 	assert.equal(work?.kind === 'work' && work.title, 'Retries wait')
 })
+
+test('a long saved topic fits one memory read at a time and its last lines can still be recalled', async () => {
+	const source = Array.from(
+		{ length: 54 },
+		(_, index) => `export const setting${index} = 'a setting for the reader'`,
+	).join('\n')
+	const built = buildRepository([{ message: 'List settings', files: { 'settings.ts': source } }])
+	const store = fileRecordStore(built.root, gitRepository(built.root))
+	const result = await store.append([
+		{ kind: 'topic', name: 'Settings', quotes: [{ path: 'settings.ts', commit: 'HEAD', text: source }] },
+	])
+	assert.ok(result.kind === 'appended' && result.entries[0])
+	const about = result.entries[0].entry.id
+	const first = await ask([{ tool: 'ken__memory_known', args: { about } }, { text: 'Done.' }], built.root)
+	const fragment = toolResults(first.requests[1])[0] ?? ''
+	assert.ok(fragment.length <= 2000, `One memory read sent ${fragment.length} characters`)
+	const next = /Continue with from (\d+)/.exec(fragment)
+	assert.ok(next)
+	const second = await ask(
+		[{ tool: 'ken__memory_known', args: { about, from: Number(next[1]) } }, { text: 'Done.' }],
+		built.root,
+	)
+	assert.match(toolResults(second.requests[1])[0] ?? '', /setting53/)
+})

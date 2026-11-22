@@ -388,6 +388,11 @@
 	fill: var(--k-wire);
 }
 
+.k-rt-line.is-stale {
+	stroke: var(--k-muted);
+	stroke-dasharray: 3 5;
+}
+
 .k-rt-line.is-picked {
 	stroke-width: 5;
 }

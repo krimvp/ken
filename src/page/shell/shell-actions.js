@@ -35,6 +35,45 @@ export function shellActions(app) {
 	const { state, render, read } = app
 	const shell = state.shell
 	const $ = (selector) => document.querySelector(selector)
+	narrow.addEventListener('change', render)
+	let settingsOpener = null
+
+	let modal = null
+	function drawModal() {
+		let top = null
+		if (shell.settingsOpen) top = $('#settings')
+		else if (narrow.matches && state.ask.open) top = $('#ask-drawer')
+		else if (narrow.matches && state.brief.id) top = $('#brief')
+		if (top === modal) return
+		modal = top
+		for (const region of document.querySelectorAll('#rail, .k-main, #brief, #ask-drawer, #settings')) {
+			region.inert = Boolean(top && region !== top)
+			if (region.id === 'brief' || region.id === 'ask-drawer') {
+				if (region === top) region.setAttribute('role', 'dialog')
+				else region.removeAttribute('role')
+			}
+			if (region === top) region.setAttribute('aria-modal', 'true')
+			else region.removeAttribute('aria-modal')
+		}
+	}
+
+	function wrapTab(event) {
+		if (event.key !== 'Tab' || !modal) return false
+		const stops = [
+			...modal.querySelectorAll(
+				'button:not(:disabled), input:not(:disabled), textarea:not(:disabled), select:not(:disabled), a[href], summary, [tabindex="0"]',
+			),
+		].filter((el) => el.tabIndex >= 0 && el.getClientRects().length)
+		const first = stops[0]
+		const last = stops.at(-1)
+		const here = document.activeElement
+		const edge = event.shiftKey ? first : last
+		const toward = event.shiftKey ? Node.DOCUMENT_POSITION_PRECEDING : Node.DOCUMENT_POSITION_FOLLOWING
+		if (edge && modal.contains(here) && here.compareDocumentPosition(edge) & toward) return false
+		event.preventDefault()
+		;(event.shiftKey ? last : first)?.focus()
+		return true
+	}
 
 	// A reply lies over whichever page the reader is on.
 	const overlaid = () => state.view !== 'home' && state.view !== 'map'
@@ -46,15 +85,18 @@ export function shellActions(app) {
 		process: state.arch.process,
 		change: state.home.change,
 		tab: state.chg.tab,
+		part: shell.page === 'changes' && state.chg.tab === 'changes' ? state.chg.part : null,
 		brief: state.brief.id,
 		on: state.brief.on,
+		source: state.brief.on === 'source' ? state.brief.source.where : null,
 	})
 
 	// The address follows the reader once the page has read where it starts. Another page, another level or another
 	// brief is a new entry in the browser's history, so Back goes to the one before. Anything finer rewrites the
 	// entry it is in. A reply open over the pages keeps its own address.
 	let addressed = null
-	const coarse = (place) => JSON.stringify([place.page, place.trail, place.tab, place.brief, place.on])
+	const coarse = (place) =>
+		JSON.stringify([place.page, place.trail, place.tab, place.part, place.brief, place.on, place.source])
 	function address() {
 		if (addressed === null || overlaid()) return
 		const place = placeNow()
@@ -107,6 +149,7 @@ export function shellActions(app) {
 	}
 
 	async function goPage(page) {
+		state.chg.part = null
 		Object.assign(shell, { page, settingsOpen: false })
 		// What was typed in search was for the page the reader left.
 		Object.assign(shell.search, { text: '', open: false, at: 0 })
@@ -125,6 +168,7 @@ export function shellActions(app) {
 		Object.assign(shell, { page: place.page, settingsOpen: false })
 		Object.assign(arch, { layer: place.layer, process: place.process, drawOpen: false })
 		state.chg.tab = place.tab
+		state.chg.part = place.part ?? null
 		state.view = state.base = 'home'
 		Object.assign(home, { trail: place.trail, change: place.change, selected: null, shown: null, at: '' })
 		if (place.brief !== brief.id) {
@@ -140,8 +184,17 @@ export function shellActions(app) {
 			})
 		}
 		brief.on = place.on
-		addressed = coarse(placeNow())
-		render()
+		const revisiting =
+			!first || ['reload', 'back_forward'].includes(performance.getEntriesByType('navigation')[0]?.type)
+		if (revisiting) brief.told = brief.id
+		if (place.source) {
+			addressed = coarse(place)
+			void app.brief.readSource(place.source.line, place.source, !revisiting)
+		} else {
+			brief.source = null
+			addressed = coarse(placeNow())
+			render()
+		}
 		const { loads } = app.level
 		if (first) await Promise.all([loadTop(), loads.loadNotes(), loads.loadReader(), app.prefs.load()])
 		if (place.page === 'changes') await app.chg.enter(place.change === 'none' ? null : place.change)
@@ -183,6 +236,7 @@ export function shellActions(app) {
 	// Draws the frame and the page under it. It answers whether a reply lies over the pages, which the page then
 	// draws as it did.
 	function draw(env) {
+		drawModal()
 		const over = overlaid()
 		const { home } = state
 		fill(
@@ -257,8 +311,8 @@ export function shellActions(app) {
 		Object.assign(shell, { page: 'changes', settingsOpen: false })
 		state.view = state.base = 'home'
 		state.chg.tab = 'changes'
-		render()
-		await app.chg.enter(item.go.change ?? null)
+		state.chg.part = item.go.part ?? null
+		await app.chg.enter(item.go.change ?? null, true)
 		render()
 	}
 
@@ -276,7 +330,11 @@ export function shellActions(app) {
 		if (!shell.settingsOpen) return false
 		shell.settingsOpen = false
 		render()
-		$('[data-key="settings"]')?.focus()
+		const opener = $(`[data-key="${settingsOpener}"]`)
+		const back = opener?.getClientRects().length
+			? opener
+			: $(narrow.matches ? '[data-key="bar-settings"]' : '[data-key="settings"]')
+		back?.focus()
 		return true
 	}
 
@@ -298,12 +356,16 @@ export function shellActions(app) {
 			await goPage('processes')
 			app.procs.ask(flow)
 		},
-		'part-changed': (el) =>
-			follow(shell.top.look.boxes.find((box) => box.name === el.dataset.name).knows, el.dataset.key),
-		settings() {
-			shell.settingsOpen = !shell.settingsOpen
+		'part-changed': (el) => {
+			const box = shell.top.look.boxes.find((box) => box.name === el.dataset.name)
+			return follow({ go: { ...box.knows.go, part: box.name } }, el.dataset.key)
+		},
+		settings(el) {
+			if (closeSettings()) return
+			settingsOpener = el.dataset.key
+			shell.settingsOpen = true
 			render()
-			$(shell.settingsOpen ? '#settings-title' : '[data-key="settings"], [data-key="bar-settings"]')?.focus()
+			$('#settings-title')?.focus()
 		},
 		'pref-text'(el) {
 			app.prefs.setText(el.dataset.text)
@@ -340,8 +402,9 @@ export function shellActions(app) {
 			search.open = false
 			render()
 		}
-		if (shell.settingsOpen && !target.closest('#settings, [data-key="settings"]')) {
-			shell.settingsOpen = false
+		if (shell.settingsOpen && !target.closest('#settings, [data-act="settings"]')) closeSettings()
+		if (state.jobs.open && !target.closest('#jobs')) {
+			state.jobs.open = false
 			render()
 		}
 	}
@@ -374,6 +437,12 @@ export function shellActions(app) {
 		const typing = event.target.matches?.('input, textarea, select')
 		const { brief, home } = state
 		if (closeSettings()) return true
+		if (state.jobs.open) {
+			state.jobs.open = false
+			render()
+			;($('[data-key="jobs-open"]') ?? $('#search-text')).focus()
+			return true
+		}
 		if (shell.page === 'you' && app.you.closeFix()) return true
 		if (app.ask.close()) return true
 		if (brief.fixing) return Boolean(app.brief.actions['brief-fix']()) || true
@@ -404,6 +473,7 @@ export function shellActions(app) {
 		input,
 		key,
 		pressed,
+		wrapTab,
 		overlaid,
 	}
 }

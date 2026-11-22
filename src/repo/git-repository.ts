@@ -8,6 +8,8 @@ import { MAX_OUTPUT_BYTES, runGit } from './run-git.ts'
 // own files pollute the history"), so every change fact reads git through this pathspec and no other.
 const OUTSIDE_RECORD = ['--', '.', ':(exclude).ken']
 
+const literalPaths = (paths: string[]) => ['--', ...paths.map((path) => `:(literal)${path}`), ':(exclude).ken']
+
 const RECORD = '.ken'
 const outsideRecord = (file: string) => file !== RECORD && !file.startsWith(`${RECORD}/`)
 
@@ -118,8 +120,9 @@ export function gitRepository(root: string, options: { alternate?: string } = {}
 			return { kind: 'ok', commits: parseLog(run.stdout) }
 		},
 
-		async commitsIn({ base, head }, limit, signal) {
-			const range = ['--full-history', `${base}..${head}`, ...OUTSIDE_RECORD]
+		async commitsIn({ base, head }, limit, signal, within = []) {
+			const paths = within.length ? literalPaths(within) : OUTSIDE_RECORD
+			const range = ['--full-history', `${base}..${head}`, ...paths]
 			const shared = ['--no-merges', ...range]
 			const run = await git(['log', '-z', '--no-color', `--max-count=${limit + 1}`, LOG_FORMAT, ...shared], signal)
 			if (run.kind === 'too-large') return tooLarge
@@ -228,8 +231,26 @@ export function gitRepository(root: string, options: { alternate?: string } = {}
 			return HASH.test(hash) ? (hash as CommitHash) : null
 		},
 
-		async diff({ base, head }, signal) {
-			const common = ['-M', '--no-color', '--no-ext-diff', '--no-textconv', base, head, ...OUTSIDE_RECORD]
+		async diff({ base, head }, signal, within = []) {
+			const args = ['-M', '--no-color', '--no-ext-diff', '--no-textconv', base, head]
+			let paths = OUTSIDE_RECORD
+			if (within.length) {
+				// Git only pairs a move when both names are in the patch. Find the other end before limiting the patch.
+				const moves = await git(['diff', '--name-status', '-z', '--diff-filter=R', ...args, ...OUTSIDE_RECORD], signal)
+				if (moves.kind === 'too-large') return tooLarge
+				if (moves.kind === 'failed') throw new Error(`git diff failed on resolved commits ${base} and ${head}`)
+				const names = moves.stdout.split('\0')
+				const inScope = (file: string) => within.some((place) => file === place || file.startsWith(`${place}/`))
+				const scope = new Set(within)
+				for (let at = 0; at + 2 < names.length; at += 3) {
+					const from = names[at + 1] ?? ''
+					const to = names[at + 2] ?? ''
+					if (inScope(from) && !inScope(to)) scope.add(to)
+					else if (inScope(to) && !inScope(from)) scope.add(from)
+				}
+				paths = literalPaths([...scope])
+			}
+			const common = [...args, ...paths]
 			const [numstat, patch] = await Promise.all([
 				git(['diff', '--numstat', '-z', ...common], signal),
 				git(['diff', '-U0', ...common], signal),
