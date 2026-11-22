@@ -265,11 +265,15 @@ export function runtimeLayout(views, { folded = false } = {}) {
 		}
 		// What calls each child from outside this frame, so children called by one outside thing stand together.
 		const callers = new Map(items.map((_, i) => [i, new Set()]))
+		// The children that meet a bus outside this frame: they stand last, nearest the bus.
+		const toBus = new Set()
 		for (const c of drawn.crossings) {
 			const [a, b] = [at(c.from), at(c.to)]
 			if (a === undefined && b !== undefined) callers.get(b).add(c.from)
+			const bus = busOf(c)
+			if (bus && at(bus.id) === undefined) for (const end of [a, b]) if (end !== undefined) toBus.add(end)
 		}
-		const rows = joinLoose(chained(ranked.filter(Boolean), edges, items), edges, touches, callers)
+		const rows = joinLoose(chained(ranked.filter(Boolean), edges, items), edges, touches, callers, toBus)
 		const ordered = wrapped(orderRows(rows, edges, touches), items, besideOf)
 		for (const [store, user] of besideOf) {
 			const crossing = drawn.crossings.find(
@@ -427,8 +431,8 @@ function chained(rows, edges, items) {
 }
 
 // A thing with no line to anything here stands in the row of something the same outside thing calls, or else in the
-// shortest row, rather than in a row of its own.
-function joinLoose(rows, edges, touches, callers) {
+// shortest row, rather than in a row of its own. Those that meet only through a bus outside stand together, last.
+function joinLoose(rows, edges, touches, callers, toBus) {
 	const linked = new Set(edges.flat())
 	for (const [bus, set] of touches) {
 		if (set.size > 0) linked.add(bus)
@@ -436,7 +440,9 @@ function joinLoose(rows, edges, touches, callers) {
 	}
 	const loose = rows.flat().filter((n) => !linked.has(n))
 	const kept = rows.map((row) => row.filter((n) => linked.has(n))).filter((row) => row.length > 0)
-	for (const n of loose) {
+	const busRow = loose.filter((n) => toBus.has(n))
+	if (busRow.length > 0) kept.push(busRow)
+	for (const n of loose.filter((each) => !toBus.has(each))) {
 		const shares = (m) => [...callers.get(n)].some((caller) => callers.get(m).has(caller))
 		const room = kept.filter((row) => row.length < MOST_IN_ROW)
 		const sibling = room.find((each) => each.some(shares))
@@ -845,8 +851,8 @@ function linesOf(drawn, placed, busOf) {
 		joined.set(key, line)
 		meta.push(line)
 	}
-	// A tie joins two places of a part only where one frame holds the other or both stand in one frame. Places in two
-	// separate processes are each marked "also runs here" instead, so ties never cross the whole drawing.
+	// A tie joins two places of a part only where one frame holds the other, as a worker thread inside its process.
+	// Other places are each marked "also runs here" instead, so ties never wind across the drawing.
 	const parentOf = new Map(placed.frames.map((f) => [f.id, f.frame.in]))
 	const chain = (frame) => {
 		const out = []
@@ -854,11 +860,10 @@ function linesOf(drawn, placed, busOf) {
 		return out
 	}
 	const near = (a, b) => {
+		if (a.holder === b.holder) return false
 		const [ca, cb] = [chain(a.holder), chain(b.holder)]
 		if (a.holder && cb.includes(a.holder)) return true
-		if (b.holder && ca.includes(b.holder)) return true
-		const [pa, pb] = [ca[1] ?? null, cb[1] ?? null]
-		return pa !== null && pa === pb
+		return Boolean(b.holder && ca.includes(b.holder))
 	}
 	for (const thing of placed.things) {
 		if (!thing.second || !near(thing, rectOf.get(thing.second))) continue

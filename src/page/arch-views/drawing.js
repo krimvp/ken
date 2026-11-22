@@ -73,6 +73,15 @@ function footOf(box, view) {
 	return `${mark}<span class="k-rt-words">${esc(levelLabel(home, box.knows.level))}</span>`
 }
 
+// The container a part runs in alone, as a tab on the part: its name where it says more than the part's, and its
+// copies.
+function tagHtml(frame, part, view) {
+	const named = frame.name.toLowerCase() === part.toLowerCase() ? '' : frame.name
+	const words = [named, copiesOf(frame)].filter(Boolean).join(', ') || FRAME_NAMES[frame.kind] || 'Frame'
+	const id = `frame:${frame.id}`
+	return `<button class="k-rt-tag" data-act="brief-open" data-concept="${esc(id)}" data-key="frame-${esc(frame.id)}" aria-pressed="${view.brief === id}" aria-label="${esc(`${FRAME_NAMES[frame.kind] ?? 'Frame'}: ${frame.name}${frame.copies ? `, ${copiesOf(frame)}` : ''}`)}">${mark(frame.kind)}<span>${esc(words)}</span></button>`
+}
+
 // A part as a bold block, in its colour: the second place of a part drawn twice is dashed.
 function partHtml(placed, view) {
 	const name = placed.thing.part
@@ -93,9 +102,7 @@ function partHtml(placed, view) {
 		stops.length > 0
 			? `<span class="k-beads">${stops.map((n) => `<span class="k-bead k-num"><span class="visually-hidden">Stop </span>${n}</span>`).join('')}</span>`
 			: ''
-	const solo = placed.solo
-		? `<button class="k-rt-tag" data-act="brief-open" data-concept="frame:${esc(placed.solo.id)}" data-key="frame-${esc(placed.solo.id)}" aria-pressed="${view.brief === `frame:${placed.solo.id}`}" title="${esc(placed.solo.name)}">${mark(placed.solo.kind)}<span>${esc(copiesOf(placed.solo) || FRAME_NAMES[placed.solo.kind] || 'Frame')}</span></button>`
-		: ''
+	const solo = placed.solo ? tagHtml(placed.solo, name, view) : ''
 
 	const known = box ? KNOWN.indexOf(box.knows.level) / (KNOWN.length - 1) : 0
 	return `<div class="${classes.filter(Boolean).join(' ')}" style="${px(placed)};--known:${known}" data-glide="part:${esc(name)}${placed.second ? ':2' : ''}">
