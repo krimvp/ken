@@ -179,7 +179,8 @@ export function questionDesk(
 							chat: 'ken' as const,
 							layer: job.layer,
 						}
-						return { ...job, yields: true, work }
+						// The run that names the top parts is the slowest, and every layer waits for it.
+						return { ...job, yields: job.kind !== 'parts', work }
 					}),
 				)
 			})

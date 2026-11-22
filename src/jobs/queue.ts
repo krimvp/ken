@@ -10,7 +10,7 @@ export type Rank = 1 | 2 | 3 | 4
 
 // key names what the job makes, so two jobs for one thing are one job. order places a background job within its rank,
 // lowest first. yields says it gives way to the reader; a live note does not, as the reader turned live mode on and a
-// note stopped halfway is lost. work is what the server needs to run it.
+// note stopped halfway is lost, and nor does the run that names the top parts. work is what the server needs to run it.
 export type JobAsk<W> = {
 	key: string
 	kind: string
@@ -78,6 +78,8 @@ export type QueueDeps<W, L> = {
 // The jobs that ended stay in the list for a while, so the page can say what ken did.
 const KEPT_ENDED = 20
 const GAVE_WAY = 'gave way to the reader'
+// A background run gives way to the reader only this soon after it started; later, the reader's job waits for it.
+const YIELD_WITHIN = 20_000
 // The waits before ken tries again a job the model refused, the last one repeated.
 const RETRY_WAITS = [30_000, 120_000, 600_000]
 
@@ -214,12 +216,14 @@ export function jobQueue<W, L>(deps: QueueDeps<W, L>) {
 	}
 
 	// A reader's job finds no free slot: the background job furthest from what the reader looks at gives way, and runs
-	// again later from the head of its rank.
+	// again later from the head of its rank. One that has run a while is not thrown away: the reader's job runs next.
 	function makeRoom() {
 		const busy = running()
 		if (busy.length < slots || busy.some((job) => job.stop?.signal.aborted)) return
+		const now = Date.now()
+		const young = (job: Job<W, L>) => job.state.kind === 'running' && now - job.state.startedAt < YIELD_WITHIN
 		const yielding = busy
-			.filter((job) => !job.asked && job.yields)
+			.filter((job) => !job.asked && job.yields && young(job))
 			.sort((a, b) => rank(b) - rank(a) || b.seq - a.seq)
 			.at(0)
 		yielding?.stop?.abort(GAVE_WAY)

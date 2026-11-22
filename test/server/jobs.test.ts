@@ -79,7 +79,7 @@ const brief = (line: string, file: keyof typeof FILES, quoted: string, questions
 	},
 })
 
-test('on a first open the server itself starts naming the parts, as the first job, and the page can read it', async () => {
+test('on a first open the server itself starts naming the parts, as the first job the page can read, and goes on when the reader asks', async () => {
 	const { root } = fresh
 	const model = await scriptedModel([{ hang: () => {} }])
 	const server = await openKen(root, homes[0] ?? '', model.baseUrl, BACKGROUND)
@@ -93,6 +93,27 @@ test('on a first open the server itself starts naming the parts, as the first jo
 		(n) => n === 1,
 	)
 	assert.match(JSON.stringify(model.requests[0]?.messages), /Name the main parts of this project/)
+	const stop = new AbortController()
+	const url = new URL('/api/questions', server.url)
+	void fetch(url, {
+		method: 'POST',
+		headers: { origin: url.origin, 'content-type': 'application/json' },
+		body: JSON.stringify({ question: 'What does run do?' }),
+		signal: stop.signal,
+	}).catch(() => {})
+	const asked = await until(
+		async () => (await json(server, '/api/jobs', { looking: { brief: null, within: null } })).jobs as Job[],
+		(jobs) => jobs.some((job) => job.by === 'reader'),
+	)
+	stop.abort()
+	assert.deepEqual(
+		asked.map((job) => [job.key.replace(/^ask:.*/, 'ask'), job.state.kind]),
+		[
+			['parts:', 'running'],
+			['ask', 'waiting'],
+		],
+		"the naming run goes on, and the reader's question runs next",
+	)
 })
 
 test("ken explains each part by itself in tour order; a part the reader presses stops ken's run, goes first, and ken's run comes back after", async () => {

@@ -245,3 +245,17 @@ test('on an endpoint that serves one request at a time, KEN_PARALLEL above 1 fai
 	assert.ok(states().includes('d:running'), 'one runs at a time from then on')
 	assert.ok(states().includes('e:waiting'))
 })
+
+test('a background run that has gone on 20 seconds is not thrown away for the reader, who runs next', async (t) => {
+	t.mock.timers.enable({ apis: ['setTimeout', 'Date'] })
+	const flush = () => new Promise((resolve) => setImmediate(resolve))
+	const { queue, ask, started, state } = harness()
+	queue.want(ask('long'), 'ken')
+	await flush()
+	t.mock.timers.tick(20_000)
+	queue.want(ask('asked'), 'reader')
+	t.mock.timers.tick(1)
+	await flush()
+	assert.deepEqual([state('long'), state('asked'), started], ['running', 'waiting', ['long']])
+	assert.equal(queue.view().find((job) => job.key === 'asked')?.place, 1)
+})
