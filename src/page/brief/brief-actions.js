@@ -108,6 +108,7 @@ export function briefActions(app) {
 				env,
 				look: lookOf(ui.id),
 				inner: ui.inner ?? null,
+				views: state.shell.top?.look?.views ?? null,
 			}),
 		)
 		const name = drawer.querySelector('#brief-name')

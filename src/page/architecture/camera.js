@@ -17,8 +17,9 @@ const DRAG = 5
 const clamp = (z) => Math.min(ZOOM.most, Math.max(ZOOM.least, z))
 
 // page is the element that holds the canvas, which is drawn again inside it. arch is the canvas's state: it keeps
-// the camera as arch.cam. drawer gives the width a brief open beside the canvas takes from it.
-export function canvasCamera(page, arch, drawer) {
+// the camera as arch.cam. drawer gives the width a brief open beside the canvas takes from it. zoomed is told each
+// zoom the reader makes.
+export function canvasCamera(page, arch, drawer, zoomed = () => {}) {
 	const canvas = () => page.querySelector('#arch-canvas')
 	const worldBox = () => {
 		const [x, y, w, h] = (canvas()?.dataset.world ?? '0 0 1 1').split(' ').map(Number)
@@ -64,13 +65,16 @@ export function canvasCamera(page, arch, drawer) {
 		const column = room.w < NARROW
 		const top = column ? ROOM.narrowTop : ROOM.top
 		const across = (room.w - 2 * (column ? ROOM.narrowSide : ROOM.side)) / world.w
-		const z = clamp(Math.min(across, column ? 1 : (room.h - top - ROOM.bottom) / world.h, 1))
+		// A drawing of where the project runs is not fitted smaller than it can be read: the reader pans the rest.
+		const legible = column ? 0 : Number(canvas().dataset.least ?? 0)
+		const z = clamp(Math.max(Math.min(across, column ? 1 : (room.h - top - ROOM.bottom) / world.h, 1), legible))
 		const spare = room.h - top - ROOM.bottom - world.h * z
-		arch.cam = {
-			z,
-			x: (room.w - world.w * z) / 2 - world.x * z,
-			y: top + (column ? 0 : spare / 2) - world.y * z,
-		}
+		// Too big to read whole, a drawing opens on the middle of its parts, and the reader pans to the rest.
+		const cut = legible > 0 && z === legible && (world.w * z > room.w || world.h * z > room.h - top)
+		const [fx, fy] = (canvas().dataset.focus ?? '').split(' ').map(Number)
+		arch.cam = cut
+			? { z, x: room.w / 2 - fx * z, y: top + (room.h - top - ROOM.bottom) / 2 - fy * z }
+			: { z, x: (room.w - world.w * z) / 2 - world.x * z, y: top + (column ? 0 : spare / 2) - world.y * z }
 		apply()
 	}
 
@@ -80,6 +84,7 @@ export function canvasCamera(page, arch, drawer) {
 		const next = clamp(z * factor)
 		arch.cam = { z: next, x: px - ((px - x) * next) / z, y: py - ((py - y) * next) / z }
 		apply()
+		zoomed(next)
 	}
 
 	function zoomBy(steps) {
@@ -145,7 +150,9 @@ export function canvasCamera(page, arch, drawer) {
 		{ passive: false },
 	)
 	page.addEventListener('focusin', (event) => {
-		const el = event.target.closest?.('.k-blk, .k-verb')
+		const el = event.target.closest?.(
+			'.k-blk, .k-verb, .k-rt-part, .k-rt-store, .k-rt-bus-head, .k-rt-out, .k-rt-person, .k-rt-fold, .k-rt-flabel, .k-rt-label, .k-rt-mark, .k-wd-tile',
+		)
 		if (el && !drag) reveal(el)
 	})
 
