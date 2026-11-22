@@ -85,6 +85,12 @@ The hash is what replaces the cursor. When the code under a topic changes, the e
 
 The map is a plain file the reader can open and correct, because it will sometimes be wrong. A question asked is evidence of interest, not proof of understanding.
 
+### Reader notes
+
+A reader note is one plain sentence ken keeps about the reader: how they want things shown, or what they already know. "Explain with examples from the tests" is one. The notes are personal, so they sit beside the map, in a plain file that only grows. A line adds a note, and another line removes it by its id.
+
+The model keeps a note with the `remember` tool when the reader says how they want to be answered. It keeps how they want to be answered, never what they asked about. Every question then starts with the newest twelve notes. The page lists them, and the reader can remove any of them.
+
 ### The project's layout
 
 The owner asked on 2026-11-17 for ken to "show me the state of the repo architecture-wise at any point and zoom in on the feature, change etc I am doing", and for a guide that "shows me data I want to follow", lets them look closer when they want, "and makes a model of what I know about it". The layout is that view, and the page's Project view is its home.
@@ -97,10 +103,12 @@ The owner asked on 2026-11-17 for ken to "show me the state of the repo architec
 
 - **ken's model names the parts.** "Ask ken to name these parts" on a folder level sends a question into the reader's thread with the folder split as the starting point and the layout rules. The model explores and sends `show` with a layout: 2 to 6 parts, each a name the owner would use, a one-line job and its paths, and at most 8 arrows. ken checks it like any card, and a layout that fails goes back alone. Every path must hold a file at the commit and sit inside the level, and no two parts share a file. Every arrow quotes lines from a file of the part it starts at, and those lines name a folder or file of the part it ends at, as an import line does. Lines that are all comments do not count: a line whose trimmed start is //, /*, *, #, -- or ; is a comment, except C's #include and #import. ken checks the quote in git and the name by plain text, with no parser. An arrow the model cannot quote that way is left out: no arrow is a guess.
 - **Every version is kept.** A named level is a `layout` entry in the record, with git's id of each path at the commit it was named at. A new one replaces the one before and the old one stays. At the commit checked out the view shows the newest version, so a level drawn again with fewer parts shows as drawn. At an older commit it picks the version with the largest share of its parts the same there by those ids, the newest on a tie. With none, it shows the folder split.
+- **A redraw on request.** The reader can tell ken to show a level another way, in their own words. The question carries those words, the level as it stands and the layout rules. When the words are about the picture, the model sends a new layout, and ken stores it with the reader's words beside it. Plain code sets those words, and the model has no field for them. When the words are about the reader, the model keeps a reader note instead. A picture can also say what the level is as a whole, in a sentence or two from the model.
+- **Back to the picture before.** ken finds the picture that shows at the commit checked out and the newest one before it whose parts or arrows differ. It appends a copy of that earlier one, which is then the newest and shows. Nothing is deleted, and going back once more brings the redraw back.
 - **It says when it no longer fits.** A part whose ids differ from when it was named says so, one line over the view says the arrows that start at it may be out of date, and a folder that is new and in no part is named ("src/extra is new and in no part"). The view says who named the parts and at which commit, and offers "Name them again".
 - **The model speaks in the reader's names.** Each question's first message lists the top named level, one line per part, so the model's words use the parts the reader sees.
 
-Looking at the layout takes no model: each look reads git, the record and the map again. Only naming a level asks the model.
+Looking at the layout takes no model: each look reads git, the record and the map again. Only naming a level, or drawing it again, asks the model.
 
 This touches "no code index". The layout is not an index: it is a few folders per level, read from git when the reader looks, with no symbols, no call graph and no cache. A drawn level adds a few named boxes and quoted arrows, still not an index of the code.
 
@@ -308,6 +316,12 @@ The owner chose these on 2026-11-17, after saying the answers felt scripted and 
 | How ken replies             | Talk first. The model replies in its own words and shows a checked card only where a claim needs proof.   |
 | Decisions and risks         | Risks on ask. A reply about a change gives the story and a one-line hint; the reader asks for the rest. The second look runs on the risks when they come. |
 | The architecture view       | The project's layout at any commit, with zoom into a part and a change laid over it, and the reader's map on each part. See "The project's layout". |
+
+The owner asked for this on 2026-11-22.
+
+| Question   | Answer                                                                                                                                                                                                                                                                             |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ken's home | A dashboard, not a chat. The picture of the project's parts comes first. It has three ways in (learn the project, catch up, review a change), three levels of detail (big picture, how it works, in the code), and a box to ask ken to show it another way. Chat is a side action. |
 
 ## Out of scope for the first version
 

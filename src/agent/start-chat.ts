@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { createSession, type RunResult } from 'aigent'
 import type { Tool } from 'aigent/plugin'
 import { followedNames, usedElsewhere } from '../checks/index.ts'
-import type { UnderstandingMap } from '../map/index.ts'
+import type { ReaderNotes, UnderstandingMap } from '../map/index.ts'
 import { fileRecordStore } from '../record/index.ts'
 import { findRoot, gitRepository } from '../repo/index.ts'
 import { projectSessions } from '../transcripts/index.ts'
@@ -12,29 +12,26 @@ import { readerIndex } from './reader-index.ts'
 import { quotesOf } from './reply/check-card.ts'
 import { fileTurn } from './reply/file-turn.ts'
 import { endReply } from './reply/record-reply.ts'
-import type { Item, Tour } from './reply/reply.ts'
+import type { Item } from './reply/reply.ts'
 import { laterCommits, laterText, MAX_PASS_REJECTIONS, reviseTool, riskPassQuestion } from './reply/risk-pass.ts'
-import { freshRound, type Round, showTool } from './reply/show-tool.ts'
+import { type Asking, changeNamed, freshRound, type Round, showTool } from './reply/show-tool.ts'
 import { SYSTEM_PROMPT } from './system-prompt.ts'
 import { describeCall } from './tools/describe-call.ts'
 import { diffTool } from './tools/diff-tool.ts'
 import { type Elsewhere, elsewhereText } from './tools/elsewhere-text.ts'
 import { explorationTools } from './tools/exploration-tools.ts'
 import { recordIndex, recordTool } from './tools/record-tool.ts'
+import { rememberTool } from './tools/remember-tool.ts'
 import { sessionTools } from './tools/session-tools.ts'
 
 export type Chat = {
 	root: string
 	// This chat's thread. A new Chat is a new thread: its model remembers what was asked of this one alone.
 	thread: string
-	// One question at a time. Breaking out of the loop early stops the question. as 'note' is a note ken writes by
-	// itself in live mode, which tells the reader's map nothing. A tour tells it nothing either: the page marks each stop
-	// as the reader reaches it.
+	// One question at a time. Breaking out of the loop early stops the question. as says how it is asked: see Asking.
 	ask(question: string, signal?: AbortSignal, as?: Asking): AsyncGenerator<ChatEvent>
 	close(): Promise<void>
 }
-
-export type Asking = 'question' | 'note' | { tour: Tour }
 
 const PLUGIN = 'ken'
 // Each step of a question has its own turns, counted from 0, and a notice when few are left: a model that runs out of
@@ -56,7 +53,8 @@ const STEPS: Record<Round['step'], { turns: number; notice: number; say: string 
 // Above the diff tool's own limit, so a whole diff reaches the model uncut.
 const MAX_TOOL_RESULT_CHARS = 64_000
 
-// map is the reader's understanding map. A chat run by a script, such as "ken ask --json", has no reader and no map.
+// reader is the reader's understanding map and their notes. A chat run by a script, such as "ken ask --json", has no
+// reader, so it has neither, and no tool to keep a note with.
 // env decides which saved sessions the agent may read (see projectSessions) and which values secretHider hides.
 // snapshots is ken's store of snapshots of uncommitted work (see the live module), which the agent's tools and the
 // quote check read as well as the project's own git.
@@ -64,7 +62,7 @@ export async function startChat(options: {
 	directory: string
 	model: ModelConfig
 	env: Record<string, string | undefined>
-	map?: UnderstandingMap
+	reader?: { map: UnderstandingMap; notes: ReaderNotes }
 	snapshots?: string
 }): Promise<{ kind: 'ok'; chat: Chat } | { kind: 'no-repository'; message: string }> {
 	const found = await findRoot(options.directory)
@@ -76,7 +74,7 @@ export async function startChat(options: {
 	const sessions = projectSessions(found.root, options.env)
 	// The record reads the project alone, so its gate refuses a quote of a snapshot whatever reaches it.
 	const store = fileRecordStore(found.root, project, sessions)
-	let round: Round = freshRound(false, () => {})
+	let round: Round = freshRound({ kind: 'note' }, () => {})
 	let turnsEnded = 0
 	const withTurnsLeft = (tool: Tool): Tool => ({
 		...tool,
@@ -102,7 +100,8 @@ export async function startChat(options: {
 		const text = parts.filter((part) => part !== '').join('\n\n')
 		return text === '' ? null : text
 	}
-	const gate = { sources: { repo, sessions }, store, project, map: options.map ?? null }
+	const { reader } = options
+	const gate = { sources: { repo, sessions }, store, project, map: reader?.map ?? null }
 	const { model, baseUrl, apiKeyEnv } = options.model
 	const session = await createSession({
 		model: { kind: 'openai-compatible', baseUrl, id: model, apiKeyEnv },
@@ -115,6 +114,7 @@ export async function startChat(options: {
 					diffTool(repo, elsewhere),
 					recordTool(store, repo),
 					...sessionTools(sessions),
+					...(reader ? [rememberTool(reader.notes, () => round)] : []),
 					showTool(gate, () => round),
 					reviseTool(gate, () => round),
 				].map(withTurnsLeft),
@@ -127,9 +127,13 @@ export async function startChat(options: {
 		systemPrompt: SYSTEM_PROMPT,
 	})
 
-	async function* ask(question: string, signal?: AbortSignal, as: Asking = 'question'): AsyncGenerator<ChatEvent> {
+	async function* ask(
+		question: string,
+		signal?: AbortSignal,
+		as: Asking = { kind: 'question' },
+	): AsyncGenerator<ChatEvent> {
 		const events = eventQueue()
-		const current = freshRound(as === 'question', events.push, typeof as === 'object' ? as.tour : null)
+		const current = freshRound(as, events.push)
 		round = current
 		turnsEnded = 0
 		shown.clear()
@@ -190,13 +194,16 @@ export async function startChat(options: {
 		})
 		const started = performance.now()
 		const index = recordIndex(await store.read())
-		const reader = options.map ? `\n\n${readerIndex(await options.map.read(new Date(), signal))}` : ''
+		const known = reader
+			? `\n\n${readerIndex(await reader.map.read(new Date(), signal), await reader.notes.read())}`
+			: ''
 		const prompt = async (text: string, own: AbortController): Promise<RunResult> =>
 			await session
 				.prompt(text, { signal: signal ? AbortSignal.any([signal, own.signal]) : own.signal })
 				.catch((error: unknown): RunResult => ({ stop: 'error', message: String(error), turns: 0 }))
 		const talk = async () => {
-			const result = await prompt(`${index}${reader}\n\nThe question: ${question}`, stops.talk)
+			if (as.kind === 'change') events.push(await changeNamed(repo, as.range, signal))
+			const result = await prompt(`${index}${known}\n\nThe question: ${question}`, stops.talk)
 			settleRetry('reply')
 			let secondLook: Cost | null = null
 			const { scope } = current

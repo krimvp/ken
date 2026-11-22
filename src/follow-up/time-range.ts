@@ -79,18 +79,16 @@ export async function timeRange(
 export type SinceChoice = { kind: 'since'; change: string; name: string; commits: number }
 
 // A choice with the same fact said two more ways: landed as a sentence, such as "23 commits landed since your last
-// commit, 14 Oct.", and short in a few words, such as "23 commits since 14 Oct".
-export type Landed = { choice: SinceChoice; landed: string; short: string }
+// commit, 14 Oct.", and short in a few words, such as "23 commits since 14 Oct". anchor is what the span starts at: the
+// reader's last question, their own last commit, or a number of days ago.
+export type Landed = { choice: SinceChoice; anchor: Anchor; landed: string; short: string }
+export type Anchor = 'question' | 'commit' | 'days'
 
 const SPANS_DAYS = [7, 30, 90]
-// shortcut: the reader's last commit is looked for among this many of the newest commits on HEAD's main line, and
-// their last question among this many of the commits they last asked at. Walk further if a reader ever misses one.
-const MAX_WALK = 200
-const MAX_ASKED_AT = 20
 
-// The spans that hold at least one commit, in this order: since the reader's last question at an older commit, since
-// their own last commit, then the last 7, 30 and 90 days, without a span that holds the same commits as a shorter one.
-// asked is the reader's questions, oldest first.
+// The spans that hold at least one commit, in this order: since the reader's last question, since their own last
+// commit, then the last 7, 30 and 90 days, without a span that holds the same commits as one before it. asked is the
+// reader's questions, oldest first.
 export async function sinceChoices(
 	repo: Repository,
 	asked: { askedAt: string; head: string | null }[],
@@ -106,27 +104,26 @@ export async function sinceChoices(
 		return logged.kind === 'ok' ? logged.commits.filter((commit) => commit.parents.length < 2).length : 0
 	}
 	// title heads the choice, clause says the same span inside a sentence, and short says it in the fewest words.
-	const spans: { title: string; clause: string; short: string; base: CommitHash; commits: number }[] = []
-	const since = async (what: string, moment: string, base: CommitHash) => {
+	const spans: { anchor: Anchor; title: string; clause: string; short: string; base: CommitHash; commits: number }[] =
+		[]
+	const since = async (anchor: Anchor, what: string, moment: string, base: CommitHash) => {
 		const when = day(moment, now)
 		const [title, clause, short] = [`Since ${what}, ${when}`, `since ${what}, ${when}`, `since ${when}`]
-		spans.push({ title, clause, short, base, commits: await landedSince(base) })
+		spans.push({ anchor, title, clause, short, base, commits: await landedSince(base) })
 	}
 
 	const question = await lastAskedBefore(repo, asked, head, signal)
-	if (question) await since('your last question to ken', question.askedAt, question.head)
-	const [email, line] = await Promise.all([repo.userEmail(signal), repo.mainLine(head, MAX_WALK, signal)])
-	const own =
-		email === null || line.kind !== 'ok'
-			? undefined
-			: line.commits.find((commit) => commit.email.toLowerCase() === email.toLowerCase())
-	if (own && own.hash !== head) await since('your last commit', own.date, own.hash)
-	const bases = new Set<CommitHash>()
+	if (question) await since('question', 'your last question to ken', question.askedAt, question.head)
+	const email = await repo.userEmail(signal)
+	const own = email === null ? null : await repo.lastCommitBy(head, email, signal)
+	if (own && own.hash !== head) await since('commit', 'your last commit', own.date, own.hash)
+	const bases = new Set(spans.map((span) => span.base))
 	for (const days of SPANS_DAYS) {
 		const range = await timeRange(repo, { kind: 'days', days }, now, signal)
 		if (range.kind !== 'ok' || bases.has(range.range.base)) continue
 		bases.add(range.range.base)
 		spans.push({
+			anchor: 'days',
 			title: `The last ${days} days`,
 			clause: `in the last ${days} days`,
 			short: `in the last ${days} days`,
@@ -136,32 +133,29 @@ export async function sinceChoices(
 	}
 	return spans
 		.filter((span) => span.commits > 0)
-		.map(({ title, clause, short, base, commits }) => {
+		.map(({ anchor, title, clause, short, base, commits }) => {
 			const count = commits === 1 ? '1 commit' : `${commits} commits`
 			return {
 				choice: { kind: 'since', change: `${base}..${head}`, name: `${title}: ${count}`, commits },
+				anchor,
 				landed: `${count} landed ${clause}.`,
 				short: `${count} ${short}`,
 			}
 		})
 }
 
-// The newest question the reader asked while the project was at an older commit of HEAD's history.
+// The reader's newest question that has a head, when the project was at an older commit of HEAD's history then. Asked
+// at HEAD, nothing landed since it. Asked at a commit HEAD's history does not hold, as after a rebase, there is no base.
 async function lastAskedBefore(
 	repo: Repository,
 	asked: { askedAt: string; head: string | null }[],
 	head: CommitHash,
 	signal?: AbortSignal,
 ): Promise<{ askedAt: string; head: CommitHash } | null> {
-	const tried = new Set<string>()
-	for (const each of asked.toReversed()) {
-		if (each.head === null || each.head === head || tried.has(each.head)) continue
-		if (tried.size === MAX_ASKED_AT) return null
-		tried.add(each.head)
-		const commit = await repo.resolve(each.head, signal)
-		if (commit.kind !== 'ok') continue
-		const split = await repo.mergeBase(commit.commit, head, signal)
-		if (split.kind === 'ok' && split.commit === commit.commit) return { askedAt: each.askedAt, head: commit.commit }
-	}
-	return null
+	const newest = asked.findLast((each) => each.head !== null)
+	if (!newest?.head) return null
+	const commit = await repo.resolve(newest.head, signal)
+	if (commit.kind !== 'ok' || commit.commit === head) return null
+	const split = await repo.mergeBase(commit.commit, head, signal)
+	return split.kind === 'ok' && split.commit === commit.commit ? { askedAt: newest.askedAt, head: commit.commit } : null
 }

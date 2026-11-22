@@ -58,7 +58,8 @@ async function ask(script: Turn[], as: 'question' | 'note' = 'question', directo
 	})
 	if (started.kind !== 'ok') throw new Error(started.message)
 	const events: ChatEvent[] = []
-	for await (const event of started.chat.ask('What did the last commit do?', undefined, as)) events.push(event)
+	for await (const event of started.chat.ask('What did the last commit do?', undefined, { kind: as }))
+		events.push(event)
 	await started.chat.close()
 	return { events, requests: model.requests }
 }

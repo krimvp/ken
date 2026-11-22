@@ -14,6 +14,7 @@ export {
 	type TourLevel,
 	topicQuestion,
 	tourQuestion,
+	viewQuestion,
 } from './lens-questions.ts'
 export {
 	type ChangeCommit,
@@ -25,6 +26,7 @@ export {
 } from './open-items.ts'
 export { type Author, authorsOf, findAuthor, type PersonChanges, personChanges } from './person.ts'
 export {
+	type Anchor,
 	type Landed,
 	type Since,
 	type SinceChoice,
