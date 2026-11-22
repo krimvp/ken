@@ -57,7 +57,8 @@ const KINDS: Record<Kind, { level: Exclude<Level, 'new'>; why: (said: Said) => s
 	change: { level: 'seen', why: ({ often }) => `You looked at a change here ${often}.` },
 	forgot: { level: 'seen', why: ({ on, thing }) => `You said ${on} that you do not know this ${thing}.` },
 	unlearned: { level: 'seen', why: ({ on }) => `You said ${on} that you do not know a topic here any more.` },
-	read: { level: 'read', why: ({ often }) => `You read about it ${often}.` },
+	// A brief open for ten seconds in a tab in view counts as read, so the sentence says what the reader did.
+	read: { level: 'read', why: ({ often }) => `You had its brief open for a while ${often}.` },
 	toured: { level: 'read', why: ({ often }) => `You read its tour stop ${often}.` },
 	answered: { level: 'read', why: ({ often }) => `You read an answer about it ${often}.` },
 	code: { level: 'code', why: ({ often }) => `You read its code ${often}.` },
