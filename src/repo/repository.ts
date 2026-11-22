@@ -89,6 +89,14 @@ export interface Repository {
 	// The newest commit head reaches whose author has this email, whatever its case. Merged branches count. Null when
 	// there is none.
 	lastCommitBy(head: CommitHash, email: string, signal?: AbortSignal): Promise<Commit | null>
+	// For each commit asked, the commits head has that it lacks, newest first, merges left out, each with its paths.
+	// Null for a commit head does not reach: history was rewritten since, or the commit is not in this clone. The
+	// hashes may be typed by hand, so text that is no hash reads as null too. One log covers every commit asked.
+	landedAfter(
+		head: CommitHash,
+		after: string[],
+		signal?: AbortSignal,
+	): Promise<{ kind: 'ok'; landed: Map<string, Commit[] | null> } | TooLarge>
 	// The whole message of one commit as its author wrote it: the subject, then the body.
 	message(commit: CommitHash, signal?: AbortSignal): Promise<{ kind: 'ok'; text: string } | TooLarge>
 	// The newest commits on head's main line, newest first: head, its first parent, that one's first parent, and so on.

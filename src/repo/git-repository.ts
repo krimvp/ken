@@ -8,6 +8,9 @@ import { MAX_OUTPUT_BYTES, runGit } from './run-git.ts'
 // own files pollute the history"), so every change fact reads git through this pathspec and no other.
 const OUTSIDE_RECORD = ['--', '.', ':(exclude).ken']
 
+const RECORD = '.ken'
+const outsideRecord = (file: string) => file !== RECORD && !file.startsWith(`${RECORD}/`)
+
 const HASH = /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/
 // A new file larger than this is not read to count its lines.
 const MAX_COUNTED_BYTES = 1024 * 1024
@@ -134,6 +137,42 @@ export function gitRepository(root: string, options: { alternate?: string } = {}
 			const run = await git(args, signal)
 			if (run.kind === 'failed') throw new Error(`git log failed on a resolved commit: ${run.stderr}`)
 			return run.kind === 'ok' ? (parseLog(run.stdout)[0] ?? null) : null
+		},
+
+		async landedAfter(head, after, signal) {
+			const landed = new Map<string, Commit[] | null>(after.map((hash) => [hash, null]))
+			const asked = [...landed.keys()].filter((hash) => HASH.test(hash))
+			if (asked.length === 0) return { kind: 'ok', landed }
+			const typed = await git(['cat-file', '--batch-check=%(objecttype)'], signal, asked.map((h) => `${h}\n`).join(''))
+			if (typed.kind !== 'ok') throw new Error(`git cat-file failed on hashes: ${typed.kind}`)
+			const types = typed.stdout.split('\n')
+			const commits = asked.filter((_, index) => types[index] === 'commit')
+			if (commits.length === 0) return { kind: 'ok', landed }
+			// One log from the newest commit that head and every commit asked share. It holds all that landed after any of
+			// them, and the parents in it say which of those each commit asked already had.
+			const shared = await git(['merge-base', '--octopus', head, ...commits], signal)
+			const from = shared.kind === 'ok' ? shared.stdout.trim() : ''
+			const range = HASH.test(from) ? `${from}..${head}` : head
+			const run = await git(['log', '-z', '--name-only', '--no-renames', '--no-color', LOG_FORMAT, range], signal)
+			if (run.kind === 'too-large') return tooLarge
+			if (run.kind === 'failed') throw new Error(`git log failed on resolved commits: ${run.stderr}`)
+			const log = parseLog(run.stdout).map((commit) => ({ ...commit, paths: commit.paths.filter(outsideRecord) }))
+			const parents = new Map<string, string[]>(log.map((commit) => [commit.hash, commit.parents]))
+			for (const commit of commits) {
+				if (commit !== from && !parents.has(commit)) continue
+				const had = new Set<string>()
+				const walk = [commit]
+				for (let next = walk.pop(); next !== undefined; next = walk.pop()) {
+					if (had.has(next)) continue
+					had.add(next)
+					walk.push(...(parents.get(next) ?? []))
+				}
+				landed.set(
+					commit,
+					log.filter((each) => !had.has(each.hash) && each.parents.length < 2 && each.paths.length > 0),
+				)
+			}
+			return { kind: 'ok', landed }
 		},
 
 		async message(commit, signal) {
