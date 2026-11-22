@@ -1436,12 +1436,12 @@ setInterval(async () => {
 }, 3000)
 
 try {
-	const [server, recent] = await Promise.all([
-		getJson('/api/state'),
-		getJson('/api/authors'),
-		loadRows(),
-		loadFollowUp(),
-	])
+	// The saved questions come first, since a page finds its stored replies among them. The place the address names
+	// is read while the rest comes, so the first page does not wait on the server's state.
+	const reads = Promise.all([getJson('/api/state'), getJson('/api/authors'), loadFollowUp()])
+	await loadRows()
+	const started = shell.start()
+	const [server, recent] = await reads
 	state.project = { name: server.name, folder: server.project }
 	state.home.project = server.name
 	learnParts(server.parts)
@@ -1451,7 +1451,7 @@ try {
 	render()
 	// An address that names a reply opens it over the pages. A reply ken no longer has leaves the Home page.
 	const reply = readReply(location.hash)
-	await shell.start()
+	await started
 	if (reply) await actions.open({ dataset: { id: reply } }).catch(() => {})
 } catch (error) {
 	state.home.problem = {

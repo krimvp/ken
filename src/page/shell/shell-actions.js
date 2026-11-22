@@ -75,6 +75,8 @@ export function shellActions(app) {
 			if (state.home.levels.length === 0 && top.body.levels) state.home.levels = top.body.levels
 		} else if (top) state.home.problem ??= { message: top.body.message, field: null }
 		shell.timeline = timeline?.ok ? timeline.body : null
+		// Home draws with the top level; what search can find fills the Concepts tile when it comes.
+		render()
 		shell.concepts = (await app.briefs.concepts()) ?? []
 	}
 
@@ -89,7 +91,9 @@ export function shellActions(app) {
 
 	async function goPage(page) {
 		Object.assign(shell, { page, settingsOpen: false })
-		shell.search.open = false
+		// What was typed in search was for the page the reader left.
+		Object.assign(shell.search, { text: '', open: false, at: 0 })
+		$('#search-text').value = ''
 		state.menuOpen = false
 		state.view = state.base = 'home'
 		render()

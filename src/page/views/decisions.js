@@ -48,7 +48,7 @@ export function decisionsViewHtml(rows, keyOpen) {
 	const used = Object.keys(LABELS).filter((name) => rows.some((row) => row.decision.label === name))
 	const list =
 		rows.length === 0
-			? '<p class="t-empty">The project record holds no decision yet. An answer about a change adds the decisions it finds, and a coding agent can log one with <code>ken decide</code>.</p>'
+			? '<p class="t-empty">The project record holds no decision yet. An answer about a change adds the decisions it finds, and a coding agent can log one with <code>ken decide</code>. <button class="link" data-act="chg-tab" data-tab="changes" data-key="decisions-review">Pick a change to review</button></p>'
 			: `<ul class="dv-list">${rows.map(rowHtml).join('')}</ul>`
 	return `<section class="decisions-view">
 		<h1>Decisions</h1>

@@ -110,6 +110,16 @@ function blocksHtml(look) {
 		${outside > 0 ? `<p class="k-muted k-chg-outside">${count(outside, 'changed file is', 'changed files are')} in no part.</p>` : ''}`
 }
 
+// The files a step shows only part of: their lines in the step beside all the change did to them. files are the
+// step's own counts.
+export function shownInPart(look, files) {
+	const all = look.boxes.flatMap((box) => box.touched?.paths ?? [])
+	return files.flatMap((file) => {
+		const whole = all.find((each) => each.path === file.path)
+		return whole && (whole.added > file.added || whole.removed > file.removed) ? [{ ...file, whole }] : []
+	})
+}
+
 // The story and the steps of the change on show, from what ken's model said of it before, or the offers to ask.
 function storyHtml(home, env) {
 	const { content, look } = home
@@ -130,7 +140,9 @@ function storyHtml(home, env) {
 		const removed = files.reduce((sum, file) => sum + file.removed, 0)
 		const where =
 			parts.length > 0 ? `<span class="k-sw ${partClass(parts[0])}"></span>${esc(parts.join(', '))}` : 'In no part'
-		return `<li><button class="k-chg-step" data-act="chg-step" data-n="${step.number}" data-key="chg-step-${step.number}"><span class="k-chg-n k-num ${parts[0] ? partClass(parts[0]) : ''}">${step.number}</span><span class="k-chg-step-words"><b>${prose(stepWords(step).title)}</b><span>${where} &middot; ${count(files.length, 'file', 'files')} <span class="k-num">+${added} &minus;${removed}</span></span></span></button></li>`
+		const part = shownInPart(look, files).map((file) => file.path.split('/').at(-1))
+		const some = part.length > 0 ? `, part of ${esc(part.join(', '))}` : ''
+		return `<li><button class="k-chg-step" data-act="chg-step" data-n="${step.number}" data-key="chg-step-${step.number}"><span class="k-chg-n k-num ${parts[0] ? partClass(parts[0]) : ''}">${step.number}</span><span class="k-chg-step-words"><b>${prose(stepWords(step).title)}</b><span>${where} &middot; ${count(files.length, 'file', 'files')}${some} <span class="k-num">+${added} &minus;${removed}</span></span></span></button></li>`
 	})
 	const offers = [
 		...(content.walk ? [] : [['run-walk', 'Walk me through it', 'chg-run-walk']]),

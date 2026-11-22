@@ -7,8 +7,9 @@ import { stepFiles } from '../level/content.js'
 import { WHOLE } from '../level/level-state.js'
 import { stepDiffHtml, stepParts, stepWords, walkOf } from '../project/walk.js'
 import { fill } from '../shell/fill.js'
+import { esc } from '../views/format.js'
 import { wordsHtml } from '../views/reply.js'
-import { changeName, changesPageHtml, spanChoices, spanOf } from './changes.js'
+import { changeName, changesPageHtml, shownInPart, spanChoices, spanOf } from './changes.js'
 import { dayAt, daysShown } from './timeline.js'
 
 const DAY = 86_400_000
@@ -79,10 +80,14 @@ export function changeActions(app) {
 		if (!step || !look?.change) return
 		const { title, body } = stepWords(step)
 		const id = `change-step:${q.id}:${n}`
+		const part = shownInPart(look, stepFiles(step)).map(
+			({ path, added, removed, whole }) =>
+				`<p class="k-muted">This step shows part of the change to <code>${esc(path)}</code>: +${added} &minus;${removed} of its +${whole.added} &minus;${whole.removed}.</p>`,
+		)
 		app.briefs.put(id, {
 			...pageBrief(id, 'step', title, body || title, TRUST),
 			lit: [...stepParts(step, look.boxes)].map((i) => look.boxes[i].name),
-			html: `<h3 class="k-eyebrow">The changed lines</h3>${stepDiffHtml(step, look.change.range)}`,
+			html: `<h3 class="k-eyebrow">The changed lines</h3>${part.join('')}${stepDiffHtml(step, look.change.range)}`,
 		})
 		app.brief.show(id, { opener })
 		const paths = stepFiles(step).map((file) => file.path)

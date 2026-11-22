@@ -595,6 +595,7 @@ function changeLines(change: Change, want: Want): string[] {
 		...(want === 'walk'
 			? [
 					'Walk me through the change in steps, in the order a reviewer should read them. A step holds one change. Two changes make two steps.',
+					'The first sentence of a step is its title, read alone in a list: say what changed, such as "The live suite no longer runs in npm test". Never a sentence that points elsewhere, such as "This is the one product fix".',
 					'After the last step, and only there, write one line that names what the steps leave out and a reviewer should still open, such as a changed rule or boundary table, a test of new behaviour, or docs. If the steps leave nothing out, say so.',
 				]
 			: [

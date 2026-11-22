@@ -3187,8 +3187,18 @@ q.subject {
 	overflow-wrap: anywhere;
 }
 
+/* A diff keeps each line whole and scrolls sideways inside itself, so JSON and long lines read as written. */
 .code.diff > code {
-	grid-template-columns: auto auto minmax(0, 1fr);
+	grid-template-columns: auto auto auto;
+	width: max-content;
+	min-width: 100%;
+}
+
+.code.diff .lc {
+	padding-left: 0;
+	text-indent: 0;
+	white-space: pre;
+	overflow-wrap: normal;
 }
 
 .code.diff .lc.add {

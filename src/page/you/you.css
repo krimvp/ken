@@ -17,7 +17,7 @@
 .k-you-map {
 	display: grid;
 	grid-template-columns: minmax(0, 1fr);
-	align-content: space-between;
+	grid-template-rows: minmax(0, 1fr) auto;
 	align-self: start;
 	min-height: calc(100dvh - var(--k-bar) - 28px);
 	gap: 8px;
@@ -26,6 +26,7 @@
 
 .k-mind {
 	position: relative;
+	align-self: center;
 	justify-self: center;
 	width: min(100%, calc((100dvh - 250px) * 1000 / 640));
 	aspect-ratio: 1000 / 640;
