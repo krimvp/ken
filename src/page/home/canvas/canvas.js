@@ -45,7 +45,6 @@ export function changeName(look, changes) {
 		: (look.change.commits[0]?.subject ?? look.change.name)
 }
 
-// The arrows as box indexes, for the picture.
 function linksOf(look) {
 	const at = (name) => look.boxes.findIndex((box) => box.name === name)
 	return look.arrows.map((arrow) => ({ from: at(arrow.from), to: at(arrow.to), text: arrow.text }))
@@ -65,7 +64,6 @@ function isFile(box) {
 	return box.files === 1 && box.paths.length === 1 && box.paths[0].split('/').at(-1) === box.name
 }
 
-// A box's paths and its file count.
 export function pathsLine(box) {
 	const files = count(box.files, 'file', 'files')
 	if (box.paths.length === 1 && box.paths[0].split('/').at(-1) === box.name)
@@ -85,7 +83,6 @@ export function stateLine(box, look) {
 	return `<span class="pv-state">${said}</span>`
 }
 
-// Lines added and removed, as the boxes and the panel say them.
 export function plusMinus({ added, removed }) {
 	return `<span class="home-plus"><span class="visually-hidden">lines added: </span>+${added}</span> <span class="home-minus"><span class="visually-hidden">removed: </span>-${removed}</span>`
 }
@@ -143,7 +140,6 @@ function boxHtml(box, i, { look, detail, colour, badge, chosen }) {
 	return { html, classes: `pv-cell${faded}${chosen ? ' is-chosen' : ''}` }
 }
 
-// The boxes the selection is about: the part picked, or the parts the picked step quotes.
 function chosenBoxes(look, path, selected) {
 	if (!selected) return new Set()
 	if (selected.kind === 'part') {

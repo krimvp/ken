@@ -33,7 +33,6 @@ const SHOWN_COMMITS = 10
 
 const READING_REPLY = `<p class="muted">Reading what ken's model said.</p>`
 
-// A part's files: how many, and where they are. The first few paths show, and the rest behind one line.
 function filesLine(box) {
 	const said = `${count(box.files, 'file', 'files')}: `
 	if (box.paths.length <= SHOWN_PATHS) return `${said}${pathList(box.paths)}.`
@@ -96,7 +95,6 @@ function levelView(home, off) {
 	}
 }
 
-// One part of a level at "Big picture": its job, where it is, and what it uses.
 function partView(home, box) {
 	const title = { picked: true, title: esc(box.name), titleClass: `part-name ${colourOf(home)(box.name)}` }
 	if (stoodOn(box, [box.name]) === 'known' && !home.unfolded.has(box.name)) {
@@ -115,7 +113,6 @@ function partView(home, box) {
 	}
 }
 
-// A level nobody named yet: what git shows, and the one run that names its parts.
 function foldersView(home, off) {
 	const { look } = home
 	const files = look.boxes.reduce((sum, box) => sum + box.files, 0)
@@ -242,7 +239,6 @@ function unwalkedView(home, off) {
 	}
 }
 
-// The diff of the files a change touched in one part, read from git when the reader asks for it.
 function partDiffHtml(home, box) {
 	const { change } = home.look
 	const diff = home.diffs.get(diffKey(change, box))
@@ -260,7 +256,6 @@ function partDiffHtml(home, box) {
 	return `${lines}${notes.map((note) => `<p class="small muted">${note}</p>`).join('')}`
 }
 
-// One part with a change laid over it: the files the change touched there, and at "In the code" their diff.
 function touchedView(home, box) {
 	const code = shownDetail(home) === 'code'
 	const did = !box.touched
@@ -306,7 +301,6 @@ function drawnView(home) {
 	}
 }
 
-// A run of ken's model that the reader started here, while it runs: what ken is doing, for how long, and its actions.
 function workingView(home, running, seconds) {
 	const [title, doing] = DOING[running.onHome.kind]
 	const asked = running.onHome.kind === 'redraw' ? `<p class="insp-asked">"${esc(home.redraw.asked)}"</p>` : ''

@@ -8,7 +8,8 @@
 // code": the stops of a tour, the steps of a walkthrough, or the numbered boxes and arrows of a drawn picture.
 import { stopTopics, walkOf } from '../../project/walk.js'
 
-const same = (a, b) => a.length === b.length && a.every((each, i) => each === b[i])
+// Whether two lists, such as the paths of two levels, hold the same things in the same order.
+export const sameList = (a, b) => a.length === b.length && a.every((each, i) => each === b[i])
 const sameSet = (a, b) => a.length === b.length && a.every((each) => b.includes(each))
 
 // The diagram a saved question holds, or null: the first one, when its reply has more.
@@ -21,7 +22,9 @@ export function diagramOf(q) {
 // is null until the page has read the reply, and asked is the reader's own words.
 export function picturesOf(look, rows, replies = new Map()) {
 	const drawn = rows
-		.filter((row) => row.outcome === 'answered' && row.view?.drew === 'diagram' && same(row.view.within, look.within))
+		.filter(
+			(row) => row.outcome === 'answered' && row.view?.drew === 'diagram' && sameList(row.view.within, look.within),
+		)
 		.reverse()
 		.map((row) => ({
 			kind: 'drawn',
@@ -54,12 +57,11 @@ export function contentOf(look, rows, replies = new Map(), shown = null) {
 	// A tour is of this level when its stops are the level's parts. The order the server walks them in may have
 	// changed since: each stop's words are about its part, so they still hold.
 	const tour = answered.find(
-		(row) => row.tour && same(row.tour.within, look.within) && sameSet(row.tour.stops, stops) && stops.length > 0,
+		(row) => row.tour && sameList(row.tour.within, look.within) && sameSet(row.tour.stops, stops) && stops.length > 0,
 	)
 	return { kind: 'level', about: look.named.about, tour: found(tour) }
 }
 
-// The saved questions a content names, read or not.
 export function repliesOf(content) {
 	const all = { change: [content.story, content.walk], level: [content.tour], drawn: [content], folders: [] }
 	return all[content.kind].filter(Boolean)

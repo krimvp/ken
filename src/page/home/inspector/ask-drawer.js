@@ -8,13 +8,11 @@ import { colourOf } from '../state/home-state.js'
 
 const SHOWN_QUESTIONS = 5
 
-// The part a question from the drawer is about: the one selected, unless the reader dropped it.
 function askedPart(home) {
 	if (home.askWhole || home.selected?.kind !== 'part') return null
 	return home.look?.boxes.find((box) => box.name === home.selected.name) ?? null
 }
 
-// What the drawer sends: the reader's words, and before them the part they are about.
 export function askedQuestion(home, text) {
 	const part = askedPart(home)
 	return part ? `About the part ${part.name} (${part.paths.join(', ')}): ${text}` : text

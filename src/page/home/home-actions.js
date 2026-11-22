@@ -72,7 +72,6 @@ export function homeActions(app) {
 		await learn(step, 'toured')
 	}
 
-	// The stop of the part the reader picked, on a named level.
 	function stopOn() {
 		const home = state.home
 		if (home.content.kind !== 'level' || home.selected?.kind !== 'part') return null
@@ -135,7 +134,6 @@ export function homeActions(app) {
 		return true
 	}
 
-	// The picture comes to the top of what the reader sees: of the canvas, and in one column of the page.
 	function toPicture() {
 		$('#home-canvas').scrollTop = 0
 		if (!sideBySide.matches) $('#home-canvas').scrollIntoView({ block: 'start' })
@@ -198,17 +196,14 @@ export function homeActions(app) {
 			return stepTo(k, true)
 		},
 		'home-clear': () => select(null),
-		// A tab over the canvas shows the parts, or one drawn picture in their place.
 		'home-picture'(el) {
 			Object.assign(state.home, { shown: el.dataset.id || null, selected: null })
 			return settle()
 		},
-		// The tour opens at the stop its button names, and the keyboard goes there with it.
 		'home-tour'(el) {
 			state.home.detail = 'how'
 			return stepTo(Number(el.dataset.index), true)
 		},
-		// The end of a reading path: the big picture of the level or the change again, with nothing picked.
 		async 'home-done'() {
 			const home = state.home
 			home.detail = 'big'
@@ -221,7 +216,6 @@ export function homeActions(app) {
 			return moveTo([...state.home.trail, { name: box.name, within: box.paths }])
 		},
 		'home-crumb': (el) => moveTo(state.home.trail.slice(0, Number(el.dataset.index) + 1)),
-		// An arrow picked in the picture picks the part it starts from and opens its line in the inspector.
 		'pv-arrow'(el) {
 			const home = state.home
 			const arrow = home.look.arrows[Number(el.dataset.index)]
@@ -337,7 +331,6 @@ export function homeActions(app) {
 		void send({ question })
 	}
 
-	// The forms of the home: the box of "Show it another way", the question of the drawer, and the fields of the picker.
 	function submit(event) {
 		const home = state.home
 		const form = event.target.closest('#redraw-form, #ask-form, .home-typed')
@@ -360,7 +353,6 @@ export function homeActions(app) {
 			$('#insp-title')?.focus({ preventScroll: true })
 		} else if (form.id === 'ask-form') sendAsk()
 		else {
-			// A field of the picker: a span of time to catch up on, another change to review, or an older commit to look at.
 			const { field } = form.dataset
 			const text = home.typed[field].trim()
 			if (field === 'at') home.at = text
@@ -393,8 +385,6 @@ export function homeActions(app) {
 		return true
 	}
 
-	// Escape closes the drawer, then lets go of what is picked. The arrow keys move along the reading path, unless the
-	// reader is typing. Enter in the drawer's box sends the question.
 	function key(event) {
 		const home = state.home
 		const typing = event.target.matches?.('input, textarea, select')
@@ -431,8 +421,6 @@ export function homeActions(app) {
 		$('#home-level')?.focus({ preventScroll: true })
 	}
 
-	// A box or an arrow picked in the drawing of a drawn picture picks its row in the inspector, and lets go of it when
-	// picked again.
 	function pick(target) {
 		const number = target.closest('#home-canvas') ? numberAt(target) : null
 		if (number === null) return

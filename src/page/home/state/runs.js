@@ -1,9 +1,7 @@
 // The runs of ken's model that the home starts. Each stays on the home: the page holds the run, and this module decides
 // what the home shows when it ends. A run remembers where it started, as { kind, trail, change, wayIn }, and is judged
 // against that, since the reader may have moved on while it ran.
-import { besideCanvas, firstUnseen, pathOf, picturesOf } from './content.js'
-
-const same = (a, b) => a.length === b.length && a.every((each, i) => each === b[i])
+import { besideCanvas, firstUnseen, pathOf, picturesOf, sameList } from './content.js'
 
 // A run by its kind: its title while it runs, and what ken's model is doing.
 export const DOING = {
@@ -18,12 +16,11 @@ export const DOING = {
 export function isThere(started, home) {
 	const onLevel =
 		started.trail.length === home.trail.length &&
-		started.trail.every((each, i) => same(each.within, home.trail[i].within))
+		started.trail.every((each, i) => sameList(each.within, home.trail[i].within))
 	const aboutChange = started.kind === 'story' || started.kind === 'walk'
 	return onLevel && (!aboutChange || started.change === home.change)
 }
 
-// The level a run started on, as a sentence names it.
 export function levelOf(started) {
 	return started.trail.length === 1 ? 'the whole project' : started.trail.at(-1).name
 }

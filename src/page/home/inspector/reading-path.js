@@ -48,7 +48,6 @@ export function lookInside(box) {
 	return `<button class="quiet-button look-inside" data-act="home-open" data-key="home-open"><span class="look-name">Look inside ${esc(box.name)}</span><span class="look-says">${inside}</span></button>`
 }
 
-// "You said you know this part", in place of a part's words until the reader asks for them.
 export function knownFold(name) {
 	return `<p class="insp-known">You said you know this part. Nothing in it changed since. <button class="link" data-act="home-unfold" data-name="${esc(name)}" data-key="home-unfold">Show it anyway</button></p>`
 }
@@ -64,14 +63,12 @@ function knowHtml(box, names) {
 
 const SEEN = { none: '', new: '', met: 'Seen', known: 'You know it' }
 
-// Files with the lines a change added to and removed from each.
 export function filesHtml(files, more = 0) {
 	const rows = files.map((file) => `<li><code>${esc(file.path)}</code> ${plusMinus(file)}</li>`)
 	const rest = more > 0 ? `<li>and ${count(more, 'more file', 'more files')}</li>` : ''
 	return `<ul class="fact-list">${rows.join('')}${rest}</ul>`
 }
 
-// The file paths a step is about, for its line at "In the code".
 function stepPaths(step) {
 	const paths = [
 		...new Set([...step.hunks.map((each) => each.path), ...step.cards.flatMap(({ card }) => cardPaths(card))]),
@@ -186,7 +183,6 @@ function stepHtml(step, k, on, ctx) {
 		</div>`
 }
 
-// The words a reply says before its first step and after its last one.
 function wordsAround(reply) {
 	const first = reply.items.findIndex((item) => item.kind === 'step')
 	const last = reply.items.findLastIndex((item) => item.kind === 'step')
@@ -227,7 +223,6 @@ function leftOutHtml(change) {
 	return `<details class="insp-more" data-key="left-out"><summary>${said} The rest are in ${count(files.size, 'file', 'files')}.</summary><ul class="fact-list">${rows.join('')}</ul></details>`
 }
 
-// The changed files of a change that sit in no part, said under its steps at every detail.
 export function outsideHtml(look) {
 	const { outside } = look.change
 	if (outside.length === 0) return ''
@@ -258,7 +253,6 @@ function navHtml(path, at, titles, start) {
 	return `<div class="insp-nav">${back}${next}</div>${keys}`
 }
 
-// Where the lines an element of a drawn picture quotes are, and the way to read them.
 function sourcesHtml(element) {
 	if (element.quotes.length === 0) return `<p class="small muted">ken's model quoted no code for this one.</p>`
 	const places = element.quotes.map(

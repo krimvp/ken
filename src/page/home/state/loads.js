@@ -1,15 +1,12 @@
 // What the home reads from the server: the level on screen, ken's notes about the reader, and the saved replies the
 // level's content names. The server reads the level from git on every move.
 import { learnParts } from '../../project/part-colours.js'
-import { contentOf, picturesOf, repliesOf, shownDetail } from './content.js'
+import { contentOf, picturesOf, repliesOf, sameList, shownDetail } from './content.js'
 import { DETAILS, FIRST_DETAIL } from './home-state.js'
-
-const same = (a, b) => a.length === b.length && a.every((each, i) => each === b[i])
 
 // The server gives the diff of this many files at a time.
 const DIFF_PATHS = 10
 
-// The key the home keeps the diff of one part's changed files under.
 export function diffKey(change, box) {
 	return `${change.range.base}..${change.range.head}\n${box.name}`
 }
@@ -61,7 +58,7 @@ export function homeLoads({ state, render, read, post, fromView, stored }) {
 		for (const path of within) query.append('within', path)
 		if (home.change !== '') query.set('change', home.change)
 		const mine = ++asked
-		home.reading = again ? null : home.look && same(home.look.within, within) ? 'overlay' : 'level'
+		home.reading = again ? null : home.look && sameList(home.look.within, within) ? 'overlay' : 'level'
 		render()
 		const answer = await ask(`/api/layout?${query}`)
 		if (mine !== asked) return false
