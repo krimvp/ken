@@ -132,9 +132,10 @@ function pictureOf(home) {
 	const path = pathOf(look, content)
 	const links = linksOf(look)
 	const chosen = chosenBoxes(look, path, home.selected)
-	// A picked part lights the arrows that touch it and the parts at their other ends, as pointing at it does.
+	// A picked part lights the arrows that touch it and the parts at their other ends, as pointing at it does. Under a
+	// change the boxes keep their marks, touched or not, and only the arrows light.
 	const hot = new Set(links.flatMap((link, i) => (chosen.has(link.from) || chosen.has(link.to) ? [i] : [])))
-	const lit = new Set([...chosen, ...[...hot].flatMap((i) => [links[i].from, links[i].to])])
+	const lit = look.change ? new Set() : new Set([...chosen, ...[...hot].flatMap((i) => [links[i].from, links[i].to])])
 	const cells = look.boxes.map((box, i) =>
 		boxHtml(box, i, {
 			look,

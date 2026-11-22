@@ -13,13 +13,14 @@ export const DETAILS = { big: 'Big picture', how: 'How it works', code: 'In the 
 
 const LEGEND = "Plain text is what ken's model says. ken has not checked it. A boxed card is checked against git."
 
-// Commits and paths a fact card lists before it folds the rest.
+// Paths a line lists before it folds the rest.
 const SHOWN_PATHS = 8
 
+// Paths as the end of a sentence: the first few, and the rest behind one line.
 function pathsHtml(paths) {
 	const code = (items) => items.map((p) => `<code class="pv-path">${esc(p)}</code>`).join(', ')
-	if (paths.length <= SHOWN_PATHS) return code(paths)
-	return `${code(paths.slice(0, SHOWN_PATHS))} <details class="insp-more"><summary>and ${paths.length - SHOWN_PATHS} more</summary>${code(paths.slice(SHOWN_PATHS))}</details>`
+	if (paths.length <= SHOWN_PATHS) return `${code(paths)}.`
+	return `${code(paths.slice(0, SHOWN_PATHS))}<details class="insp-more"><summary>and ${paths.length - SHOWN_PATHS} more</summary>${code(paths.slice(SHOWN_PATHS))}.</details>`
 }
 
 function lookInside(box) {
@@ -99,7 +100,7 @@ function partView(home, box) {
 		...title,
 		titleClass,
 		body: `<p class="insp-lead">${prose(box.job ?? '')}</p>
-			<p class="small">${count(box.files, 'file', 'files')} in ${pathsHtml(box.paths)}.</p>
+			<div class="small">${count(box.files, 'file', 'files')} in ${pathsHtml(box.paths)}</div>
 			${state === '' ? '' : `<p class="small">${state}.</p>`}
 			${box.map.line === '' ? '' : `<p class="small muted">${esc(box.map.line)}</p>`}
 			${usesHtml(home, box.name)}
@@ -137,7 +138,7 @@ function folderView(box) {
 		where: 'A folder',
 		picked: true,
 		title: esc(box.name),
-		body: `<p class="small">${count(box.files, 'file', 'files')} in ${pathsHtml(box.paths)}.</p>
+		body: `<div class="small">${count(box.files, 'file', 'files')} in ${pathsHtml(box.paths)}</div>
 			<p class="insp-actions">${lookInside(box)}</p>`,
 	}
 }
@@ -174,7 +175,7 @@ function changeView(home, off) {
 				: '',
 		`<li>${count(change.files, 'file', 'files')} changed, in ${touched} of the ${count(look.boxes.length, noun, `${noun}s`)}.</li>`,
 		change.outside.length > 0
-			? `<li>${count(change.outside.length, 'changed file is', 'changed files are')} in no ${noun}: ${pathsHtml(change.outside)}.</li>`
+			? `<li>${count(change.outside.length, 'changed file is', 'changed files are')} in no ${noun}: ${pathsHtml(change.outside)}</li>`
 			: '',
 	]
 	let story

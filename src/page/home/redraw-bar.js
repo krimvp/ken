@@ -3,7 +3,7 @@
 // keeps sit under the box, each with a way to remove it. On a narrow screen the bar folds to one line.
 import { esc, runButton } from '../views/format.js'
 
-const EXAMPLES = ['Group by feature', 'Fewer, bigger parts', 'Follow one request', 'I am new to this language']
+const EXAMPLES = ['Group by feature', 'Fewer, bigger parts', 'Follow one request', 'I am new here']
 
 // off is the reason no run of ken's model can start now, or null.
 export function redrawBarHtml(home, off) {

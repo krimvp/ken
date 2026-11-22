@@ -564,6 +564,7 @@ button.brand {
 }
 
 .redraw-said {
+	flex: none;
 	color: var(--color-note);
 }
 
@@ -594,6 +595,7 @@ button.brand {
 
 .note-chip {
 	display: inline-flex;
+	flex: 1 1 14rem;
 	align-items: baseline;
 	gap: 0 var(--space-3);
 	max-width: 100%;
@@ -706,12 +708,8 @@ button.brand {
 	margin-top: var(--space-3);
 }
 
-.insp-more {
-	display: inline;
-}
-
 .insp-more summary {
-	display: inline;
+	width: fit-content;
 	color: var(--color-accent);
 	cursor: pointer;
 }
