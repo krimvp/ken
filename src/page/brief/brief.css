@@ -629,30 +629,37 @@ li.k-row {
 	font-weight: 600;
 }
 
-/* The foot: what ken thinks the reader knows, and the three ways on. */
+/* The foot: the three ways on. */
 .k-brief-foot {
 	flex: none;
 	padding: 10px 14px 12px;
 	border-top: 1px solid var(--k-line);
 }
 
+/* What ken thinks the reader knows, as a sentence near the end of the brief. */
 .k-knows {
 	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	gap: 4px 7px;
-	padding: 0 6px 4px;
-	font-size: 14px;
-}
-
-.k-knows .k-link {
-	margin-left: auto;
-}
-
-.k-knows-why {
-	padding: 0 6px 10px;
+	align-items: flex-start;
+	gap: 10px;
+	margin: 18px 0 6px;
+	padding: 10px 12px;
+	border-radius: 12px;
+	background: var(--k-sunk);
 	color: var(--k-muted);
 	font-size: 14px;
+}
+
+.k-knows .k-mark {
+	flex: none;
+	margin-top: 2px;
+}
+
+.k-knows p {
+	margin: 0;
+}
+
+.k-knows b {
+	color: var(--k-ink);
 }
 
 .k-brief-note {
@@ -799,5 +806,36 @@ li.k-row.is-open .k-row-main {
 	.k-brief {
 		width: 100%;
 		border-left: 0;
+	}
+
+	/* On a phone the three ways are one row of 48 pixels: each its icon, its count and its name. */
+	.k-brief-foot {
+		padding: 4px 8px;
+	}
+
+	.k-ways {
+		gap: 4px;
+	}
+
+	.k .k-way {
+		display: flex;
+		justify-content: center;
+		gap: 6px;
+		height: 40px;
+		padding: 0 8px;
+		border-radius: 10px;
+	}
+
+	.k-way b {
+		order: 1;
+		font-size: 16px;
+	}
+
+	.k-way-name-s {
+		font-size: 14px;
+	}
+
+	.k-way-note {
+		display: none;
 	}
 }

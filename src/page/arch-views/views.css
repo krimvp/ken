@@ -1102,11 +1102,32 @@
 	}
 }
 
-@media (min-width: 1000px) and (max-width: 1280px) {
+/* Beside a brief the canvas is as narrow as on a small window, so its controls stack the same way, and the
+   process picker never lies over the switch's words. */
+@media (min-width: 1281px) {
+	.k-canvas.has-brief {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr);
+		align-content: start;
+		gap: 6px;
+		padding: 12px;
+	}
+
+	.k-canvas.has-brief > :is(.k-vw-card, .k-layers, .k-layer-pick) {
+		position: relative;
+		inset: auto;
+		justify-self: start;
+		max-width: 100%;
+	}
+}
+
+@media (min-width: 1000px) {
 	.k-canvas.has-brief {
 		padding-right: calc(var(--k-drawer) + 12px);
 	}
+}
 
+@media (min-width: 1000px) and (max-width: 1280px) {
 	.k-canvas.has-brief .k-vw-switch {
 		flex-wrap: wrap;
 	}
@@ -1255,4 +1276,79 @@
 
 .k-arch-reading .k-notes {
 	position: static;
+}
+
+/* On a phone the breadcrumb and one row of buttons share the top of the canvas, and each button opens its sheet
+   under that row: the drawing has the rest of the screen. */
+.k-phone-bar {
+	display: none;
+}
+
+@media (max-width: 760px) {
+	.k-canvas {
+		padding-top: 68px;
+	}
+
+	.k-canvas .k-phone-bar {
+		display: flex;
+		top: 12px;
+		right: 12px;
+		gap: 2px;
+		padding: 2px;
+	}
+
+	.k .k-phone-bar > button {
+		flex-direction: column;
+		justify-content: center;
+		gap: 1px;
+		width: 50px;
+		height: 44px;
+		padding: 0;
+		font-size: 12px;
+		font-weight: 600;
+	}
+
+	.k .k-phone-bar > button[aria-expanded="true"] {
+		background: var(--k-ink);
+		color: var(--k-surface);
+	}
+
+	.k-canvas > .k-vw-card {
+		position: absolute;
+		top: 12px;
+		left: 12px;
+		max-width: calc(100% - 24px - 4 * 52px - 8px);
+	}
+
+	.k-canvas:not(.sheet-views) > .k-vw-card > :not(.k-vw-head),
+	.k-canvas:not(.sheet-views) > .k-vw-card .k-vw-head > .k-link,
+	.k-canvas:not(.sheet-layers) > :is(.k-layers, .k-layer-pick),
+	.k-canvas:not(.sheet-notes) > .k-under,
+	.k-canvas:not(.sheet-zoom) > .k-tools {
+		display: none;
+	}
+
+	.k-canvas.sheet-views > .k-vw-card {
+		position: relative;
+		top: auto;
+		left: auto;
+		max-width: 100%;
+	}
+
+	.k-canvas.sheet-notes > .k-under,
+	.k-canvas.sheet-zoom > .k-tools {
+		top: 68px;
+		bottom: auto;
+	}
+
+	.k-canvas.sheet-zoom > .k-tools {
+		right: 12px;
+		left: auto;
+	}
+}
+
+@media (max-width: 760px) {
+	.k-layer-pick .k-clip {
+		max-width: 180px;
+	}
 }

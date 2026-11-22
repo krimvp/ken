@@ -15,10 +15,10 @@ export type Lens = { tools: readonly string[]; show: readonly ShowField[]; syste
 
 const READS = ['read_file', 'list_files', 'search']
 
-// A part's brief and the parts of a level are saved and shown again in any later chat, so they come from the code
-// alone. A brief of a top part gets the level it stands in from memory, which its question already sums up. One
-// deeper down, and the parts inside a part, also ask memory what the brief above them said and what quotes their
-// files. A question about a concept is a follow-up, which may build on what this reader was told.
+// A part's brief and the parts of a level go into the project record, so they come from the code and the record
+// alone (see forRecord). A brief of a top part gets the level it stands in from memory, which its question already
+// sums up. One deeper down, and the parts inside a part, also ask memory what the brief above them said and what
+// quotes their files. A question about a concept is a follow-up, which may build on what this reader was told.
 const BRIEF: Lens = {
 	tools: [...READS, 'memory_level'],
 	show: ['brief'],
@@ -66,6 +66,13 @@ export function briefParts(as: Asking): { name: string; paths: string[] }[] {
 	if (as.kind === 'answer') return as.paths.length > 0 ? [{ name: as.concept, paths: as.paths }] : []
 	if (as.kind === 'parts') return as.parts
 	return []
+}
+
+// What these runs make goes into the project record, which the team commits: the parts of a level and the drawings,
+// a part's brief and its terms, a level drawn another way. So they read the code and the record alone, never what the
+// reader typed, was told or keeps as notes.
+export function forRecord(as: Asking): boolean {
+	return as.kind === 'explain' || as.kind === 'parts' || as.kind === 'views' || as.kind === 'view'
 }
 
 // null: every tool and the whole system prompt.

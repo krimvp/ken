@@ -112,7 +112,7 @@ test('a change the reader walked through up to HEAD clears the commits since for
 	assert.doesNotMatch(knows(after).a?.why ?? '', /commit/)
 })
 
-test('what to look at next leads with the part that changed since the reader read it, then their uncommitted work, then the tour, then the parts they never opened', async () => {
+test('what to look at next leads with the part that changed since the reader read it, then for a reader who read less than half the parts the tour before their uncommitted work, then the parts they never opened', async () => {
 	const { root, hashes } = buildRepository([{ message: 'feat: start', files: { ...START, 'src/d/w.ts': 'w\n' } }])
 	const [start = ''] = hashes
 	const sources = await sourcesFor(root)
@@ -135,23 +135,30 @@ test('what to look at next leads with the part that changed since the reader rea
 		items.map((item) => [item.kind, item.go.way, item.go.part ?? null, item.go.detail, item.go.change ?? null]),
 		[
 			['stale', 'catch-up', 'Gamma', 'code', `${start}..${head}`],
-			['review', 'review', null, 'how', 'uncommitted'],
 			['tour', 'learn', 'Alpha', 'how', null],
+			['review', 'review', null, 'how', 'uncommitted'],
 			['read', 'learn', 'Beta', 'big', null],
 			['read', 'learn', 'Delta', 'big', null],
 		],
 	)
 	assert.deepEqual(
 		items.map((item) => item.parts),
-		[['Gamma'], ['Beta'], ['Alpha'], ['Beta'], ['Delta']],
+		[['Gamma'], ['Alpha'], ['Beta'], ['Beta'], ['Delta']],
 		'each item names the boxes it is about, and the review the box the uncommitted work touched',
 	)
 	assert.deepEqual(items[0]?.landed, { files: 1, added: 1, removed: 1 })
-	assert.deepEqual(items[1]?.size, { files: 1, what: 'your uncommitted work' })
+	assert.deepEqual(items[2]?.size, { files: 1, what: 'your uncommitted work' })
 	for (const item of items.filter((each) => each.kind !== 'review')) {
 		const { part, ...opens } = item.go
 		assert.deepEqual(seen.boxes.find((box) => box.name === part)?.knows.go, opens, `${part} opens where its item goes`)
 	}
+
+	await did(sources, 3, head, { did: 'read', paths: ['src/d'] })
+	assert.deepEqual(
+		(await look(sources)).next.items.map((item) => item.kind),
+		['stale', 'review', 'tour', 'read'],
+		'a reader who read half the parts sees their uncommitted work before the tour',
+	)
 })
 
 test('a correction sets the level the reader picks in place of what came before, and only "I know it" clears the commits that landed since they looked', async () => {

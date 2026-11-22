@@ -84,7 +84,7 @@ function layerPickHtml(home, arch, processes) {
 		}
 		const picks = processes.map(
 			(process) =>
-				`<button data-act="arch-process" data-id="${esc(process.id)}" data-key="process-${esc(process.id)}" aria-pressed="${arch.process === process.id}" title="${esc(process.name)}"><span class="k-clip">${prose(process.name)}</span></button>`,
+				`<button data-act="arch-process" data-id="${esc(process.id)}" data-key="process-${esc(process.id)}" aria-pressed="${arch.process === process.id}"><span class="k-clip" data-fit="${esc(process.name)}">${esc(process.name)}</span></button>`,
 		)
 		const on = processes.find((process) => process.id === arch.process)
 		const brief = on
@@ -122,10 +122,17 @@ function notesHtml(home, env, arch, stops) {
 			job.kind === 'explain' && live(job) && look.boxes.some((box) => job.concept === partId(look.within, box.name)),
 	)
 	if (look.named && look.at === look.head && unexplained && queued.length > 0) {
+		// The count is of parts at this level; the quiet line in the bar counts all of ken's runs, as "runs left".
 		const done = look.explained ?? 0
-		const more = queued.length === 1 ? 'the last part' : `${queued.length} parts`
+		const rest = look.boxes.length - done
+		const more =
+			queued.length === rest
+				? rest === 1
+					? 'the last one'
+					: `the other ${rest}`
+				: `${queued.length} of the other ${rest}`
 		said.push(
-			`${done} of ${look.boxes.length} parts explained. ken is explaining ${more} by itself, one at a time. Open a part to have it explained first.`,
+			`${done} of ${look.boxes.length} parts explained. ken is explaining ${more} by itself. Open a part to have it explained first.`,
 		)
 	} else if (look.named && look.at === look.head && home.content.kind === 'level' && unexplained && !env.running) {
 		const done = look.explained ?? 0
@@ -232,7 +239,7 @@ function treeSaidHtml(home, env) {
 	}
 	const naming = (env.jobs ?? []).find((job) => job.key === `parts:${home.look.within.join(',')}` && live(job))
 	if (naming) {
-		return `<div class="k-tree-ask">${jobLineHtml(naming, 'naming the main parts', 'span')}<span class="k-muted">The parts show here when it is done.</span></div>`
+		return `<div class="k-tree-ask">${jobLineHtml(naming, 'naming its main parts', 'span')}<span class="k-muted">The parts show here when it is done.</span></div>`
 	}
 	return `<p class="k-tree-ask"><button class="k-btn" data-act="run-name" data-key="run-name"${env.off ? ' disabled' : ''}>Ask ken to name the main parts</button><span class="k-muted">${env.off ? esc(env.off) : RUN_COST}</span></p>`
 }
@@ -341,10 +348,29 @@ export function architectureHtml({ home, arch, env, brief, column, topViews, tex
 	})
 }
 
+// On a phone what floats over the drawing folds into one row beside the breadcrumb: each button opens one sheet
+// under the row, so the drawing has the screen. The row shows only under 760 pixels.
+const SHEETS = [
+	['views', 'pictures', 'Views'],
+	['layers', 'layers', 'Layers'],
+	['notes', 'words', 'Notes'],
+	['zoom', 'fit', 'Zoom'],
+]
+
+function phoneBarHtml(arch, under) {
+	const buttons = SHEETS.filter(([sheet]) => sheet !== 'notes' || under !== '').map(
+		([sheet, glyph, name]) =>
+			`<button data-act="arch-sheet" data-sheet="${sheet}" data-key="sheet-${sheet}" aria-expanded="${arch.sheet === sheet}">${icon(glyph)}<span>${name}</span></button>`,
+	)
+	return `<div class="k-float k-phone-bar" role="group" aria-label="What lies over the drawing">${buttons.join('')}</div>`
+}
+
 // The canvas around a drawing: the world the camera moves, and what floats over it.
 function canvasHtml({ home, arch, env, brief, view, world, inner, empty = '', top, notes, processes, minimap, hint }) {
 	const shownHint = hint === '' || notes !== '' || env.running?.onHome ? '' : `<p class="k-hint">${hint}</p>`
-	return `<div class="k-canvas view-${view}${arch.layer ? ` layer-${arch.layer}` : ''}${brief ? ' has-brief' : ''}" id="arch-canvas" data-world="${world.x} ${world.y} ${world.w} ${world.h}">
+	const under = `${runHtml(home, env)}${notes}`
+	const sheet = arch.sheet ? ` sheet-${arch.sheet}` : ''
+	return `<div class="k-canvas view-${view}${arch.layer ? ` layer-${arch.layer}` : ''}${brief ? ' has-brief' : ''}${sheet}" id="arch-canvas" data-world="${world.x} ${world.y} ${world.w} ${world.h}">
 		<div class="k-world" id="arch-world"${home.reading ? ' inert' : ''}>
 			${inner}
 		</div>
@@ -353,7 +379,8 @@ function canvasHtml({ home, arch, env, brief, view, world, inner, empty = '', to
 		${layersHtml(arch)}
 		${layerPickHtml(home, arch, processes)}
 		${keyHtml(arch)}
-		<div class="k-under">${runHtml(home, env)}${notes}</div>
+		<div class="k-under">${under}</div>
+		${phoneBarHtml(arch, under)}
 		${home.reading ? READING : ''}
 		${toolsHtml(arch)}
 		${arch.drawOpen ? drawToolHtml(home, env.off) : ''}

@@ -36,6 +36,8 @@ export const freshArch = () => ({
 	tree: freshTree(),
 	// Whether the reader picked a layer themselves. Until they do, a drawn process is lit.
 	layerPicked: false,
+	// The sheet open over the drawing on a phone: "views", "layers", "notes" or "zoom", or null.
+	sheet: null,
 })
 
 const narrow = matchMedia('(max-width: 760px)')
@@ -184,7 +186,14 @@ export function archActions(app) {
 			render()
 			page.querySelector('[data-key="arch-format"]')?.focus()
 		},
-		'arch-view': (el) => showView(el.dataset.view),
+		'arch-view'(el) {
+			arch.sheet = null
+			return showView(el.dataset.view)
+		},
+		'arch-sheet'(el) {
+			arch.sheet = arch.sheet === el.dataset.sheet ? null : el.dataset.sheet
+			render()
+		},
 		'arch-view-pick': pickPart,
 		'arch-key'() {
 			arch.keyOpen = !arch.keyOpen
@@ -293,6 +302,15 @@ export function archActions(app) {
 	wide.addEventListener('change', render)
 	window.addEventListener('resize', () => state.shell.page === 'architecture' && render())
 
+	function closeSheet() {
+		if (!arch.sheet) return false
+		const key = `sheet-${arch.sheet}`
+		arch.sheet = null
+		render()
+		$(`[data-key="${key}"]`)?.focus()
+		return true
+	}
+
 	function closeKey() {
 		if (!arch.keyOpen) return false
 		arch.keyOpen = false
@@ -301,5 +319,5 @@ export function archActions(app) {
 		return true
 	}
 
-	return { actions, draw, enter, goInside, moveTo, closeDraw, closeKey, showConcept, viewsEnded }
+	return { actions, draw, enter, goInside, moveTo, closeDraw, closeKey, closeSheet, showConcept, viewsEnded }
 }

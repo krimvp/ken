@@ -1,5 +1,5 @@
-// Checks the briefs of one run the way the reviewers did, from the run's saved reply: every quote is in git at its
-// commit, each point's line has at most BRIEF_BOUNDS.lineWords words, and no term is a code name. Then it prints each
+// Checks the briefs of one run the way the reviewers did, from the run's saved reply: every quote is a file's lines in
+// git at its commit, each point's line has at most BRIEF_BOUNDS.lineWords words, and no term is a code name. Then it prints each
 // point beside its quoted lines, for a person or a model to judge whether the point is true against its quote.
 //
 // node scripts/bench/check-reply.ts --repo <project checkout> <run.ndjson>...
@@ -15,8 +15,9 @@ if (!values.repo || positionals.length === 0) {
 }
 const repo = values.repo
 
-// camelCase or PascalCase inside a word, a name in CAPITALS or with an underscore, or a dotted name.
-const CODE_NAME = /[a-z][A-Z]|\b[A-Z0-9]+_[A-Z0-9_]*\b|\b[A-Z]{2,}[0-9]*\b|\w\.\w/
+// camelCase or PascalCase inside a word, a name in capitals with an underscore, or a dotted name. An acronym such as
+// CLI or API is a word a maintainer says.
+const CODE_NAME = /[a-z][A-Z]|\b[A-Z0-9]+_[A-Z0-9_]*\b|\w\.\w/
 
 const files = new Map<string, string[] | null>()
 function linesAt(commit: string, file: string): string[] | null {
@@ -35,7 +36,7 @@ function linesAt(commit: string, file: string): string[] | null {
 type Quote = { path: string | null; commit: string; startLine: number; endLine: number; text: string }
 
 function inGit(quote: Quote): boolean {
-	if (quote.path === null) return true
+	if (quote.path === null) return false
 	const lines = linesAt(quote.commit, quote.path)
 	if (!lines) return false
 	return lines.slice(quote.startLine - 1, quote.endLine).join('\n') === quote.text

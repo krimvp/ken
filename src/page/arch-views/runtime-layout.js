@@ -58,18 +58,22 @@ export function labelOf(text, most = LABEL.most) {
 	return { lines, w, h: lines.length * LABEL.line + LABEL.pad }
 }
 
-// The words on a call's label: its protocol, or what crosses when the way is "other".
+// The words on a call's label, kept short so the label fits beside its line: a protocol by its name, and otherwise what
+// the source does to the target. A file crossing says whether it reads or writes, from the model's words; a way ken
+// has no word for says what crosses, as the model wrote it.
 const HOW_LABELS = {
 	http: 'HTTP',
 	https: 'HTTPS',
 	grpc: 'gRPC',
 	sql: 'SQL',
 	event: 'event',
-	file: 'files',
-	process: 'process',
-	library: 'library',
+	process: 'starts',
+	library: 'calls',
 }
-export const howLabel = (crossing) => HOW_LABELS[crossing.how] ?? crossing.text
+export function howLabel(crossing) {
+	if (crossing.how === 'file') return /\bwrit/i.test(crossing.text) ? 'writes files' : 'reads files'
+	return HOW_LABELS[crossing.how] ?? crossing.text
+}
 
 const hasLanes = (thing) => thing?.kind === 'store' && thing.topics.length > 0
 // An event names its bus at an end, or belongs to the only bus with its topic. When two buses carry the same

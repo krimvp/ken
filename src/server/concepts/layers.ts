@@ -1,7 +1,8 @@
 // The layers of what ken's model knows of a project, and the jobs that fill what is missing, in the order the queue
 // fills them. Layer 0 is the project: its parts with the drawings of where it runs, then its main process drawn.
 // Layer 1 is the brief of each part, in tour order. Layer 2 names the parts inside each part the reader has opened.
-// Last come the questions each brief lists, answered ahead of the reader. Plain code: it reads the layout, the
+// Last come two questions the briefs of the parts the reader opened list, answered ahead of the reader. Nothing more,
+// so the queue ends. Plain code: it reads the layout, the
 // reader's history and what they opened, and asks no model. What is missing is worked out again from what exists each
 // time, so a server that starts again, or a run that failed halfway, ends with the same jobs.
 import { type LayoutSources, lookAtLayout, readLayoutAsk, tourOrder, under } from '../../layout/index.ts'
@@ -27,8 +28,8 @@ export type LayerJob = {
 // canvas, or null on another page.
 export type Looking = { brief: string | null; within: string[] | null }
 
-// The questions of each brief ken answers ahead of the reader. Each is a model run, so only the first few.
-export const QUESTIONS_PER_PART = 2
+// The questions ken answers ahead of the reader, in all. Each is a model run, so only the first few.
+const QUESTIONS_AHEAD = 2
 
 // The name of the thing a lens makes, so a job ken queued and the same request from the reader are one job. A lens
 // whose thing has no name of its own, such as a question typed in the reader's words, gets none.
@@ -79,7 +80,8 @@ export function layerPlan(layout: LayoutSources, reads: ReturnType<typeof concep
 		const job = (made: Omit<LayerJob, 'key'>): LayerJob => ({ ...made, key: lensKey(made.lens) ?? '' })
 		if (!top.named) {
 			const lens = { kind: 'parts', within: [], name: null }
-			return [job({ kind: 'parts', concept: null, title: 'Naming the main parts', order: 0, layer: 0, lens })]
+			const title = 'ken is naming the main parts of the project.'
+			return [job({ kind: 'parts', concept: null, title, order: 0, layer: 0, lens })]
 		}
 		const jobs: LayerJob[] = []
 		const missingViews = openedArchitecture && !top.views?.world && !top.views?.runtime
@@ -88,7 +90,7 @@ export function layerPlan(layout: LayoutSources, reads: ReturnType<typeof concep
 				job({
 					kind: 'views',
 					concept: null,
-					title: missingViews ? 'Drawing the architecture' : 'Updating the architecture drawings',
+					title: missingViews ? 'ken is drawing the architecture.' : 'ken is updating the architecture drawings.',
 					order: 0,
 					layer: 0,
 					lens: { kind: 'views', within: [] },
@@ -99,33 +101,38 @@ export function layerPlan(layout: LayoutSources, reads: ReturnType<typeof concep
 		const drawn = (await reads.processes([], now))?.processes ?? []
 		if (flow && drawn.length === 0) {
 			const lens = { kind: 'view', within: [], name: null, text: flow }
-			jobs.push(job({ kind: 'process', concept: null, title: `Drawing ${flow}`, order: 1, layer: 0, lens }))
+			const title = `ken is drawing a process: ${flow}.`
+			jobs.push(job({ kind: 'process', concept: null, title, order: 1, layer: 0, lens }))
 		}
 		const looked = await opened()
 		const order = tourOrder(top.boxes.filter((box) => box.state !== 'gone'))
+		// The first questions of the opened parts, so answering or stopping one never brings the next one in.
+		let ahead = QUESTIONS_AHEAD
 		for (const [at, stop] of order.entries()) {
 			const concept = partId([], stop.name)
 			const brief = await reads.brief(concept, now)
 			if (!brief) continue
 			if (!brief.explained || brief.staleFiles) {
 				const lens = { kind: 'explain', within: [], part: stop.name }
-				jobs.push(job({ kind: 'explain', concept, title: `Explaining ${stop.name}`, order: 100 + at, layer: 1, lens }))
+				const title = `ken is explaining ${stop.name}.`
+				jobs.push(job({ kind: 'explain', concept, title, order: 100 + at, layer: 1, lens }))
 				continue
 			}
-			// The first few the brief lists, so answering or stopping one never brings the next one in.
-			const asked = brief.questions.slice(0, QUESTIONS_PER_PART).filter((question) => !question.answered)
-			for (const [k, question] of asked.entries()) {
+			const box = top.boxes.find((each) => each.name === stop.name)
+			if (!box || !looked.some((path) => box.paths.some((place) => under(path, place)))) continue
+			const first = brief.questions.slice(0, ahead)
+			ahead -= first.length
+			for (const [k, question] of first.entries()) {
+				if (question.answered) continue
 				const lens = { kind: 'answer', concept, text: question.text }
-				const title = `Answering "${question.text}"`
+				const title = `ken is answering a question ahead of you: ${question.text}`
 				jobs.push(job({ kind: 'answer', concept: question.id, title, order: 300 + at * 10 + k, layer: 3, lens }))
 			}
-			const box = top.boxes.find((each) => each.name === stop.name)
-			const opens = box?.opens && looked.some((path) => box.paths.some((place) => under(path, place)))
-			if (!box || !opens) continue
+			if (!box.opens) continue
 			const within = box.paths.toSorted()
 			if ((await levelAt(within, now))?.named) continue
 			const lens = { kind: 'parts', within, name: box.name }
-			const title = `Naming the parts inside ${box.name}`
+			const title = `ken is naming the parts inside ${box.name}.`
 			jobs.push(job({ kind: 'inner', concept, title, order: 200 + at, layer: 2, lens }))
 		}
 		return jobs
@@ -137,10 +144,12 @@ export function layerPlan(layout: LayoutSources, reads: ReturnType<typeof concep
 
 	// How near a job is to what the reader looks at: 2 when it fills it, 3 for the layer below a part they opened, 4
 	// for the rest. With a brief open the reader looks at that brief, not at the level behind the drawer.
-	function rankOf(job: { layer: Layer; concept: string | null; kind?: string }): 2 | 3 | 4 {
+	function rankOf(job: { key: string; layer: Layer; concept: string | null; kind?: string }): 2 | 3 | 4 {
 		const onTop = looking.within?.length === 0 && looking.brief === null
+		const onCanvas = looking.brief === null && looking.within !== null
 		if (job.layer === 1 && (job.concept === looking.brief || onTop)) return 2
 		if (job.layer === 0 && onTop) return 2
+		if (job.layer === 2 && onCanvas && job.key === lensKey({ kind: 'parts', within: looking.within })) return 2
 		if (job.kind === 'views' && looking.brief) {
 			const kind = parseConcept(looking.brief)?.kind
 			if (kind === 'outside' || kind === 'store' || kind === 'frame' || kind === 'crossing') return 2

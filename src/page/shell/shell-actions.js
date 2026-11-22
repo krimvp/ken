@@ -429,8 +429,8 @@ export function shellActions(app) {
 	}
 
 	// Escape closes what is open, the nearest first: the search, the settings, a correction on You, the "Ask ken"
-	// drawer, a correction in the brief, the draw tool or the key, the brief, and then the level of the canvas, which
-	// goes up one.
+	// drawer, a correction in the brief, the draw tool, the key or a sheet over the drawing, the brief, and then the
+	// level of the canvas, which goes up one.
 	function key(event) {
 		if (event.target.id === 'search-text' && searchKey(event)) return true
 		if (event.key !== 'Escape') return false
@@ -446,7 +446,7 @@ export function shellActions(app) {
 		if (shell.page === 'you' && app.you.closeFix()) return true
 		if (app.ask.close()) return true
 		if (brief.fixing) return Boolean(app.brief.actions['brief-fix']()) || true
-		if (app.arch.closeDraw() || app.arch.closeKey()) return true
+		if (app.arch.closeDraw() || app.arch.closeKey() || app.arch.closeSheet()) return true
 		if (app.brief.close()) return true
 		if (!overlaid() && shell.page === 'architecture' && home.trail.length > 1 && !typing) {
 			void app.arch.moveTo(home.trail.slice(0, -1))

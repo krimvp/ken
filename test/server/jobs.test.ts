@@ -18,9 +18,18 @@ const BACKGROUND = { KEN_BACKGROUND: 'on' }
 const fresh = buildRepository([{ message: 'feat: start', files: FILES }])
 const namedRepo = buildRepository([{ message: 'feat: start', files: FILES }])
 const asking = buildRepository([{ message: 'feat: start', files: FILES }])
-const homes = [readerHome(), readerHome(), readerHome()]
+const busy = buildRepository([{ message: 'feat: start', files: FILES }])
+const homes = [readerHome(), readerHome(), readerHome(), readerHome()]
 
-type Job = { key: string; title: string; by: string; state: { kind: string; skipped?: boolean }; place: number | null }
+type Job = {
+	key: string
+	title: string
+	by: string
+	state: { kind: string; skipped?: boolean }
+	place: number | null
+	reason: string | null
+	retryIn: number | null
+}
 
 // GET /api/jobs as the page reads it: one list of jobs a line, a new line each time a job changes.
 function jobLines(server: KenServer) {
@@ -70,7 +79,7 @@ const brief = (line: string, file: keyof typeof FILES, quoted: string, questions
 	},
 })
 
-test('on a first open the server itself starts naming the parts, as the first job, and the page can read it', async () => {
+test('on a first open the server itself starts naming the parts, as the first job the page can read, and goes on when the reader asks', async () => {
 	const { root } = fresh
 	const model = await scriptedModel([{ hang: () => {} }])
 	const server = await openKen(root, homes[0] ?? '', model.baseUrl, BACKGROUND)
@@ -78,12 +87,36 @@ test('on a first open the server itself starts naming the parts, as the first jo
 		async () => (await json(server, '/api/jobs', { looking: { brief: null, within: null } })).jobs as Job[],
 		(jobs) => jobs[0]?.state.kind === 'running',
 	)
-	assert.deepEqual([first?.key, first?.title, first?.by], ['parts:', 'Naming the main parts', 'ken'])
+	assert.deepEqual(
+		[first?.key, first?.title, first?.by],
+		['parts:', 'ken is naming the main parts of the project.', 'ken'],
+	)
 	await until(
 		() => model.requests.length,
 		(n) => n === 1,
 	)
 	assert.match(JSON.stringify(model.requests[0]?.messages), /Name the main parts of this project/)
+	const stop = new AbortController()
+	const url = new URL('/api/questions', server.url)
+	void fetch(url, {
+		method: 'POST',
+		headers: { origin: url.origin, 'content-type': 'application/json' },
+		body: JSON.stringify({ question: 'What does run do?' }),
+		signal: stop.signal,
+	}).catch(() => {})
+	const asked = await until(
+		async () => (await json(server, '/api/jobs', { looking: { brief: null, within: null } })).jobs as Job[],
+		(jobs) => jobs.some((job) => job.by === 'reader'),
+	)
+	stop.abort()
+	assert.deepEqual(
+		asked.map((job) => [job.key.replace(/^ask:.*/, 'ask'), job.state.kind]),
+		[
+			['parts:', 'running'],
+			['ask', 'waiting'],
+		],
+		"the naming run goes on, and the reader's question runs next",
+	)
 })
 
 test("ken explains each part by itself in tour order; a part the reader presses stops ken's run, goes first, and ken's run comes back after", async () => {
@@ -173,7 +206,7 @@ test("ken explains each part by itself in tour order; a part the reader presses 
 	assert.equal((await json(server, '/api/brief?concept=part%3A%3ACore')).line, 'Runs the work and gives back one.')
 })
 
-test('ken answers ahead only the first two questions a brief lists, and answering one does not bring in the third', async () => {
+test('ken answers ahead only the first two questions of the parts the reader opened, in all, and answering one brings in no other', async () => {
 	const { root } = asking
 	const record = fileRecordStore(root, gitRepository(root))
 	const parts = [
@@ -186,10 +219,11 @@ test('ken answers ahead only the first two questions a brief lists, and answerin
 	const home = homes[2] ?? ''
 	const first = await scriptedModel([
 		brief('Runs the work and gives back one.', 'src/core/run.ts', '\treturn 1', asked),
-		brief('Starts a run when a person types the command.', 'src/cli/main.ts', 'run()'),
+		brief('Starts a run when a person types the command.', 'src/cli/main.ts', 'run()', ['What starts main?']),
 	])
 	const before = await openKen(root, home, first.baseUrl)
 	for (const part of ['Core', 'Command']) await ask(before, { lens: { kind: 'explain', within: [], part } })
+	for (const paths of [['src/core'], ['src/cli']]) await json(before, '/api/seen', { did: 'opened', paths })
 	const model = await scriptedModel([brief('Run gives back one.', 'src/core/run.ts', '\treturn 1'), { hang: () => {} }])
 	const server = await openKen(root, home, model.baseUrl, BACKGROUND)
 	const answers = async () =>
@@ -200,9 +234,35 @@ test('ken answers ahead only the first two questions a brief lists, and answerin
 	assert.deepEqual(
 		after.map((job) => [job.title, job.state.kind]),
 		[
-			[`Answering "${asked[1]}"`, 'running'],
-			[`Answering "${asked[0]}"`, 'done'],
+			[`ken is answering a question ahead of you: ${asked[1]}`, 'running'],
+			[`ken is answering a question ahead of you: ${asked[0]}`, 'done'],
 		],
-		'with the first answered, the third question never joins the line',
+		"with the first answered, neither Core's third question nor Command's joins the line",
 	)
+})
+
+test("a brief the model endpoint refused says the endpoint's reason, stays out of the reader's list, and waits to be tried again while the next part goes on", async () => {
+	const { root } = busy
+	const record = fileRecordStore(root, gitRepository(root))
+	const parts = [
+		{ name: 'Core', job: 'Runs the work', paths: ['src/core'] },
+		{ name: 'Command', job: 'The command a person types', paths: ['src/cli'] },
+	]
+	const named = await record.append([{ kind: 'layout', within: [], at: 'HEAD', parts, arrows: [] }])
+	if (named.kind !== 'appended') assert.fail(named.problems.join(' '))
+	const model = await scriptedModel([{ status: 429 }, { hang: () => {} }])
+	const server = await openKen(root, homes[3] ?? '', model.baseUrl, BACKGROUND)
+	const { jobs, left } = await until(
+		async () =>
+			(await json(server, '/api/jobs', { looking: { brief: null, within: null } })) as {
+				jobs: Job[]
+				left: { jobs: number; seconds: number | null }
+			},
+		({ jobs }) => jobs.some((job) => job.key === 'explain:part::Command' && job.state.kind === 'running'),
+	)
+	assert.equal(left.jobs, 1, 'what is left is the run going on, not the job that waits to be tried again')
+	const core = jobs.find((job) => job.key === 'explain:part::Core')
+	assert.deepEqual([core?.state.kind, core?.reason], ['failed', 'The model endpoint is busy: 429.'])
+	assert.ok((core?.retryIn ?? 0) > 25, `tried again in ${core?.retryIn} s`)
+	assert.deepEqual((await json(server, '/api/questions')).questions, [], "ken's failed run is not in the reader's list")
 })

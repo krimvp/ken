@@ -1,8 +1,8 @@
 // The brief: one concept the reader can take in within a few minutes, in a drawer on the right, over the page they
 // are on. From the top: the trail of briefs they came through, the kind and the minutes, the name and the one line
-// that defines it, a picture, the things to know, each a line beside a small drawing, and its terms. At the foot,
-// always in the same place: what ken thinks the reader knows of it with "Not right", and the three ways on,
-// Sideways, Questions and Deeper. The setting for text decides how much stands under each line. A concept ken's
+// that defines it, a picture, the things to know, each a line beside a small drawing, its terms, and what ken thinks
+// the reader knows of it with "Not right?". At the foot, always in the same place: the three ways on, Sideways,
+// Questions and Deeper. The setting for text decides how much stands under each line. A concept ken's
 // model has not explained yet still opens, with what git says of it and one button for the rest.
 
 import { runtimePicture } from '../arch-views/switch.js'
@@ -166,20 +166,23 @@ function pointHtml(point, i, ui) {
 	</li>`
 }
 
-// The reader can ask for a first explanation or update one whose evidence changed.
+// The reader can ask for a first explanation or update one whose evidence changed. While ken's queue holds the
+// brief's run, every tab says the same: its place in line and when it starts, or how long it has run, from the queue.
 function explainHtml(brief, env, ui) {
 	const run = env.running?.onHome
-	if (run?.kind === 'explain' && run.concept === brief.id) return workingHtml(run, env)
 	const job = jobOf(env.jobs ?? [], brief.id)
 	const what = brief.kind === 'question' ? 'answered this' : 'explained this'
 	if (job && !brief.staleFiles) {
 		const reading = jobLineHtml(job, brief.kind === 'question' ? 'answering this' : 'reading this part')
-		const sooner =
+		const act =
 			job.state.kind === 'waiting'
-				? `<button class="k-btn is-quiet k-run-btn" data-act="brief-explain" data-key="brief-explain"${env.off ? ' disabled' : ''}><span>Explain it now</span><small>It goes first</small></button>`
-				: ''
-		return `<div class="k-unexplained">${reading}<p class="k-muted">The brief fills in here when ken is done.</p>${sooner}</div>`
+				? `<button class="k-btn is-quiet k-run-btn" data-act="brief-explain" data-key="brief-explain"${env.off ? ' disabled' : ''}><span>${brief.kind === 'question' ? 'Answer now' : 'Explain now'}</span><small>It goes first</small></button>`
+				: job.by === 'reader'
+					? `<button class="k-link" data-act="job-stop" data-job="${esc(job.key)}" data-key="brief-stop">Stop</button>`
+					: ''
+		return `<div class="k-unexplained">${reading}<p class="k-muted">The brief fills in here when ken is done.</p>${act}</div>`
 	}
+	if (run?.kind === 'explain' && run.concept === brief.id) return workingHtml(run, env)
 	if (!brief.explain) {
 		return `<div class="k-unexplained"><p>ken's model has not ${what} yet.</p></div>`
 	}
@@ -216,7 +219,7 @@ function workingHtml(run, env) {
 	return `<div class="k-unexplained" role="status"><p><span class="k-spin" aria-hidden="true"></span> <b>${DOING[run.kind][1]}.</b></p><p class="k-muted k-num k-clock">${Math.round(env.seconds)} s so far, ${count(tools, 'action', 'actions')}</p>${newest ? `<p class="k-muted k-working-step">${prose(newest)}</p>` : ''}<button class="k-link" data-act="stop" data-key="brief-stop">Stop</button></div>`
 }
 
-function mainHtml(brief, { ui, env, prefs, look, views, inner, runtime }) {
+function mainHtml(brief, { ui, env, prefs, look, views, inner, runtime, home }) {
 	const texts = Object.entries(TEXTS).map(
 		([text, name]) =>
 			`<button data-act="pref-text" data-text="${text}" data-key="brief-text-${text}" aria-pressed="${prefs.text === text}">${name}</button>`,
@@ -284,6 +287,7 @@ function mainHtml(brief, { ui, env, prefs, look, views, inner, runtime }) {
 		${why}
 		${lines}
 		${terms}
+		${knowsHtml(brief, home, ui)}
 		<p class="k-trust">${esc(brief.trust)}</p>`
 }
 
@@ -429,6 +433,15 @@ function deeperHtml(brief, inner) {
 		<p class="k-none">${icon('deeper')}Then its files, and then the lines.</p>`
 }
 
+// What ken thinks the reader knows of a concept, said as a sentence, by level.
+const THINKS = {
+	new: 'ken thinks this is new to you.',
+	seen: 'ken thinks you have seen it.',
+	read: 'ken thinks you have read about it.',
+	code: 'ken thinks you have read its code.',
+	said: 'You said you know it.',
+}
+
 function knowsHtml(brief, home, ui) {
 	const { knows } = brief
 	if (!knows) return ''
@@ -440,13 +453,12 @@ function knowsHtml(brief, home, ui) {
 		return `<div class="k-ladder" role="group" aria-label="What do you know of ${esc(brief.name)}?"><p class="k-ladder-q">What do you know of ${prose(brief.name)}?</p>${rungs.join('')}<button class="k-link" data-act="brief-fix" data-key="brief-fix-cancel">Cancel</button></div>`
 	}
 	const since = knows.stale ? ` ${count(knows.since, 'commit', 'commits')} landed there since.` : ''
-	const why = knows.why || since ? `<p class="k-knows-why">${esc(knows.why ?? '')}${since}</p>` : ''
 	const problem = ui.saveProblem ? `<p class="k-ask-problem" role="alert">${esc(ui.saveProblem)}</p>` : ''
 	const said = ui.said ? `<p class="k-knows-said" role="status">ken wrote: ${esc(ui.said)}</p>` : ''
-	return `${said}<p class="k-knows"><span class="k-muted">ken thinks:</span>${levelMark(knows.level, 16)}<b>${esc(levelLabel(home, knows.level))}</b><button class="k-link" data-act="brief-fix" data-key="brief-fix">Not right</button></p>${why}${problem}`
+	return `${said}<div class="k-knows">${levelMark(knows.level, 16)}<p><b>${THINKS[knows.level]}</b> ${esc(knows.why ?? '')}${since} <button class="k-link" data-act="brief-fix" data-key="brief-fix">Not right?</button></p></div>${problem}`
 }
 
-function footHtml(brief, home, ui) {
+function footHtml(brief, ui) {
 	if (brief.local) return ''
 	const counts = waysCount(brief)
 	const ways = Object.entries(WAYS).map(([way, [name, note]]) =>
@@ -454,7 +466,7 @@ function footHtml(brief, home, ui) {
 			? `<button class="k-way" data-act="brief-way" data-way="source" data-key="brief-way-deeper" aria-pressed="${ui.on === 'source'}">${icon('code')}<span class="k-way-name-s">Read source</span><span class="k-way-note">Lines from git</span></button>`
 			: `<button class="k-way" data-act="brief-way" data-way="${way}" data-key="brief-way-${way}" aria-pressed="${ui.on === way}">${icon({ sideways: 'sideways', questions: 'question', deeper: 'deeper' }[way])}<b class="k-num">${counts[way]}</b><span class="k-way-name-s">${name}</span><span class="k-way-note">${note}</span></button>`,
 	)
-	return `<div class="k-brief-foot">${knowsHtml(brief, home, ui)}<div class="k-ways">${ways.join('')}</div></div>`
+	return `<div class="k-brief-foot"><div class="k-ways">${ways.join('')}</div></div>`
 }
 
 // ui is the drawer's state: { id, on, trail, fixing, openQuotes, problem }. found is what the page has of the
@@ -496,5 +508,5 @@ export function briefHtml(ui, found, ctx) {
 						: mainHtml(brief, { ...ctx, ui })
 	// A frame, a store, an outside thing or a crossing is no part, so it takes no part's colour.
 	const colour = view ? '' : colourOf(brief)
-	return `${head}<div class="k-brief-body text-${ctx.prefs.text} ${colour || 'is-plain'}${view ? ' is-view' : ''}" id="brief-scroll">${body}</div>${footHtml(brief, ctx.home, ui)}`
+	return `${head}<div class="k-brief-body text-${ctx.prefs.text} ${colour || 'is-plain'}${view ? ' is-view' : ''}" id="brief-scroll">${body}</div>${footHtml(brief, ui)}`
 }

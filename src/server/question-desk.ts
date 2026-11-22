@@ -28,7 +28,7 @@ import {
 	viewsQuestion,
 } from '../follow-up/index.ts'
 import { entryFrom, type History, type HistoryEntry, whyNoNote } from '../history/index.ts'
-import { gaveWay, jobQueue } from '../jobs/index.ts'
+import { gaveWay, jobQueue, type Ran } from '../jobs/index.ts'
 import {
 	type Change,
 	type LayoutSources,
@@ -47,6 +47,7 @@ import { type Layer, type Looking, type layerPlan, lensKey } from './concepts/la
 import { toldWithLines } from './concepts/told.ts'
 
 const MAX_QUESTION_CHARS = 4000
+const RAN: Ran = { kind: 'ran' }
 const MAX_TOPICS = 20
 // How much of a note's words the next question about it quotes back.
 const NOTE_CHARS = 400
@@ -136,7 +137,10 @@ export function questionDesk(
 		parallel: jobs.parallel,
 		async run(job, signal, say, acted) {
 			const { work } = job
-			if (work.kind === 'note') return say({ kind: 'saved', view: await writeNote(work, signal) })
+			if (work.kind === 'note') {
+				say({ kind: 'saved', view: await writeNote(work, signal) })
+				return RAN
+			}
 			if (!chats) throw new Error('No model is set.')
 			const asked = work.asked ?? (await askedOf(work.body))
 			const chat = work.chat === 'reader' ? chats.reader : chats.ken
@@ -144,17 +148,19 @@ export function questionDesk(
 				if (line.kind === 'tool') acted()
 				say(line)
 			}
-			const entry = await run(chat, asked.text, signal, sent, asked.as)
+			const { ran, entry } = await run(chat, asked.text, signal, sent, asked.as)
+			if (ran.kind === 'model-error') return ran
 			if (entry?.outcome === 'partial') throw new Error("ken's model explained only some parts.")
 			if (entry?.outcome === 'incomplete') throw new Error("ken's model did not give a brief with a checked point.")
 			// A run can end without making its thing, such as a brief whose every point was sent back.
 			if (work.layer !== null && !signal.aborted && !(await plan.fresh(job.key))) {
 				throw new Error("ken's model ran, but made nothing that passed ken's checks.")
 			}
+			return RAN
 		},
 		fresh: async ({ key, work }) => work.kind === 'ask' && work.layer !== null && (await plan.fresh(key)),
-		rankOf: ({ kind, concept, work }) =>
-			work.kind === 'ask' && work.layer !== null ? plan.rankOf({ layer: work.layer, concept, kind }) : 2,
+		rankOf: ({ key, kind, concept, work }) =>
+			work.kind === 'ask' && work.layer !== null ? plan.rankOf({ key, layer: work.layer, concept, kind }) : 2,
 		ended: () => void refill(),
 	})
 
@@ -176,7 +182,9 @@ export function questionDesk(
 							chat: 'ken' as const,
 							layer: job.layer,
 						}
-						return { ...job, yields: true, work }
+						// The run that names the top parts is the slowest, and every layer waits for it.
+						const holds = job.kind === 'explain' && job.concept ? [job.concept] : []
+						return { ...job, yields: job.kind !== 'parts', holds, work }
 					}),
 					head ?? '',
 				)
@@ -205,8 +213,9 @@ export function questionDesk(
 		const key = (lens === undefined ? null : lensKey(lens)) ?? `ask:${randomUUID()}`
 		const kind = String(fieldOf(lens, 'kind') ?? 'question')
 		const concept = fieldOf(lens, 'concept') ?? null
-		const title = asked.text.split('\n')[0] ?? ''
+		const title = titleOf(lens, asked.text.split('\n')[0] ?? '')
 		const work = { kind: 'ask' as const, body, asked, chat: 'reader' as const, layer: null }
+		const tour = asked.as?.kind === 'explain' ? asked.as.tour : null
 		const ask = {
 			key,
 			kind,
@@ -214,24 +223,32 @@ export function questionDesk(
 			title,
 			order: 0,
 			yields: true,
+			holds: tour ? tour.stops.map((each) => partId(tour.within, each.name)) : [],
 			work,
 		}
 		const job = queue.want(ask, 'reader')
 		if (!job) return send({ kind: 'error', message: 'ken is closing.' })
 		if (job.state.kind === 'waiting') send({ kind: 'waiting' })
-		let saved = false
+		// A run that said its error, or saved what it made, has told the reader already.
+		let told = false
 		const ended = await queue.follow(
 			key,
 			(line) => {
-				if (line.kind === 'saved') saved = true
+				if (line.kind === 'saved' || line.kind === 'error') told = true
 				send(line)
 			},
 			stop,
 		)
-		if (ended?.kind === 'failed' && !saved && !stop.aborted) send({ kind: 'error', message: ended.why })
+		if (ended?.kind === 'failed' && !told && !stop.aborted) send({ kind: 'error', message: ended.why })
 	}
 
-	async function run(chat: Chat, question: string, stop: AbortSignal, send: (line: QuestionLine) => void, as?: Asking) {
+	async function run(
+		chat: Chat,
+		question: string,
+		stop: AbortSignal,
+		send: (line: QuestionLine) => void,
+		as?: Asking,
+	): Promise<{ ran: Ran; entry: HistoryEntry | null }> {
 		const asked = {
 			id: randomUUID(),
 			question,
@@ -249,7 +266,7 @@ export function questionDesk(
 			} else send(event)
 		}
 		// A job that gave way to the reader runs again from the start, so this run leaves nothing in the history.
-		if (gaveWay(stop)) return
+		if (gaveWay(stop)) return { ran: RAN, entry: null }
 		const entry = entryFrom(asked, events, stop.aborted)
 		if (entry.outcome === 'incomplete' || entry.outcome === 'partial') {
 			if (as?.kind === 'answer')
@@ -261,9 +278,14 @@ export function questionDesk(
 					part: as.tour.stops.length === 1 ? (as.tour.stops[0]?.name ?? null) : null,
 				}
 		}
-		await history.add(entry)
-		send({ kind: 'saved', view: await viewOf(entry) })
-		return entry
+		// The reader's list of questions holds what they asked and what ken made; the jobs list says why ken's failed.
+		if (entry.outcome === 'answered' || chat !== chats?.ken) {
+			await history.add(entry)
+			send({ kind: 'saved', view: await viewOf(entry) })
+		}
+		const last = events.at(-1)
+		const ran: Ran = last?.kind === 'error' && last.model ? { kind: 'model-error', why: last.message } : RAN
+		return { ran, entry }
 	}
 
 	// A note ken writes by itself in live mode, saved in the history with what it is about. null when live mode was
@@ -271,7 +293,10 @@ export function questionDesk(
 	async function note(chat: Chat, about: About, question: string, stop: AbortSignal): Promise<QuestionView | null> {
 		const key = `note:${randomUUID()}`
 		const work = { kind: 'note' as const, chat, about, question }
-		queue.want({ key, kind: 'note', concept: null, title: 'Writing a live note', order: 0, yields: false, work }, 'ken')
+		queue.want(
+			{ key, kind: 'note', concept: null, title: 'ken is writing a live note.', order: 0, yields: false, work },
+			'ken',
+		)
 		const off = () => queue.stop(key, 'stop')
 		if (stop.aborted) off()
 		stop.addEventListener('abort', off)
@@ -548,7 +573,13 @@ export function questionDesk(
 			// level, the model explains the parts it has not explained yet, or all of them when none is left.
 			const order = tourOrder(level.boxes.filter((box) => box.state !== 'gone'))
 			const { explained } = await concepts.levelTold(level)
-			const rest = order.filter((stop) => !explained.includes(stop.name))
+			// A part ken is explaining now is left to that run.
+			const now = new Set(
+				queue.view().flatMap((job) => (job.state.kind === 'running' && job.kind === 'explain' ? [job.key] : [])),
+			)
+			const rest = order.filter(
+				(stop) => !explained.includes(stop.name) && !now.has(`explain:${partId(level.within, stop.name)}`),
+			)
 			const stops = part === null ? (rest.length > 0 ? rest : order) : order.filter((stop) => stop.name === part)
 			if (stops.length === 0) {
 				const problem = part === null ? 'There is no part here to explain.' : `There is no part "${String(part)}" here.`
@@ -659,6 +690,7 @@ export function questionDesk(
 		refill,
 		close,
 		jobs: queue.view,
+		left: queue.left,
 		subscribe: queue.subscribe,
 	}
 }
@@ -680,6 +712,37 @@ function deeperOnNote(about: About, at: string, summary: string, commits: number
 		return `Go deeper on the ${time} note about ${what}\nThe note was about the commits from ${short(about.base)} to ${short(about.head)}. Read them with log and diff over that range.\n${explain}`
 	}
 	return `Go deeper on the ${time} note about uncommitted work\nken copied that work into commit ${short(about.snapshot)} in its own store, on top of HEAD ${short(about.head)}. Read it with diff from ${short(about.base)} to ${short(about.snapshot)} and with read_file at ${short(about.snapshot)}, as you would a commit.\n${explain}`
+}
+
+// What the page shows of a job the reader asked for: a whole sentence, from the lens and the question's first line.
+function titleOf(lens: unknown, first: string): string {
+	const field = (name: string) => {
+		const value = fieldOf(lens, name)
+		return typeof value === 'string' ? value : null
+	}
+	const within = fieldOf(lens, 'within')
+	const top = !Array.isArray(within) || within.length === 0
+	const said = (text: string) => (/[.?!]$/.test(text) ? text : `${text}.`)
+	switch (field('kind')) {
+		case 'explain': {
+			const part = field('part')
+			return part ? `ken is explaining ${part}.` : 'ken is explaining every part here.'
+		}
+		case 'parts':
+			return top
+				? 'ken is naming the main parts of the project.'
+				: `ken is naming the parts inside ${field('name') ?? 'this part'}.`
+		case 'views':
+			return 'ken is drawing where the project runs.'
+		case 'view':
+			return `ken is drawing it the way you asked: ${said(field('text') ?? first)}`
+		case 'change':
+			return `ken is reading the change: ${said(first)}`
+		case 'answer':
+			return `ken is answering your question: ${said(field('text') ?? first)}`
+		default:
+			return `ken is answering your question: ${said(first)}`
+	}
 }
 
 // The questions the page asks beside a change's story. Each is answered in a thread of its own.
