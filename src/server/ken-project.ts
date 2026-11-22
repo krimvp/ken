@@ -82,7 +82,10 @@ export async function openProject(options: {
 	if (config.kind === 'ok') {
 		const reader = { map, notes: readerNotes, prefs }
 		const chat = { directory: root, model: config.config, env: options.env, reader, snapshots: store.objects }
-		const [started, forNotes] = await Promise.all([startChat(chat), startChat(chat)])
+		const [started, forNotes] = await Promise.all([
+			startChat({ ...chat, reader: { ...reader, readSaved: history.readSaved } }),
+			startChat(chat),
+		])
 		if (started.kind !== 'ok') return { kind: 'refused', message: started.message }
 		if (forNotes.kind !== 'ok') return { kind: 'refused', message: forNotes.message }
 		model = { kind: 'ok', chat: started.chat, name: config.config.model }

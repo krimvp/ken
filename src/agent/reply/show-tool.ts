@@ -86,14 +86,14 @@ export type Asking =
 	| { kind: 'question' }
 	| { kind: 'note' }
 	| { kind: 'explain'; tour: Tour }
-	| { kind: 'answer'; concept: string; text: string }
+	| { kind: 'answer'; concept: string; text: string; typed?: boolean }
 	| { kind: 'change'; range: Range; want: Want }
 	| { kind: 'view'; within: string[]; text: string }
 
 export function freshRound(as: Asking, emit: Round['emit']): Round {
 	return {
 		asked: as.kind !== 'note' && as.kind !== 'explain',
-		typed: as.kind === 'question' || as.kind === 'view',
+		typed: as.kind === 'question' || as.kind === 'view' || (as.kind === 'answer' && as.typed === true),
 		tour: as.kind === 'explain' ? as.tour : null,
 		view: as.kind === 'view' ? { within: as.within, text: as.text } : null,
 		want: as.kind === 'change' ? as.want : null,
@@ -121,12 +121,14 @@ function spent(round: Round): string {
 	return `ken has sent back ${sentBackLimit(round)} cards in this reply and checks no more. Say the rest in words, and say which points you could not quote.`
 }
 
-export function showTool(gate: Gate, round: () => Round): Tool {
+export function showTool(gate: Gate, round: () => Round, as: Asking['kind']): Tool {
+	const brief = as === 'answer' || as === 'explain'
 	return {
 		name: 'show',
-		description:
-			'Show the reader cards that prove what you say: claims, decisions, risks, diagrams, topics, the parts of the project and the brief of a part, each with the exact lines it rests on. ken checks each card alone against git and shows it after the words you write in this turn. A card that fails comes back with its problems, and the reader sees nothing of it. Every field is optional.',
-		parameters: PARAMETERS,
+		description: brief
+			? 'Show the reader the brief the question asks for, with its checked quotes.'
+			: 'Show the reader cards that prove what you say: claims, decisions, risks, diagrams, topics, the parts of the project and the brief of a part, each with the exact lines it rests on. ken checks each card alone against git and shows it after the words you write in this turn. A card that fails comes back with its problems, and the reader sees nothing of it. Every field is optional.',
+		parameters: as === 'explain' ? TOUR_PARAMETERS : brief ? BRIEF_PARAMETERS : PARAMETERS,
 		async execute(args, ctx) {
 			const current = round()
 			if (current.sentBack >= sentBackLimit(current)) return refuse(spent(current))
@@ -1062,3 +1064,20 @@ const SHOW_SCHEMA = {
 } as const
 
 const PARAMETERS = allowJsonText(SHOW_SCHEMA)
+const BRIEF_PARAMETERS = allowJsonText({
+	type: 'object',
+	properties: { brief: SHOW_SCHEMA.properties.brief },
+	required: ['brief'],
+	additionalProperties: false,
+})
+
+// Providers can still send a tour stop as a step and its checked claims.
+const TOUR_PARAMETERS = allowJsonText({
+	type: 'object',
+	properties: {
+		brief: SHOW_SCHEMA.properties.brief,
+		step: SHOW_SCHEMA.properties.step,
+		claims: SHOW_SCHEMA.properties.claims,
+	},
+	additionalProperties: false,
+})

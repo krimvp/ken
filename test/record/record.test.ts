@@ -218,6 +218,8 @@ test('a note goes stale when its quoted code changes at HEAD, and stays fresh wh
 
 		assert.ok(written?.kind === 'topic' && note?.kind === 'note')
 		assert.deepEqual(await noteFreshness(builtRepo, written, note), expected)
+		const direct = await describeEntry(builtRepo, await store.read(), note)
+		assert.ok(direct.includes(`note ${note.id}, ${expected.kind}:`), direct)
 	}
 })
 

@@ -38,4 +38,5 @@ export {
 	type Withdrawn,
 } from './reply/reply.ts'
 export type { Asking } from './reply/show-tool.ts'
+export type { SavedAnswer } from './reply/thread-memory.ts'
 export { type Chat, startChat } from './start-chat.ts'

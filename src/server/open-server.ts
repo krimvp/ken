@@ -188,10 +188,17 @@ export async function openServer(options: {
 		if (where === 'POST /api/notes') {
 			const body = await readJson(request)
 			const id = body.kind === 'ok' ? fieldOf(body.value, 'remove') : undefined
-			if (typeof id !== 'string') {
-				return sendJson(response, 400, { message: 'Send remove: the id of the note to remove.' })
+			const text = body.kind === 'ok' ? fieldOf(body.value, 'text') : undefined
+			if (typeof id === 'string' && text === undefined) {
+				return sendJson(response, 200, { notes: await readerNotes.remove(id, new Date()) })
 			}
-			return sendJson(response, 200, { notes: await readerNotes.remove(id, new Date()) })
+			if (typeof text === 'string' && id === undefined) {
+				const kept = await readerNotes.add(text, new Date(), 'reader')
+				return kept.kind === 'kept'
+					? sendJson(response, 200, { notes: kept.notes })
+					: sendJson(response, 400, { message: kept.problem })
+			}
+			return sendJson(response, 400, { message: 'Send the text of one note or the id of the note to remove.' })
 		}
 		if (where === 'GET /api/open') return sendJson(response, 200, await openNow())
 		if (where === 'GET /api/layout') {

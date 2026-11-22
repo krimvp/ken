@@ -93,7 +93,7 @@ export function foundHtml(search, home) {
 const TEXT_SAYS = {
 	pictures: 'A large picture, and one line for each thing to know.',
 	balanced: 'The picture, and a sentence under each line.',
-	words: 'A smaller picture, and a short paragraph under each line.',
+	words: 'Read the architecture as text. In briefs, see a short paragraph under each line.',
 }
 
 // prefs is { text, theme }. files is where ken keeps what it knows: the project's folder, and the folder outside it

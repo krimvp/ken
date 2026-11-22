@@ -2,7 +2,7 @@
 // runs", "How the code is split", and the key. A drawing the project does not have is not offered. With none drawn,
 // the card offers one run of ken's model to draw them. This module also lays out the drawing on show, once per
 // drawing and fold, and says which lines a process lights.
-import { esc } from '../views/format.js'
+import { esc, prose } from '../views/format.js'
 import { mark, runtimeHtml, runtimePictureHtml, worldHtml } from './drawing.js'
 import { runtimeLayout } from './runtime-layout.js'
 import { worldLayout } from './world-layout.js'
@@ -50,21 +50,30 @@ function askHtml(home, env) {
 }
 
 // crumb is the breadcrumb's HTML. problem is what the last run to draw them left to say.
-export function switchCardHtml({ home, arch, env, crumb, offered, on }) {
+export function switchCardHtml({ home, arch, env, crumb, offered, on, format, about }) {
+	const reading = format === 'text'
+	const formatButton = format
+		? `<button class="k-link" data-act="arch-format" data-format="${reading ? 'drawing' : 'text'}" data-key="arch-format">${reading ? 'Show diagram' : 'Read as text'}</button>`
+		: ''
+	const head = `<div class="k-vw-head">${crumb}${formatButton}</div>`
+	const summary = about ? `<p class="k-vw-asks">${prose(about)}</p>` : ''
 	if (offered.length === 0) {
 		const ask = askHtml(home, env)
 		const problem = arch.viewsProblem ? `<p class="k-vw-problem" role="alert">${esc(arch.viewsProblem)}</p>` : ''
-		return `<div class="k-float k-vw-card">${crumb}${ask}${problem}</div>`
+		return `<div class="k-float k-vw-card">${head}${summary}${ask}${problem}</div>`
 	}
 	const buttons = offered.map(
 		(view) =>
 			`<button data-act="arch-view" data-view="${view}" data-key="view-${view}" aria-pressed="${on === view}">${VIEW_ICONS[view] ? mark(VIEW_ICONS[view]) : '<svg class="k-i" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="8" height="6" rx="1.500"/><rect x="13" y="14" width="8" height="6" rx="1.500"/><path d="M11 7h3a3 3 0 0 1 3 3v4"/></svg>'}<span>${VIEW_NAMES[view]}</span></button>`,
 	)
-	const key = `<button class="k-vw-keybtn" data-act="arch-key" data-key="view-key" aria-expanded="${arch.keyOpen}">${mark('key')}<span>Key</span></button>`
+	const key =
+		reading || !home.look?.named
+			? ''
+			: `<button class="k-vw-keybtn" data-act="arch-key" data-key="view-key" aria-expanded="${arch.keyOpen}">${mark('key')}<span>Key</span></button>`
 	const asks = offered.map(
 		(view) => `<span${view === on ? ' class="is-on"' : ''}>${VIEW_NAMES[view]} shows ${VIEW_ASKS[view]}.</span>`,
 	)
-	return `<div class="k-float k-vw-card">${crumb}<div class="k-vw-switch" role="group" aria-label="Which drawing">${buttons.join('')}${key}</div><p class="k-vw-asks">${asks.join(' ')}</p></div>`
+	return `<div class="k-float k-vw-card">${head}<div class="k-vw-switch" role="group" aria-label="Which drawing">${buttons.join('')}${key}</div>${summary || (reading ? '' : `<p class="k-vw-asks">${asks.join(' ')}</p>`)}</div>`
 }
 
 const KEY_SHAPES = [

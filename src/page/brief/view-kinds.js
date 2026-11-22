@@ -3,6 +3,7 @@
 // found in git, the crossings into and out of it, what sits in a frame, a bus's topics, and what the repository does
 // not say. This file draws the parts of the drawer that differ from a part's brief.
 import { mark } from '../arch-views/drawing.js'
+import { eventBus } from '../arch-views/runtime-layout.js'
 import { partClass } from '../project/part-colours.js'
 import { icon } from '../shell/icons.js'
 import { esc, prose } from '../views/format.js'
@@ -47,7 +48,9 @@ function topicsHtml(brief, views) {
 		return thing.kind === 'part' ? thing.part : thing.kind === 'store' ? thing.name : (outside.get(thingId) ?? thingId)
 	}
 	const rows = brief.topics.map((topic) => {
-		const events = (runtime?.crossings ?? []).filter((c) => c.kind === 'event' && c.topic === topic)
+		const events = (runtime?.crossings ?? []).filter(
+			(c) => c.kind === 'event' && c.topic === topic && eventBus(runtime.things, c)?.id === id,
+		)
 		const send = [...new Set(events.filter((c) => c.from !== id).map((c) => nameOf(c.from)))]
 		const take = [...new Set(events.filter((c) => c.to !== id).map((c) => nameOf(c.to)))]
 		const who = (names) => (names.length === 0 ? '<em>none drawn</em>' : names.map(esc).join(', '))

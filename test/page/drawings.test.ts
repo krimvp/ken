@@ -315,6 +315,41 @@ test("a bus's brief lists each topic with who publishes it and who picks it up",
 	assert.match(html, /no reader of payments\.dead-letter in the repository/)
 })
 
+test('two buses with the same topic show only publishers and readers tied to each bus', () => {
+	const { runtime } = SHOP
+	const bus = runtime.things.find((t) => t.id === 'bus')
+	assert.ok(bus)
+	const views = { ...SHOP, runtime: { ...runtime, things: [...runtime.things, { ...bus, id: 'second-bus' }] } }
+	const drawn = runtimeLayout(views)
+	assert.ok(
+		drawn.lines.some((line) => line.kind === 'event' && line.id === 'e1'),
+		'the direct order.placed event stays between its two parts',
+	)
+	const brief = {
+		id: 'store:second-bus',
+		kind: 'store',
+		name: 'Second bus',
+		line: '',
+		minutes: 1,
+		points: [],
+		terms: [],
+		quotes: [],
+		questions: [],
+		decisions: [],
+		explained: true,
+		trust: '',
+		sideways: { uses: [], usedBy: [], processes: [] },
+		topics: ['order.placed', 'payments.dead-letter'],
+	}
+	const ui = { id: brief.id, on: null, trail: [{ id: brief.id, name: brief.name }], openQuotes: new Set() }
+	const html = briefHtml(
+		ui,
+		{ kind: 'ok', brief },
+		{ home: {}, prefs: { text: 'pictures' }, env: {}, look: null, inner: null, views },
+	)
+	assert.doesNotMatch(html, /Publishes: (orders|payments)|Picks up: payments/)
+})
+
 test("a crossing's brief has its two ends beside it, from the drawing, when the server sends none", () => {
 	const brief = {
 		id: 'crossing:c-model',

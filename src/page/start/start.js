@@ -21,7 +21,13 @@ const DAY = 86_400_000
 const SHOWN_PROCESSES = 2
 
 // What the button of "Start here" says, by the kind of the thing ken leads with.
-const DOES = { stale: 'Show what changed', review: 'Review it', tour: 'Open its brief', read: 'Open its brief' }
+const DOES = {
+	decision: 'Open decisions',
+	stale: 'Show what changed',
+	review: 'Review it',
+	tour: 'Open its brief',
+	read: 'Open its brief',
+}
 
 const head = (title, page, label) =>
 	`<div class="k-tile-head"><h2 class="k-eyebrow">${title}</h2><button class="k-tile-go" data-act="go-page" data-page="${page}" data-key="tile-${page}" aria-label="${label}">${icon('right')}</button></div>`
@@ -59,6 +65,11 @@ function mapHtml(look, { lit = null, byLevel = false, key }) {
 	return `<div class="k-mini${byLevel ? ' is-big' : ''}" style="--cols:${cols}"><svg viewBox="0 0 ${cols * 100} ${rows * 100}" preserveAspectRatio="none" aria-hidden="true">${lines.join('')}</svg>${boxes.join('')}</div>`
 }
 
+function nextButton(item, index) {
+	const mark = item.go.way === 'learn' ? 'architecture' : item.kind === 'decision' ? 'decision' : 'changes'
+	return `<button class="k-chip" data-act="start-go" data-index="${index}" data-key="start-chip-${index}">${icon(mark)}<span>${prose(item.title)}</span></button>`
+}
+
 function startHtml({ look }) {
 	const items = look.next?.items ?? []
 	const about = look.named
@@ -79,7 +90,7 @@ function startHtml({ look }) {
 		<div class="k-start-words"><p class="k-eyebrow">Start here</p><h2 id="start-title">${prose(lead.title)}</h2><p class="k-start-why">${prose(lead.why)}</p>
 			<div class="k-then">${rest
 				.slice(0, 2)
-				.map((item, i) => chip(item, i + 1))
+				.map((item, i) => nextButton(item, i + 1))
 				.join('')}</div></div>
 		<button class="k-btn is-big" data-act="start-go" data-index="0" data-key="start-primary">${DOES[lead.kind] ?? 'Open it'}${icon('right')}</button>
 	</section>`

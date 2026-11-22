@@ -7,15 +7,15 @@ import { lensHtml } from '../views/map.js'
 
 const SUGGESTED = 4
 
-// The questions of the briefs opened last, newest first: [{ text, about, id, answered }]. briefOf gives a brief the
+// The questions of the briefs opened last, newest first: [{ text, about, concept, id, answered }]. briefOf gives a brief the
 // page has read, or null.
 export function suggestions(recent, briefOf) {
 	const found = []
 	for (const id of recent) {
 		const brief = briefOf(id)
 		for (const question of brief?.questions ?? []) {
-			if (found.some((each) => each.text === question.text)) continue
-			found.push({ text: question.text, about: brief.name, id: question.id, answered: question.answered })
+			if (found.some((each) => each.id === question.id)) continue
+			found.push({ text: question.text, about: brief.name, concept: id, id: question.id, answered: question.answered })
 		}
 	}
 	return found.slice(0, SUGGESTED)
@@ -25,8 +25,8 @@ export function suggestions(recent, briefOf) {
 // setting, off, the reason no run can start now, and what the lenses need.
 export function askDrawerHtml(ask, env, briefOf) {
 	const offered = suggestions(ask.recent, briefOf).map(
-		(each, i) =>
-			`<li><button class="k-ask-sug" data-act="${each.answered ? 'brief-open' : 'ask-suggest'}" data-concept="${esc(each.id)}" data-index="${i}" data-key="ask-sug-${i}">${icon('question')}<span><b>${prose(each.text)}</b><span>${each.answered ? 'Answered. Open the answer' : `About ${esc(each.about)}`}</span></span></button></li>`,
+		(each) =>
+			`<li><button class="k-ask-sug" data-act="${each.answered ? 'brief-open' : 'ask-suggest'}" data-concept="${esc(each.id)}" data-about="${esc(each.concept)}" data-key="ask-sug-${esc(each.id)}">${icon('question')}<span><b>${prose(each.text)}</b><span>${each.answered ? 'Answered. Open the answer' : `About ${esc(each.about)}`}</span></span></button></li>`,
 	)
 	const suggested =
 		offered.length === 0
@@ -60,8 +60,9 @@ export function askDrawerHtml(ask, env, briefOf) {
 			<h3 class="k-eyebrow">Worth asking</h3>
 			${suggested}
 			<form class="k-ask-form" id="ask-form" autocomplete="off">
-				<label class="k-eyebrow" for="ask-text">Your question</label>
-				<textarea id="ask-text" name="text" data-key="ask-text" rows="3" placeholder="Ask what changed, why, or how a part works">${esc(ask.text)}</textarea>
+				<label class="k-eyebrow" for="ask-text">${ask.about ? `Your question about ${esc(ask.about.name)}` : 'Your question'}</label>
+				${ask.about ? '<button class="k-link k-ask-earlier" type="button" data-act="ask-anything" data-key="ask-anything">Ask about something else</button>' : ''}
+				<textarea id="ask-text" name="text" maxlength="4000" data-key="ask-text" rows="3" placeholder="Ask what changed, why, or how a part works">${esc(ask.text)}</textarea>
 				<button class="k-btn is-big k-run-btn" type="submit" data-key="ask-send"${env.off ? ' disabled' : ''}><span>Ask ken</span><small>${RUN_COST}</small></button>
 				${env.off ? `<p class="k-muted">${esc(env.off)}</p>` : ''}
 				${model}

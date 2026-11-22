@@ -19,7 +19,7 @@ export function codeHash(quotes: VerifiedGitQuote[]): string {
 // was there.
 export async function topicCode(
 	repo: Repository,
-	topic: Topic,
+	topic: Pick<Topic, 'quotes'>,
 	signal?: AbortSignal,
 	commit = 'HEAD',
 ): Promise<TopicCode> {

@@ -2,11 +2,19 @@
 // the box, send the box, and show their earlier replies. The drawer keeps the briefs the reader opened last, for the
 // questions it suggests.
 import { fill } from '../shell/fill.js'
-import { askDrawerHtml, suggestions } from './ask.js'
+import { askDrawerHtml } from './ask.js'
 
 const REMEMBERED = 6
 
-export const freshAsk = () => ({ open: false, text: '', earlier: false, recent: [] })
+export const freshAsk = () => ({
+	open: false,
+	opener: null,
+	text: '',
+	suggestion: null,
+	about: null,
+	earlier: false,
+	recent: [],
+})
 
 // app is the page: its state, render, send, and the store of briefs.
 export function askActions(app) {
@@ -36,7 +44,7 @@ export function askActions(app) {
 		if (!ask.open) return false
 		ask.open = false
 		render()
-		$('[data-key="ask-open"], [data-key="bar-ask"]')?.focus()
+		if (ask.opener) $(`[data-key="${ask.opener}"]`)?.focus()
 		return true
 	}
 
@@ -44,16 +52,25 @@ export function askActions(app) {
 		const text = ask.text.trim()
 		// With no run to start, the question stays in its box.
 		if (text === '' || state.running || state.model?.kind !== 'ok') return
-		Object.assign(ask, { text: '', open: false })
-		void send({ question: text })
+		const about = ask.about
+		const typed = text !== ask.suggestion
+		Object.assign(ask, { text: '', open: false, about: null, suggestion: null })
+		if (about) {
+			app.brief.show(about.id, { opener: ask.opener })
+			void app.brief.ask(text, typed)
+		} else void send({ question: text })
 	}
 
 	const actions = {
-		'ask-open'() {
-			ask.open = !ask.open
+		'ask-open'(el) {
+			if (ask.open) return close()
+			ask.open = true
+			ask.opener = el.dataset.key
+			const brief = app.brief.open()
+			if (!ask.text.trim()) ask.about = brief && !brief.local ? { id: brief.id, name: brief.name } : null
 			app.brief.close()
 			render()
-			if (ask.open) $('#ask-title')?.focus()
+			$('#ask-title')?.focus()
 		},
 		'ask-close': close,
 		'ask-earlier'() {
@@ -61,7 +78,16 @@ export function askActions(app) {
 			render()
 		},
 		'ask-suggest'(el) {
-			ask.text = suggestions(ask.recent, briefOf)[Number(el.dataset.index)]?.text ?? ''
+			const brief = briefOf(el.dataset.about)
+			const question = brief?.questions.find((each) => each.id === el.dataset.concept)
+			if (!question) return
+			ask.text = ask.suggestion = question.text
+			ask.about = { id: brief.id, name: brief.name }
+			render()
+			$('#ask-text')?.focus()
+		},
+		'ask-anything'() {
+			ask.about = null
 			render()
 			$('#ask-text')?.focus()
 		},

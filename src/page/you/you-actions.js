@@ -8,6 +8,9 @@ export const freshYou = () => ({
 	// The line of what ken recorded whose "Not right" is open, or -1.
 	fixing: -1,
 	all: false,
+	note: '',
+	savingNote: false,
+	noteStatus: null,
 	problem: null,
 	// What ken wrote after the last correction, as ken recorded it.
 	said: null,
@@ -65,6 +68,44 @@ export function youActions(app) {
 		$('#recorded-title')?.focus({ preventScroll: true })
 	}
 
+	async function saveNote() {
+		if (you.savingNote) return
+		if (!you.note.trim()) {
+			state.home.noteProblem = 'Write a note first.'
+			render()
+			$('#reader-note')?.focus()
+			return
+		}
+		you.savingNote = true
+		you.noteStatus = null
+		state.home.noteProblem = null
+		render()
+		try {
+			state.home.notes = (await post('/api/notes', { text: you.note })).notes
+			you.note = ''
+			you.noteStatus = 'Saved for your next question.'
+		} catch (error) {
+			state.home.noteProblem = error.message
+		}
+		you.savingNote = false
+		render()
+		$('#reader-note')?.focus()
+	}
+
+	function submit(event) {
+		if (event.target.id !== 'reader-note-form') return false
+		event.preventDefault()
+		void saveNote()
+		return true
+	}
+
+	function input(event) {
+		if (event.target.id !== 'reader-note') return false
+		you.note = event.target.value
+		you.noteStatus = null
+		return true
+	}
+
 	const lineAt = (el) => state.home.reader.learned[Number(el.dataset.index)]
 
 	const actions = {
@@ -107,5 +148,5 @@ export function youActions(app) {
 		return true
 	}
 
-	return { actions, enter, draw, closeFix }
+	return { actions, enter, draw, closeFix, submit, input }
 }

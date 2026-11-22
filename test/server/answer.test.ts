@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
+import { writeFileSync } from 'node:fs'
+import path from 'node:path'
 import { test } from 'node:test'
 import { fileRecordStore } from '../../src/record/index.ts'
 import { gitRepository } from '../../src/repo/index.ts'
@@ -39,15 +42,18 @@ const brief = (line: string, rest: object): Turn[] => [
 ]
 
 const WRITTEN = 'What happens when a save fails?'
-const OWN = 'Can a run save twice?'
+const OWN = `I am new to TypeScript. ${'I want to follow the path from the user request to the store. '.repeat(6)}Can a run save twice?`
+const note = 'You are new to TypeScript.'
 const model = await scriptedModel([
 	...brief('Runs one piece of work and saves it.', {
 		points: [point('A run saves once.', 'src/core/run.ts', '\tsave()')],
 		questions: [WRITTEN, 'Why does a run save once?', 'What would a second store break?'],
 	}),
+	{ tool: 'ken__remember', args: { note } },
 	...brief('The run stops with the error of the store.', {
 		points: [point('The store throws when it is full.', 'src/store/db.ts', '\tthrow new Error("full")')],
 	}),
+	{ tool: 'ken__remember', args: { note } },
 	...brief('No: run calls save one time.', {
 		points: [point('run holds one call to save.', 'src/core/run.ts', '\tsave()')],
 	}),
@@ -87,6 +93,7 @@ test('an answer is kept as a brief: the saved row names it, the question opens a
 		'the run that explained one part names that part, and the answer names its question',
 	)
 
+	assert.deepEqual((await json(server, '/api/notes')).notes, [], 'a suggested question cannot set reader notes')
 	const answer = await briefOf(written.id)
 	assert.deepEqual(
 		[answer.kind, answer.name, answer.line, answer.explained, answer.explain],
@@ -122,7 +129,14 @@ test('an answer is kept as a brief: the saved row names it, the question opens a
 })
 
 test("a question the reader asks in their own words is listed under the concept as answered, after the ones ken's model wrote", async () => {
-	const lines = await ask(server, { lens: { kind: 'answer', concept: 'part::Core', text: `  ${OWN}  ` } })
+	await json(server, '/api/seen', { did: 'set', paths: ['src/core'], level: 'new' })
+	const { knows } = await briefOf('part::Core')
+	const lines = await ask(server, { lens: { kind: 'answer', concept: 'part::Core', text: `  ${OWN}  `, typed: true } })
+	assert.ok(lines.find((line) => line.kind === 'asked').question.includes(knows.why), 'ken uses the corrected map')
+	assert.deepEqual(
+		(await json(server, '/api/notes')).notes.map((row: { text: string }) => row.text),
+		[note],
+	)
 	const listed: Question[] = (await briefOf('part::Core')).questions
 	assert.deepEqual(
 		[listed.length, listed.at(-1)],
@@ -130,5 +144,20 @@ test("a question the reader asks in their own words is listed under the concept 
 	)
 	await server.close()
 	const later = await openKen(root, home)
-	assert.equal((await briefOf(listed.at(-1)?.id ?? '', later)).line, 'No: run calls save one time.', 'with no model')
+	const saved = listed.at(-1)?.id ?? ''
+	assert.equal((await briefOf(saved, later)).line, 'No: run calls save one time.', 'with no model')
+	const file = 'src/core/run.ts'
+	const change = (text: string) => {
+		writeFileSync(path.join(root, file), text)
+		execFileSync('git', ['-c', 'commit.gpgsign=false', 'commit', '-qm', 'edit core', '--', file], { cwd: root })
+	}
+	change(`// Moved down a line.\n${FILES[file]}`)
+	assert.equal((await briefOf(saved, later)).staleFiles, undefined, 'moving a quote keeps the answer current')
+	change(FILES[file].replace('save()', 'save(42)'))
+	const stale = await briefOf(saved, later)
+	assert.deepEqual(stale.staleFiles, [file], 'the saved answer names the file whose quote no longer matches')
+	assert.deepEqual(stale.explain, { lens: { kind: 'answer', concept: 'part::Core', text: OWN } })
+	assert.equal(stale.points[0].quotes[0].text, '\tsave()', 'the old answer keeps its original evidence')
+	assert.deepEqual((await briefOf('part::Core', later)).staleFiles, [file])
+	assert.equal((await briefOf(written.id, later)).staleFiles, undefined, 'another answer still matches the code')
 })

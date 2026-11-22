@@ -4,6 +4,7 @@
 import { appendFile, mkdir, open, readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import path from 'node:path'
+import type { SavedAnswer } from '../agent/index.ts'
 import type { RecordStore } from '../record/index.ts'
 import type { Repository } from '../repo/index.ts'
 import type { HistoryEntry } from './history-entry.ts'
@@ -13,6 +14,7 @@ export type History = {
 	file: string
 	// Oldest first.
 	list(): Promise<HistoryEntry[]>
+	readSaved(): Promise<SavedAnswer[]>
 	add(entry: HistoryEntry): Promise<void>
 }
 
@@ -51,7 +53,14 @@ export async function openHistory(
 		await appendFile(file, `${lead}${JSON.stringify(entry)}\n`)
 	}
 
-	return { kind: 'ok', history: { file, list, add } }
+	async function readSaved(): Promise<SavedAnswer[]> {
+		return (await list()).flatMap((entry) =>
+			entry.outcome === 'answered' && entry.about === undefined
+				? [{ id: entry.id, askedAt: entry.askedAt, head: entry.head, question: entry.question, reply: entry.reply }]
+				: [],
+		)
+	}
+	return { kind: 'ok', history: { file, list, add, readSaved } }
 }
 
 async function lastByte(file: string): Promise<string> {
