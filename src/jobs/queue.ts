@@ -50,6 +50,8 @@ type Job<W, L> = JobAsk<W> & {
 	stop: AbortController | null
 	lines: L[]
 	followers: Set<(line: L) => void>
+	// The run now going, or the last one: a job that gave way runs again, so its run ends long before the job does.
+	run: Promise<void>
 	ended: Promise<void>
 	end: () => void
 }
@@ -140,7 +142,7 @@ export function jobQueue<W, L>(deps: QueueDeps<W, L>) {
 				job.state = { ...job.state, actions: job.state.actions + 1 }
 			changed()
 		}
-		void (async () => {
+		job.run = (async () => {
 			let state: JobState
 			try {
 				const made = !job.asked && (await deps.fresh(job))
@@ -220,6 +222,7 @@ export function jobQueue<W, L>(deps: QueueDeps<W, L>) {
 			stop: null,
 			lines: [],
 			followers: new Set(),
+			run: Promise.resolve(),
 			ended,
 			end,
 		}
@@ -259,12 +262,12 @@ export function jobQueue<W, L>(deps: QueueDeps<W, L>) {
 		pump()
 	}
 
-	// A stopped job may still be winding down. Resolves when none is.
+	// A stopped run may still be winding down. Resolves when none is.
 	async function settled() {
 		while (true) {
 			const ending = running().filter((job) => job.stop?.signal.aborted)
 			if (ending.length === 0) return
-			await Promise.all(ending.map((job) => job.ended))
+			await Promise.all(ending.map((job) => job.run))
 		}
 	}
 
@@ -273,18 +276,19 @@ export function jobQueue<W, L>(deps: QueueDeps<W, L>) {
 		pump()
 	}
 
-	// Stops every job and waits for the running ones to end.
+	// Stops every job and waits for the running ones to end. A job that gave way ends as stopped too.
 	async function close() {
 		closed = true
 		const ending = running().map((job) => {
 			job.stop?.abort('stopped')
-			return job.ended
+			return job.run
 		})
-		for (const job of jobs.filter((each) => each.state.kind === 'waiting')) {
+		await Promise.all(ending)
+		for (const job of jobs.filter(live)) {
 			job.state = { kind: 'failed', why: STOPPED }
+			job.followers.clear()
 			job.end()
 		}
-		await Promise.all(ending)
 	}
 
 	function subscribe(listener: (jobs: JobView[]) => void): () => void {

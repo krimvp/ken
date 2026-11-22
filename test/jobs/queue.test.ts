@@ -3,8 +3,10 @@ import { test } from 'node:test'
 import { type JobAsk, type JobView, jobQueue, type Rank } from '../../src/jobs/index.ts'
 
 // A run the test ends by hand: each start is logged, and each run waits until the test lets it finish, or until the
-// queue stops it.
-function harness(options: { parallel?: number; fresh?: string[]; ranks?: Record<string, Exclude<Rank, 1>> } = {}) {
+// queue stops it. windDown is how long a run takes to end once stopped, as a git call or a model request does.
+function harness(
+	options: { parallel?: number; fresh?: string[]; ranks?: Record<string, Exclude<Rank, 1>>; windDown?: number } = {},
+) {
 	const started: string[] = []
 	const finishers = new Map<string, () => void>()
 	const ended: JobView[] = []
@@ -15,7 +17,8 @@ function harness(options: { parallel?: number; fresh?: string[]; ranks?: Record<
 			say(`${job.key} said`)
 			await new Promise<void>((resolve, reject) => {
 				finishers.set(job.key, resolve)
-				signal.addEventListener('abort', () => reject(new Error('aborted')))
+				const stopped = () => reject(new Error('aborted'))
+				signal.addEventListener('abort', () => setTimeout(stopped, options.windDown ?? 0))
 			})
 		},
 		fresh: async (job) => options.fresh?.includes(job.key) ?? false,
@@ -148,4 +151,25 @@ test('a reader who follows a job gets what it said so far; stopping stops their 
 	queue.want(ask('queued'), 'ken')
 	queue.stop('queued', 'stop')
 	assert.equal(queue.want(ask('queued'), 'ken'), null, 'ken does not queue again what the reader stopped before it ran')
+})
+
+test('a background job that gave way and takes time to stop holds nothing up: settled waits for its run alone, and close ends it', async () => {
+	const inTime = async (promise: Promise<unknown>) =>
+		await Promise.race([promise.then(() => 'ended'), new Promise((resolve) => setTimeout(resolve, 500, 'hung'))])
+	const first = harness({ windDown: 30 })
+	first.queue.want(first.ask('bg'), 'ken')
+	await first.settle()
+	first.queue.want(first.ask('asked'), 'reader')
+	assert.equal(await inTime(first.queue.settled()), 'ended', 'settled waits for the stopped run, not for the job')
+	assert.equal(first.state('asked'), 'running')
+	assert.equal(first.state('bg'), 'waiting')
+
+	const second = harness({ windDown: 30 })
+	second.queue.want(second.ask('bg'), 'ken')
+	await second.settle()
+	second.queue.want(second.ask('asked'), 'reader')
+	const following = second.queue.follow('bg', () => {})
+	assert.equal(await inTime(second.queue.close()), 'ended', 'close returns while the job winds down')
+	assert.deepEqual(await inTime(following), 'ended', 'whoever followed the job that gave way hears it end')
+	assert.deepEqual(second.state('bg'), 'failed')
 })
