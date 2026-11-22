@@ -22,6 +22,7 @@ import { learnParts } from './project/part-colours.js'
 import { atRest, drawPictures, lightPicture } from './project/parts-picture.js'
 import { tourKey } from './project/tour-card.js'
 import { partOf, stepDiffHtml, stopState, stopTopics, tourStart, walkOf } from './project/walk.js'
+import { fitWords } from './shell/fit-words.js'
 import { readerPrefs } from './shell/prefs.js'
 import { freshShell, shellActions } from './shell/shell-actions.js'
 import { checksHtml, quoteCardHtml } from './views/checks.js'
@@ -626,6 +627,7 @@ function render() {
 	const older = shell.draw(env)
 	jobs.look()
 	level.watch()
+	fitWords()
 	if (!older) {
 		refocus()
 		return tipFrom(null)
@@ -1420,7 +1422,11 @@ new ResizeObserver(([entry]) => {
 	document.documentElement.style.setProperty('--composer', `${entry.target.offsetHeight}px`)
 }).observe($('#ask'))
 wideQuery.addEventListener('change', render)
-window.addEventListener('resize', () => drawPictures(document.body))
+window.addEventListener('resize', () => {
+	drawPictures(document.body)
+	fitWords()
+})
+document.fonts?.addEventListener('loadingdone', () => fitWords())
 setInterval(tick, 1000)
 setInterval(async () => {
 	const onLive = state.view === 'live' || (state.shell.page === 'changes' && state.chg.tab === 'live')

@@ -600,6 +600,7 @@
 
 .k-first.is-small .k-first-about {
 	font-size: 16px;
+	font-weight: 500;
 }
 
 /* Folders on the Architecture tile, before ken's model names the parts: a row each, with a bar for its lines. */

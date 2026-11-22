@@ -1,5 +1,5 @@
 // The "Ask ken" drawer: a free question, for when no picture or brief answers it. It offers the questions of the
-// briefs the reader opened last, then the box, and the reader's earlier replies behind one press. A question sent
+// briefs the reader opened last, then the box, and the reader's earlier answers behind one press. A question sent
 // here opens as a thread with the cards ken checked, as every question does.
 import { icon } from '../shell/icons.js'
 import { esc, prose, RUN_COST, when } from '../views/format.js'
@@ -36,7 +36,7 @@ export function askDrawerHtml(ask, env, briefOf) {
 	const earlier =
 		rows.length === 0
 			? ''
-			: `<button class="k-link k-ask-earlier" data-act="ask-earlier" data-key="ask-earlier" aria-expanded="${ask.earlier}">${ask.earlier ? 'Hide your earlier replies' : `Your earlier replies (${rows.length})`}</button>
+			: `<button class="k-link k-ask-earlier" data-act="ask-earlier" data-key="ask-earlier" aria-expanded="${ask.earlier}">${ask.earlier ? 'Hide earlier answers' : `Earlier answers (${rows.length})`}</button>
 				${
 					ask.earlier
 						? `<ul class="k-ask-rows">${rows
@@ -63,7 +63,7 @@ export function askDrawerHtml(ask, env, briefOf) {
 				<label class="k-eyebrow" for="ask-text">${ask.about ? `Your question about ${esc(ask.about.name)}` : 'Your question'}</label>
 				${ask.about ? '<button class="k-link k-ask-earlier" type="button" data-act="ask-anything" data-key="ask-anything">Ask about something else</button>' : ''}
 				<textarea id="ask-text" name="text" maxlength="4000" data-key="ask-text" rows="3" placeholder="Ask what changed, why, or how a part works">${esc(ask.text)}</textarea>
-				<button class="k-btn is-big k-run-btn" type="submit" data-key="ask-send"${env.off ? ' disabled' : ''}><span>Ask ken</span><small>${RUN_COST}</small></button>
+				<button class="k-btn is-big k-run-btn" type="submit" data-key="ask-send"${env.off ? ' disabled' : ''}><span>Send the question</span><small>${RUN_COST}</small></button>
 				${env.off ? `<p class="k-muted">${esc(env.off)}</p>` : ''}
 				${model}
 			</form>
