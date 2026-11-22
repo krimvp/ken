@@ -54,6 +54,21 @@ export function gitRepository(root: string, options: { alternate?: string } = {}
 			return { kind: 'ok', paths: run.stdout.split('\0').filter((path) => path !== '') }
 		},
 
+		async lineCounts(commit, signal) {
+			// An empty pattern matches every line, so git grep counts them, in one call over the whole tree.
+			const run = await git(['grep', '-c', '-z', '-I', '--no-color', '-e', '', commit, '--'], signal)
+			if (run.kind === 'too-large') return tooLarge
+			// git grep exits 1 when no file has a line.
+			if (run.kind === 'failed' && run.code !== 1)
+				throw new Error(`git grep failed on a resolved commit: ${run.stderr}`)
+			const lines = new Map<string, number>()
+			for (const record of run.kind === 'ok' ? run.stdout.split('\n') : []) {
+				const [where = '', count = ''] = record.split('\0')
+				if (where !== '') lines.set(where.slice(commit.length + 1), Number(count))
+			}
+			return { kind: 'ok', lines }
+		},
+
 		async search(commit, pattern, signal) {
 			if (pattern.includes('\0')) return { kind: 'bad-pattern', message: 'the pattern holds a NUL byte' }
 			const args = ['grep', '-n', '-z', '-I', '--no-color', '--no-column', '-E', '-e', pattern, commit, '--']

@@ -61,6 +61,8 @@ export interface Repository {
 		signal?: AbortSignal,
 	): Promise<{ kind: 'ok'; text: string } | NoFile | TooLarge>
 	listFiles(commit: CommitHash, signal?: AbortSignal): Promise<{ kind: 'ok'; paths: string[] } | TooLarge>
+	// How many lines each text file holds at the commit, by path. A binary file and an empty one are not listed.
+	lineCounts(commit: CommitHash, signal?: AbortSignal): Promise<{ kind: 'ok'; lines: Map<string, number> } | TooLarge>
 	search(
 		commit: CommitHash,
 		pattern: string,

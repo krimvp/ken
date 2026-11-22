@@ -25,6 +25,11 @@ export const MODULES: Record<string, Module> = {
 		imports: ['repo', 'checks'],
 		packages: [],
 	},
+	'first-look': {
+		job: 'What plain code tells of a project in its first second, with no model: its name and description from its manifests, the first paragraph of its README as a checked quote, its languages, entry points, deploy files and recent commits, and the lines and recent commits under any folder.',
+		imports: ['repo', 'checks', 'diagram'],
+		packages: [],
+	},
 	record: {
 		job: "The project record: an append-only store of pieces of work, decisions, topics, notes and the named levels of the project's layout.",
 		imports: ['repo', 'checks', 'diagram', 'transcripts'],
@@ -70,6 +75,7 @@ export const MODULES: Record<string, Module> = {
 		imports: [
 			'agent',
 			'diagram',
+			'first-look',
 			'follow-up',
 			'history',
 			'layout',

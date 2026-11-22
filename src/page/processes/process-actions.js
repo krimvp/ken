@@ -104,5 +104,5 @@ export function processActions(app) {
 
 	window.addEventListener('resize', () => state.shell.page === 'processes' && drawLaneLinks(page))
 
-	return { actions, enter, draw, ended, submit, reread: load }
+	return { actions, enter, draw, ended, submit, ask, reread: load }
 }

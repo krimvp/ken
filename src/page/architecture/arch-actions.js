@@ -5,6 +5,7 @@
 import { glide, gliders } from '../arch-views/glide.js'
 import { foldedAt } from '../arch-views/runtime-layout.js'
 import { viewOfConcept, viewOn, viewsOffered } from '../arch-views/switch.js'
+import { freshTree } from '../folder-tree/folder-tree.js'
 import { WHOLE } from '../level/level-state.js'
 import { fill } from '../shell/fill.js'
 import { architectureHtml, processesOf } from './architecture.js'
@@ -30,6 +31,10 @@ export const freshArch = () => ({
 	viewsProblem: null,
 	// The drawing on screen when the canvas was last drawn, so a switch glides.
 	shown: null,
+	// The folders open in the tree of a level ken's model has not named.
+	tree: freshTree(),
+	// Whether the reader picked a layer themselves. Until they do, a drawn process is lit.
+	layerPicked: false,
 })
 
 const narrow = matchMedia('(max-width: 760px)')
@@ -198,6 +203,7 @@ export function archActions(app) {
 				? app.brief.project(el.dataset.key)
 				: moveTo(state.home.trail.slice(0, Number(el.dataset.index) + 1)),
 		async 'arch-layer'(el) {
+			arch.layerPicked = true
 			const layer = arch.layer === el.dataset.layer ? null : el.dataset.layer
 			const wasChanges = arch.layer === 'changes'
 			arch.layer = layer
@@ -212,6 +218,27 @@ export function archActions(app) {
 		},
 		async 'arch-change'(el) {
 			await layChange(el.dataset.change)
+			render()
+		},
+		// A folder of the tree opens in place, and its folders and files are read the way the level is.
+		async 'tree-open'(el) {
+			const key = el.dataset.paths
+			if (arch.tree.has(key)) {
+				arch.tree.delete(key)
+				return render()
+			}
+			arch.tree.set(key, { kind: 'reading' })
+			render()
+			const within = key.split(',').map((each) => `within=${encodeURIComponent(each)}`)
+			const answer = await app.read(`/api/layout?${within.join('&')}`).catch((error) => ({
+				ok: false,
+				body: { message: error.message },
+			}))
+			if (!arch.tree.has(key)) return
+			arch.tree.set(
+				key,
+				answer.ok ? { kind: 'ok', boxes: answer.body.look.boxes } : { kind: 'failed', message: answer.body.message },
+			)
 			render()
 		},
 		'arch-zoom': (el) => camera.zoomBy(Number(el.dataset.by)),
@@ -231,6 +258,8 @@ export function archActions(app) {
 		if (arch.layer !== 'changes') home.change = 'none'
 		else if (home.change === 'none') home.change = changeChoices(home.changes)[0]?.change ?? 'none'
 		await app.level.loads.refresh()
+		// Process first: the page opens on how it works, so a drawn process is lit until the reader picks a layer.
+		if (arch.layer === null && !arch.layerPicked && processesOf(home).length > 0) arch.layer = 'processes'
 		if (arch.layer === 'processes') arch.process ??= processesOf(home)[0]?.id ?? null
 	}
 
