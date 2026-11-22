@@ -1,10 +1,10 @@
 # ken
 
-ken explains a software project to the developer who owns it. Ask what changed, why, or how a part works now. ken's model replies in its own words, and backs each claim that needs proof with a card: the exact lines it rests on, which ken looks up before you see the card. ken is built for projects where AI agents write most of the code.
+ken explains a software project to the developer who owns it. Its page opens on a picture of the project's parts. You say why you are here (to learn the project, to catch up, or to review a change) and how close you want to look, and the picture and the text beside it follow. You can also ask what changed, why, or how a part works now. ken's model replies in its own words, and backs each claim that needs proof with a card: the exact lines it rests on, which ken looks up before you see the card. ken is built for projects where AI agents write most of the code.
 
-<img src="site/images/ken-change-card-wide.png" width="440" alt="The question What could go wrong with the change from 47eec4e to e490d9c? Show me the risks. Under it, the card What this change touched draws the project's 6 parts as boxes, with arrows for which part uses which. Eval CLI, in orange, is marked 1 file: 7 lines added, 4 removed. Test suite, in green, is marked 9 files: 333 lines added, 112 removed. Plugin engine, multeval harness, Eval scenarios, and Vendored skills and scripts are faded and marked Not touched. An arrow from Test suite to Eval CLI runs over the top row.">
+<img src="site/images/ken-home-wide.png" width="820" alt="ken's page. A bar at the top holds two controls. Way in offers Learn the project, 6 parts; Catch up, 6 commits in the last 7 days; and Review a change, the newest merge. Detail offers Big picture, How it works and In the code. On the left, the picture of the whole project: six boxes, each with a part's name and its job in a sentence, joined by six numbered arrows such as 2, Plugin engine runs code in Sandbox. Under the picture, a box to say how you want to see it, with the button Show it another way. On the right, a panel with the button Start the tour and the six parts as a list. Ask ken sits at the top right.">
 
-Screenshot of a reply on ken's local page, about a merge in an agent harness that AI agents wrote most of. ken draws this card from git, before the model's words.
+Screenshot of ken's local page on an agent harness that AI agents wrote most of. ken's model named the six parts, and ken checked each path and arrow against git.
 
 ## Install
 
