@@ -47,7 +47,7 @@ New to a project, or back after weeks away? ken's page opens on a picture of the
 1. Install ken and name its model, as above.
 2. In the project, run `ken open`. The page shows the project's main folders as boxes.
 3. Press **Ask ken to name these parts**. ken's model names the main parts and the arrows between them, and ken checks each against git. Commit `.ken/` so the next person gets the same parts.
-4. Press **Show me around**. Plain code picks the order from the arrows: it starts at the part nothing else uses, goes inward, and leaves tests, build and vendored code for last. ken's model then explains each part in turn, in one run, with the lines of its key files. The stops open beside the picture, numbered as the boxes are. Move with Next or the arrow keys. Each stop you reach goes on your map, and **I know this part** marks it understood.
+4. Press **Show me around**. Plain code picks the order from the arrows: it starts at the part the most other parts use, goes outward, and leaves tests, build and vendored code for last. ken's model then explains each part in turn, in one run, with the lines of its key files. The stops open beside the picture, numbered as the boxes are. Move with Next or the arrow keys. Each stop you reach goes on your map, and **I know this part** marks it understood.
 
 Open the page again later and **Start the tour** opens the same tour, with no model, at the first stop you have not seen. **Look inside** a part opens that part's own picture, and once its parts are named it has a tour of its own.
 
@@ -137,7 +137,7 @@ npm run ken -- catch-up --repo ../my-project
 npm run ken -- area src/server --repo ../my-project
 ```
 
-`layout` prints one level of the project's layout and needs no model. `--at` picks the commit, `--within` opens a box (give each of its paths), and `--change` lays a change over the boxes: a range such as `main..feature`, a branch, `uncommitted`, or `none`. Without `--change`, ken lays your own work over the boxes: your uncommitted work if there is any, else the branch you are on against the main branch.
+`layout` prints one level of the project's layout and needs no model. `--at` picks the commit, `--within` opens a box (give each of its paths), and `--change` lays a change over the boxes: a range such as `main..feature`, a branch, a span of time such as `since:14d` or `since:2026-11-01`, `uncommitted`, or `none`. Without `--change`, ken lays your own work over the boxes: your uncommitted work if there is any, else the branch you are on against the main branch.
 
 ```sh
 npm run ken -- layout --repo ../my-project

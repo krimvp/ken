@@ -20,7 +20,7 @@ export async function printLayout(directory: string, raw: RawAsk, json: boolean)
 	const opened = await openMap(home, repo, record)
 	if (opened.kind !== 'ok') return refuse(`${root} has no commits yet.`)
 	const sources = { root, repo, snapshots, record, map: opened.map }
-	const read = await readLayoutAsk(sources, raw)
+	const read = await readLayoutAsk(sources, raw, new Date())
 	if (read.kind !== 'ok') return refuse(read.message)
 	const look = await lookAtLayout(sources, read.ask, new Date())
 	process.stdout.write(json ? `${JSON.stringify(look, null, 2)}\n` : layoutText(look))

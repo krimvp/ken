@@ -105,9 +105,9 @@ const step = (number: number, text: string, file: string, line: string): Turn =>
 })
 // One script for three runs: the tour of the whole project, the story of the reviewed change, and its walkthrough.
 const model = await scriptedModel([
-	step(1, 'The command starts everything.', 'src/cli/main.ts', 'run()'),
+	step(1, 'The store saves it.', 'src/store/db.ts', 'export function save() {'),
 	step(2, 'The core runs the work.', 'src/core/run.ts', 'export function run() {'),
-	step(3, 'The store saves it.', 'src/store/db.ts', 'export function save() {'),
+	step(3, 'The command starts everything.', 'src/cli/main.ts', 'run()'),
 	step(4, 'The tests run the core.', 'test/run.test.ts', 'run()'),
 	{ text: 'That is the whole project.' },
 	{
@@ -183,12 +183,12 @@ test('for a toured level the inspector offers the stored tour at the big picture
 	const picked = { kind: 'part', name: 'Core' }
 	const how = await homeOn('change=none', 'how', picked)
 	const stop = open(inspectorHtml(how, ENV))
-	assert.match(stop, /class="path-n">2</, 'the core is the second stop: the command runs it')
+	assert.match(stop, /class="path-n">2</, 'the core is the second stop: the tour starts at the store, which it uses')
 	assert.match(stop, /The core runs the work\./)
 	assert.doesNotMatch(stop, /The store saves it\./)
 	assert.equal(stop.match(/data-act="home-arrow"/g)?.length, 3, 'three arrows start or end at the core')
 	assert.match(stop, /data-act="home-know"/)
-	assert.match(inspectorHtml(how, ENV), /data-key="home-nav-Next, stop 3"[\s\S]*?nav-name">Store</)
+	assert.match(inspectorHtml(how, ENV), /data-key="home-nav-Next, stop 3"[\s\S]*?nav-name">Command</)
 	assert.match(
 		canvasHtml(how, rows),
 		/aria-pressed="true"><span class="home-badge">Stop 2<\/span>\s*<span class="pv-name">Core</,
@@ -254,6 +254,7 @@ const drawing = (title: string, text: string): Turn[] => [
 async function drawnPictures() {
 	const again = {
 		within: ['src'],
+		about: 'The code a person runs.',
 		parts: [part('Front', 'Takes the command and runs it', 'src/cli'), part('Rest', 'Runs and saves', 'src/core')],
 	}
 	const drawer = await scriptedModel([

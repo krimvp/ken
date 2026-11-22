@@ -7,6 +7,9 @@ import {
 	firstWords,
 	type Item,
 	type Reply,
+	TOUR_WORDS,
+	WANTS,
+	type Want,
 } from '../agent/index.ts'
 import { DIAGRAM_BOUNDS, drawn, LAYOUT_BOUNDS } from '../diagram/index.ts'
 import {
@@ -26,11 +29,10 @@ import type { About } from '../live/index.ts'
 import { areaQuestion, catchUpQuestion, deeperQuestion, type TopicState, type UnderstandingMap } from '../map/index.ts'
 import { type RecordStore, sameName } from '../record/index.ts'
 import { parsePath, type Repository } from '../repo/index.ts'
+import { pullRequestOf } from './way-in.ts'
 
 const MAX_QUESTION_CHARS = 4000
 const MAX_TOPICS = 20
-// What the reader wants of a change: its story, or a walk through it in steps.
-const WANTS = ['story', 'walk'] as const
 // How much of a note's words the next question about it quotes back.
 const NOTE_CHARS = 400
 
@@ -38,7 +40,9 @@ const NOTE_CHARS = 400
 // wants the reader to decide, and risks its risks. hunks is null when the reply was not about a range of commits.
 // thread groups the rows the page shows as one thread. tour names the level and the stops of a tour, so the page can
 // open a tour it has already instead of asking again. change is the change the reply is about and steps the number of
-// steps it walks through, so the page can open the stored story or walkthrough of a change the same way. view is there
+// steps it walks through. want says the reader asked for the story of that change or a walk through it, so the page
+// opens the stored one again and never takes a later reply about the same commits for it. snapshot is true when the
+// change ends at a commit of ken's own snapshot store, which is uncommitted work and no range to look at again. view is there
 // when the reader asked to see a level another way, and drew says what the reply drew for it: the parts again, a
 // diagram, since a flow or the data is not a grouping of parts, or nothing.
 export type QuestionRow = {
@@ -52,7 +56,8 @@ export type QuestionRow = {
 	risks: number
 	hunks: { uncovered: number; total: number } | null
 	tour: { within: string[]; stops: string[] } | null
-	change: { base: string; head: string } | null
+	change: { base: string; head: string; snapshot: boolean } | null
+	want: Want | null
 	steps: number
 	view: { within: string[]; asked: string; drew: 'parts' | 'diagram' | 'nothing' } | null
 }
@@ -231,15 +236,28 @@ export function questionDesk(
 
 	async function rows(): Promise<QuestionRow[]> {
 		await settled()
-		return (await history.list())
-			.filter((entry) => entry.about === undefined)
-			.map((entry) => {
+		const asked = (await history.list()).filter((entry) => entry.about === undefined)
+		// repo is the project's own git, which does not hold the commits ken makes of uncommitted work. Rows about the
+		// same change ask git once.
+		const inProject = new Map<string, Promise<boolean>>()
+		const isSnapshot = async (head: string) => {
+			if (!inProject.has(head))
+				inProject.set(
+					head,
+					repo.resolve(head).then((found) => found.kind === 'ok'),
+				)
+			return !(await inProject.get(head))
+		}
+		return await Promise.all(
+			asked.map(async (entry) => {
 				const { id, question, askedAt, thread, outcome } = entry
 				const row = { id, question, askedAt, thread, outcome }
 				if (entry.outcome !== 'answered') {
-					return { ...row, cards: 0, calls: 0, risks: 0, hunks: null, tour: null, change: null, steps: 0, view: null }
+					const none = { hunks: null, tour: null, change: null, want: null, steps: 0, view: null }
+					return { ...row, cards: 0, calls: 0, risks: 0, ...none }
 				}
-				const { items, change, tour, view } = entry.reply
+				const { items, change, tour, view, want } = entry.reply
+				const snapshot = change !== null && (await isSnapshot(change.head))
 				const cards = items.flatMap((item) => (item.kind === 'card' ? [item.card] : []))
 				const has = (kind: CardKind) => cards.some((card) => card.kind === kind)
 				const total = change ? change.covered.length + change.uncovered.length : 0
@@ -250,11 +268,13 @@ export function questionDesk(
 					risks: cards.filter((card) => card.kind === 'risk').length,
 					hunks: change && { uncovered: change.uncovered.length, total },
 					tour: tour ? { within: tour.within, stops: tour.stops.map((each) => each.name) } : null,
-					change: change && { base: change.base, head: change.head },
+					change: change && { base: change.base, head: change.head, snapshot },
+					want: want ?? null,
 					steps: items.filter((item) => item.kind === 'step').length,
 					view: view ? { ...view, drew: has('layout') ? 'parts' : has('diagram') ? 'diagram' : 'nothing' } : null,
 				}
-			})
+			}),
+		)
 	}
 
 	async function view(id: string): Promise<QuestionView | null> {
@@ -271,7 +291,7 @@ export function questionDesk(
 	// is the level at HEAD whatever commit the page shows.
 	async function levelOf(lens: unknown) {
 		const within = fieldOf(lens, 'within')
-		const ask = await readLayoutAsk(layout, { within: Array.isArray(within) ? within.map(String) : [] })
+		const ask = await readLayoutAsk(layout, { within: Array.isArray(within) ? within.map(String) : [] }, new Date())
 		if (ask.kind !== 'ok') return { kind: 'refused' as const, problem: ask.message }
 		const look = await lookAtLayout(layout, ask.ask, new Date())
 		const name = fieldOf(lens, 'name')
@@ -359,7 +379,7 @@ export function questionDesk(
 		}
 		if (kind === 'tour') {
 			const within = fieldOf(lens, 'within')
-			const ask = await readLayoutAsk(layout, { within: Array.isArray(within) ? within.map(String) : [] })
+			const ask = await readLayoutAsk(layout, { within: Array.isArray(within) ? within.map(String) : [] }, new Date())
 			if (ask.kind !== 'ok') return { kind: 'refused', problem: ask.message }
 			const look = await lookAtLayout(layout, ask.ask, new Date())
 			if (!look.tour) {
@@ -370,6 +390,7 @@ export function questionDesk(
 			const text = tourQuestion({
 				name: typeof name === 'string' ? oneLine(name).slice(0, 80) || null : null,
 				head: look.head,
+				words: TOUR_WORDS,
 				stops,
 				arrows: look.arrows,
 			}).text
@@ -382,7 +403,7 @@ export function questionDesk(
 				return { kind: 'refused', problem: `Send the change, and what you want of it: ${WANTS.join(' or ')}.` }
 			}
 			// The layout reads the change, so the question is about the same commits the page lays over the picture.
-			const ask = await readLayoutAsk(layout, { change: asked })
+			const ask = await readLayoutAsk(layout, { change: asked }, new Date())
 			if (ask.kind !== 'ok') return { kind: 'refused', problem: ask.message }
 			const { change } = ask.ask
 			if (change === null) return { kind: 'refused', problem: 'Name the change to ask about.' }
@@ -390,7 +411,7 @@ export function questionDesk(
 			const title = want === 'walk' ? `Walk me through ${name}` : `What did ${name} do, and why?`
 			if (change.range.base === change.range.head) return { kind: 'empty', text: title }
 			const text = [title, ...changeLines(change, want)].join('\n')
-			return { kind: 'ok', text, as: { kind: 'change', range: change.range } }
+			return { kind: 'ok', text, as: { kind: 'change', range: change.range, want } }
 		}
 		if (kind === 'topic') {
 			const { record: read, states } = await lensFacts()
@@ -436,15 +457,18 @@ function deeperOnNote(about: About, at: string, summary: string, commits: number
 	return `Go deeper on the ${time} note about uncommitted work\nken copied that work into commit ${short(about.snapshot)} in its own store, on top of HEAD ${short(about.head)}. Read it with diff from ${short(about.base)} to ${short(about.snapshot)} and with read_file at ${short(about.snapshot)}, as you would a commit.\n${explain}`
 }
 
-// The change as the layout names it to the reader, inside a sentence: their uncommitted work, a branch, the subject of
-// a merge or of one commit, or a count of commits.
+// The change as the layout names it to the reader, inside a sentence: their uncommitted work, a branch, the pull
+// request a merge brought in, the subject of another merge or of one commit, or a count of commits.
 async function changeName(repo: Repository, change: Change): Promise<string> {
 	if (change.kind === 'uncommitted') return 'your uncommitted work'
 	if (change.kind === 'branch') return `the branch ${change.name}`
 	const { base, head } = change.range
 	const line = await repo.mainLine(head, 1)
 	const newest = line.kind === 'ok' ? line.commits[0] : undefined
-	if (newest?.hash === head && newest.parents[0] === base) return `"${newest.subject}"`
+	if (newest?.hash === head && newest.parents[0] === base) {
+		const pull = pullRequestOf(newest.subject)
+		return pull ? `the merge of pull request ${pull}` : `"${newest.subject}"`
+	}
 	const logged = await repo.log(change.range)
 	const commits = logged.kind === 'ok' ? logged.commits.length : 0
 	const count = commits === 1 ? 'the commit' : commits > 1 ? `the ${commits} commits` : 'the commits'
@@ -453,7 +477,7 @@ async function changeName(repo: Repository, change: Change): Promise<string> {
 
 // What the agent is told under the title of a question about one change: the page shows only the title, as with
 // deeperOnNote. Plain code set the reply's scope to the range, so the model need not.
-function changeLines(change: Change, want: (typeof WANTS)[number]): string[] {
+function changeLines(change: Change, want: Want): string[] {
 	const short = (hash: string) => hash.slice(0, 7)
 	const { base, head } = change.range
 	return [
@@ -461,9 +485,16 @@ function changeLines(change: Change, want: (typeof WANTS)[number]): string[] {
 			? `ken copied that work into commit ${short(head)} in its own store, on top of HEAD ${short(base)}. Read it with diff from ${short(base)} to ${short(head)} and with read_file at ${short(head)}, as you would a commit.`
 			: `The change is the commits from ${short(base)} to ${short(head)}. Read them with log and diff over that range.`,
 		'ken has set the scope of this reply to that range, so leave scope out of show.',
-		want === 'walk'
-			? 'Walk me through the change in steps, in the order a reviewer should read them.'
-			: 'Tell its story: what was wrong or missing before, what the change does now, and why.',
+		...(want === 'walk'
+			? [
+					'Walk me through the change in steps, in the order a reviewer should read them. A step holds one thing: if a step needs "and" to join two things, make it two steps.',
+					'After the last step, and only there, write one line that names what the steps leave out and a reviewer should still open, such as a changed rule or boundary table, a test of new behaviour, or docs. If the steps leave nothing out, say so.',
+				]
+			: [
+					'Tell its story in plain prose: what was wrong or missing before, what the change does now, and why. Five sentences is the most, so tell the main thing the change does and leave the smaller things out. I will ask for them. No list and no heading. No file names and no numbers unless one is the point.',
+					"If most of the change is tests or upkeep, one of those sentences names the one change it makes to the product's own code.",
+				]),
+		`Before you say how something was before the change, read the code at ${short(base)}. A commit message can describe a state the code never had.`,
 	]
 }
 

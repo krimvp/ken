@@ -143,16 +143,39 @@ test("ken suggests catching up on what landed since the reader's own last commit
 	assert.match(wayIn.why, /\b1 commit\b/)
 })
 
-test('the review fact names a GitHub merge by its pull request number, not by the branch it came from', async () => {
-	const { root } = buildRepository([
+test("when the reader's last question was asked at a commit the history no longer holds, ken does not claim that nothing landed since they looked", async () => {
+	const bo = { name: 'Bo Other', email: 'bo@example.com' }
+	const { root } = buildRepository([{ message: 'feat: start', files: { 'src/a/x.ts': 'x\n' }, author: bo }])
+	const model = await scriptedModel([{ text: 'It holds x.' }])
+	const server = await openKen(root, readerHome(), model.baseUrl)
+	await ask(server, { question: 'What is here?' })
+	const env = { ...process.env, GIT_COMMITTER_EMAIL: bo.email }
+	execFileSync('git', ['-c', 'commit.gpgsign=false', 'commit', '--quiet', '--amend', '--no-edit'], { cwd: root, env })
+	commitNow(root, 'src/a/y.ts', 'y\n')
+
+	const { wayIn } = await json(server, '/api/layout')
+	assert.equal(wayIn.suggested, 'learn')
+	assert.match(wayIn.facts['catch-up'], /^1 commit /, 'a commit did land in the last days')
+	assert.doesNotMatch(wayIn.why, /nothing landed/i)
+})
+
+test('a GitHub merge is named by its pull request number, not by the branch it came from, in the review fact and in a question about it', async () => {
+	const { root, hashes } = buildRepository([
 		{ message: 'feat: start', files: { 'src/a/x.ts': 'x\n' } },
 		{ message: 'feat: y', files: { 'src/a/y.ts': 'y\n' }, parent: 0 },
 		{ message: 'Merge pull request #107 from someone/a-long-branch-name', files: {}, parent: 0, merge: 1 },
 	])
-	const server = await openKen(root, readerHome())
+	const model = await scriptedModel([{ text: 'It adds y.' }])
+	const server = await openKen(root, readerHome(), model.baseUrl)
 	const { review } = (await json(server, '/api/layout')).wayIn.facts
 	assert.ok(review.includes('pull request #107'), review)
 	assert.ok(!review.includes('someone'), review)
+
+	const merge = hashes[2]
+	const lines = await ask(server, { lens: { kind: 'change', change: `${merge}^1..${merge}`, want: 'story' } })
+	const [title] = lines[0].question.split('\n')
+	assert.ok(title.includes('pull request #107'), title)
+	assert.ok(!title.includes('someone'), title)
 })
 
 test('on a branch ahead of main ken suggests review, and says which branch and how many commits', async () => {
@@ -214,7 +237,37 @@ test('a walk asked through the change lens is about that change though the model
 	assert.deepEqual([replied.reply.change.base, replied.reply.change.head], [base, head])
 
 	const [row] = (await json(server, '/api/questions')).questions
-	assert.deepEqual([row.change, row.steps], [{ base, head }, 2])
+	assert.deepEqual([row.change, row.steps], [{ base, head, snapshot: false }, 2])
+})
+
+test('a row says which lens asked it: the story of a change, a later question about the same commits which is no story, and a walk through uncommitted work, whose change ken marks as its own snapshot', async () => {
+	const { root, hashes } = buildRepository([
+		{ message: 'feat: start', files: { 'src/a.ts': 'a\n' } },
+		{ message: 'feat: more', files: { 'src/a.ts': 'a\nb\n' } },
+	])
+	const [base = '', head = ''] = hashes
+	const model = await scriptedModel([
+		{ text: 'It adds b.' },
+		{ tool: 'ken__show', text: 'A reader of a could miss b.', args: { scope: { base, head } } },
+		{ text: '' },
+		{ text: 'You are adding c.' },
+	])
+	const server = await openKen(root, readerHome(), model.baseUrl)
+	await ask(server, { lens: { kind: 'change', change: `${base}..${head}`, want: 'story' } })
+	await ask(server, { question: 'What could go wrong with the last commit?' })
+	writeFileSync(path.join(root, 'src/a.ts'), 'a\nb\nc\n')
+	await ask(server, { lens: { kind: 'change', change: 'uncommitted', want: 'walk' } })
+
+	const rows: { want: string | null; change: { base: string; head: string; snapshot: boolean } }[] = (
+		await json(server, '/api/questions')
+	).questions
+	assert.deepEqual(
+		rows.map((row) => row.want),
+		['story', null, 'walk'],
+	)
+	const committed = { base, head, snapshot: false }
+	assert.deepEqual([rows[0]?.change, rows[1]?.change], [committed, committed], 'both are about the same commits')
+	assert.deepEqual([rows[2]?.change.base, rows[2]?.change.snapshot], [head, true])
 })
 
 test('a level the reader asks to see another way is stored with their own words when the model draws it again, and the layout then shows the new parts and those words', async () => {
@@ -230,6 +283,7 @@ test('a level the reader asks to see another way is stored with their own words 
 	])
 	const layout = {
 		within: ['src'],
+		about: 'A server that answers from a store.',
 		parts: [
 			{ name: 'Front', job: 'serves and answers', paths: ['src/server', 'src/agent'] },
 			{ name: 'Store', job: 'saves', paths: ['src/store'] },

@@ -16,8 +16,8 @@ import { type TourStop, tourOrder } from './tour-order.ts'
 export type Scope = RepoPath[]
 
 // kind says how the change was asked for: the reader's uncommitted work, a branch against the main branch, or a range
-// of commits. name says what the change is to the reader: "Uncommitted work", a branch, or a range as they typed it.
-// asked is the text that asks for this change again.
+// of commits, which a span of time is too. name says what the change is to the reader: "Uncommitted work", a branch,
+// a range as they typed it, or a span such as "In the last 14 days". asked is the text that asks for this change again.
 export type Change = { kind: 'uncommitted' | 'branch' | 'range'; name: string; asked: string; range: Range }
 
 export type LayoutAsk = { at: CommitHash; within: Scope; change: Change | null }
@@ -31,7 +31,21 @@ export type LayoutSources = {
 	map: UnderstandingMap
 }
 
-export type Touched = { files: number; added: number; removed: number }
+// What a change did to one box. paths lists its changed files, at most MAX_PATHS, and morePaths counts the rest.
+export type Touched = {
+	files: number
+	added: number
+	removed: number
+	paths: { path: string; added: number; removed: number }[]
+	morePaths: number
+}
+
+// A commit of the change laid over the picture, as the page lists it.
+export type LandedCommit = { hash: CommitHash; subject: string; author: string; date: string }
+
+// The page shows a change with no model, so it lists what git knows, up to what a reader scans.
+const MAX_COMMITS = 50
+const MAX_PATHS = 20
 
 // job is the model's one line on a part it named, null for a folder. files counts the files under the box at HEAD for
 // a folder and at the commit asked for a part. opens is false for a box of one file, which has no level inside. state
@@ -67,7 +81,9 @@ export type LookArrow = Stored['arrows'][number] & { stale: boolean }
 type Stored = Extract<RecordEntry, { kind: 'layout' }>
 
 // loose names what sits in the scope at the commit asked and in no box, such as a folder HEAD no longer has or one the
-// model left out of its parts. outside names the changed files no box holds.
+// model left out of its parts. Of a change, files counts the changed files in the level's scope and outside names
+// those no box holds. commits are its commits, newest first, without merges, since the commits a merge brings are
+// listed themselves. It lists at most MAX_COMMITS, and moreCommits counts the rest.
 export type LayoutLook = {
 	at: CommitHash
 	head: CommitHash
@@ -76,7 +92,7 @@ export type LayoutLook = {
 	boxes: LookBox[]
 	arrows: LookArrow[]
 	loose: string[]
-	change: (Change & { files: number; outside: string[] }) | null
+	change: (Change & { files: number; outside: string[]; commits: LandedCommit[]; moreCommits: number }) | null
 	next: Next
 	tour: TourStop[] | null
 }
@@ -100,8 +116,9 @@ export async function lookAtLayout(
 			? await namedLevel(repo, versions, ask, head.commit, signal)
 			: await folderLevel(repo, ask, head.commit, signal)
 	const places = level.boxes.flatMap((box) => box.paths)
-	const [diff, mapRead] = await Promise.all([
+	const [diff, commits, mapRead] = await Promise.all([
 		ask.change && changedFiles(repo, ask.change.range, signal),
+		ask.change && landedCommits(repo, ask.change.range, signal),
 		sources.map.read(now, signal),
 	])
 	const topics = read.current.flatMap((entry) => (entry.kind === 'topic' ? [entry] : []))
@@ -115,12 +132,18 @@ export async function lookAtLayout(
 			map: boxMap(marks),
 		}
 	})
+	// Inside a part, the change is what it did to that part: a file changed elsewhere is not this level's to count.
+	const inScope = (diff ?? [])
+		.map((file) => file.path)
+		.filter((file) => ask.within.length === 0 || ask.within.some((place) => under(file, place)))
 	const change =
-		ask.change && diff
+		ask.change && commits
 			? {
 					...ask.change,
-					files: diff.length,
-					outside: diff.map((file) => file.path).filter((file) => !places.some((place) => under(file, place))),
+					files: inScope.length,
+					outside: inScope.filter((file) => !places.some((place) => under(file, place))),
+					commits: commits.slice(0, MAX_COMMITS),
+					moreCommits: Math.max(0, commits.length - MAX_COMMITS),
 				}
 			: null
 	const tour = level.named
@@ -301,13 +324,30 @@ async function changedFiles(repo: Repository, range: Range, signal?: AbortSignal
 	return diff.files
 }
 
+async function landedCommits(repo: Repository, range: Range, signal?: AbortSignal): Promise<LandedCommit[]> {
+	const logged = await repo.log(range, signal)
+	if (logged.kind !== 'ok') {
+		throw new Error(`The change ${range.base}..${range.head} has too many commits for ken to lay out.`)
+	}
+	return logged.commits
+		.filter((commit) => commit.parents.length < 2)
+		.map(({ hash, subject, author, date }) => ({ hash, subject, author, date }))
+}
+
 function touchedIn(paths: string[], diff: FileDiff[]): Touched | null {
-	const files = diff.filter((file) => paths.some((place) => under(file.path, place)))
+	const files = diff
+		.filter((file) => paths.some((place) => under(file.path, place)))
+		.map((file) => {
+			const lines = file.kind === 'text' ? file.hunks.flatMap((hunk) => hunk.lines) : []
+			const count = (sign: string) => lines.filter((line) => line.startsWith(sign)).length
+			return { path: file.path, added: count('+'), removed: count('-') }
+		})
 	if (files.length === 0) return null
-	const lines = files.flatMap((file) => (file.kind === 'text' ? file.hunks.flatMap((hunk) => hunk.lines) : []))
 	return {
 		files: files.length,
-		added: lines.filter((line) => line.startsWith('+')).length,
-		removed: lines.filter((line) => line.startsWith('-')).length,
+		added: files.reduce((sum, file) => sum + file.added, 0),
+		removed: files.reduce((sum, file) => sum + file.removed, 0),
+		paths: files.slice(0, MAX_PATHS),
+		morePaths: Math.max(0, files.length - MAX_PATHS),
 	}
 }

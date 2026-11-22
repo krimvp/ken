@@ -1,5 +1,5 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
-import { MODEL_EXAMPLE, type ModelFlags } from '../agent/index.ts'
+import { changedHunks, MODEL_EXAMPLE, type ModelFlags } from '../agent/index.ts'
 import { layoutDraft } from '../diagram/index.ts'
 import { authorsOf, decide, openItems, sinceChoices, timeRange } from '../follow-up/index.ts'
 import {
@@ -13,6 +13,7 @@ import {
 import type { MapSignal } from '../map/index.ts'
 import { MERMAID_FILE, PAGE_FOLDER } from '../page/index.ts'
 import { OUTCOMES } from '../record/index.ts'
+import { parsePath } from '../repo/index.ts'
 import { decisionRows } from './decision-list.ts'
 import { refusal } from './http/guard-request.ts'
 import { type PageFile, readPageFiles } from './http/page-files.ts'
@@ -26,6 +27,9 @@ export type KenServer = { url: string; root: string; model: string | null; live:
 const MAX_BODY_BYTES = 64 * 1024
 // The person lens offers the authors of this many days.
 const RECENT_DAYS = 90
+// The diff of a change is asked a few files at a time and shows this many changed lines, so the page stays light.
+const DIFF_PATHS = 10
+const DIFF_LINES = 400
 // Mermaid puts a <style> element and style attributes in every drawing it makes, so styles may be inline. Nothing else
 // is widened: scripts, images, fonts and requests still come only from this server, so a style cannot fetch anything
 // from another host.
@@ -89,7 +93,7 @@ export async function openServer(options: {
 					: { kind: 'unset', message: model.message, missing: model.missing, example: MODEL_EXAMPLE }
 			// parts are the top level's parts in order with their paths, so the page colours each part, and the things in
 			// it, from its first paint. named says ken's model named them, so the first visit can offer a tour.
-			const top = await readLayoutAsk(layout, { change: 'none' })
+			const top = await readLayoutAsk(layout, { change: 'none' }, new Date())
 			const look = top.kind === 'ok' ? await lookAtLayout(layout, top.ask, new Date()) : null
 			const parts = look?.boxes.map(({ name, paths }) => ({ name, paths })) ?? []
 			const named = Boolean(look?.named)
@@ -138,9 +142,24 @@ export async function openServer(options: {
 				within: query.getAll('within'),
 				change: query.get('change') ?? undefined,
 			}
-			const ask = await readLayoutAsk(layout, raw)
+			const ask = await readLayoutAsk(layout, raw, new Date())
 			if (ask.kind !== 'ok') return sendJson(response, 400, { message: ask.message, field: ask.field })
 			return sendJson(response, 200, await layoutView(ask.ask))
+		}
+		if (where === 'GET /api/change/diff') {
+			const paths = url.searchParams.getAll('path').map(parsePath)
+			const bad = paths.find((each) => each.kind !== 'ok')
+			if (paths.length === 0 || paths.length > DIFF_PATHS || bad) {
+				return sendJson(response, 400, { message: `Send path once for each file, ${DIFF_PATHS} at most.` })
+			}
+			const ask = await readLayoutAsk(layout, { change: url.searchParams.get('change') ?? '' }, new Date())
+			if (ask.kind !== 'ok') return sendJson(response, 400, { message: ask.message, field: ask.field })
+			const { change } = ask.ask
+			if (!change) return sendJson(response, 400, { message: 'Name the change to show the diff of.' })
+			const wanted = new Set<string>(paths.flatMap((each) => (each.kind === 'ok' ? [each.path] : [])))
+			const hunks = await changedHunks(layout.repo, change.range, new AbortController().signal)
+			const asked = hunks.filter((each) => wanted.has(each.path))
+			return sendJson(response, 200, cutAt(asked, DIFF_LINES))
 		}
 		if (where === 'POST /api/layout/back') {
 			const body = await readJson(request)
@@ -149,7 +168,7 @@ export async function openServer(options: {
 			if (!Array.isArray(within) || !within.every((each) => typeof each === 'string')) {
 				return sendJson(response, 400, { message: 'Send within: the paths of the level, as a list.' })
 			}
-			const ask = await readLayoutAsk(layout, { within })
+			const ask = await readLayoutAsk(layout, { within }, new Date())
 			if (ask.kind !== 'ok') return sendJson(response, 400, { message: ask.message, field: ask.field })
 			const pictures = pictureBefore((await record.read()).entries, ask.ask.within)
 			if (!pictures) {
@@ -273,6 +292,34 @@ async function readJson(
 	} catch {
 		return { kind: 'refused', problem: 'Send the request as JSON.' }
 	}
+}
+
+type ChangedHunk = Awaited<ReturnType<typeof changedHunks>>[number]
+
+// The hunks up to most changed lines, in the shape a walkthrough step's hunks have. The hunk that passes the limit
+// keeps the lines that fit and counts them again, and cut says the diff goes on.
+function cutAt(hunks: ChangedHunk[], most: number): { hunks: ChangedHunk[]; cut: boolean } {
+	const changed = (line: string) => line.startsWith('+') || line.startsWith('-')
+	const kept: ChangedHunk[] = []
+	let room = most
+	for (const each of hunks) {
+		const lines: string[] = []
+		for (const line of each.hunk.lines) {
+			if (changed(line) && room === 0) break
+			if (changed(line)) room -= 1
+			lines.push(line)
+		}
+		if (lines.length === each.hunk.lines.length) {
+			kept.push(each)
+			continue
+		}
+		const count = (sign: string) => lines.filter((line) => !line.startsWith(sign) && !line.startsWith('\\')).length
+		if (lines.some(changed)) {
+			kept.push({ ...each, hunk: { ...each.hunk, lines, oldLength: count('+'), newLength: count('-') } })
+		}
+		return { hunks: kept, cut: true }
+	}
+	return { hunks: kept, cut: false }
 }
 
 // Two of the three buttons under an answer, "I do not know this any more" on the map, and a tour stop the reader

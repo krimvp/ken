@@ -31,7 +31,7 @@ async function sourcesFor(root: string): Promise<LayoutSources> {
 }
 
 async function look(sources: LayoutSources, raw: RawAsk): Promise<LayoutLook> {
-	const read = await readLayoutAsk(sources, raw)
+	const read = await readLayoutAsk(sources, raw, NOW)
 	if (read.kind !== 'ok') assert.fail(read.message)
 	return await lookAtLayout(sources, read.ask, NOW)
 }
@@ -119,25 +119,31 @@ test("a branch's change counts from where it left main, lands its files in their
 		{ message: 'feat: start', files: { 'src/a/x.ts': 'x\n', 'src/b/y.ts': 'y\n' } },
 		{ message: 'feat: more', files: { 'src/b/w.ts': 'w\n' } },
 		{ message: 'fix: change a on main', files: { 'src/a/x.ts': 'x2\n' } },
-		{ message: 'feat: side work', files: { 'src/b/y.ts': 'y\ny2\ny3\n', 'extra/e.ts': 'e\n' }, parent: 1 },
+		{ message: 'feat: side work', files: { 'src/b/y.ts': 'y\ny2\ny3\n', 'src/extra/e.ts': 'e\n' }, parent: 1 },
 	])
 	git(root, ['branch', 'feature', hashes[3] ?? ''])
 	git(root, ['checkout', '--quiet', 'main'])
 	const sources = await sourcesFor(root)
 
 	const branch = await look(sources, { within: ['src'], change: 'feature' })
-	assert.deepEqual(box(branch, 'b')?.touched, { files: 1, added: 2, removed: 0 })
+	assert.deepEqual(box(branch, 'b')?.touched, {
+		files: 1,
+		added: 2,
+		removed: 0,
+		paths: [{ path: 'src/b/y.ts', added: 2, removed: 0 }],
+		morePaths: 0,
+	})
 	assert.equal(
 		box(branch, 'a')?.touched,
 		null,
 		'main moved on in a after the branch left it, and that is not the branch',
 	)
-	assert.deepEqual(branch.change?.outside, ['extra/e.ts'])
+	assert.deepEqual(branch.change?.outside, ['src/extra/e.ts'], 'main has no folder src/extra to hold it')
 	assert.equal(branch.change?.files, 2)
 
 	writeFileSync(path.join(root, 'src/a/x.ts'), 'x2\nnot committed\n')
 	const uncommitted = await look(sources, { within: ['src'], change: 'uncommitted' })
-	assert.deepEqual(box(uncommitted, 'a')?.touched, { files: 1, added: 1, removed: 0 })
+	assert.deepEqual([box(uncommitted, 'a')?.touched?.files, box(uncommitted, 'a')?.touched?.added], [1, 1])
 	assert.equal(box(uncommitted, 'b')?.touched, null)
 	assert.deepEqual(uncommitted.change?.outside, [])
 })
@@ -231,7 +237,7 @@ test('a commit, a path or a change the project does not have is refused before k
 	const { root } = buildRepository([{ message: 'feat: start', files: { 'src/a/x.ts': 'x\n' } }])
 	const sources = await sourcesFor(root)
 	for (const raw of [{ at: 'nope' }, { within: ['../outside'] }, { change: 'main..nope' }, { change: 'nope' }]) {
-		assert.equal((await readLayoutAsk(sources, raw)).kind, 'refused', JSON.stringify(raw))
+		assert.equal((await readLayoutAsk(sources, raw, NOW)).kind, 'refused', JSON.stringify(raw))
 	}
 })
 

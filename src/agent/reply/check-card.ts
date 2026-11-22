@@ -123,7 +123,7 @@ export async function checkCard(
 			return { kind: 'ok', card: { kind: 'diagram', diagram: checked.diagram } }
 		}
 		case 'layout': {
-			const checked = await checkLayout(sources.repo, draft, where, signal)
+			const checked = await checkLayout(sources.repo, draft, { where, needsAbout: true }, signal)
 			if (checked.kind === 'refused') return checked
 			return { kind: 'ok', card: { kind: 'layout', layout: checked.layout } }
 		}

@@ -11,6 +11,7 @@ export {
 	personLens,
 	rangeLens,
 	rangeQuestion,
+	sinceWords,
 	type TourLevel,
 	topicQuestion,
 	tourQuestion,

@@ -174,6 +174,7 @@ export async function endReply(
 			topics,
 			...(round.tour ? { tour: round.tour } : {}),
 			...(round.view ? { view: { within: round.view.within, asked: round.view.text } } : {}),
+			...(round.want ? { want: round.want } : {}),
 		},
 		recorded: recorded.kind === 'recorded' ? recorded.entries : [],
 		problems: recorded.kind === 'draft' ? [] : recorded.problems,

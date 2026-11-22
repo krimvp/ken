@@ -266,7 +266,7 @@ export async function checkEntry(
 			break
 		}
 		case 'layout': {
-			const checked = await checkLayout(repo, draft, 'the layout', signal)
+			const checked = await checkLayout(repo, draft, { where: 'the layout', needsAbout: false }, signal)
 			if (checked.kind === 'refused') return checked
 			entry = checked.layout
 			break

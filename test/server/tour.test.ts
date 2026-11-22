@@ -13,7 +13,8 @@ import { scriptedModel, type Turn } from '../fixtures/scripted-model.ts'
 // A command that runs the core, a core that saves to a store, and a test of the core.
 const FILES = {
 	'src/cli/main.ts': "import { run } from '../core/run.ts'\nrun()\n",
-	'src/core/run.ts': "import { save } from '../store/db.ts'\nexport function run() {\n\tsave()\n}\n",
+	'src/core/run.ts':
+		"import { save } from '../store/db.ts'\n// Runs the work, then saves it.\nexport function run() {\n\tsave()\n}\n",
 	'src/store/db.ts': 'export function save() {}\n',
 	'test/run.test.ts': "import { run } from '../src/core/run.ts'\nrun()\n",
 }
@@ -107,12 +108,12 @@ async function json(server: KenServer, route: string, body?: object) {
 type State = { topic: string; kind: string }
 const kinds = (states: State[]) => Object.fromEntries(states.map((state) => [state.topic, state.kind]))
 
-test('a tour asks for its stops in the order of the arrows, reaches the reader stop by stop with its cards, follows the map, and reopens with no model', async () => {
+test('a tour asks for its stops from the most used part outward, reaches the reader stop by stop with its cards, follows the map, and reopens with no model', async () => {
 	const model = await scriptedModel([
 		{ text: 'Let me read the parts.', tool: 'ken__read_file', args: { path: 'src/cli/main.ts' } },
-		stop(1, 'The command starts everything.', 'src/cli/main.ts', 'run()'),
+		stop(1, 'The store saves it.', 'src/store/db.ts', 'export function save() {}'),
 		stop(2, 'The core runs the work.', 'src/core/run.ts', 'export function run() {'),
-		stop(3, 'The store saves it.', 'src/store/db.ts', 'export function save() {}'),
+		stop(3, 'The command starts everything.', 'src/cli/main.ts', 'run()'),
 		stop(4, 'The tests run the core.', 'test/run.test.ts', 'run()'),
 		{ text: 'That is the whole project.' },
 	])
@@ -129,9 +130,9 @@ test('a tour asks for its stops in the order of the arrows, reaches the reader s
 	assert.deepEqual(
 		question.split('\n').flatMap((line) => line.match(/^- Stop \d+, (.+) \((.+)\): (.+)$/)?.slice(1) ?? []),
 		[
-			...['Command', 'src/cli', 'The command a person types'],
-			...['Core', 'src/core', 'Runs the work'],
 			...['Store', 'src/store', 'Saves what the core makes'],
+			...['Core', 'src/core', 'Runs the work'],
+			...['Command', 'src/cli', 'The command a person types'],
 			...['Tests', 'test', 'Tests the core'],
 		],
 		'the question carries each stop in order with its paths and job',
@@ -148,7 +149,7 @@ test('a tour asks for its stops in the order of the arrows, reaches the reader s
 	)
 	assert.deepEqual(
 		entry.reply.tour.stops.map((each: { name: string }) => each.name),
-		['Command', 'Core', 'Store', 'Tests'],
+		['Store', 'Core', 'Command', 'Tests'],
 	)
 	assert.deepEqual(
 		kinds(topics),
@@ -157,7 +158,7 @@ test('a tour asks for its stops in the order of the arrows, reaches the reader s
 	)
 
 	const rows = (await json(server, '/api/questions')).questions
-	assert.deepEqual(rows.at(-1).tour, { within: [], stops: ['Command', 'Core', 'Store', 'Tests'] })
+	assert.deepEqual(rows.at(-1).tour, { within: [], stops: ['Store', 'Core', 'Command', 'Tests'] })
 	assert.deepEqual([rows.at(-1).steps, rows.at(-1).change], [4, null], 'four steps, about no change')
 
 	const reached = await json(server, '/api/map', { signal: 'toured', topics: ['Command'] })
@@ -183,4 +184,33 @@ test('a tour of a level nobody named is refused before it reaches the model', as
 	const { status, text } = await call(server, '/api/questions', { lens: { kind: 'tour', within: ['src/core'] } })
 	assert.equal(status, 400, text)
 	assert.equal(model.requests.length, 0)
+})
+
+test('a tour step whose only card quotes a comment goes back to the model, and one that quotes code beside the comment is shown', async () => {
+	const comment = '// Runs the work, then saves it.'
+	const model = await scriptedModel([
+		stop(1, 'The core runs the work.', 'src/core/run.ts', comment),
+		stop(1, 'The core runs the work.', 'src/core/run.ts', `${comment}\nexport function run() {`),
+		{ text: '' },
+	])
+	const server = await open(model.baseUrl)
+	const { status, text } = await call(server, '/api/questions', { lens: { kind: 'tour', within: [] } })
+	assert.equal(status, 200, text)
+	const lines = text
+		.trim()
+		.split('\n')
+		.map((line) => JSON.parse(line))
+
+	assert.deepEqual(
+		lines.flatMap((line) => (line.kind === 'step' && line.step.kind === 'sent-back' ? [line.step.what] : [])),
+		['Claim 1'],
+		'the card that quotes only a comment went back',
+	)
+	const items: { kind: string; step?: number; card?: { claim: { quotes: { text: string }[] } } }[] =
+		lines.at(-1).view.entry.reply.items
+	assert.deepEqual(
+		items.flatMap((item) => (item.kind === 'card' ? [[item.step, item.card?.claim.quotes[0]?.text]] : [])),
+		[[1, `${comment}\nexport function run() {`]],
+		'the reader sees the one card that quotes code',
+	)
 })
