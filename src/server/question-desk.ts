@@ -250,6 +250,7 @@ export function questionDesk(
 				const cards = items.flatMap((item) => (item.kind === 'card' ? [item.card] : []))
 				const has = (kind: CardKind) => cards.some((card) => card.kind === kind)
 				const total = change ? change.covered.length + change.uncovered.length : 0
+				const steps = items.filter((item) => item.kind === 'step').length
 				return {
 					...row,
 					cards: cards.length,
@@ -258,8 +259,9 @@ export function questionDesk(
 					hunks: change && { uncovered: change.uncovered.length, total },
 					tour: tour ? { within: tour.within, stops: tour.stops.map((each) => each.name) } : null,
 					change: change && { base: change.base, head: change.head, snapshot },
-					want: want ?? null,
-					steps: items.filter((item) => item.kind === 'step').length,
+					// A walkthrough saved before replies carried want still shows as one: a reply about a change with steps.
+					want: want ?? (change && steps > 0 ? 'walk' : null),
+					steps,
 					view: view ? { ...view, drew: has('layout') ? 'parts' : has('diagram') ? 'diagram' : 'nothing' } : null,
 				}
 			}),
