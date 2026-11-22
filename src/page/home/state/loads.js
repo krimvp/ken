@@ -50,8 +50,9 @@ export function homeLoads({ state, render, read, post, fromView, stored }) {
 	// One level from the server, for where the reader is now. A level the server refuses takes the last one off the
 	// screen and shows the reason in its place. While the server reads, the home says so: reading is "level" when the
 	// level on screen is another one, and "overlay" when it is the same level with another change or commit to come.
-	// False means a newer request took this one's place.
-	async function loadLayout() {
+	// False means a newer request took this one's place. again says the same level is read again with nothing else asked
+	// of it, so what is on screen stays in use meanwhile.
+	async function loadLayout(again = false) {
 		const home = state.home
 		const { within } = home.trail.at(-1)
 		const query = new URLSearchParams()
@@ -59,7 +60,7 @@ export function homeLoads({ state, render, read, post, fromView, stored }) {
 		for (const path of within) query.append('within', path)
 		if (home.change !== '') query.set('change', home.change)
 		const mine = ++asked
-		home.reading = home.look && same(home.look.within, within) ? 'overlay' : 'level'
+		home.reading = again ? null : home.look && same(home.look.within, within) ? 'overlay' : 'level'
 		render()
 		const answer = await ask(`/api/layout?${query}`)
 		if (mine !== asked) return false
@@ -88,8 +89,10 @@ export function homeLoads({ state, render, read, post, fromView, stored }) {
 		const { look, selected } = home
 		if (!look?.change || home.content.kind !== 'change' || selected?.kind !== 'part') return
 		const box = look.boxes.find((each) => each.name === selected.name)
-		if (!box?.touched || shownDetail(home) !== 'code' || home.diffs.has(diffKey(look.change, box))) return
+		if (!box?.touched || shownDetail(home) !== 'code') return
 		const key = diffKey(look.change, box)
+		// A diff the server could not read is asked for again the next time the reader looks at the part.
+		if (home.diffs.has(key) && !home.diffs.get(key)?.problem) return
 		home.diffs.set(key, null)
 		const paths = box.touched.paths.slice(0, DIFF_PATHS).map((file) => file.path)
 		const query = new URLSearchParams([['change', look.change.asked], ...paths.map((file) => ['path', file])])

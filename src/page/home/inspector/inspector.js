@@ -439,14 +439,15 @@ export function inspectorHtml(home, env) {
 	const noModel = env.model?.kind === 'unset' ? noModelHtml(env.model, env.asked, true) : ''
 	const nav = working ? '' : (view.nav ?? '')
 	// While the server reads the level again for another change or commit, the panel still shows the one before. It
-	// cannot be pressed then, so a stop of the old path is not picked into the new one.
-	return `<div class="insp-scroll${home.reading ? ' is-reading' : ''}" id="insp-scroll">
+	// cannot be pressed or reached by the keyboard then, so a stop of the old path is not picked into the new one.
+	const closed = home.reading ? ' inert' : ''
+	return `<div class="insp-scroll" id="insp-scroll"${closed}>
 			<p class="insp-legend">${LEGEND}</p>
 			<p class="insp-head"><span class="insp-detail">${DETAILS[shownDetail(home)]}</span>${view.where ? `<span class="insp-where">${view.where}</span>` : ''}${clear}<button class="link insp-up" data-act="home-up" data-key="home-up">Back to the picture</button></p>
-			<h2 class="insp-title ${view.titleClass ?? ''}" id="insp-title" tabindex="-1">${view.title}</h2>
+			<h2 class="insp-title ${view.titleClass ?? ''}" id="insp-title" data-key="insp-title" tabindex="-1">${view.title}</h2>
 			${notices}
 			${view.body}
 			${noModel}
 		</div>
-		${nav === '' ? '' : `<div class="insp-foot${home.reading ? ' is-reading' : ''}">${nav}</div>`}`
+		${nav === '' ? '' : `<div class="insp-foot"${closed}>${nav}</div>`}`
 }

@@ -374,7 +374,7 @@ const READING = '<p class="home-line home-reading" role="status">Reading the pro
 export function canvasHtml(home, rows) {
 	const { look, suggestion, problem } = home
 	const inside = home.trail.length > 1
-	const name = `<div class="home-where">${trailHtml(home.trail)}<h1 class="home-level ${inside ? colourOf(home)('') : ''}" id="home-level" tabindex="-1">${esc(levelName(home))}</h1></div>`
+	const name = `<div class="home-where">${trailHtml(home.trail)}<h1 class="home-level ${inside ? colourOf(home)('') : ''}" id="home-level" data-key="home-level" tabindex="-1">${esc(levelName(home))}</h1></div>`
 	// While the server reads another level, the one on screen is not the one the heading names, so it gives its place
 	// to one line. A level read again for another change or commit stays, so the picture does not blink.
 	if (!look || home.reading === 'level') return `<div class="home-head">${name}</div>${problem ? '' : READING}`
@@ -397,7 +397,7 @@ export function canvasHtml(home, rows) {
 			: ''
 	return `${head}${about}${why}${reading}
 		${notesHtml(home)}
-		<div class="home-picture${look.arrows.length > 0 ? ' has-arrows' : ''}${home.reading ? ' is-reading' : ''}">${pictureOf(home)}</div>
+		<div class="home-picture${look.arrows.length > 0 ? ' has-arrows' : ''}"${home.reading ? ' inert' : ''}>${pictureOf(home)}</div>
 		${footHtml(look)}
 		<div class="home-arrows">${arrowListHtml(home, null, { where: 'canvas' })}</div>`
 }

@@ -574,18 +574,23 @@ function caretOf(box) {
 	return box?.matches?.('input:not([type]), textarea') ? [box.selectionStart, box.selectionEnd] : null
 }
 
+// The key of what had the keyboard when its region closed for a read, so it gets the keyboard back when it opens.
+let focusLost = null
+
 function render() {
 	hideTip()
 	const ui = state.ui
 	ui.wide = wideQuery.matches
 	const active = document.activeElement
-	const focused = active?.dataset?.key
+	if (active !== document.body) focusLost = null
+	const focused = active?.dataset?.key ?? focusLost
 	const caret = caretOf(active)
 	const refocus = () => {
 		if (!focused || document.activeElement?.dataset?.key === focused) return
 		const now = document.querySelector(`[data-key="${CSS.escape(focused)}"]`)
 		now?.focus({ preventScroll: true })
 		if (caret && caretOf(now)) now.setSelectionRange(...caret)
+		focusLost = now?.closest('[inert]') ? focused : null
 	}
 	const onHome = state.view === 'home'
 	$('#project').innerHTML = state.project ? `<span class="reads">reads </span>${folderHtml(state.project)}` : ''

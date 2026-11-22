@@ -49,9 +49,10 @@ export function homeActions(app) {
 	async function back() {
 		const place = readAddress(location.hash)
 		if (!place) return
-		Object.assign(state.home, place, { askOpen: false })
+		Object.assign(state.home, place, { askOpen: false, openArrows: new Set() })
 		addressed = JSON.stringify([place.wayIn, place.trail])
 		await show()
+		toPicture()
 	}
 
 	async function show() {
@@ -86,7 +87,8 @@ export function homeActions(app) {
 		} catch (error) {
 			state.home.trouble = { said: 'ken could not save that to your map.', message: error.message, again: false }
 		}
-		await loadLayout()
+		// The same level read again: nothing on screen is out of date, so the home does not say it is reading.
+		await loadLayout(true)
 		render()
 	}
 
@@ -191,9 +193,10 @@ export function homeActions(app) {
 		'home-step'(el) {
 			const k = Number(el.dataset.index)
 			const path = pathOf(state.home.look, state.home.content)
-			// The line of the open step closes it. Back and Next always move.
+			// The line of the open step closes it. Back and Next always move, and the keyboard goes with them: their
+			// own buttons are drawn again under other names.
 			if (el.matches('.path-head') && placeOf(path, state.home.selected) === k) return select(null)
-			return stepTo(k)
+			return stepTo(k, true)
 		},
 		'home-clear': () => select(null),
 		// A tab over the canvas shows the parts, or one drawn picture in their place.
@@ -283,8 +286,8 @@ export function homeActions(app) {
 		'home-run-go'() {
 			const home = state.home
 			const { trail, change, wayIn } = state.running?.onHome ?? home.ended.started
-			Object.assign(home, { trail, change, wayIn, at: '', shown: null, selected: null, ended: null })
-			return refresh()
+			Object.assign(home, { change, wayIn, at: '', ended: null })
+			return moveTo(trail)
 		},
 		'home-trouble-close'() {
 			state.home.trouble = null
@@ -395,7 +398,7 @@ export function homeActions(app) {
 			sendAsk()
 			return true
 		}
-		if ((event.key === 'ArrowLeft' || event.key === 'ArrowRight') && !typing && !home.askOpen) {
+		if ((event.key === 'ArrowLeft' || event.key === 'ArrowRight') && !typing && !home.askOpen && !home.reading) {
 			if (!stepBy(event.key === 'ArrowLeft' ? -1 : 1)) return false
 			event.preventDefault()
 			return true
