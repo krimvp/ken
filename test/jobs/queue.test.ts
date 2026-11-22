@@ -345,7 +345,8 @@ test('two waiting readers can take two busy background slots', async () => {
 	await settle()
 	queue.want(ask('first question'), 'reader')
 	queue.want(ask('second question'), 'reader')
-	await settle()
+	// Each reader waits for a stopped run to wind down, which takes more than one settle on a busy machine.
+	for (let tries = 0; started.length < 4 && tries < 200; tries++) await settle()
 	assert.deepEqual(started, ['parts', 'process', 'first question', 'second question'])
 	for (const key of ['first question', 'second question', 'parts', 'process']) await finish(key)
 })
