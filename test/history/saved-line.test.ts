@@ -54,3 +54,54 @@ test('an answer saved before ken replied in words shows the decision it stored i
 	)
 	assert.deepEqual(questions, [draft.question, decision.question])
 })
+
+test('damaged saved briefs leave the next question readable and an old unchecked answer can be retried', async () => {
+	const { root, hashes } = buildRepository([
+		{ message: 'feat: start', files: { 'retry.ts': 'export const max = 3\n' } },
+	])
+	const home = mkdtempSync(path.join(tmpdir(), 'ken-home-'))
+	after(() => rmSync(home, { recursive: true, force: true }))
+	const repo = gitRepository(root)
+	const opened = await openHistory(home, repo, fileRecordStore(root, repo))
+	if (opened.kind !== 'ok') assert.fail('no repository')
+	const base = {
+		question: 'What is the limit?',
+		askedAt: new Date().toISOString(),
+		steps: [],
+		outcome: 'answered',
+		recorded: [],
+	}
+	const answers = { concept: 'part::Retry', text: base.question }
+	const quote = { path: 'retry.ts', commit: hashes[0], startLine: 1, endLine: 1, text: 'export const max = 3' }
+	const step = { kind: 'step', number: 1, text: 'Three retries.' }
+	const claim = (q: unknown) => ({
+		kind: 'card',
+		step: 1,
+		card: { kind: 'claim', claim: { text: 'Three retries.', label: 'inferred', quotes: [q] } },
+	})
+	const reply = { topics: [], change: null, answers, items: [step, claim(quote)] }
+	const rows = [
+		{ ...reply, items: null },
+		{ ...reply, tour: {} },
+		{ ...reply, tour: { within: [], stops: [null] } },
+		{ ...reply, items: [null] },
+		{ ...reply, items: [step, { kind: 'card' }] },
+		{ ...reply, items: [step, claim(null)] },
+		{ ...reply, items: [{ kind: 'words', text: 'Proposed tool call' }] },
+		reply,
+	]
+	mkdirSync(path.dirname(opened.history.file), { recursive: true })
+	writeFileSync(
+		opened.history.file,
+		rows.map((reply, id) => JSON.stringify({ ...base, id: String(id), reply })).join('\n'),
+	)
+	const entries = await opened.history.list()
+	assert.deepEqual(
+		entries.map((each) => each.outcome),
+		['incomplete', 'answered'],
+	)
+	assert.deepEqual(
+		(await opened.history.readSaved()).map((each) => each.id),
+		['7'],
+	)
+})

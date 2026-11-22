@@ -48,13 +48,13 @@ const written = await record.append([
 				from: 'Core',
 				to: 'Store',
 				text: 'saves to',
-				quotes: [quote('src/core/run.ts', "import { save } from '../store/db.ts'")],
+				quotes: [quote('src/core/run.ts', FILES['src/core/run.ts'].trimEnd())],
 			},
 			{
 				from: 'Command',
 				to: 'Core',
 				text: 'runs',
-				quotes: [quote('src/cli/main.ts', "import { run } from '../core/run.ts'")],
+				quotes: [quote('src/cli/main.ts', FILES['src/cli/main.ts'].trimEnd())],
 			},
 		],
 	},
@@ -187,6 +187,23 @@ test("a level says how many of its parts ken's model explained, and a block of o
 test('inside a part nobody split, a block of one file opens as that file', async () => {
 	const file = await briefOf('part:src/core:run.ts')
 	assert.deepEqual([file.kind, file.name, file.line], ['file', 'run.ts', 'The file src/core/run.ts.'])
+	const folder = await briefOf('part:src:cli')
+	assert.equal(folder.kind, 'part', 'a folder with just one file still opens onto its contents')
+	assert.equal(folder.deeper.within, 'src/cli')
+	assert.equal(file.deeper, null)
+	const source = await json(
+		server,
+		`/api/source?${new URLSearchParams({ at: file.source.commit, path: file.source.path, start: '2' })}`,
+	)
+	assert.deepEqual(
+		[source.start, source.lines, source.next],
+		[2, ['export function run() {', '\tsave(plan())', '}'], null],
+	)
+	const shortened = await json(
+		server,
+		`/api/source?${new URLSearchParams({ at: file.source.commit, path: file.source.path, start: '61' })}`,
+	)
+	assert.deepEqual([shortened.start, shortened.total, shortened.lines.at(-1)], [1, 4, '}'])
 })
 
 test('Sideways lists the parts a part uses and the parts that use it, each with its verb, and the drawn process that passes through it', async () => {

@@ -714,7 +714,7 @@ test('"Ask ken to name these parts" sends the folder split to the model, and the
 	)
 	assert.deepEqual(
 		look.arrows.map((arrow: { from: string; text: string; to: string }) => [arrow.from, arrow.text, arrow.to]),
-		[['Server', 'asks', 'Chat engine']],
+		[['Server', 'imports', 'Chat engine']],
 	)
 	assert.equal(look.named.about, layout.about, 'the picture says what the level is, in the words the model gave')
 	assert.equal(look.named.asked, null, 'nobody asked for another way to show it')
@@ -724,12 +724,14 @@ test('a new visit can look up an earlier answer with its date and commit, withou
 	const home = tempFolder('ken-recall-')
 	const project = buildRepository([{ message: 'feat: retry delay', files: { 'retry.ts': 'wait(100)\n' } }])
 	const earlier = 'Retries had a fixed delay between attempts.'
-	const model = await scriptedModel([{ text: earlier }])
+	const answer = `${earlier}${' The job waits.'.repeat(210)} At midnight the backoff resets.`
+	const model = await scriptedModel([{ text: answer }])
 	const first = await open(home, model.baseUrl, project.root)
 	const saved = (await ask(first, 'How did we pace retries?')).at(-1).view.entry
 	const returning = await scriptedModel([
 		{ text: 'Hello again.' },
-		{ tool: 'ken__memory_search', args: { words: 'pace retries' } },
+		{ tool: 'ken__memory_search', args: { words: 'fixed midnight' } },
+		{ tool: 'ken__memory_known', args: { about: saved.id, from: 2800 } },
 		{ text: 'We discussed the delay.' },
 	])
 	execFileSync(
@@ -742,6 +744,8 @@ test('a new visit can look up an earlier answer with its date and commit, withou
 	await ask(next, 'What did we discuss about pace retries last visit?')
 	assert.ok(!JSON.stringify(returning.requests[0]?.messages).includes(earlier))
 	const result = toolResults(returning.requests[2]).at(-1) ?? ''
-	for (const field of [earlier, saved.id, saved.askedAt, project.hashes[0] ?? 'unknown commit'])
+	const page = toolResults(returning.requests[3]).at(-1) ?? ''
+	assert.match(page, /At midnight the backoff resets/)
+	for (const field of [saved.id, saved.askedAt, project.hashes[0] ?? 'unknown commit'])
 		assert.ok(result.includes(field), result)
 })

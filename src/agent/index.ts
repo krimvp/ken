@@ -22,6 +22,7 @@ export {
 export { type NoteFacts, noteQuestion } from './note-question.ts'
 export { changedHunks } from './reply/check-card.ts'
 export {
+	briefCoverage,
 	CARD_KINDS,
 	type Card,
 	type CardKind,

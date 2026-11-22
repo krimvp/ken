@@ -26,7 +26,10 @@ export type Process = {
 export type Drawn = { id: string; diagram: Diagram; at: string; within: string[] }
 
 // Newest first. The same drawing in a reply and in the record is one process.
-export function drawnOf(answered: Extract<HistoryEntry, { outcome: 'answered' }>[], record: RecordRead): Drawn[] {
+export function drawnOf(
+	answered: Extract<HistoryEntry, { outcome: 'answered' | 'partial' }>[],
+	record: RecordRead,
+): Drawn[] {
 	const draw = (diagram: Diagram, at: string, within: string[]) => ({ id: idOf(diagram), diagram, at, within })
 	const replied = answered.flatMap(({ reply, askedAt }) =>
 		reply.items.flatMap((item) =>

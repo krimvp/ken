@@ -73,6 +73,7 @@ test('an address written for a place reads back as that place, so a reload and B
 			layer: null,
 			process: null,
 			change: 'since:2026-11-13',
+			part: 'Plugin engine',
 			tab: 'changes',
 			brief: 'part::Sandbox',
 			on: null,
@@ -106,6 +107,17 @@ test('an address written for a place reads back as that place, so a reload and B
 			tab: 'changes',
 			brief: 'step:p-1:3',
 			on: null,
+		},
+		{
+			page: 'home',
+			trail: [WHOLE],
+			layer: null,
+			process: null,
+			change: 'none',
+			tab: 'changes',
+			brief: 'part:lib:entry',
+			on: 'source',
+			source: { path: 'lib/a & b.js', commit: 'a'.repeat(40), line: 61 },
 		},
 		{
 			page: 'home',
@@ -188,12 +200,14 @@ test('a drawn process numbers the parts it passes through in the order of its st
 
 // A project with two parts ken's model named, and a later commit that touches one of them.
 async function namedProject() {
+	const startStore = "import { start } from '../store/db.ts'\nstart()"
+	const waitForStore = "import { ready } from '../store/db.ts'\nawait ready()"
 	const { root } = buildRepository([
 		{
 			message: 'feat: start',
 			files: {
-				'src/core/run.ts': "import { save } from '../store/db.ts'\nrun()\n",
-				'src/core/wait.ts': "import { keep } from '../store/db.ts'\nwait()\n",
+				'src/core/run.ts': startStore,
+				'src/core/wait.ts': waitForStore,
 				'src/store/db.ts': 'save()\n',
 			},
 		},
@@ -215,13 +229,13 @@ async function namedProject() {
 					from: 'core',
 					to: 'store',
 					text: 'starts',
-					quotes: [{ path: 'src/core/run.ts', commit: 'HEAD', text: "import { save } from '../store/db.ts'" }],
+					quotes: [{ path: 'src/core/run.ts', commit: 'HEAD', text: startStore }],
 				},
 				{
 					from: 'core',
 					to: 'store',
 					text: 'waits on',
-					quotes: [{ path: 'src/core/wait.ts', commit: 'HEAD', text: "import { keep } from '../store/db.ts'" }],
+					quotes: [{ path: 'src/core/wait.ts', commit: 'HEAD', text: waitForStore }],
 				},
 			],
 			parts: ['core', 'store'].map((name) => ({ name, job: `Does the work of ${name}`, paths: [`src/${name}`] })),

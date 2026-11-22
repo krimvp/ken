@@ -33,6 +33,7 @@ test('what plain code reads first: the README paragraph past its heading and bad
 			name: 'shop',
 			description: 'Orders, payments and stock',
 			bin: { shop: 'bin/shop.js' },
+			exports: { types: './src/types.d.ts', default: './src/orders/place.ts' },
 			scripts: { test: 'node --test' },
 		}),
 		'pyproject.toml': '[project]\nname = "shop-tools"\n\n[project.scripts]\nrestock = "tools.restock:main"\n',
@@ -53,6 +54,7 @@ test('what plain code reads first: the README paragraph past its heading and bad
 		look.entries.map((each) => [each.kind, each.name, each.runs]),
 		[
 			['bin', 'shop', 'bin/shop.js'],
+			['main', 'main', './src/orders/place.ts'],
 			['script', 'test', 'node --test'],
 			['bin', 'restock', 'tools.restock:main'],
 		],

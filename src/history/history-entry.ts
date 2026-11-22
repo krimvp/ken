@@ -7,9 +7,15 @@ import type { EntryId } from '../record/index.ts'
 export type Usage = { inputTokens: number; outputTokens: number; seconds: number }
 
 // recorded names the project record entries the reply added; the record holds them, the history only points at them.
+type BriefRetry =
+	| { kind: 'answer'; concept: string; text: string; typed?: boolean }
+	| { kind: 'explain'; within: string[]; part: string | null }
+
 export type Ending =
 	| { outcome: 'answered'; reply: Reply; recorded: EntryId[] }
-	| { outcome: Exclude<Outcome, 'answered'> | 'stopped' }
+	| { outcome: 'partial'; reply: Reply; recorded: EntryId[]; retry?: BriefRetry }
+	| { outcome: Exclude<Outcome, 'answered' | 'partial' | 'incomplete'> | 'stopped' }
+	| { outcome: 'incomplete'; retry?: BriefRetry }
 	| { outcome: 'error'; error: string }
 
 // head is the project's HEAD when the question was asked, so a reopened reply can say the project has moved on. thread
@@ -57,11 +63,10 @@ export function entryFrom(asked: Asked, events: ChatEvent[], stopped: boolean): 
 				usage = { inputTokens: event.inputTokens, outputTokens: event.outputTokens, seconds: event.seconds }
 				break
 			case 'done':
-				ending = replied
-					? { outcome: 'answered', reply: replied.reply, recorded: replied.recorded.map((entry) => entry.id) }
-					: event.outcome === 'answered'
-						? { outcome: 'no-answer' }
-						: { outcome: event.outcome }
+				if (event.outcome !== 'answered' && event.outcome !== 'partial') ending = { outcome: event.outcome }
+				else if (replied)
+					ending = { outcome: event.outcome, reply: replied.reply, recorded: replied.recorded.map((entry) => entry.id) }
+				else ending = { outcome: 'no-answer' }
 				break
 			case 'error':
 				ending = stopped ? { outcome: 'stopped' } : { outcome: 'error', error: event.message }
@@ -83,6 +88,10 @@ export function whyNoNote(entry: HistoryEntry): string | null {
 	switch (entry.outcome) {
 		case 'answered':
 			return null
+		case 'partial':
+			return "ken's model explained only some parts."
+		case 'incomplete':
+			return "ken's model did not give a brief with a checked point."
 		case 'no-answer':
 			return `ken's model stopped without writing a note, ${none}`
 		case 'out-of-turns':

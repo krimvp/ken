@@ -68,11 +68,13 @@ export type Brief = {
 	questions: { id: string; text: string; answered: boolean }[]
 	decisions: { id: string; question: string; chosen: string; why: string }[]
 	sideways: { uses: Neighbour[]; usedBy: Neighbour[]; processes: { id: string; name: string; steps: number }[] }
+	source?: { path: string; commit: CommitHash }
 	deeper: { within: string; parts: number; files: number } | null
 	steps: { n: number; part: string | null; line: string; quotes: BriefQuote[] }[] | null
 	knows: Knows | null
 	trust: string
 	staleFiles?: string[] | undefined
+	checkedAt?: string
 	about?: Named
 	usedIn?: Named[]
 	note?: string
@@ -150,11 +152,23 @@ export function conceptReads(layout: LayoutSources, history: History) {
 			case 'store':
 			case 'outside':
 			case 'crossing': {
-				const views = (await levelAt([], all.now))?.views
+				const top = await levelAt([], all.now)
+				const views = top?.views
 				const found = views && viewBrief(concept.kind, concept.id, views)
-				if (!found) return null
+				if (!top || !views || !found) return null
 				const { id: named, kind, name, line, sideways, ...rest } = found
-				return { ...blank(named, kind, name, line), explained: true, sideways: { ...sideways, processes: [] }, ...rest }
+				const stale = views.stale?.find((item) => item.id === concept.id)
+				return {
+					...blank(named, kind, name, line),
+					explained: true,
+					sideways: { ...sideways, processes: [] },
+					...(stale && {
+						staleFiles: stale.files,
+						checkedAt: top.head,
+						explain: { lens: { kind: 'views', within: [] } },
+					}),
+					...rest,
+				}
 			}
 			default:
 				return concept satisfies never
@@ -177,9 +191,8 @@ export function conceptReads(layout: LayoutSources, history: History) {
 		)
 		// A box of one file has no level inside, only the file.
 		const inside = box.opens ? (box.inside ?? (await levelAt(box.paths, all.now))?.boxes.length ?? 0) : 0
-		const [only] = box.paths
-		const file = !look.named && box.files === 1 && box.paths.length === 1 && only?.split('/').at(-1) === box.name
-		const line = told?.line ?? box.job ?? (file ? `The file ${only}.` : folderLine(box))
+		const file = box.file
+		const line = told?.line ?? box.job ?? (file ? `The file ${file}.` : folderLine(box))
 		const uses = look.arrows.flatMap((arrow) =>
 			arrow.from === box.name ? [{ ...other(arrow.to), verb: arrow.text }] : [],
 		)
@@ -211,7 +224,8 @@ export function conceptReads(layout: LayoutSources, history: History) {
 				processes: through.map(({ id: process, name, steps }) => ({ id: processId(process), name, steps })),
 			},
 			// Sorted, as a level's own paths are, so the page asks for the level inside by the same text.
-			deeper: { within: box.paths.toSorted().join(','), parts: inside, files: box.files },
+			deeper: file ? null : { within: box.paths.toSorted().join(','), parts: inside, files: box.files },
+			...(file ? { source: { path: file, commit: look.head } } : {}),
 			knows: box.knows,
 		}
 	}
@@ -224,6 +238,10 @@ export function conceptReads(layout: LayoutSources, history: History) {
 		return {
 			...blank(arrowId(look.within, concept.n), 'arrow', `${arrow.from} to ${arrow.to}`, line),
 			explained: true,
+			trust:
+				arrow.text === 'imports'
+					? 'The quoted import shows a dependency. It does not show which operation runs.'
+					: 'ken checked the quoted lines in git. The arrow describes what its model inferred from them.',
 			quotes: fileQuotes(arrow.quotes),
 		}
 	}
@@ -377,7 +395,8 @@ export function conceptReads(layout: LayoutSources, history: History) {
 		const files = await Promise.all(
 			look.boxes.flatMap((box, at) => {
 				const [path] = box.paths
-				const file = box.files === 1 && box.paths.length === 1 && path?.split('/').at(-1) === box.name
+				const file =
+					box.file || (look.named && box.files === 1 && box.paths.length === 1 && path?.split('/').at(-1) === box.name)
 				if (!file || !path) return []
 				return [fileTold(box.name, path, look.head, told[at]?.line ?? null)]
 			}),

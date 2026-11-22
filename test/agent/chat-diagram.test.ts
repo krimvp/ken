@@ -68,7 +68,9 @@ async function ask(script: Turn[]) {
 }
 
 test('a diagram with true quotes is numbered, stored with its piece of work and read back after a restart; one arrow with a false quote sends back that diagram alone while the words and the claim stand', async () => {
-	const first = await ask([show(CALL), { text: '' }])
+	const first = await ask([{ tool: 'core__load_skill', args: { name: 'ken__diagrams' } }, show(CALL), { text: '' }])
+	const format = JSON.parse(toolResults(first.requests[1])[0] ?? '{}')
+	assert.deepEqual(format.items.properties.arrows.items.required, ['from', 'to', 'text', 'quotes'])
 	const drawn = cardsIn(first.events).find((card) => card.kind === 'diagram')
 	assert.ok(drawn?.kind === 'diagram' && drawn.diagram.kind === 'component')
 	const { diagram: checked } = drawn

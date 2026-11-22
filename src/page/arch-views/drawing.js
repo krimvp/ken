@@ -205,6 +205,7 @@ export function runtimeHtml(views, layout, view) {
 		if (parts.length === 1 && users.length === parts.length) view.storeColour.set(placed.id, view.colour(parts[0]))
 	}
 	const lit = view.litCrossings ?? new Set()
+	const stale = new Set(views.stale?.map((item) => item.id))
 	const frames = layout.frames.toSorted((a, b) => a.depth - b.depth).map((placed) => frameHtml(placed, view))
 	const things = layout.things.map((placed) => {
 		const kind = placed.thing.kind
@@ -220,7 +221,8 @@ export function runtimeHtml(views, layout, view) {
 		const crossings = line.crossings ?? (line.crossing ? [line.crossing.id] : [])
 		const picked = crossings.some((c) => view.brief === `crossing:${c}`)
 		const on = crossings.some((c) => lit.has(c))
-		const cls = `k-rt-line is-${line.kind}${picked ? ' is-picked' : ''}${on ? ' is-lit' : ''}`
+		const earlier = crossings.some((id) => stale.has(id))
+		const cls = `k-rt-line is-${line.kind}${earlier ? ' is-stale' : ''}${picked ? ' is-picked' : ''}${on ? ' is-lit' : ''}`
 		const ends =
 			line.kind === 'call' || line.kind === 'event'
 				? ` marker-end="url(#rt-head)"${line.both ? ' marker-start="url(#rt-head)"' : ''}`
@@ -243,7 +245,7 @@ export function runtimeHtml(views, layout, view) {
 		const shape = mid ? 'k-rt-knob' : 'k-rt-label'
 		const place = mid ? px({ x: mid.x - 13, y: mid.y - 13, w: 26, h: 26 }) : px(line.label)
 		labels.push(
-			`<button class="${shape} is-${line.kind}${picked ? ' is-picked' : ''}${on ? ' is-lit' : ''}" style="${place}" data-act="brief-open" data-concept="crossing:${esc(c.id)}" data-ends="${esc(`${c.from} ${c.to}`)}" data-key="line-${esc(c.id)}" aria-pressed="${picked}" aria-label="${esc(said)}">${line.words.map(esc).join('<br>')}</button>`,
+			`<button class="${shape} is-${line.kind}${picked ? ' is-picked' : ''}${on ? ' is-lit' : ''}" style="${place}" data-act="brief-open" data-concept="crossing:${esc(c.id)}" data-ends="${esc(`${c.from} ${c.to}`)}" data-key="line-${esc(c.id)}" aria-pressed="${picked}" aria-label="${esc(said)}${earlier ? '. Source changed.' : ''}">${line.words.map(esc).join('<br>')}</button>`,
 		)
 	}
 	const marks = layout.marks.map((m) => {
@@ -255,7 +257,7 @@ export function runtimeHtml(views, layout, view) {
 				: m.kind === 'sub'
 					? `${who} picks up ${m.topic}`
 					: `${who} publishes and picks up ${m.topic}`
-		return `<button class="k-rt-mark is-${m.kind}${picked ? ' is-picked' : ''}${lit.has(m.crossing) ? ' is-lit' : ''}" style="left:${m.x}px;top:${m.y}px" data-act="brief-open" data-concept="crossing:${esc(m.crossing)}" data-key="mark-${esc(m.thing)}-${esc(m.topic)}" aria-pressed="${picked}" aria-label="${esc(said)}"></button>`
+		return `<button class="k-rt-mark is-${m.kind}${picked ? ' is-picked' : ''}${lit.has(m.crossing) ? ' is-lit' : ''}" style="left:${m.x}px;top:${m.y}px" data-act="brief-open" data-concept="crossing:${esc(m.crossing)}" data-key="mark-${esc(m.thing)}-${esc(m.topic)}" aria-pressed="${picked}" aria-label="${esc(said)}${stale.has(m.crossing) ? '. Source changed.' : ''}"></button>`
 	})
 	const svg = (cls, body) =>
 		`<svg class="k-wires ${cls}" width="${layout.width}" height="${layout.height}" viewBox="0 0 ${layout.width} ${layout.height}" aria-hidden="true">${ARROWS}${body}</svg>`
@@ -322,6 +324,7 @@ export function runtimePictureHtml(layout, id, colour) {
 // crossing.
 export function worldHtml(views, layout, view) {
 	const { project } = layout
+	const stale = new Set(views.stale?.map((item) => item.id))
 	const tiles = project.tiles.map((tile) => {
 		const id = partId([], tile.name)
 		const picked = view.brief === id
@@ -340,7 +343,7 @@ export function worldHtml(views, layout, view) {
 					? [' marker-start="url(#rt-head)"', '']
 					: [' marker-start="url(#rt-head)"', ' marker-end="url(#rt-head)"']
 		lines.push(
-			`<path class="k-rt-line is-call${picked ? ' is-picked' : ''}" d="${pathOf(line.points)}"${start}${end}/>`,
+			`<path class="k-rt-line is-call${stale.has(c.id) ? ' is-stale' : ''}${picked ? ' is-picked' : ''}" d="${pathOf(line.points)}"${start}${end}/>`,
 		)
 		const other = view.outsideName(c.outside)
 		const said =
@@ -351,7 +354,7 @@ export function worldHtml(views, layout, view) {
 					: `Between the project and ${other}: ${line.words.join(' ')}`
 		if (line.label) {
 			labels.push(
-				`<button class="k-rt-label is-call is-world${picked ? ' is-picked' : ''}" style="${px(line.label)}" data-act="brief-open" data-concept="crossing:${esc(c.id)}" data-key="line-${esc(c.id)}" aria-pressed="${picked}" aria-label="${esc(said)}">${line.words.map(esc).join('<br>')}</button>`,
+				`<button class="k-rt-label is-call is-world${picked ? ' is-picked' : ''}" style="${px(line.label)}" data-act="brief-open" data-concept="crossing:${esc(c.id)}" data-key="line-${esc(c.id)}" aria-pressed="${picked}" aria-label="${esc(said)}${stale.has(c.id) ? '. Source changed.' : ''}">${line.words.map(esc).join('<br>')}</button>`,
 			)
 		}
 	}

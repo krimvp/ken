@@ -15,7 +15,12 @@ export function homeSeen(app, loads) {
 	// ken wrote something down: the level, what ken recorded and every brief are read again. A level being read
 	// anyway brings the change itself.
 	async function recorded() {
-		await Promise.all([state.home.reading ? null : loads.loadLayout(true), loads.loadReader(), app.rereadKnows()])
+		const inPartChange = state.shell?.page === 'changes' && state.chg.part
+		await Promise.all([
+			state.home.reading || inPartChange ? null : loads.loadLayout(true),
+			loads.loadReader(),
+			app.rereadKnows(),
+		])
 		render()
 	}
 

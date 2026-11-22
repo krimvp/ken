@@ -55,7 +55,7 @@ export async function openHistory(
 
 	async function readSaved(): Promise<SavedAnswer[]> {
 		return (await list()).flatMap((entry) =>
-			entry.outcome === 'answered' && entry.about === undefined
+			'reply' in entry && entry.about === undefined
 				? [{ id: entry.id, askedAt: entry.askedAt, head: entry.head, question: entry.question, reply: entry.reply }]
 				: [],
 		)

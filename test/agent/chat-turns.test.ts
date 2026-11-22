@@ -112,7 +112,26 @@ test('a follow-up keeps the answer and its sources, and can recall an older answ
 })
 
 test('asking for a brief loads only its card form and the next free question can show a checked claim', async () => {
-	const model = await scriptedModel([{ text: 'First brief.' }, { text: 'Next brief.' }, SHOW, { text: '' }])
+	const line = 'Retries run three times.'
+	const checked: Turn = {
+		tool: 'ken__show',
+		args: {
+			brief: {
+				number: 1,
+				line,
+				points: [
+					{
+						line,
+						more: line,
+						long: line,
+						drawing: { kind: 'dot' },
+						quotes: [{ path: 'src/retry.ts', text: 'export const TIMES = 3' }],
+					},
+				],
+			},
+		},
+	}
+	const model = await scriptedModel([checked, checked, SHOW, { text: '' }])
 	const started = await startChat({
 		directory: root,
 		model: { model: 'scripted', baseUrl: model.baseUrl, apiKeyEnv: KEY_ENV },
@@ -130,7 +149,12 @@ test('asking for a brief loads only its card form and the next free question can
 		await collect(
 			started.chat.ask('A brief', undefined, { kind: 'answer', concept: 'Retry', text: 'How many?', paths: [] }),
 		)
-		await collect(started.chat.ask('A tour', undefined, { kind: 'explain', tour: { within: [], stops: [] } }))
+		await collect(
+			started.chat.ask('A tour', undefined, {
+				kind: 'explain',
+				tour: { within: [], stops: [{ name: 'Retry', job: 'Retries', paths: ['src/retry.ts'] }] },
+			}),
+		)
 		const full = await collect(started.chat.ask('Show me the retry count.'))
 		assert.deepEqual(fields(model.requests[0]), ['brief'])
 		assert.deepEqual(fields(model.requests[1]), ['brief'], 'a tour offers only the brief')

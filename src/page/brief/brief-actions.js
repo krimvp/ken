@@ -63,6 +63,7 @@ export function briefActions(app) {
 			saveProblem: null,
 			said: null,
 			inner: undefined,
+			source: null,
 			focusName: true,
 		})
 		render()
@@ -180,13 +181,39 @@ export function briefActions(app) {
 		if (ui.id !== started.concept) return render()
 		if (started.kind === 'answer' && answered && answer) return show(answer, { inside: true })
 		if (!answered) {
-			const why = { stopped: 'You stopped the run.', unasked: q.error }[q.outcome] ?? q.error
+			const why =
+				{
+					incomplete: "ken's model did not give a brief with a checked point. You can ask again.",
+					stopped: 'You stopped the run.',
+					unasked: q.error,
+				}[q.outcome] ?? q.error
 			ui.problem = why ?? "ken's model gave no reply."
 		}
 		render()
 	}
 
+	async function readSource(start, ref, record = true) {
+		if (!ref) return
+		const { path, commit } = ref
+		const where = { path, commit, line: Number(start) }
+		const reading = { kind: 'reading', where }
+		ui.on = 'source'
+		ui.source = reading
+		render()
+		const query = new URLSearchParams({ path, at: commit, start })
+		const result = await app
+			.read(`/api/source?${query}`)
+			.catch((error) => ({ ok: false, body: { message: error.message } }))
+		if (ui.source !== reading || ui.on !== 'source') return
+		ui.source = result.ok ? { ...result.body, where } : { kind: 'error', where, message: result.body.message }
+		render()
+		$('#brief-scroll').scrollTop = 0
+		$('#brief-name')?.focus({ preventScroll: true })
+		if (record && result.ok && result.body.lines.length) void app.level.tell({ did: 'code', paths: [path] })
+	}
+
 	const actions = {
+		'brief-source': (el) => readSource(el.dataset.start, el.dataset.path ? el.dataset : ui.source?.where),
 		'brief-open': (el) => show(el.dataset.concept, { inside: Boolean(el.closest('#brief')), opener: el.dataset.key }),
 		'brief-close': close,
 		'brief-trail': (el) => show(ui.trail[Number(el.dataset.index)].id, { inside: true }),
@@ -194,6 +221,7 @@ export function briefActions(app) {
 			const way = el.dataset.way || null
 			ui.on = ui.on === way ? null : way
 			ui.fixing = false
+			if (ui.on === 'source') return readSource(1, open()?.source)
 			if (ui.on === 'deeper') readInner(open())
 			render()
 			$('#brief-scroll').scrollTop = 0
@@ -277,5 +305,5 @@ export function briefActions(app) {
 		show(id, { opener })
 	}
 
-	return { actions, show, close, draw, ended, submit, readPaths, open, project, ask }
+	return { actions, show, close, draw, ended, submit, readPaths, open, project, ask, readSource }
 }

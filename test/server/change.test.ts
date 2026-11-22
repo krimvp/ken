@@ -65,6 +65,17 @@ test('a change laid over the picture lists its commits newest first without the 
 	})
 	assert.equal(top.change.files, 3)
 
+	const part = await json(server, `/api/change/diff?change=${change}&within=src/a`)
+	assert.deepEqual(
+		part.commits.map((each: { hash: string }) => each.hash),
+		[hashes[1]],
+	)
+	assert.deepEqual(part.files, [{ path: 'src/a/y.ts', oldPath: 'src/a/y.ts' }])
+	assert.deepEqual(
+		part.hunks.flatMap((each: { hunk: { lines: string[] } }) => each.hunk.lines),
+		['+y', '+y'],
+	)
+
 	const inside = (await json(server, layoutOf(change, 'src'))).look
 	assert.deepEqual(
 		[inside.change.files, inside.change.outside],
@@ -91,6 +102,11 @@ test('a file moved from one box to another counts in both, each listing it by th
 			.find((box: { name: string }) => box.name === name)
 			.touched?.paths.map((each: { path: string }) => each.path)
 	assert.deepEqual([pathsIn('src'), pathsIn('lib')], [['src/a/x.ts'], ['lib/x.ts']])
+	for (const part of ['src', 'lib']) {
+		const moved = await json(server, `/api/change/diff?change=${change}&within=${part}`)
+		assert.deepEqual(moved.files, [{ oldPath: 'src/a/x.ts', path: 'lib/x.ts' }])
+		assert.deepEqual(moved.hunks, [], 'a move keeps both names without reporting a deletion or addition')
+	}
 	const inside = (await json(server, layoutOf(change, 'src'))).look
 	assert.deepEqual([inside.change.files, inside.change.outside], [1, []], 'src lost the file, and its box a holds it')
 })
@@ -178,6 +194,22 @@ test('a change asked as a span of time is the commits since then, a span with no
 	const asked = await ask(server, lens('since:2026-01-02'))
 	const replied = asked.find((line) => line.kind === 'replied')
 	assert.deepEqual([replied.reply.change.base, replied.reply.change.head], [second, third])
+})
+
+test('a small part still shows its changed lines when an unrelated patch exceeds the git output limit', async () => {
+	const { root, hashes } = buildRepository([
+		{ message: 'start', files: { 'part/limit\twith spaces.ts': '3\n' } },
+		{ message: 'raise the limit', files: { 'part/limit\twith spaces.ts': '5\n' } },
+		{ message: 'regenerate data', files: { 'data.txt': 'x'.repeat(17 * 1024 * 1024) } },
+	])
+	const server = await openKen(root, readerHome())
+	const view = await json(server, `/api/change/diff?within=part&change=${hashes[0]}..${hashes[2]}`)
+	assert.equal(view.hunks[0].path, 'part/limit\twith spaces.ts')
+	assert.deepEqual(view.hunks[0].hunk.lines, ['-3', '+5'])
+	assert.deepEqual(
+		view.commits.map((commit: { subject: string }) => commit.subject),
+		['raise the limit'],
+	)
 })
 
 test('the diff of a change comes from git for the files asked, as hunks with their line numbers, cut after 400 changed lines, and names the asked files that are binary', async () => {

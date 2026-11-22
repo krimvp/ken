@@ -7,7 +7,7 @@
 import { type LayoutSources, lookAtLayout, readLayoutAsk, tourOrder, under } from '../../layout/index.ts'
 import type { ReaderSeen } from '../../map/index.ts'
 import type { conceptReads } from './brief.ts'
-import { partId, questionId } from './concept.ts'
+import { parseConcept, partId, questionId } from './concept.ts'
 
 // 0 the project, 1 a part's brief, 2 the parts inside a part, 3 a question a brief lists.
 export type Layer = 0 | 1 | 2 | 3
@@ -15,7 +15,7 @@ export type Layer = 0 | 1 | 2 | 3
 // key is the job's name for what it makes (see lensKey). lens is what the page would send to have it made.
 export type LayerJob = {
 	key: string
-	kind: 'parts' | 'process' | 'explain' | 'inner' | 'answer'
+	kind: 'parts' | 'views' | 'process' | 'explain' | 'inner' | 'answer'
 	concept: string | null
 	title: string
 	order: number
@@ -59,6 +59,7 @@ export function lensKey(lens: unknown): string | null {
 
 export function layerPlan(layout: LayoutSources, reads: ReturnType<typeof conceptReads>, seen: ReaderSeen) {
 	let looking: Looking = { brief: null, within: null }
+	let openedArchitecture = false
 
 	async function levelAt(within: string[], now: Date) {
 		const ask = await readLayoutAsk(layout, { within, change: 'none' }, now)
@@ -81,6 +82,19 @@ export function layerPlan(layout: LayoutSources, reads: ReturnType<typeof concep
 			return [job({ kind: 'parts', concept: null, title: 'Naming the main parts', order: 0, layer: 0, lens })]
 		}
 		const jobs: LayerJob[] = []
+		const missingViews = openedArchitecture && !top.views?.world && !top.views?.runtime
+		if (missingViews || top.views?.stale?.length) {
+			jobs.push(
+				job({
+					kind: 'views',
+					concept: null,
+					title: missingViews ? 'Drawing the architecture' : 'Updating the architecture drawings',
+					order: 0,
+					layer: 0,
+					lens: { kind: 'views', within: [] },
+				}),
+			)
+		}
 		const [flow] = top.named.flows
 		const drawn = (await reads.processes([], now))?.processes ?? []
 		if (flow && drawn.length === 0) {
@@ -123,10 +137,14 @@ export function layerPlan(layout: LayoutSources, reads: ReturnType<typeof concep
 
 	// How near a job is to what the reader looks at: 2 when it fills it, 3 for the layer below a part they opened, 4
 	// for the rest. With a brief open the reader looks at that brief, not at the level behind the drawer.
-	function rankOf(job: { layer: Layer; concept: string | null }): 2 | 3 | 4 {
+	function rankOf(job: { layer: Layer; concept: string | null; kind?: string }): 2 | 3 | 4 {
 		const onTop = looking.within?.length === 0 && looking.brief === null
 		if (job.layer === 1 && (job.concept === looking.brief || onTop)) return 2
 		if (job.layer === 0 && onTop) return 2
+		if (job.kind === 'views' && looking.brief) {
+			const kind = parseConcept(looking.brief)?.kind
+			if (kind === 'outside' || kind === 'store' || kind === 'frame' || kind === 'crossing') return 2
+		}
 		if (job.layer === 2) return 3
 		return 4
 	}
@@ -137,6 +155,7 @@ export function layerPlan(layout: LayoutSources, reads: ReturnType<typeof concep
 		rankOf,
 		look(now: Looking) {
 			looking = now
+			if (now.within?.length === 0 && now.brief === null) openedArchitecture = true
 		},
 	}
 }

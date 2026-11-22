@@ -35,6 +35,10 @@
 	color: var(--k-ink);
 }
 
+.k-jobs-short {
+	display: none;
+}
+
 .k-jobs-now {
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -149,11 +153,18 @@
 }
 
 @media (max-width: 760px) {
+	.k-bar-end {
+		min-width: max-content;
+	}
+
 	.k .k-jobs-line {
 		padding: 4px 6px;
 	}
 
-	/* A phone has room for the dot alone; its label says what ken reads and how many runs wait. */
+	.k-jobs-short {
+		display: inline;
+	}
+
 	.k-jobs-now,
 	.k-jobs-wait {
 		display: none;
@@ -163,5 +174,18 @@
 		justify-content: center;
 		min-width: 44px;
 		min-height: 44px;
+	}
+}
+
+@media (max-width: 480px) {
+	.k-bar:has(.k-jobs-line) {
+		grid-template-columns: minmax(0, 1fr) auto;
+	}
+
+	.k-bar:has(.k-jobs-line) h1 {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		clip-path: inset(50%);
 	}
 }

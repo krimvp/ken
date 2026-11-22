@@ -15,9 +15,9 @@ import { readerIndex, readerNotes } from './reader-index.ts'
 import { quotesOf } from './reply/check-card.ts'
 import { fileTurn } from './reply/file-turn.ts'
 import { endReply } from './reply/record-reply.ts'
-import type { Item } from './reply/reply.ts'
+import { briefCoverage, checkedBriefs, type Item } from './reply/reply.ts'
 import { laterCommits, laterText, MAX_PASS_REJECTIONS, reviseTool, riskPassQuestion } from './reply/risk-pass.ts'
-import { type Asking, changeNamed, freshRound, type Round, showTool } from './reply/show-tool.ts'
+import { type Asking, changeNamed, freshRound, type Round, showFormats, showTool } from './reply/show-tool.ts'
 import { type SavedAnswer, threadMemory } from './reply/thread-memory.ts'
 import { SYSTEM_PROMPT } from './system-prompt.ts'
 import { describeCall } from './tools/describe-call.ts'
@@ -137,7 +137,7 @@ export async function startChat(options: {
 					...memory,
 					...sessionTools(sessions),
 					...remember,
-					showTool(gate, round, { shorten }),
+					showTool(gate, round, { shorten, freeQuestion: as.kind === 'question' }),
 					reviseTool(gate, round),
 				]
 		return createSession({
@@ -147,6 +147,7 @@ export async function startChat(options: {
 					name: PLUGIN,
 					description: "Reads the project's files, git history and saved sessions, and checks cards against them.",
 					tools: tools.map((tool) => withTurnsLeft(tool, run)),
+					...(as.kind === 'question' ? { skills: showFormats } : {}),
 				},
 			],
 			enabled: [PLUGIN],
@@ -222,6 +223,10 @@ export async function startChat(options: {
 		events: ReturnType<typeof eventQueue>,
 	): AsyncGenerator<ChatEvent> {
 		const current = run.round
+		const wanted =
+			as.kind === 'explain' ? as.tour.stops.map((part) => part.name) : as.kind === 'answer' ? [as.concept] : []
+		const wantsBrief = wanted.length > 0
+		let repairEndsAt = Number.POSITIVE_INFINITY
 		// The second look has its own stop, so ending it at its turn limit does not end the question.
 		const stops: Record<Round['step'], AbortController> = { talk: new AbortController(), risks: new AbortController() }
 		const tokens = { input: 0, output: 0 }
@@ -251,7 +256,7 @@ export async function startChat(options: {
 			events.push({ kind: 'item', item: words })
 		}
 		const unsubscribe = session.subscribe((event) => {
-			if (event.type === 'text') events.push({ kind: 'text', delta: event.delta })
+			if (event.type === 'text' && !wantsBrief) events.push({ kind: 'text', delta: event.delta })
 			if (event.type === 'tool_start') {
 				const name = event.call.name.replace(`${PLUGIN}__`, '')
 				events.push({ kind: 'tool', name, step: describeCall(name, event.call.args) })
@@ -276,11 +281,14 @@ export async function startChat(options: {
 				}
 				const text = event.turn.text.trim()
 				const showOnly = calls.length > 0 && calls.every(({ call }) => call.tool === 'show')
-				const writes = text !== '' && calls.every(({ call }) => call.tool === 'show')
+				const writes = !wantsBrief && text !== '' && calls.every(({ call }) => call.tool === 'show')
 				if (writes) settleRetry('step')
 				const again = showOnly && writes && sentBackBefore > 0 && current.step === 'talk'
 				if (again) retry = { text, at: current.items.length }
-				for (const filed of fileTurn(again ? { text: '', calls } : event.turn, current.pending.splice(0))) {
+				const pending = current.pending.splice(0)
+				const checked = wantsBrief ? checkedBriefs([...current.items, ...pending]) : null
+				const shown = checked ? pending.filter((item) => item.kind !== 'step' || checked.has(item.number)) : pending
+				for (const filed of fileTurn(again || wantsBrief ? { text: '', calls } : event.turn, shown)) {
 					if (filed.kind === 'item') current.items.push(filed.item)
 					events.push(filed)
 				}
@@ -288,11 +296,18 @@ export async function startChat(options: {
 				sentBackBefore = current.sentBack
 				// A brief's question says to write nothing after the briefs, so once each has passed, the turn that would
 				// only close the run is not asked for. aigent ends a run at a stop that comes as its turn ends.
-				if (showOnly && passed && current.step === 'talk' && briefsDone(current)) {
+				if (
+					showOnly &&
+					passed &&
+					current.step === 'talk' &&
+					wantsBrief &&
+					briefCoverage(current.items, wanted).outcome === 'answered'
+				) {
 					endedOnShow = true
 					stops.talk.abort()
 				}
 				// aigent stops the first step at its turns; the second look has fewer, so ken stops it.
+				if (current.step === 'talk' && run.turnsEnded >= repairEndsAt) stops.talk.abort()
 				if (current.step === 'risks' && run.turnsEnded >= STEPS.risks.turns) stops.risks.abort()
 			}
 			if (event.type === 'record' && event.record.kind === 'usage') {
@@ -312,9 +327,30 @@ export async function startChat(options: {
 			const opening = lens && !lens.followUp ? await lensOpening() : await chatOpening(question, as, signal)
 			const earlier = followUp ? thread.recent() : ''
 			const facts = lens ? await briefFacts(as, signal) : ''
-			const ran = await prompt(`${opening}${earlier}The question: ${question}${facts}`, stops.talk)
+			let ran = await prompt(`${opening}${earlier}The question: ${question}${facts}`, stops.talk)
+			if (
+				wantsBrief &&
+				ran.stop === 'done' &&
+				briefCoverage(current.items, wanted).outcome !== 'answered' &&
+				(ran.text.trim() !== '' || current.items.length > 0 || current.sentBack > 0) &&
+				!signal?.aborted &&
+				run.turnsEnded < STEPS.talk.turns
+			) {
+				// One more chance to read the source and show a brief. Text that looks like a call never runs as a tool.
+				repairEndsAt = Math.min(run.turnsEnded + 4, STEPS.talk.turns)
+				events.push({
+					kind: 'step',
+					step: { kind: 'text', text: 'Asked the model to send the missing brief with a checked quote.' },
+				})
+				ran = await prompt(
+					'Use native tool calls to read any source you still need and call ken__show with each missing brief and a point supported by a code quote. If the code leaves the answer open, say so in the brief and show what the code does establish. Do not write a tool call as text.',
+					stops.talk,
+				)
+			}
 			const result: RunResult =
-				endedOnShow && ran.stop === 'aborted' ? { stop: 'done', text: '', turns: ran.turns } : ran
+				(endedOnShow || run.turnsEnded >= repairEndsAt) && ran.stop === 'aborted' && !signal?.aborted
+					? { stop: 'done', text: '', turns: ran.turns }
+					: ran
 			settleRetry('reply')
 			let secondLook: Cost | null = null
 			const { scope } = current
@@ -342,9 +378,16 @@ export async function startChat(options: {
 			// Cards of a turn that never ended, and risks the second look did not settle, show as ken first checked them.
 			const unreviewed = current.held.splice(0).map((risk) => riskItem({ ...risk, unreviewed: true }))
 			file([...current.pending.splice(0), ...unreviewed])
-			if (current.items.length > 0 && !signal?.aborted) {
+			const coverage = wantsBrief ? briefCoverage(current.items, wanted) : null
+			const ending = endOf(result, current, coverage?.outcome ?? null)
+			if (
+				ending.kind === 'done' &&
+				(ending.outcome === 'answered' || ending.outcome === 'partial') &&
+				!signal?.aborted
+			) {
 				// Past this check the reply is whole, so a stop that comes while it is saved does not lose it.
 				const ended = await endReply(gate, current, new AbortController().signal)
+				if (coverage?.outcome === 'partial') ended.reply.missingParts = coverage.missing
 				if (ended.problems.length > 0) {
 					const what = 'The project record'
 					events.push({ kind: 'step', step: { kind: 'sent-back', what, problems: ended.problems } })
@@ -356,7 +399,7 @@ export async function startChat(options: {
 			}
 			const seconds = Math.round((performance.now() - started) / 100) / 10
 			events.push({ kind: 'usage', inputTokens: tokens.input, outputTokens: tokens.output, seconds, secondLook })
-			events.push(endOf(result, current))
+			events.push(ending)
 		}
 		// Git and the record can fail, and the stop can land in a git call, so every way out of talk ends the question.
 		const talking = talk()
@@ -433,14 +476,6 @@ function accepted(outcome: ToolOutcome): boolean {
 	return outcome.kind === 'ran' && !outcome.result.isError
 }
 
-// Every brief the question asks for has been shown: one for each part of a tour, or the one that answers a question.
-function briefsDone(round: Round): boolean {
-	const wanted = round.tour ? round.tour.stops.length : round.answers ? 1 : 0
-	if (wanted === 0) return false
-	const shown = new Set(round.items.flatMap((item) => (item.kind === 'step' ? [item.number] : [])))
-	return Array.from({ length: wanted }, (_, at) => at + 1).every((number) => shown.has(number))
-}
-
 function riskItem(risk: Round['held'][number]): Extract<Item, { kind: 'card' }> {
 	return { kind: 'card', card: { kind: 'risk', risk } }
 }
@@ -455,9 +490,15 @@ function costSince(
 
 const STOPPED = 'The question was stopped before it had a reply.'
 
-function endOf(result: RunResult, round: Round): ChatEvent {
+function endOf(
+	result: RunResult,
+	round: Round,
+	coverage: ReturnType<typeof briefCoverage>['outcome'] | null,
+): ChatEvent {
 	if (result.stop === 'aborted') return { kind: 'error', message: STOPPED }
-	if (round.items.length > 0) return { kind: 'done', outcome: 'answered' }
+	if (coverage === 'partial' || (coverage === 'incomplete' && result.stop !== 'error'))
+		return { kind: 'done', outcome: coverage }
+	if (coverage !== 'incomplete' && round.items.length > 0) return { kind: 'done', outcome: 'answered' }
 	if (result.stop === 'error') return { kind: 'error', message: result.message }
 	return { kind: 'done', outcome: result.stop === 'max_turns' ? 'out-of-turns' : 'no-answer' }
 }

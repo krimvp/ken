@@ -1,8 +1,8 @@
 // A level of the project's layout as ken's model names it: 2 to 6 parts, each a name, a one-line job and the paths it
 // holds, and at most 8 arrows between them. ken checks every path with git, and every arrow rests on quoted lines in a
 // file of the part it starts at that name a folder or file of the part it ends at, as an import line does, and are not
-// all comments. So an arrow is never the model's guess, and no parser is needed. ken stores git's id of each path, so it can tell later,
-// at any commit, which parts changed since the model named them.
+// all comments. ken checks the quoted code. The model supplies the verb. The git id of each path tells ken which
+// parts changed since the model named them.
 import { type GitQuote, type VerifiedGitQuote, verifyGitQuote } from '../checks/index.ts'
 import { type CommitHash, type ObjectId, parsePath, type RepoPath, type Repository } from '../repo/index.ts'
 import { checkViews, type ViewsDraft, viewsDraft } from './views/check-views.ts'
