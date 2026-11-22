@@ -6,7 +6,7 @@ import { icon } from '../shell/icons.js'
 import { count, esc, prose } from '../views/format.js'
 
 // What the run that names the parts costs the reader, said before it starts and while it runs.
-export const NAMING_TAKES = 'a minute or two'
+const NAMING_TAKES = 'a few minutes'
 const SHOWN_LANGUAGES = 4
 const SHOWN_ENTRIES = 4
 const DAY = 86_400_000
@@ -71,13 +71,19 @@ function factsHtml(first) {
 	</dl>`
 }
 
+// Why the last run named nothing: the reader stopped it, or it failed.
+const endedLine = (ended) =>
+	ended.outcome === 'stopped'
+		? ' You stopped the last run.'
+		: ` The last run named nothing${ended.error ? `: ${esc(ended.error)}` : '.'}`
+
 // What ken does next, by the state of the run that names the parts.
-function nextHtml({ look, env }) {
+function nextHtml({ look, env, home }) {
 	const run = env.running?.onHome
 	if (run?.kind === 'name') {
 		const tools = env.running.q.steps.filter((step) => step.kind === 'tool').length
 		const by = run.auto ? ' ken started this by itself, since you opened the project for the first time.' : ''
-		return `<div class="k-first-next is-running" role="status"><span class="k-spin" aria-hidden="true"></span><p><b>ken is reading the project to name its main parts and draw how it works.</b> That takes ${NAMING_TAKES}. <span class="k-clock k-num">${Math.round(env.seconds)} s so far, ${count(tools, 'action', 'actions')}.</span>${by} You can use the pages meanwhile.</p><button class="k-btn is-quiet" data-act="stop" data-key="first-stop">Stop</button></div>`
+		return `<div class="k-first-next is-running" role="status"><span class="k-spin" aria-hidden="true"></span><p><b>ken is reading the project to name its main parts and draw how it works.</b> That takes ${NAMING_TAKES}. <span class="k-clock k-num">${Math.round(env.seconds)} s so far, ${count(tools, 'action', 'actions')}</span>.${by} You can use the pages meanwhile.</p><button class="k-btn is-quiet" data-act="stop" data-key="first-stop">Stop</button></div>`
 	}
 	if (env.model?.kind !== 'ok') {
 		const example = env.model?.example
@@ -87,7 +93,8 @@ function nextHtml({ look, env }) {
 	}
 	const why = env.off ? esc(env.off) : `One run of ken's model, ${NAMING_TAKES}.`
 	const where = look.boxes.length > 0 ? ' Until then the Architecture page shows the folders.' : ''
-	return `<div class="k-first-next"><p><b>ken's model has not named the main parts yet.</b>${where}</p><button class="k-btn" data-act="first-name" data-key="first-name"${env.off ? ' disabled' : ''}>Ask ken to name them</button><span class="k-muted">${why}</span></div>`
+	const ended = home.ended?.kind === 'nothing' ? endedLine(home.ended) : ''
+	return `<div class="k-first-next"><p><b>ken's model has not named the main parts yet.</b>${ended}${where}</p><button class="k-btn" data-act="first-name" data-key="first-name"${env.off ? ' disabled' : ''}>Ask ken to name them</button><span class="k-muted">${why}</span></div>`
 }
 
 // The main process: a drawn one as a route through its parts, or else the one ken's model named, offered to draw.
@@ -101,7 +108,8 @@ function processHtml({ look, concepts, briefOf, env, routeHtml }) {
 	}
 	const flow = look.named.flows[0]
 	if (!flow) return ''
-	return `<div class="k-first-proc"><span class="k-route is-plain">${icon('processes')}</span><span><span class="k-eyebrow">The main process, as ken's model named it</span><b>${prose(flow)}</b></span><button class="k-link" data-act="first-draw" data-key="first-draw"${env.off ? ' disabled' : ''}>Draw it</button><span class="k-muted">${env.off ? esc(env.off) : "One run of ken's model."}</span></div>`
+	const cost = env.off ? esc(env.off) : "One run of ken's model."
+	return `<p class="k-first-flow">The main process, as ken's model named it: <b>${prose(flow)}</b>. <button class="k-link" data-act="first-draw" data-key="first-draw"${env.off ? ' disabled' : ''}>Draw it</button> <span class="k-muted">${cost}</span></p>`
 }
 
 // view is the Home's view, with first as GET /api/first-look sends it and env as the page's. mapHtml draws the parts

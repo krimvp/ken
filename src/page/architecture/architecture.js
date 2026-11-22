@@ -155,7 +155,7 @@ function runHtml(home, env) {
 	if (run && DOING[run.kind]) {
 		const tools = env.running.q.steps.filter((step) => step.kind === 'tool').length
 		const by = run.auto ? ' ken started this by itself, since you opened the project for the first time.' : ''
-		return `<div class="k-float k-run" role="status"><span class="k-spin" aria-hidden="true"></span><span><b>${DOING[run.kind][1]}.</b> <span class="k-clock k-num">${Math.round(env.seconds)} s so far, ${count(tools, 'action', 'actions')}.</span>${by}</span><button class="k-link" data-act="stop" data-key="run-stop">Stop</button></div>`
+		return `<div class="k-float k-run" role="status"><span class="k-spin" aria-hidden="true"></span><span><b>${DOING[run.kind][1]}.</b> <span class="k-clock k-num">${Math.round(env.seconds)} s so far, ${count(tools, 'action', 'actions')}</span>.${by}</span><button class="k-link" data-act="stop" data-key="run-stop">Stop</button></div>`
 	}
 	const close = (act) =>
 		`<button class="k-icon-btn" data-act="${act}" data-key="${act}" aria-label="Close this">${icon('close')}</button>`

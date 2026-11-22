@@ -563,6 +563,10 @@
 	font-size: 16px;
 }
 
+.k-first-flow {
+	margin: 0;
+}
+
 /* Folders on the Architecture tile, before ken's model names the parts: a row each, with a bar for its lines. */
 .k-mini-rows {
 	display: grid;
@@ -654,6 +658,15 @@
 
 	.k-first {
 		padding: 18px;
+	}
+
+	/* On a phone what ken does next comes right under the quote, and the facts after it. */
+	.k-first-facts {
+		order: 1;
+	}
+
+	.k-first-quote blockquote {
+		font-size: 15px;
 	}
 
 	.k-first-facts > div {
