@@ -8,6 +8,10 @@ const picture: {
 	placeParts: (count: number, links: [number, number][]) => { rows: number; cols: number; cells: Cell[] }
 	placeColumn: (count: number, links: [number, number][]) => number[]
 } = await import(path.join(import.meta.dirname, '../../src/page/project/parts-picture.js'))
+const colours: {
+	learnParts: (parts: { name: string; paths: string[] }[]) => void
+	partClass: (name: string) => string
+} = await import(path.join(import.meta.dirname, '../../src/page/project/part-colours.js'))
 
 // A link is [the part that uses, the part it uses]. The parts are listed with the used ones first, as a level often
 // lists them, so the rule cannot hold by the order of the list.
@@ -36,4 +40,16 @@ test('a part two others use sits under both of them', () => {
 		[2, 0],
 	])
 	assert.deepEqual([cells[1]?.row, cells[2]?.row, cells[0]?.row], [0, 0, 1])
+})
+
+test('a part keeps its colour when ken draws the level again with other parts around it', () => {
+	const named = (...names: string[]) => names.map((name) => ({ name, paths: [name.toLowerCase()] }))
+	colours.learnParts(named('Engine', 'Eval harness', 'Tests'))
+	const before = colours.partClass('Tests')
+	assert.notEqual(before, '', 'a part of the level has a colour')
+	assert.notEqual(colours.partClass('Engine'), colours.partClass('Eval harness'), 'and no two parts share one')
+
+	colours.learnParts(named('Tests', 'Product'))
+	assert.equal(colours.partClass('Tests'), before, 'fewer, bigger parts: Tests moved up the list and kept its colour')
+	assert.equal(colours.partClass('Engine'), '', 'a part that is gone has none')
 })
