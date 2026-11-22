@@ -253,14 +253,14 @@ export async function startChat(options: {
 			}
 		})
 		const started = performance.now()
-		const opening = lens ? await lensOpening() : await chatOpening(signal)
-		const facts = lens ? await briefFacts(as, signal) : ''
 		const prompt = async (text: string, own: AbortController): Promise<RunResult> =>
 			await runner
 				.prompt(text, { signal: signal ? AbortSignal.any([signal, own.signal]) : own.signal })
 				.catch((error: unknown): RunResult => ({ stop: 'error', message: String(error), turns: 0 }))
 		const talk = async () => {
 			if (as.kind === 'change') events.push(await changeNamed(repo, as.range, signal))
+			const opening = lens ? await lensOpening() : await chatOpening(signal)
+			const facts = lens ? await briefFacts(as, signal) : ''
 			const ran = await prompt(`${opening}The question: ${question}${facts}`, stops.talk)
 			const result: RunResult =
 				endedOnShow && ran.stop === 'aborted' ? { stop: 'done', text: '', turns: ran.turns } : ran
