@@ -143,7 +143,7 @@ test("ken suggests catching up on what landed since the reader's own last commit
 	assert.match(wayIn.why, /\b1 commit\b/)
 })
 
-test("when the reader's last question was asked at a commit the history no longer holds, ken does not claim that nothing landed since they looked", async () => {
+test("when the reader's last question was asked at a commit the history no longer holds, ken suggests learning and still counts what landed in the last days", async () => {
 	const bo = { name: 'Bo Other', email: 'bo@example.com' }
 	const { root } = buildRepository([{ message: 'feat: start', files: { 'src/a/x.ts': 'x\n' }, author: bo }])
 	const model = await scriptedModel([{ text: 'It holds x.' }])
@@ -155,8 +155,8 @@ test("when the reader's last question was asked at a commit the history no longe
 
 	const { wayIn } = await json(server, '/api/layout')
 	assert.equal(wayIn.suggested, 'learn')
+	assert.equal(wayIn.facts.learn, '1 folder')
 	assert.match(wayIn.facts['catch-up'], /^1 commit /, 'a commit did land in the last days')
-	assert.doesNotMatch(wayIn.why, /nothing landed/i)
 })
 
 test('a GitHub merge is named by its pull request number, not by the branch it came from, in the review fact and in a question about it', async () => {
