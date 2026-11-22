@@ -387,7 +387,7 @@ export function canvasHtml(home, rows) {
 	const drawn = home.content.kind === 'drawn'
 	// The tabs and the picker share the line of the level's name while the canvas has room, so they take no height
 	// from the picture. The way in and the change laid over belong to the parts, so a drawn picture shows without them.
-	const head = `<div class="home-head">${name}${tabsHtml(home)}${drawn ? '' : pickerHtml(home, rows)}</div>`
+	const head = `<div class="home-head">${name}${drawn ? '' : pickerHtml(home, rows)}${tabsHtml(home)}</div>`
 	const about = look.named?.about ? `<p class="home-about">${prose(look.named.about)}</p>` : ''
 	const reading = home.reading ? READING : ''
 	if (drawn) return `${head}${about}${reading}${drawnHtml(home.content)}`

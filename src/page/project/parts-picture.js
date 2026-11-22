@@ -385,6 +385,16 @@ function placeLabels(picture, links, curves, rects, frame, compact) {
 	layer.setAttribute('aria-hidden', 'true')
 	picture.append(layer)
 	const taken = rects.map((r) => ({ x: r.x - CLEAR, y: r.y - CLEAR, w: r.w + 2 * CLEAR, h: r.h + 2 * CLEAR }))
+	// A badge hangs over the edge of its box, so a label keeps off it as it keeps off the box.
+	for (const badge of picture.querySelectorAll('.pv-badge')) {
+		const r = badge.getBoundingClientRect()
+		taken.push({
+			x: r.left - frame.left - CLEAR,
+			y: r.top - frame.top - CLEAR,
+			w: r.width + 2 * CLEAR,
+			h: r.height + 2 * CLEAR,
+		})
+	}
 	const lines = curves.map((curve) => (curve ? samples(curve) : []))
 	const heads = lines.flatMap((line, k) =>
 		line.filter((p) => Math.hypot(p.x - curves[k][3].x, p.y - curves[k][3].y) <= HEAD),
