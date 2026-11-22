@@ -23,12 +23,12 @@ import { tourKey } from './project/tour-card.js'
 import { partOf, stepDiffHtml, stopState, stopTopics, tourStart, walkOf } from './project/walk.js'
 import { readerPrefs } from './shell/prefs.js'
 import { freshShell, shellActions } from './shell/shell-actions.js'
-import { allQuotesHtml, checksHtml, quoteCardHtml } from './views/checks.js'
+import { checksHtml, quoteCardHtml } from './views/checks.js'
 import { decisionsViewHtml } from './views/decisions.js'
 import { elementKey } from './views/diagram.js'
 import { count, duration, esc, projectHtml, prose, short, when } from './views/format.js'
 import { changedLine, changedTopics, lensHtml } from './views/map.js'
-import { openCount, openViewHtml } from './views/open.js'
+import { changedParts, openCount, openViewHtml } from './views/open.js'
 import { cardsOf, isMoved, itemsOf, knowPartHtml, LEGEND, replyHtml, stepCardsHtml } from './views/reply.js'
 import { endedHtml, noChecksPanelHtml, noModelHtml, stepsHtml, workingHtml } from './views/states.js'
 import { freshYou, youActions } from './you/you-actions.js'
@@ -86,13 +86,10 @@ const state = {
 	menuOpen: false,
 	lensesOpen: false,
 	problem: null,
-	// "home" shows the project as a picture and "question" a thread. "map" shows the reader's understanding map,
-	// "decisions" the record's decisions, "follow-up" what is open, and "live" the notes of live mode. base is the one
-	// of home and question the reader was on last, which the other views close back to.
+	// "home" shows the pages and "question" a thread over them. base is the one the reader was on last.
 	view: 'home',
 	base: 'home',
 	map: null,
-	mapSaid: '',
 	decisions: null,
 	decisionsKey: false,
 	ui: freshUi(),
@@ -137,7 +134,11 @@ function store(name, value) {
 }
 
 // The open decisions and quotes of the view on screen.
-const uiNow = () => ({ 'follow-up': state.followUi, live: state.liveUi })[state.view] ?? state.ui
+// What waits on the reader and live mode are tabs of the Changes page, each with its own open cards.
+const uiNow = () =>
+	state.view === 'home' && state.shell.page === 'changes'
+		? ({ decisions: state.followUi, live: state.liveUi }[state.chg.tab] ?? state.ui)
+		: state.ui
 
 // What each run the page starts is doing, by its kind.
 const DOING = { ...LEVEL_RUNS, views: VIEWS_RUN }
@@ -278,25 +279,25 @@ async function send(body, onHome = null) {
 	const controller = new AbortController()
 	state.running = { q, controller, started: Date.now(), onHome }
 	let saved = null
-	if (onHome === null) {
-		// A question joins the chat ken talks in now, so the page shows that chat's thread with it at the end.
-		if (state.thread[0]?.thread !== thread) {
-			state.thread = await threadOf(thread)
-			state.ui = freshUi()
-		}
-		state.thread = [...state.thread, q]
-		state.open = picked = q
-		state.menuOpen = false
-		state.ask.open = false
-		state.view = state.base = 'question'
-		if (!body.lens) $('#question').value = ''
-		resizeBox()
-		// On a phone the keyboard would cover the answer as it arrives.
-		if (!state.ui.wide) $('#question').blur()
-	}
-	render()
-	if (onHome === null) $(`#turn-${state.thread.length - 1}`)?.scrollIntoView({ block: 'start' })
 	try {
+		if (onHome === null) {
+			// A question joins the chat ken talks in now, so the page shows that chat's thread with it at the end.
+			if (state.thread[0]?.thread !== thread) {
+				state.thread = await threadOf(thread)
+				state.ui = freshUi()
+			}
+			state.thread = [...state.thread, q]
+			state.open = picked = q
+			state.menuOpen = false
+			state.ask.open = false
+			state.view = state.base = 'question'
+			if (!body.lens) $('#question').value = ''
+			resizeBox()
+			// On a phone the keyboard would cover the answer as it arrives.
+			if (!state.ui.wide) $('#question').blur()
+		}
+		render()
+		if (onHome === null) $(`#turn-${state.thread.length - 1}`)?.scrollIntoView({ block: 'start' })
 		const response = await fetch('/api/questions', {
 			method: 'POST',
 			headers: { 'content-type': 'application/json' },
@@ -331,30 +332,39 @@ async function send(body, onHome = null) {
 		} else {
 			q.outcome = 'error'
 			q.error = `ken stopped answering (${error.message}). Check that ken open is still running in the terminal.`
+			if (!state.thread.includes(q) && onHome === null) state.problem = q.error
 		}
 	} finally {
-		q.live = false
-		q.typing = ''
-		// The run stays the running one until its result is on screen, so no other run can start in between.
-		await Promise.all([loadRows(), loadFollowUp()])
-		// ken saves a stopped question a moment after the page lets go of it, so the list is read once more.
-		if (controller.signal.aborted && state.rows.at(-1)?.question !== q.question) {
-			await new Promise((resolve) => setTimeout(resolve, 500))
-			await loadRows()
-		}
-		const last = state.rows.at(-1)
-		// A stopped question has no saved line, so it is read back from the history.
-		const stopped = controller.signal.aborted && last?.question === q.question
-		const made = saved ?? (stopped ? { ...q, id: last.id } : q)
-		await shell.reread()
-		if (onHome?.kind === 'explain' || onHome?.kind === 'answer') await brief.ended(onHome, made)
-		else if (onHome?.kind === 'draw') await procs.ended(made)
-		else if (onHome?.kind === 'views') await arch.viewsEnded(made)
-		else if (onHome !== null) await level.ended(onHome, made)
-		else if (state.thread.includes(q) && stopped) await openQuestion(last.id)
+		// The run stays the running one until its result is on screen, so no other run can start in between. A read
+		// that fails here still lets go of the run.
+		await runEnded(q, saved, controller, onHome).catch((error) => {
+			state.problem = error.message
+		})
 		state.running = null
 		render()
 	}
+}
+
+// What a run leaves once it is over: the lists read again, and the page or brief it started from told what it made.
+async function runEnded(q, saved, controller, onHome) {
+	q.live = false
+	q.typing = ''
+	await Promise.all([loadRows(), loadFollowUp()])
+	// ken saves a stopped question a moment after the page lets go of it, so the list is read once more.
+	if (controller.signal.aborted && state.rows.at(-1)?.question !== q.question) {
+		await new Promise((resolve) => setTimeout(resolve, 500))
+		await loadRows()
+	}
+	const last = state.rows.at(-1)
+	// A stopped question has no saved line, so it is read back from the history.
+	const stopped = controller.signal.aborted && last?.question === q.question
+	const made = saved ?? (stopped ? { ...q, id: last.id } : q)
+	await shell.reread()
+	if (onHome?.kind === 'explain' || onHome?.kind === 'answer') await brief.ended(onHome, made)
+	else if (onHome?.kind === 'draw') await procs.ended(made)
+	else if (onHome?.kind === 'views') await arch.viewsEnded(made)
+	else if (onHome !== null) await level.ended(onHome, made)
+	else if (state.thread.includes(q) && stopped) await openQuestion(last.id)
 }
 
 async function loadRows() {
@@ -531,7 +541,6 @@ function panelHtml() {
 	if (!q || !ui.wide || state.view !== 'question') return ''
 	const items = itemsOf(state.thread)
 	if (ui.panel.kind === 'quote') return quoteCardHtml(ui, items)
-	if (ui.panel.kind === 'all') return allQuotesHtml(items)
 	if (ui.panel.kind === 'walk') return walkPanelHtml(ui.panel.t, ui.walkAt.get(ui.panel.t))
 	if (!q.reply || cardsOf(q, 0).length === 0) return noChecksPanelHtml(q.live)
 	return checksHtml(q, ui, state.thread.at(-1) === q ? null : when(q.askedAt))
@@ -833,8 +842,9 @@ function closePanel() {
 		return true
 	}
 	render()
-	const back = shown.kind === 'quote' ? `${shown.key}-q${shown.quote}` : 'all-quotes'
-	document.querySelector(`[data-key="${back}"]`)?.focus({ preventScroll: true })
+	if (shown.kind === 'quote') {
+		document.querySelector(`[data-key="${shown.key}-q${shown.quote}"]`)?.focus({ preventScroll: true })
+	}
 	return true
 }
 
@@ -961,8 +971,8 @@ state.shell = freshShell(app.prefs.prefs)
 app.briefs = briefStore(app)
 app.briefPaths = () => brief.readPaths()
 app.reread = () => shell.reread()
+app.rereadKnows = () => shell.rereadKnows()
 const level = levelActions(app)
-app.home = level
 app.level = level
 const ask = askActions(app)
 app.ask = ask
@@ -986,7 +996,8 @@ app.older = {
 			const seen = { seen: state.liveSeen, hideAsk: state.hideAsk }
 			return liveViewHtml(state.live, state.liveUi, state.unfolded, canAsk, state.liveProblem, seen)
 		}
-		const open = openViewHtml(state.followUp, state.followUi, canAsk, state.followSaid, state.followDecided)
+		const parts = changedParts(state.shell.top?.look)
+		const open = openViewHtml(state.followUp, state.followUi, canAsk, state.followSaid, state.followDecided, parts)
 		return `${open}${decisionsViewHtml(state.decisions, state.decisionsKey)}`
 	},
 	async load(tab) {
@@ -1012,7 +1023,7 @@ app.older = {
 			state.decisions = []
 		}
 	},
-	waiting: () => openCount(state.followUp),
+	waiting: () => openCount(state.followUp, changedParts(state.shell.top?.look)),
 	live: () => liveLook(state.liveStatus),
 }
 const shell = shellActions(app)
@@ -1040,8 +1051,6 @@ const actions = {
 	...chg.actions,
 	// What waits on the reader, the record's decisions and live mode are tabs of the Changes page now.
 	'follow-up': () => shell.goTab('decisions'),
-	decisions: () => shell.goTab('decisions'),
-	live: () => shell.goTab('live'),
 	'back-page'() {
 		state.view = state.base = 'home'
 		render()
@@ -1082,10 +1091,6 @@ const actions = {
 			() => post('/api/map', { signal: 'know', topics: [el.dataset.topic] }),
 			`Saved. Your map says you know ${el.dataset.topic}, as the code is now.`,
 		),
-	'map-topic-know': (el) =>
-		mapTopic('know', el.dataset.topic, `Saved. Your map says you know ${el.dataset.topic}, as the code is now.`),
-	'map-topic-forgot': (el) =>
-		mapTopic('forgot', el.dataset.topic, `Saved. Your map says you do not know ${el.dataset.topic} any more.`),
 	'map-know': (el) => postMap('know', Number(el.dataset.turn)),
 	'map-too-much': (el) => postMap('too-much', Number(el.dataset.turn)),
 	'map-deeper'(el) {
@@ -1137,24 +1142,6 @@ const actions = {
 		render()
 		// "Show all" goes away once the lines are open, so the quote's own row takes the focus.
 		if (el.matches('.q-all')) document.querySelector(`[data-key="${key}-q${quote}"]`)?.focus({ preventScroll: true })
-	},
-	'all-quotes'() {
-		const ui = state.ui
-		if (ui.wide) {
-			ui.panel = ui.panel.kind === 'all' ? CHECKS : { kind: 'all' }
-			render()
-			$('#panel').scrollTop = 0
-			return
-		}
-		const items = itemsOf(state.thread)
-		const keys = items.flatMap(({ key, item }) => item.quotes.map((_, j) => `${key}-q${j}`))
-		const allOpen = keys.every((key) => ui.openQuotes.has(key))
-		ui.openQuotes = allOpen ? new Set() : new Set(keys)
-		if (!allOpen) {
-			for (const { key, kind } of items) if (kind === 'decision') ui.openDecisions.add(key)
-			for (const { key, kind } of items) if (kind === 'element') ui.openParts.add(key.match(/^g([\w-]+)n/)[1])
-		}
-		render()
 	},
 	decision(el) {
 		toggle(uiNow().openDecisions, el.dataset.item)
@@ -1426,12 +1413,12 @@ setInterval(async () => {
 }, 3000)
 
 try {
-	const [server, recent] = await Promise.all([
-		getJson('/api/state'),
-		getJson('/api/authors'),
-		loadRows(),
-		loadFollowUp(),
-	])
+	// The saved questions come first, since a page finds its stored replies among them. The place the address names
+	// is read while the rest comes, so the first page does not wait on the server's state.
+	const reads = Promise.all([getJson('/api/state'), getJson('/api/authors'), loadFollowUp()])
+	await loadRows()
+	const started = shell.start()
+	const [server, recent] = await reads
 	state.project = { name: server.name, folder: server.project }
 	state.home.project = server.name
 	learnParts(server.parts)
@@ -1441,7 +1428,7 @@ try {
 	render()
 	// An address that names a reply opens it over the pages. A reply ken no longer has leaves the Home page.
 	const reply = readReply(location.hash)
-	await shell.start()
+	await started
 	if (reply) await actions.open({ dataset: { id: reply } }).catch(() => {})
 } catch (error) {
 	state.home.problem = {

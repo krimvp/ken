@@ -117,9 +117,15 @@ export function gitRepository(root: string, options: { alternate?: string } = {}
 			}
 			const merges = await count(['--merges', ...range])
 			const commits = parseLog(run.stdout).map(({ paths: _, ...commit }) => commit)
-			if (commits.length <= limit) return { kind: 'ok', commits, more: 0, merges }
-			// Only a range longer than the limit is counted.
-			return { kind: 'ok', commits: commits.slice(0, limit), more: (await count(shared)) - limit, merges }
+			if (commits.length <= limit) return { kind: 'ok', commits, more: 0, merges, oldest: commits.at(-1)?.date ?? null }
+			// Only a range longer than the limit is counted, and its oldest commit read alone.
+			const total = await count(shared)
+			const last = await git(
+				['log', '-z', '--no-color', `--skip=${total - 1}`, '--max-count=1', LOG_FORMAT, ...shared],
+				signal,
+			)
+			const oldest = last.kind === 'ok' ? (parseLog(last.stdout)[0]?.date ?? null) : null
+			return { kind: 'ok', commits: commits.slice(0, limit), more: total - limit, merges, oldest }
 		},
 
 		async lastCommitBy(head, email, signal) {

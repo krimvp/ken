@@ -114,7 +114,8 @@ test('what to look at next leads with the part that changed since the reader rea
 	if (named.kind !== 'appended') assert.fail(named.problems.join(' '))
 	await did(sources, 1, start, { did: 'read', paths: ['src/c'] })
 	await did(sources, 2, start, { did: 'opened', paths: ['src/a'] })
-	const head = commit(root, { 'src/c/z.ts': 'z2\n' })
+	commit(root, { 'src/c/z.ts': 'z2\n' })
+	const head = commit(root, { 'src/c/z.ts': 'z3\n' })
 	writeFileSync(path.join(root, 'src/b/y.ts'), 'y\nnot committed\n')
 
 	const seen = await look(sources)
@@ -163,4 +164,29 @@ test('a correction sets the level the reader picks in place of what came before,
 	await did(sources, 4, head, { did: 'set', level: 'new', paths: ['src/a'] })
 	const fresh = await a()
 	assert.deepEqual([fresh?.level, fresh?.stale, fresh?.go], ['new', false, { way: 'learn', detail: 'big' }])
+})
+
+test('a change the reader walks through after reading the part at HEAD does not count again the commits they already read', async () => {
+	const { root, hashes } = buildRepository([{ message: 'feat: start', files: START }])
+	const [start = ''] = hashes
+	const sources = await sourcesFor(root)
+	const merged = commit(root, { 'src/a/x.ts': 'x2\n' })
+	const head = commit(root, { 'src/a/x.ts': 'x3\n' })
+	await did(sources, 1, head, { did: 'code', paths: ['src/a'] })
+	// Later the reader walks through the older change, which ended one commit before HEAD.
+	await did(sources, 5, head, { did: 'change', paths: ['src/a/x.ts'], change: { base: start, head: merged } })
+	const { a } = knows(await look(sources))
+	assert.deepEqual([a?.since, a?.stale], [0, false])
+})
+
+test('a change to review comes before a part one commit touched since the reader read it, and after it when they said they know that part', async () => {
+	const { root, hashes } = buildRepository([{ message: 'feat: start', files: START }])
+	const sources = await sourcesFor(root)
+	await did(sources, 1, hashes[0] ?? '', { did: 'read', paths: ['src/a'] })
+	commit(root, { 'src/a/x.ts': 'x2\n' })
+	writeFileSync(path.join(root, 'src/b/y.ts'), 'y\nnot committed\n')
+	const kinds = async () => (await look(sources)).next.items.slice(0, 2).map((item) => item.kind)
+	assert.deepEqual(await kinds(), ['review', 'stale'])
+	await did(sources, 2, hashes[0] ?? '', { did: 'said', paths: ['src/a'] })
+	assert.deepEqual(await kinds(), ['stale', 'review'])
 })

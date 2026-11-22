@@ -97,7 +97,7 @@ export async function openServer(options: {
 			const file = told.files.find((each) => each.name === box.name)
 			return file ? { ...box, lines: file.lines, told: file.line } : box
 		})
-		return { look: { ...look, boxes, explained: told.explained }, changes, wayIn, levels: LEVELS }
+		return { look: { ...look, boxes, explained: told.explained.length }, changes, wayIn, levels: LEVELS }
 	}
 
 	async function route(request: IncomingMessage, response: ServerResponse) {

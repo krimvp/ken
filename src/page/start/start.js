@@ -5,15 +5,18 @@
 // like the page it stands for. On a first visit "Start here" is the project in two sentences and the path through
 // the pages.
 import { partId } from '../brief/concept-id.js'
+import { dayText } from '../changes/timeline.js'
 import { KNOWN, levelLabel } from '../level/level-state.js'
 import { partClass } from '../project/part-colours.js'
 import { placeParts } from '../project/parts-picture.js'
 import { icon, KIND_ICONS, levelMark } from '../shell/icons.js'
 import { count, esc, prose } from '../views/format.js'
-import { openCount } from '../views/open.js'
+import { changedParts, openCount } from '../views/open.js'
 
 // Concepts the tile lists.
 const SHOWN_CONCEPTS = 6
+const BAR_DAYS = 30
+const DAY = 86_400_000
 const SHOWN_PROCESSES = 2
 
 // What the button of "Start here" says, by the kind of the thing ken leads with.
@@ -77,9 +80,12 @@ function startHtml({ look, reader, project }) {
 			<button class="k-btn is-big" data-act="go-page" data-page="architecture" data-key="start-primary">See the architecture${icon('right')}</button>
 		</section>`
 	}
+	const about = look.named
+		? `<p class="k-home-about">${prose(look.named.about)} <button class="k-link" data-act="project-brief" data-key="home-about">Open the project's brief</button></p>`
+		: ''
 	const [lead, ...rest] = items
 	if (!lead) {
-		return `<section class="k-tile k-start" aria-labelledby="start-title">
+		return `${about}<section class="k-tile k-start" aria-labelledby="start-title">
 			<div class="k-start-pic">${mapHtml(look, { lit: [], key: 'start-map' })}</div>
 			<div class="k-start-words"><p class="k-eyebrow">Start here</p><h2 id="start-title">Nothing new since you looked</h2><p class="k-start-why">${look.named ? 'The architecture is as you left it.' : "ken's model has not named the parts of this project yet."}</p></div>
 			<button class="k-btn is-big" data-act="go-page" data-page="architecture" data-key="start-primary">See the architecture${icon('right')}</button>
@@ -87,7 +93,7 @@ function startHtml({ look, reader, project }) {
 	}
 	const stale = lead.kind === 'stale' ? look.boxes.find((box) => box.name === lead.parts[0])?.knows.since : null
 	const badge = stale ? `<span class="k-badge">${icon('changed')}<span class="k-num">${stale}</span></span>` : ''
-	return `<section class="k-tile k-start" aria-labelledby="start-title">
+	return `${about}<section class="k-tile k-start" aria-labelledby="start-title">
 		<div class="k-start-pic">${mapHtml(look, { lit: lead.parts, key: 'start-map' })}${badge}</div>
 		<div class="k-start-words"><p class="k-eyebrow">Start here</p><h2 id="start-title">${prose(lead.title)}</h2><p class="k-start-why">${prose(lead.why)}</p>
 			<div class="k-then">${rest
@@ -127,7 +133,7 @@ function conceptsHtml(look, concepts, home) {
 		const time = minutes ? `<span class="k-concept-min k-num">${minutes} min</span>` : ''
 		return `<li><button class="k-chip k-concept" data-act="brief-open" data-concept="${esc(each.id)}" data-key="concept-${i}">${lead}<span class="k-concept-name">${prose(each.name)}</span>${level}${time}</button></li>`
 	})
-	return `<section class="k-tile k-tile-concepts"><div class="k-tile-head"><h2 class="k-eyebrow">Concepts</h2><span class="k-tile-note">a few minutes each</span></div><ul class="k-concepts">${rows.join('')}</ul></section>`
+	return `<section class="k-tile k-tile-concepts"><div class="k-tile-head"><h2 class="k-eyebrow">Concepts</h2><span class="k-tile-note">minutes to read</span></div><ul class="k-concepts">${rows.join('')}</ul></section>`
 }
 
 // A process as a line through its stops, each in the colour of its part.
@@ -162,40 +168,37 @@ function processesHtml(concepts, briefOf) {
 	</section>`
 }
 
-// The commits that landed, as a small chart: one bar a day when the server sends the days, else one bar for each
-// span it counts.
+// The commits that landed, as a small chart of the last 30 days, with a frame round the days since the reader looked
+// at the first part that changed, or round the first span of time the server offers.
 function changesHtml(look, changes, timeline) {
-	const stale = look.boxes.filter((box) => box.knows.stale)
-	const spans = changes.filter((choice) => choice.kind === 'since')
-	const DAY = 86_400_000
-	// The title counts something since a day, and the chart frames the days since then.
-	let title = big(0, 'commits in the last 90 days')
-	let from = null
-	if (stale.length > 0) {
-		title = big(stale.length, `${stale.length === 1 ? 'part' : 'parts'} changed since you looked`)
-		// Since the reader last looked at the first of those parts.
-		const looked = stale.map((box) => Date.parse(box.knows.last ?? '') + DAY).filter(Number.isFinite)
+	const changed = changedParts(look)
+	const span = changes.find((choice) => choice.kind === 'since')
+	const tile = (body) => `<section class="k-tile">${head('Changes', 'changes', 'Open Changes')}${body}</section>`
+	if (changed.length === 0 && !span) return tile('<p class="k-tile-note">Nothing landed in the last 90 days.</p>')
+	let title
+	let from
+	if (changed.length > 0) {
+		title = big(changed.length, `${changed.length === 1 ? 'part' : 'parts'} changed since you looked`)
+		const looked = changed.map((box) => Date.parse(box.knows.last ?? '') + DAY).filter(Number.isFinite)
 		from = looked.length > 0 ? Math.min(...looked) : null
-	} else if (spans.length > 0) {
-		const span = spans[0].name.slice(0, spans[0].name.lastIndexOf(': '))
-		title = big(
-			spans[0].commits,
-			`${spans[0].commits === 1 ? 'commit' : 'commits'} in ${span.replace(/^The /, 'the ')}`,
-		)
-		const days = Number(span.match(/(\d+) days/)?.[1] ?? 0)
-		// ken counts from this time that many days ago, so the frame starts on that day.
-		from = days > 0 ? Date.now() - days * DAY : null
+	} else {
+		const named = span.name.slice(0, span.name.lastIndexOf(': '))
+		const words = span.days ? `in the last ${span.days} days` : `${named[0].toLowerCase()}${named.slice(1)}`
+		title = big(span.commits, `${span.commits === 1 ? 'commit' : 'commits'} ${words}`)
+		from = Date.parse(span.start)
 	}
-	return `<section class="k-tile">${head('Changes', 'changes', 'Open Changes')}${title}${timeline ? barsHtml(timeline.days, from) : ''}</section>`
+	const first = dayText(new Date(Date.now() - (BAR_DAYS - 1) * DAY).toISOString().slice(0, 10))
+	const key = `<p class="k-bars-key"><span>${esc(first)}</span><span>commits a day</span><span>today</span></p>`
+	return tile(`${title}${timeline ? `${barsHtml(timeline.days, from)}${key}` : ''}`)
 }
 
 // The commits of each of the last 30 days, one slot a day up to today, and a frame round the days from the time from,
 // when there is one.
 function barsHtml(days, from) {
-	const [w, h, slots] = [300, 84, 30]
+	const [w, h, slots] = [300, 84, BAR_DAYS]
 	const step = w / slots
 	const today = Date.parse(new Date().toISOString().slice(0, 10))
-	const slotOf = (time) => slots - 1 - Math.round((today - time) / 86_400_000)
+	const slotOf = (time) => slots - 1 - Math.round((today - time) / DAY)
 	const most = Math.max(1, ...days.map((each) => each.commits))
 	const since = from === null ? slots : Math.max(0, slotOf(Date.parse(new Date(from).toISOString().slice(0, 10))))
 	const bars = days
@@ -228,8 +231,8 @@ function youHtml(look, project) {
 	</section>`
 }
 
-function waitingHtml(followUp) {
-	const waiting = openCount(followUp)
+function waitingHtml(followUp, look) {
+	const waiting = openCount(followUp, changedParts(look))
 	if (waiting === 0) return ''
 	return `<button class="k-tile k-waiting" data-act="follow-up" data-key="tile-waiting">${icon('decision')}<span class="k-waiting-words"><b class="k-num">${waiting}</b> ${waiting === 1 ? 'thing waits' : 'things wait'} on you</span>${icon('right')}</button>`
 }
@@ -253,6 +256,6 @@ export function startPageHtml(view) {
 		${processesHtml(view.concepts, view.briefOf)}
 		${changesHtml(look, changes, view.timeline)}
 		${youHtml(look, project)}
-		${waitingHtml(view.followUp)}
+		${waitingHtml(view.followUp, look)}
 	</div>`
 }

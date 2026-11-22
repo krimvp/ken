@@ -272,6 +272,7 @@ export function viewQuestion(
 			'Use sequence for steps in order, component for calls between pieces, and entity-relationship for data.',
 			'A diagram of a path through the code shows every actor that decides something on it, the ones outside the code too, such as a person, a model or a database.',
 			`Give it a title of at most ${diagram.title} characters that says what it follows, at most ${diagram.nodes} participants, boxes or entities, and at most ${diagram.edges} messages, arrows or relations, each quoting the lines it rests on.`,
+			'Write each message in plain words, such as "sends the prompt to the agent", never code such as "session.prompt(text)": the code it calls is in its quote.',
 			'Then say in one or two sentences what it shows.',
 			'If neither a layout nor a diagram can do what I ask, say so plainly, and say what I can ask for instead.',
 		].join('\n'),
@@ -432,7 +433,7 @@ function pointRules({ bounds, drawings }: Pick<ExplainLevel, 'bounds' | 'drawing
 }
 
 const termRule = (bounds: ExplainLevel['bounds']) =>
-	`Give each its name as the code spells it, means: what it means in at most ${bounds.meansWords} words, and quote: one line where the code uses it.`
+	`Give each its name in the words people use for it, in lower case with spaces, such as "tool mode" for toolMode: never a name in camelCase, PascalCase or CAPITALS, and never a type, a constant or a function. The code's own name for it belongs only in quote. Give means: what it means in at most ${bounds.meansWords} words, and quote: one line where the code uses it.`
 
 const LAST_RULES = [
 	'Never write that I understand, know or have learned something. Say what the code does.',

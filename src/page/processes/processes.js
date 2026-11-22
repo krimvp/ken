@@ -11,6 +11,9 @@ import { routeHtml } from '../start/start.js'
 import { count, esc, prose, RUN_COST } from '../views/format.js'
 
 // Offered when the level was named before ken listed the processes worth drawing.
+// A name such as session.prompt(text) may break after a dot or a bracket; words break only between them.
+const breakable = (html) => html.replace(/(?<=[a-z])([.(])(?=[a-zA-Z])/g, '$1<wbr>')
+
 const FIXED_OFFERS = ['Follow one request through the code', 'How the project starts up']
 
 const nameOf = (id) => (id ? (readConcept(id)?.name ?? '') : '')
@@ -81,7 +84,7 @@ function lanesHtml(process, look, home) {
 		const colour = lane.part ? partClass(lane.name) : 'is-plain'
 		const cells = steps.map((step) =>
 			step.lane === l
-				? `<button class="k-step ${colour}" data-act="brief-open" data-concept="${esc(stepId(process.id, step.n))}" data-key="step-${step.n}" data-n="${step.n}" style="grid-row:${l + 1};grid-column:${step.n + 1}"><b class="k-step-n k-num">${step.n}</b><span>${prose(step.line)}</span></button>`
+				? `<button class="k-step ${colour}" data-act="brief-open" data-concept="${esc(stepId(process.id, step.n))}" data-key="step-${step.n}" data-n="${step.n}" style="grid-row:${l + 1};grid-column:${step.n + 1}"><b class="k-step-n k-num">${step.n}</b><span>${breakable(prose(step.line))}</span></button>`
 				: '',
 		)
 		return `<div class="k-lane ${colour}" style="grid-row:${l + 1}">${laneHead(lane, look, home)}</div>${cells.join('')}`

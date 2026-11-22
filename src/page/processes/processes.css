@@ -265,7 +265,8 @@
 	align-self: stretch;
 	display: -webkit-box;
 	overflow: hidden;
-	overflow-wrap: break-word;
+	overflow-wrap: normal;
+	hyphens: none;
 	-webkit-box-orient: vertical;
 	-webkit-line-clamp: 4;
 }

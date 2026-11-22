@@ -6,16 +6,16 @@
 const READ_MS = 10_000
 
 // app is the page: its state, render, post, briefPaths, which gives the files of the brief that is open, or null,
-// and reread, which reads again what the pages keep of the project. loads reads the level again.
+// and rereadKnows, which reads again what ken thinks the reader knows. loads reads the level again.
 export function homeSeen(app, loads) {
 	const { state, render, post } = app
 	// What the timer waits on, by what it would send: the same thing still on screen is not sent twice.
 	let waiting = null
 
-	// ken wrote something down: the level and the record are read again, unless a level is being read anyway.
+	// ken wrote something down: the level, what ken recorded and every brief are read again. A level being read
+	// anyway brings the change itself.
 	async function recorded() {
-		if (state.home.reading) return
-		await Promise.all([loads.loadLayout(true), loads.loadReader(), app.reread()])
+		await Promise.all([state.home.reading ? null : loads.loadLayout(true), loads.loadReader(), app.rereadKnows()])
 		render()
 	}
 

@@ -2,15 +2,20 @@
 // at a time, pick a change to review, ask ken's model for its story or its steps, and open a step as a brief with its
 // diff. The level, its change and the runs of ken's model are the level's (src/page/level); this module lays the
 // change over the top of the project and draws the page.
+import { pageBrief } from '../brief/briefs.js'
 import { stepFiles } from '../level/content.js'
 import { WHOLE } from '../level/level-state.js'
 import { stepDiffHtml, stepParts, stepWords, walkOf } from '../project/walk.js'
 import { fill } from '../shell/fill.js'
+import { esc } from '../views/format.js'
 import { wordsHtml } from '../views/reply.js'
-import { changesPageHtml, isSpan, spanChoices, spanOf } from './changes.js'
+import { changeName, changesPageHtml, shownInPart, spanChoices, spanOf } from './changes.js'
 import { dayAt, daysShown } from './timeline.js'
 
 const DAY = 86_400_000
+
+// What a brief made on the page says of where its words come from.
+const TRUST = "ken's model wrote the words. ken found each changed line in git."
 
 export const freshChanges = () => ({
 	tab: 'changes',
@@ -18,29 +23,6 @@ export const freshChanges = () => ({
 	drag: null,
 	// What the reader typed in "Another change" and has not sent.
 	typed: '',
-})
-
-// What a brief made on the page says of where its words come from.
-const TRUST = "ken's model wrote the words. ken found each changed line in git."
-
-const blank = (id, kind, name, line) => ({
-	id,
-	kind,
-	name,
-	line,
-	local: true,
-	minutes: Math.max(1, Math.round(line.split(/\s+/).length / 120)),
-	explained: true,
-	explain: null,
-	points: [],
-	terms: [],
-	questions: [],
-	decisions: [],
-	sideways: { uses: [], usedBy: [], processes: [] },
-	deeper: null,
-	steps: null,
-	knows: null,
-	trust: TRUST,
 })
 
 // app is the page: its state, render, the level's reads and runs, the store of briefs and the brief's drawer, and
@@ -70,7 +52,7 @@ export function changeActions(app) {
 		if (change) return show(change)
 		const kept = home.trail.length === 1 && home.change !== 'none' && home.look?.change
 		if (kept) return show(home.change)
-		const first = spanChoices(state.shell.top?.changes ?? home.changes, state.shell.timeline)[0]
+		const first = spanChoices(state.shell.top?.changes ?? home.changes)[0]
 		await show(first?.change ?? 'since:7d')
 	}
 
@@ -98,10 +80,14 @@ export function changeActions(app) {
 		if (!step || !look?.change) return
 		const { title, body } = stepWords(step)
 		const id = `change-step:${q.id}:${n}`
+		const part = shownInPart(look, stepFiles(step)).map(
+			({ path, added, removed, whole }) =>
+				`<p class="k-muted">This step shows part of the change to <code>${esc(path)}</code>: +${added} &minus;${removed} of its +${whole.added} &minus;${whole.removed}.</p>`,
+		)
 		app.briefs.put(id, {
-			...blank(id, 'step', title, body || title),
+			...pageBrief(id, 'step', title, body || title, TRUST),
 			lit: [...stepParts(step, look.boxes)].map((i) => look.boxes[i].name),
-			html: `<h3 class="k-eyebrow">The changed lines</h3>${stepDiffHtml(step, look.change.range)}`,
+			html: `<h3 class="k-eyebrow">The changed lines</h3>${part.join('')}${stepDiffHtml(step, look.change.range)}`,
 		})
 		app.brief.show(id, { opener })
 		const paths = stepFiles(step).map((file) => file.path)
@@ -117,7 +103,7 @@ export function changeActions(app) {
 		const [lead = '', ...rest] = words.join('\n\n').split(/\n\s*\n/)
 		const id = `change-story:${q.id}`
 		app.briefs.put(id, {
-			...blank(id, 'change', look.change.name, lead),
+			...pageBrief(id, 'change', changeName(state.home), lead, TRUST),
 			lit: look.boxes.filter((box) => box.touched).map((box) => box.name),
 			html: rest.length > 0 ? `<div class="k-story">${wordsHtml(rest.join('\n\n'))}</div>` : '',
 		})
@@ -126,7 +112,7 @@ export function changeActions(app) {
 
 	// The span starts a day earlier or later, and runs to today.
 	function shift(by) {
-		const span = spanOf(lookNow()?.change, isSpan(state.home))
+		const span = spanOf(state.home)
 		const days = daysShown(state.shell.timeline)
 		const from = span ? Date.parse(span.from) + by * DAY : Date.parse(days.at(-8))
 		const day = new Date(Math.min(Math.max(from, Date.parse(days[0])), Date.parse(days.at(-1)))).toISOString()
@@ -177,6 +163,15 @@ export function changeActions(app) {
 		dragFrom = null
 		void show(`since:${chg.drag.from}`)
 	})
+	// A swipe the browser takes over, or capture lost another way, ends the drag with nothing picked.
+	const drop = () => {
+		if (dragFrom === null) return
+		dragFrom = null
+		chg.drag = null
+		render()
+	}
+	page.addEventListener('pointercancel', drop)
+	page.addEventListener('lostpointercapture', drop)
 
 	function submit(event) {
 		if (event.target.id !== 'chg-another') return false

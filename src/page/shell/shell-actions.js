@@ -1,8 +1,6 @@
 // What the reader does with the frame: go to a page by the rail, find a concept with the search, change a setting,
 // and follow what "Start here" leads with. This module also owns the address: every page and every open brief has
-// one, so the browser's Back and a reload bring the reader to the same place. Three of the rail's pages still show a
-// view from before the pages: Processes the drawn pictures, Changes the home with "Catch up" and "Review a change",
-// and You the reader's map.
+// one, so the browser's Back and a reload bring the reader to the same place. A reply opens over the pages.
 import { partId, readConcept } from '../brief/concept-id.js'
 import { learnParts } from '../project/part-colours.js'
 import { startPageHtml } from '../start/start.js'
@@ -33,7 +31,7 @@ export function shellActions(app) {
 	const shell = state.shell
 	const $ = (selector) => document.querySelector(selector)
 
-	// A reply, the decisions, the live notes or what is open lie over whichever page the reader is on.
+	// A reply lies over whichever page the reader is on.
 	const overlaid = () => state.view !== 'home' && state.view !== 'map'
 
 	const placeNow = () => ({
@@ -60,19 +58,24 @@ export function shellActions(app) {
 		addressed = coarse(place)
 	}
 
-	// The top level, for the Home page and for a part's colour on every page.
+	// The top level, for the Home page and for a part's colour on every page. An answer to an older read is dropped.
+	let topAsked = 0
 	async function loadTop() {
+		const mine = ++topAsked
 		const [top, timeline] = await Promise.all([
 			read('/api/layout').catch(() => null),
 			read('/api/timeline?days=90').catch(() => null),
 		])
+		if (mine !== topAsked) return
 		if (top?.ok) {
 			shell.top = top.body
 			learnParts(top.body.look.boxes)
 			if (state.home.levels.length === 0 && top.body.levels) state.home.levels = top.body.levels
 		} else if (top) state.home.problem ??= { message: top.body.message, field: null }
 		shell.timeline = timeline?.ok ? timeline.body : null
-		shell.concepts = await app.briefs.concepts()
+		// Home draws with the top level; what search can find fills the Concepts tile when it comes.
+		render()
+		shell.concepts = (await app.briefs.concepts()) ?? []
 	}
 
 	// What a page reads when the reader comes to it.
@@ -86,7 +89,9 @@ export function shellActions(app) {
 
 	async function goPage(page) {
 		Object.assign(shell, { page, settingsOpen: false })
-		shell.search.open = false
+		// What was typed in search was for the page the reader left.
+		Object.assign(shell.search, { text: '', open: false, at: 0 })
+		$('#search-text').value = ''
 		state.menuOpen = false
 		state.view = state.base = 'home'
 		render()
@@ -141,16 +146,24 @@ export function shellActions(app) {
 		await loadTop()
 	}
 
+	// ken wrote a line about the reader: only what ken thinks they know moves, so the top level and the briefs are
+	// read again, and the commits by day and what search can find stay.
+	async function rereadKnows() {
+		app.briefs.forget()
+		const mine = ++topAsked
+		const top = await read('/api/layout').catch(() => null)
+		if (mine === topAsked && top?.ok) shell.top = top.body
+	}
+
 	const briefOf = (id) => {
 		const found = app.briefs.get(id, render)
 		return found.kind === 'ok' ? found.brief : null
 	}
 
-	// Draws the frame and the page under it. It answers whether a view from before the pages is on screen, which
-	// the page then draws as it did.
+	// Draws the frame and the page under it. It answers whether a reply lies over the pages, which the page then
+	// draws as it did.
 	function draw(env) {
 		const over = overlaid()
-		const older = over
 		const { home } = state
 		fill(
 			$('#rail'),
@@ -162,20 +175,22 @@ export function shellActions(app) {
 		if ($('#search-text').placeholder !== asks) $('#search-text').placeholder = asks
 		if ($('#bar-title').textContent !== title) $('#bar-title').textContent = title
 		const [start, canvas, procs] = [$('#pg-home'), $('#pg-arch'), $('#pg-proc')]
-		start.hidden = older || shell.page !== 'home'
-		canvas.hidden = older || shell.page !== 'architecture'
-		procs.hidden = older || shell.page !== 'processes'
+		start.hidden = over || shell.page !== 'home'
+		canvas.hidden = over || shell.page !== 'architecture'
+		procs.hidden = over || shell.page !== 'processes'
 		if (procs.hidden) fill(procs, '')
 		else app.procs.draw(env)
 		const you = $('#pg-you')
-		you.hidden = older || shell.page !== 'you'
+		you.hidden = over || shell.page !== 'you'
 		if (you.hidden) fill(you, '')
 		else app.you.draw()
 		const changes = $('#pg-changes')
-		changes.hidden = older || shell.page !== 'changes'
+		changes.hidden = over || shell.page !== 'changes'
 		if (changes.hidden) fill(changes, '')
 		else app.chg.draw(env)
-		$('#pg-old').hidden = !older
+		$('#pg-old').hidden = !over
+		// A brief or Ask ken takes the right of the window, and Home makes room for it.
+		start.classList.toggle('has-drawer', Boolean(state.brief.id) || state.ask.open)
 		if (start.hidden) fill(start, '')
 		else {
 			const view = { top: shell.top, home, reader: home.reader, followUp: state.followUp, concepts: shell.concepts }
@@ -205,7 +220,7 @@ export function shellActions(app) {
 
 		app.brief.draw(env)
 		address()
-		return older
+		return over
 	}
 
 	// "Start here" and its chips go where the server says: a part to read opens as a brief on the canvas, and a
@@ -251,6 +266,9 @@ export function shellActions(app) {
 	const actions = {
 		'go-page': (el) => goPage(el.dataset.page),
 		'start-go': (el) => follow(shell.top.look.next.items[Number(el.dataset.index)], el.dataset.key),
+		'project-brief': (el) => app.brief.project(el.dataset.key),
+		'part-changed': (el) =>
+			follow(shell.top.look.boxes.find((box) => box.name === el.dataset.name).knows, el.dataset.key),
 		settings() {
 			shell.settingsOpen = !shell.settingsOpen
 			render()
@@ -272,9 +290,10 @@ export function shellActions(app) {
 		if (event.target.id !== 'search-text') return false
 		const { search } = shell
 		Object.assign(search, { text: event.target.value, at: 0, open: true })
-		if (search.list === null) {
+		if (search.list === null || search.list === false) {
+			search.list = null
 			void app.briefs.concepts().then((list) => {
-				search.list = list
+				search.list = list ?? false
 				render()
 			})
 		}
@@ -314,8 +333,9 @@ export function shellActions(app) {
 		return true
 	}
 
-	// Escape closes what is open, the nearest first: the search, the settings, the "Ask ken" drawer, a correction,
-	// the brief, the draw tool, and then the level of the canvas, which goes up one.
+	// Escape closes what is open, the nearest first: the search, the settings, a correction on You, the "Ask ken"
+	// drawer, a correction in the brief, the draw tool or the key, the brief, and then the level of the canvas, which
+	// goes up one.
 	function key(event) {
 		if (event.target.id === 'search-text' && searchKey(event)) return true
 		if (event.key !== 'Escape') return false
@@ -348,10 +368,10 @@ export function shellActions(app) {
 		goTab,
 		draw,
 		reread,
+		rereadKnows,
 		input,
 		key,
 		pressed,
 		overlaid,
-		isOlder: overlaid,
 	}
 }

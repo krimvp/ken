@@ -9,6 +9,7 @@ import { KNOWN, levelLabel } from '../level/level-state.js'
 import { partClass } from '../project/part-colours.js'
 import { icon, levelMark } from '../shell/icons.js'
 import { esc, prose } from '../views/format.js'
+import { changedParts } from '../views/open.js'
 
 const [W, H] = [1000, 640]
 const CENTRE = { x: W / 2, y: H / 2 }
@@ -68,21 +69,40 @@ function mindHtml(look, inside, project, home) {
 	</div>`
 }
 
-function legendHtml(home) {
-	const rows = KNOWN.map(
+// The key names only what the map shows: the levels its parts are at, and the badge when a part carries one.
+function legendHtml(home, look) {
+	const shown = new Set(look.boxes.map((box) => box.knows.level))
+	const rows = KNOWN.filter((level) => shown.has(level)).map(
 		(level) => `<li><span class="k-mind-sample is-${level}"></span>${esc(levelLabel(home, level))}</li>`,
 	)
-	return `<div class="k-mind-key"><h2 class="k-eyebrow">A part grows as you learn it</h2><ul>${rows.join('')}<li><span class="k-badge">${icon('changed')}<span class="k-num">1</span></span>changed since you looked</li></ul></div>`
+	const badge =
+		changedParts(look).length > 0
+			? `<li><span class="k-badge">${icon('changed')}<span class="k-num">1</span></span>changed since you looked</li>`
+			: ''
+	return `<div class="k-mind-key"><h2 class="k-eyebrow">A part grows as you learn it</h2><ul>${rows.join('')}${badge}</ul></div>`
 }
 
 const dayOf = (at) =>
 	new Date(at.length === 10 ? `${at}T12:00:00Z` : at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
 
+// What ken recorded, newest first, with the same thing done on the same day as one line and how many times. i is the
+// newest line's place in the list, which "Not right" acts on.
+function sameDayOnce(learned) {
+	const lines = []
+	for (const [i, line] of learned.entries()) {
+		const same = lines.find((each) => each.line.text === line.text && dayOf(each.line.at) === dayOf(line.at))
+		if (same) same.times += 1
+		else lines.push({ line, i, times: 1 })
+	}
+	return lines
+}
+
 // One line of what ken recorded. fixing is the line whose "Not right" is open.
-function lineHtml(line, i, { look, home, you }) {
+function lineHtml({ line, i, times }, { look, home, you }) {
 	const box = line.part ? look.boxes.find((each) => each.name === line.part) : null
 	const swatch = line.part ? `<span class="k-sw ${partClass(line.part)}"></span>` : ''
-	const head = `<span class="k-rec-day">${esc(dayOf(line.at))}</span><span class="k-rec-text">${swatch}${prose(line.text)}</span>`
+	const often = times > 1 ? ` <span class="k-muted">${times} times</span>` : ''
+	const head = `<span class="k-rec-day">${esc(dayOf(line.at))}</span><span class="k-rec-text">${swatch}${prose(line.text)}${often}</span>`
 	if (you.fixing !== i) {
 		return `<li class="k-rec">${head}<button class="k-link" data-act="you-fix" data-index="${i}" data-key="rec-${i}" aria-label="Not right: ${esc(line.text)}">Not right</button></li>`
 	}
@@ -94,7 +114,7 @@ function lineHtml(line, i, { look, home, you }) {
 		: ''
 	return `<li class="k-rec is-fixing">${head}
 		<div class="k-ladder" role="group" aria-label="Correct what ken recorded">
-			<button class="k-btn is-quiet" data-act="you-undo" data-index="${i}" data-key="you-undo">Take this line back</button>
+			<button class="k-btn is-quiet" data-act="you-undo" data-index="${i}" data-key="you-undo">${line.topic ? `I do not know ${prose(line.topic)}` : 'Take this line back'}</button>
 			${rungs}
 			<button class="k-link" data-act="you-fix" data-index="-1" data-key="you-fix-cancel">Cancel</button>
 		</div></li>`
@@ -103,11 +123,12 @@ function lineHtml(line, i, { look, home, you }) {
 function sideHtml({ look, home, you }) {
 	const reader = home.reader
 	const learned = reader?.learned ?? []
-	const shown = you.all ? learned : learned.slice(0, SHOWN_LINES)
+	const once = sameDayOnce(learned)
+	const shown = you.all ? once : once.slice(0, SHOWN_LINES)
 	const lines =
 		learned.length === 0
 			? `<div class="k-rec-none">${icon('you')}<p><b>Nothing recorded yet.</b></p><p>ken writes down what you open and read, and fills your map as you go. You do not have to tell it anything.</p></div>`
-			: `<ul class="k-recs">${shown.map((line, i) => lineHtml(line, i, { look, home, you })).join('')}</ul>${learned.length > SHOWN_LINES ? `<button class="k-link" data-act="you-all" data-key="you-all">${you.all ? 'Show fewer' : `Show all ${learned.length}`}</button>` : ''}`
+			: `<ul class="k-recs">${shown.map((each) => lineHtml(each, { look, home, you })).join('')}</ul>${once.length > SHOWN_LINES ? `<button class="k-link" data-act="you-all" data-key="you-all">${you.all ? 'Show fewer' : `Show all ${once.length}`}</button>` : ''}`
 	const notes =
 		home.notes.length === 0
 			? '<p class="k-muted">None yet. Tell ken how you like things shown with "Draw it another way" on the Architecture page, and it keeps a note.</p>'
@@ -124,6 +145,8 @@ function sideHtml({ look, home, you }) {
 	return `<aside class="k-tile k-you-side" aria-label="What ken recorded">
 		<h2 class="k-you-title" id="recorded-title" tabindex="-1">What ken recorded</h2>
 		${you.problem ? `<p class="k-ask-problem" role="alert">${esc(you.problem)}</p>` : ''}
+		${reader?.problems?.length > 0 ? `<p class="k-ask-problem" role="status">${reader.problems.map(esc).join(' ')}</p>` : ''}
+		${you.said ? `<p class="k-knows-said" role="status">${esc(you.said)}</p>` : ''}
 		${lines}
 		<h2 class="k-eyebrow">How you like things shown</h2>
 		${notes}
@@ -143,7 +166,7 @@ export function youPageHtml(view) {
 		<section class="k-tile k-you-map" aria-labelledby="you-map-title">
 			<h2 class="visually-hidden" id="you-map-title">Your map of ${esc(view.project)}</h2>
 			${mindHtml(look, view.inside, view.project, view.home)}
-			${legendHtml(view.home)}
+			${legendHtml(view.home, look)}
 		</section>
 		${sideHtml(view)}
 	</div>`

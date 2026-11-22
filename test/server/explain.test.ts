@@ -178,9 +178,9 @@ test('a term is a topic of the record with one meaning: a second brief that name
 	assert.deepEqual(store.terms, [{ id: 'term:save', name: 'save' }])
 	const opened = await briefOf('term:save')
 	assert.deepEqual(
-		[opened.line, opened.explained, opened.explain?.lens.kind],
-		['Writes what a run made.', false, 'answer'],
-		'it opens with its meaning, and offers the run that explains it',
+		[opened.line, opened.note, opened.explained, opened.explain?.lens.kind],
+		['A term the project uses in Store.', 'Writes what a run made.', false, 'answer'],
+		'it opens with where it is used and its meaning, and offers the run that explains it',
 	)
 	assert.deepEqual(opened.usedIn, [{ id: 'part::Store', name: 'Store' }])
 	const topics = (await record.read()).current.filter(
@@ -266,5 +266,23 @@ test('briefs the model sends in one turn reach the reader in the order of the pa
 	assert.deepEqual(
 		items.map((item) => (item.kind === 'step' ? `brief ${item.number}` : `${item.card?.kind} of ${item.step}`)),
 		['brief 1', 'claim of 1', 'claim of 1', 'topic of 1', 'brief 2', 'claim of 2'],
+	)
+})
+
+test('asked to explain the whole level once one part is explained, the model is asked for the rest alone', async () => {
+	const scripted = await scriptedModel([
+		brief(1, 'Runs the work.', {
+			points: [point({ line: 'The core runs the work.', file: 'src/core/run.ts', quoted: 'export function run() {' })],
+		}),
+		{ text: '' },
+		{ text: '' },
+	])
+	const again = await openKen(root, readerHome(), scripted.baseUrl)
+	await ask(again, { lens: { kind: 'explain', within: [], part: 'Core' } })
+	const said = await ask(again, { lens: { kind: 'explain', within: [], part: null } })
+	const question: string = said.find((line) => line.kind === 'asked').question
+	assert.deepEqual(
+		[...question.matchAll(/^- Part \d+, (.+?) \(/gm)].map((match) => match[1]),
+		['Store', 'Command', 'Tests'],
 	)
 })

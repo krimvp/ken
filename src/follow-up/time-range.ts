@@ -80,8 +80,16 @@ export async function timeRange(
 }
 
 // A span of time the page offers to lay over the picture as a change, so the reader can catch up. change is the range
-// as the layout takes it, and name is what the reader picks: the span, then the commits it holds.
-export type SinceChoice = { kind: 'since'; change: string; name: string; commits: number }
+// as the layout takes it, and name is what the reader picks: the span, then the commits it holds. start is the day in
+// UTC the span begins, and days the number of days of a span of the last days, null for a span from a moment.
+export type SinceChoice = {
+	kind: 'since'
+	change: string
+	name: string
+	commits: number
+	start: string
+	days: number | null
+}
 
 // A choice with the same fact said two more ways: landed as a sentence, such as "23 commits landed since your last
 // commit, 14 Oct.", and short in a few words, such as "23 commits since 14 Oct". anchor is what the span starts at: when
@@ -111,12 +119,13 @@ export async function sinceChoices(
 		return logged.kind === 'ok' ? logged.commits.filter((commit) => commit.parents.length < 2).length : 0
 	}
 	// title heads the choice, clause says the same span inside a sentence, and short says it in the fewest words.
-	const spans: { anchor: Anchor; title: string; clause: string; short: string; base: CommitHash; commits: number }[] =
-		[]
+	type Span = { anchor: Anchor; title: string; clause: string; short: string; base: CommitHash; commits: number }
+	const spans: (Span & { start: string; days: number | null })[] = []
 	const since = async (anchor: Anchor, what: string, moment: string, base: CommitHash) => {
 		const when = day(moment, now)
 		const [title, clause, short] = [`Since ${what}, ${when}`, `since ${what}, ${when}`, `since ${when}`]
-		spans.push({ anchor, title, clause, short, base, commits: await landedSince(base) })
+		const start = new Date(moment).toISOString().slice(0, 10)
+		spans.push({ anchor, title, clause, short, base, commits: await landedSince(base), start, days: null })
 	}
 
 	const looked = await lastAskedBefore(repo, visit ? [{ askedAt: visit.at, head: visit.head }] : asked, head, signal)
@@ -137,14 +146,16 @@ export async function sinceChoices(
 			short: `in the last ${days} days`,
 			base: range.range.base,
 			commits: range.range.commits.length,
+			start: range.range.start.slice(0, 10),
+			days,
 		})
 	}
 	return spans
 		.filter((span) => span.commits > 0)
-		.map(({ anchor, title, clause, short, base, commits }) => {
+		.map(({ anchor, title, clause, short, base, commits, start, days }) => {
 			const count = commits === 1 ? '1 commit' : `${commits} commits`
 			return {
-				choice: { kind: 'since', change: `${base}..${head}`, name: `${title}: ${count}`, commits },
+				choice: { kind: 'since', change: `${base}..${head}`, name: `${title}: ${count}`, commits, start, days },
 				anchor,
 				landed: `${count} landed ${clause}.`,
 				short: `${count} ${short}`,

@@ -50,7 +50,8 @@ type Neighbour = Named & { verb: string }
 
 // explained is false while nothing from the model is here: points, terms and questions are then empty, and explain is
 // what to send to /api/questions to have ken's model write them. quotes is there for a decision, an arrow and a step,
-// about for a question and a step, usedIn for a term, and why for a decision. A frame, a store, an outside system and a
+// about for a question and a step, usedIn for a term and, before ken's model explains it, note with what the record
+// holds of its meaning, and why for a decision. A frame, a store, an outside system and a
 // crossing of the drawings of the top level have quotes, and as their kind has them inside, parts, gaps and topics.
 export type Brief = {
 	id: string
@@ -72,6 +73,7 @@ export type Brief = {
 	trust: string
 	about?: Named
 	usedIn?: Named[]
+	note?: string
 	// For a question: the parts of the top level its answer quotes, which its picture lights.
 	lit?: string[]
 	quotes?: BriefQuote[]
@@ -176,19 +178,29 @@ export function conceptReads(layout: LayoutSources, history: History) {
 		const [only] = box.paths
 		const file = !look.named && box.files === 1 && box.paths.length === 1 && only?.split('/').at(-1) === box.name
 		const line = told?.line ?? box.job ?? (file ? `The file ${only}.` : folderLine(box))
+		const uses = look.arrows.flatMap((arrow) =>
+			arrow.from === box.name ? [{ ...other(arrow.to), verb: arrow.text }] : [],
+		)
+		const usedBy = look.arrows.flatMap((arrow) =>
+			arrow.to === box.name ? [{ ...other(arrow.from), verb: arrow.text }] : [],
+		)
+		// Before ken's model explains a part, plain code asks what its arrows and its files raise.
+		const written = told?.questions ?? (told ? [] : codeQuestions(box.name, uses, usedBy, box.files))
+		const fields = toldFields(told, all.read)
+		const connections = [
+			...uses.map((to) => `${box.name} ${to.verb} ${to.name}.`),
+			...usedBy.map((by) => `${by.name} ${by.verb} ${box.name}.`),
+		]
 		return {
 			...blank(id, file ? 'file' : 'part', box.name, line),
-			...toldFields(told, all.read),
+			...fields,
+			minutes: told ? fields.minutes : minutesFor([line, ...connections, ...written]),
 			explain: { lens: { kind: 'explain', within: look.within, part: box.name } },
-			questions: questionsAbout(id, told?.questions ?? [], all.answers),
+			questions: questionsAbout(id, written, all.answers),
 			decisions: decisionsOf(all.read, (decision) => fileQuotes(decision.quotes).some((quote) => inPart(quote.path))),
 			sideways: {
-				uses: look.arrows.flatMap((arrow) =>
-					arrow.from === box.name ? [{ ...other(arrow.to), verb: arrow.text }] : [],
-				),
-				usedBy: look.arrows.flatMap((arrow) =>
-					arrow.to === box.name ? [{ ...other(arrow.from), verb: arrow.text }] : [],
-				),
+				uses,
+				usedBy,
 				processes: through.map(({ id: process, name, steps }) => ({ id: processId(process), name, steps })),
 			},
 			// Sorted, as a level's own paths are, so the page asks for the level inside by the same text.
@@ -221,8 +233,16 @@ export function conceptReads(layout: LayoutSources, history: History) {
 		// ken's model explains a term by answering what it means here, and its newest answer is the term's brief.
 		const told = all.answers.find((answer) => answer.concept === id && answer.text === meansWhat(topic.name))?.told
 		const words = told ? toldFields(told, all.read) : null
+		const usedIn = parts
+			.filter((part) => quotes.some((quote) => part.paths.some((place) => under(quote.path, place))))
+			.map(({ id: part, name: called }) => ({ id: part, name: called }))
+		// Before ken's model explains a term, its line says where the project uses it, and what the record holds of its
+		// meaning, often dense with code, follows as a note.
+		const where = usedIn.length > 0 ? usedIn.map((part) => part.name) : [...new Set(quotes.map((quote) => quote.path))]
+		const plain = `A term the project uses in ${listed(where.slice(0, 3)) || 'its code'}.`
 		return {
-			...blank(id, 'term', topic.name, told?.line ?? meaning ?? ''),
+			...blank(id, 'term', topic.name, told?.line ?? plain),
+			...(told || !meaning ? {} : { note: meaning }),
 			// What the record says a term means is its line; the things to know are the model's alone.
 			explained: told !== undefined,
 			explain: { lens: { kind: 'answer', concept: id, text: meansWhat(topic.name) } },
@@ -232,9 +252,7 @@ export function conceptReads(layout: LayoutSources, history: History) {
 			questions: questionsAbout(id, [], all.answers),
 			decisions: decisionsOf(all.read, (decision) => decision.topic !== null && sameName(decision.topic, topic.name)),
 			knows,
-			usedIn: parts
-				.filter((part) => quotes.some((quote) => part.paths.some((place) => under(quote.path, place))))
-				.map(({ id: part, name: called }) => ({ id: part, name: called })),
+			usedIn,
 		}
 	}
 
@@ -290,17 +308,34 @@ export function conceptReads(layout: LayoutSources, history: History) {
 		const answer = all.answers.find((each) => each.id === full)
 		const written = answer ?? writtenQuestion(full, all)
 		if (!written) return null
-		const about = { id: written.concept, name: (await nameOf(written.concept, all)) ?? written.concept }
+		const of = parseConcept(written.concept)?.kind === 'question' ? null : await brief(written.concept, all.now)
+		const about = { id: written.concept, name: of?.name ?? (await nameOf(written.concept, all)) ?? written.concept }
 		const base = blank(full, 'question', written.text, answer?.told.line ?? '')
+		// The other questions about the same thing stand beside this one.
+		const others = (of?.questions ?? []).filter((each) => each.id !== full)
 		if (!answer) {
-			return { ...base, explain: { lens: { kind: 'answer', concept: written.concept, text: written.text } }, about }
+			const lens = { kind: 'answer', concept: written.concept, text: written.text }
+			return { ...base, explain: { lens }, about, questions: others }
 		}
 		const top = await levelAt([], all.now)
-		const quoted = answer.told.points.flatMap((point) => point.quotes.map((quote) => quote.path))
-		const lit = (top?.boxes ?? [])
-			.filter((box) => quoted.some((path) => box.paths.some((place) => under(path, place))))
-			.map((box) => box.name)
-		return { ...base, ...toldFields(answer.told, all.read), about, lit }
+		const quoted = [...new Set(answer.told.points.flatMap((point) => point.quotes.map((quote) => quote.path)))]
+		const boxes = (top?.boxes ?? []).filter((box) =>
+			quoted.some((path) => box.paths.some((place) => under(path, place))),
+		)
+		return {
+			...base,
+			...toldFields(answer.told, all.read),
+			about,
+			lit: boxes.map((box) => box.name),
+			questions: others,
+			// Sideways are the parts its answer quotes, and Deeper the files.
+			sideways: {
+				uses: boxes.map((box) => ({ id: partId([], box.name), name: box.name, verb: 'its answer quotes it' })),
+				usedBy: [],
+				processes: [],
+			},
+			deeper: quoted.length > 0 ? { within: quoted.toSorted().join(','), parts: 0, files: quoted.length } : null,
+		}
 	}
 
 	// The words ken's model wrote of a term so far, for how long its brief takes to read.
@@ -309,9 +344,9 @@ export function conceptReads(layout: LayoutSources, history: History) {
 		return told ? [told.line ?? '', ...told.points.map((point) => point.line)] : []
 	}
 
-	// What ken's model said of each part of a level: how many parts it explained, and for a part that is one file, the
-	// lines it has at HEAD and the sentence the model wrote of it.
-	async function levelTold(look: LayoutLook): Promise<{ explained: number; files: FileTold[] }> {
+	// What ken's model said of each part of a level: the parts it explained, and for a part that is one file, the lines
+	// it has at HEAD and the sentence the model wrote of it.
+	async function levelTold(look: LayoutLook): Promise<{ explained: string[]; files: FileTold[] }> {
 		const all = await held(new Date())
 		const told = look.boxes.map((box) => toldOfPart(all.answered, look.within, box.name))
 		const files = await Promise.all(
@@ -322,7 +357,8 @@ export function conceptReads(layout: LayoutSources, history: History) {
 				return [fileTold(box.name, path, look.head, told[at]?.line ?? null)]
 			}),
 		)
-		return { explained: told.filter(Boolean).length, files: files.flatMap((each) => each ?? []) }
+		const explained = look.boxes.flatMap((box, at) => (told[at] ? [box.name] : []))
+		return { explained, files: files.flatMap((each) => each ?? []) }
 	}
 
 	async function fileTold(name: string, raw: string, head: CommitHash, line: string | null): Promise<FileTold | null> {
@@ -523,6 +559,35 @@ function processLine(process: Process): string {
 }
 
 // A folder nobody named says what git says of it.
+// Up to three questions from a part's arrows and its files, such as "How does Plugin engine run code in Sandbox?".
+function codeQuestions(name: string, uses: Neighbour[], usedBy: Neighbour[], files: number): string[] {
+	const asked = [
+		...uses.map((to) => `How does ${name} ${baseVerb(to.verb)} ${to.name}?`),
+		...usedBy.map((by) => `How does ${by.name} ${baseVerb(by.verb)} ${name}?`),
+	].slice(0, files > 1 ? 2 : 3)
+	return files > 1 ? [...asked, `Which of its ${files} files should I read first?`] : asked
+}
+
+// "runs code in" as "run code in", for a question that starts "How does".
+function baseVerb(verb: string): string {
+	const [first = '', ...rest] = verb.split(' ')
+	const IRREGULAR: Record<string, string> = { is: 'be', has: 'have', does: 'do', goes: 'go' }
+	const base =
+		IRREGULAR[first] ??
+		(/(ss|sh|ch|x|z)es$/.test(first)
+			? first.slice(0, -2)
+			: /ies$/.test(first)
+				? `${first.slice(0, -3)}y`
+				: /[^s]s$/.test(first)
+					? first.slice(0, -1)
+					: first)
+	return [base, ...rest].join(' ')
+}
+
+function listed(names: string[]): string {
+	return names.length < 2 ? (names[0] ?? '') : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`
+}
+
 function folderLine(box: LookBox): string {
 	const files = box.files === 1 ? '1 file' : `${box.files} files`
 	return `${files} in ${box.paths.join(', ')}. ken's model has not named this part.`
