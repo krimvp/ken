@@ -1,10 +1,13 @@
-// ken's page: one state object and one render per frame, with no framework. The home is the project as a picture, with
-// what ken says about it beside it (src/page/home). A question opens as a thread: the words on the left, and on the
-// right the panel with what ken checked. Under 1100 pixels the panel goes away and the same things open in place. The
-// page talks only to the server that sent it.
+// ken's page: one state object and one render per frame, with no framework. A rail leads to a page for each job
+// (src/page/shell), and a concept pressed on any page opens its brief in a drawer (src/page/brief). A question opens
+// as a thread over the pages: the words on the left, and on the right the panel with what ken checked. Under 1100
+// pixels the panel goes away and the same things open in place. The page talks only to the server that sent it.
+import { archActions, freshArch } from './architecture/arch-actions.js'
+import { briefActions, freshBrief } from './brief/brief-actions.js'
+import { briefStore } from './brief/briefs.js'
 import { fillDrawings, markPart, numberAt } from './draw-diagrams.js'
 import { homeActions } from './home/home-actions.js'
-import { showHome } from './home/home-view.js'
+import { clearHome, drawCanvas, showHome } from './home/home-view.js'
 import { readReply, replyAddress } from './home/state/address.js'
 import { freshHome } from './home/state/home-state.js'
 import { DOING } from './home/state/runs.js'
@@ -14,10 +17,12 @@ import { learnParts } from './project/part-colours.js'
 import { atRest, drawPictures, lightPicture } from './project/parts-picture.js'
 import { tourKey } from './project/tour-card.js'
 import { partOf, stepDiffHtml, stopState, stopTopics, tourStart, walkOf } from './project/walk.js'
+import { readerPrefs } from './shell/prefs.js'
+import { freshShell, shellActions } from './shell/shell-actions.js'
 import { allQuotesHtml, checksHtml, quoteCardHtml } from './views/checks.js'
 import { decisionsViewHtml } from './views/decisions.js'
 import { elementKey } from './views/diagram.js'
-import { count, duration, esc, folderHtml, prose, short, when } from './views/format.js'
+import { count, duration, esc, projectHtml, prose, short, when } from './views/format.js'
 import { changedLine, changedTopics, lensHtml, mapViewHtml } from './views/map.js'
 import { openCount, openViewHtml } from './views/open.js'
 import { cardsOf, isMoved, itemsOf, knowPartHtml, LEGEND, replyHtml, stepCardsHtml } from './views/reply.js'
@@ -25,7 +30,6 @@ import { endedHtml, noChecksPanelHtml, noModelHtml, stepsHtml, workingHtml } fro
 
 const $ = (selector) => document.querySelector(selector)
 const wideQuery = matchMedia('(min-width: 1100px)')
-const darkQuery = matchMedia('(prefers-color-scheme: dark)')
 
 // panel is what the right column shows on a wide screen: what ken checked, the quotes of one item, or all quotes.
 const CHECKS = { kind: 'checks' }
@@ -59,7 +63,11 @@ const freshUi = () => ({
 })
 
 const state = {
-	project: '',
+	// The frame, the canvas of the Architecture page and the brief's drawer: see their modules.
+	shell: null,
+	arch: freshArch(),
+	brief: freshBrief(),
+	project: null,
 	model: null,
 	rows: [],
 	// The thread on screen, oldest question first: saved ones from the history, and the one running now. open is the
@@ -132,8 +140,9 @@ const LENS_TITLES = {
 	topic: 'What changed since I understood it?',
 	note: 'Go deeper on this note',
 	parts: 'Name the main parts',
-	tour: 'Show me around',
 	view: 'Show it another way',
+	explain: 'Explain it',
+	answer: 'Answer a question about it',
 }
 
 // The same for the questions about one change, by what the reader wants of it.
@@ -323,7 +332,10 @@ async function send(body, onHome = null) {
 		const last = state.rows.at(-1)
 		// A stopped question has no saved line, so it is read back from the history.
 		const stopped = controller.signal.aborted && last?.question === q.question
-		if (onHome !== null) await home.ended(onHome, saved ?? (stopped ? { ...q, id: last.id } : q))
+		const made = saved ?? (stopped ? { ...q, id: last.id } : q)
+		await shell.reread()
+		if (onHome?.kind === 'explain' || onHome?.kind === 'answer') await brief.ended(onHome, made)
+		else if (onHome !== null) await home.ended(onHome, made)
 		else if (state.thread.includes(q) && stopped) await openQuestion(last.id)
 		state.running = null
 		render()
@@ -403,9 +415,9 @@ function firstLine(question) {
 	return old ? `Go deeper on the ${old[2]} UTC note about ${old[1]}` : first
 }
 
-// The header: the views, ken's earlier replies in a menu, and the one button that opens the "Ask ken" drawer. The
-// brand goes home. On a phone the views go into the menu too, beside the questions, and the menu button carries live
-// mode's mark, so the project's name keeps its room.
+// The header of the views from before the pages: the views, and ken's earlier replies in a menu. On a phone the views
+// go into the menu too, beside the questions, and the menu button carries live mode's mark, so the project's name
+// keeps its room.
 function menuHtml() {
 	const n = state.rows.length
 	const current = (view) => (state.view === view ? ' aria-current="page"' : '')
@@ -414,7 +426,6 @@ function menuHtml() {
 		waiting === 0
 			? ''
 			: `<button class="link" data-act="follow-up" data-key="follow-up"${current('follow-up')}>Waiting on you (${waiting})</button>`
-	const ask = `<button class="quiet-button ask-ken" data-act="ask-open" data-key="ask-open" aria-expanded="${state.view === 'home' && state.home.askOpen}">Ask ken</button>`
 	const look = liveLook(state.liveStatus)
 	const mark = look === 'off' ? '' : `<span class="live-mark is-${look}" aria-hidden="true"></span>`
 	const said = { on: ', on', paused: ', paused', writing: ', writing a note', off: '' }[look]
@@ -428,7 +439,7 @@ function menuHtml() {
 			? ''
 			: `<button class="link top-wide" data-act="menu" data-key="menu" aria-expanded="${state.menuOpen}">Earlier replies (${n})</button>`
 	const narrow = `<button class="link top-narrow" data-act="menu" data-key="menu-narrow" aria-expanded="${state.menuOpen}" aria-label="Menu${said ? `, live${said}` : ''}">${mark}Menu</button>`
-	const bar = `<span class="top-views top-wide">${views}</span>${questions}${ask}${narrow}`
+	const bar = `<span class="top-views top-wide">${views}</span>${questions}${narrow}`
 	if (!state.menuOpen) return bar
 	const running = state.running
 		? `<button class="row" data-act="open-running" data-key="menu-running"><span class="row-q">${esc(firstLine(state.running.q.question))}</span><span class="row-meta">Running now</span></button>`
@@ -559,8 +570,10 @@ function lensPick() {
 	}
 }
 
-function renderHome() {
-	const env = {
+// What the page around a view is doing: whether a run of ken's model can start, the run under way, and what the
+// "Ask ken" drawer needs.
+function envNow() {
+	return {
 		off: whyNoRun(),
 		running: state.running,
 		seconds: state.running ? (Date.now() - state.running.started) / 1000 : 0,
@@ -569,8 +582,6 @@ function renderHome() {
 		asked: state.rows.length > 0,
 		lenses: { open: state.lensesOpen, pick: lensPick() },
 	}
-	showHome($('#home'), state.home, env, schedule)
-	home.address()
 }
 
 // What the reader typed stays where they typed it when the box they type in is drawn again.
@@ -601,21 +612,32 @@ function render() {
 	if (active !== document.body) focusLost = null
 	const focused = active?.dataset?.key ?? focusLost
 	const caret = caretOf(active)
+	// Only a focus the draw dropped is put back: one the draw moved on purpose, as into an opened brief, stays.
 	const refocus = () => {
-		if (!focused || document.activeElement?.dataset?.key === focused) return
+		const moved = document.activeElement !== active && document.activeElement !== document.body
+		if (!focused || moved || document.activeElement?.dataset?.key === focused) return
 		const now = document.querySelector(`[data-key="${CSS.escape(focused)}"]`)
 		now?.focus({ preventScroll: true })
 		if (caret && caretOf(now)) now.setSelectionRange(...caret)
 		focusLost = now?.closest('[inert]') ? focused : null
 	}
-	const onHome = state.view === 'home'
-	$('#project').innerHTML = state.project ? `<span class="reads">reads </span>${folderHtml(state.project)}` : ''
+	// The frame and the page under it come first. Only a view from before the pages is drawn by what follows.
+	const env = envNow()
+	const older = shell.draw(env)
+	home.watch()
+	const onHome = older && state.view === 'home'
+	$('.skip').hidden = !onHome
+	if (!onHome) clearHome($('#home'))
+	if (!older) {
+		refocus()
+		return tipFrom(null)
+	}
+	$('#project').innerHTML = state.project ? `<span class="reads">reads </span>${projectHtml(state.project)}` : ''
 	$('#menu').innerHTML = menuHtml()
 	$('#home').hidden = !onHome
-	$('.skip').hidden = !onHome
 	$('#page').hidden = onHome
 	if (onHome) {
-		renderHome()
+		showHome($('#home'), state.home, env, schedule)
 		refocus()
 		return tipFrom(null)
 	}
@@ -723,11 +745,11 @@ function markDescribed() {
 }
 
 function tick() {
-	const clock = $('#working-clock')
 	const shown = state.view === 'home' ? state.running?.onHome : state.open === state.running?.q
-	if (!clock || !state.running || !shown) return
+	if (!state.running || !shown) return
 	const tools = state.running.q.steps.filter((step) => step.kind === 'tool').length
-	clock.textContent = `${duration((Date.now() - state.running.started) / 1000)} so far, ${count(tools, 'action', 'actions')}`
+	const said = `${duration((Date.now() - state.running.started) / 1000)} so far, ${count(tools, 'action', 'actions')}`
+	for (const clock of document.querySelectorAll('#working-clock, .k-clock')) clock.textContent = said
 }
 
 // ---- What the reader can do ----
@@ -884,6 +906,8 @@ async function showMap() {
 }
 
 function closeMap() {
+	// On the You page the map is the page, so leaving it goes to Home.
+	if (state.shell.page === 'you') return shell.goPage('home')
 	state.view = state.base
 	render()
 	$('[data-key="map"]')?.focus({ preventScroll: true })
@@ -1054,7 +1078,21 @@ async function followUpSaved(save, said) {
 	render()
 }
 
-const home = homeActions({ state, render, read, post, send, stored, store, fromView })
+// The page as its modules see it. Each takes what it needs from here, and the modules made later are added to it.
+const app = { state, render, read, post, send, stored, store, fromView, showMap }
+app.prefs = readerPrefs(app)
+state.shell = freshShell(app.prefs.prefs)
+app.briefs = briefStore(app)
+app.briefPaths = () => brief.readPaths()
+app.reread = () => shell.reread()
+const home = homeActions(app)
+app.home = home
+const brief = briefActions(app)
+app.brief = brief
+const arch = archActions(app)
+app.arch = arch
+const shell = shellActions(app)
+app.shell = shell
 
 async function showReply(id) {
 	await openQuestion(id)
@@ -1069,6 +1107,9 @@ async function showReply(id) {
 
 const actions = {
 	...home.actions,
+	...shell.actions,
+	...arch.actions,
+	...brief.actions,
 	map: () => (state.view === 'map' ? closeMap() : showMap()),
 	decisions: () => (state.view === 'decisions' ? closeDecisions() : showDecisions()),
 	'cc-open': (el) => openChangePart(Number(el.dataset.turn), Number(el.dataset.index)),
@@ -1161,6 +1202,7 @@ const actions = {
 		if (uiNow().wide && !el.closest('#panel')) return choose(key, quote)
 		toggle(uiNow().openQuotes, `${key}-q${quote}`)
 		render()
+		if (state.view === 'home') home.quoted()
 		// "Show all" goes away once the lines are open, so the quote's own row takes the focus.
 		if (el.matches('.q-all')) document.querySelector(`[data-key="${key}-q${quote}"]`)?.focus({ preventScroll: true })
 	},
@@ -1241,6 +1283,7 @@ document.addEventListener('click', (event) => {
 		state.menuOpen = false
 		render()
 	}
+	shell.pressed(event.target)
 	if (el && !el.disabled) void actions[el.dataset.act](el)
 	else if (state.view === 'home') home.pick(event.target)
 	else if (state.thread.length > 0) chooseInDrawing(event.target)
@@ -1260,8 +1303,12 @@ document.addEventListener(
 	true,
 )
 
+// The home from before the pages is on screen: the page is Processes or Changes and nothing lies over it.
+const onOldHome = () => state.view === 'home' && shell.isOlder()
+
 document.addEventListener('keydown', (event) => {
-	if (state.view === 'home' && !state.menuOpen && $('#tip').hidden && home.key(event)) return
+	if (!state.menuOpen && $('#tip').hidden && shell.key(event)) return
+	if (onOldHome() && !state.menuOpen && $('#tip').hidden && home.key(event)) return
 	if ((event.key === 'ArrowLeft' || event.key === 'ArrowRight') && state.view === 'question') {
 		const t = walkTurn()
 		if (t === null) return
@@ -1316,7 +1363,15 @@ $('#ask').addEventListener('submit', (event) => {
 })
 
 document.addEventListener('submit', (event) => {
-	if (home.submit(event)) return
+	if (brief.submit(event)) return
+	if (home.submit(event)) {
+		// A request sent from the canvas's tool closes the tool, so the canvas shows the run.
+		if (event.target.id === 'redraw-form' && state.home.redraw.problem === null && state.arch.drawOpen) {
+			state.arch.drawOpen = false
+			render()
+		}
+		return
+	}
 	const form = event.target.closest('.area-form, .change-form, .decide-form')
 	if (!form) return
 	event.preventDefault()
@@ -1338,12 +1393,9 @@ document.addEventListener('submit', (event) => {
 	if (path !== '') void send({ lens: { kind: 'area', path } })
 })
 
-document.addEventListener('input', (event) => home.input(event))
+document.addEventListener('input', (event) => shell.input(event) || home.input(event))
 document.addEventListener('mousedown', (event) => home.press(event))
-window.addEventListener('popstate', () => {
-	const reply = readReply(location.hash)
-	return reply ? showReply(reply) : home.back()
-})
+window.addEventListener('popstate', () => shell.back(showReply))
 
 // The lens forms are drawn again with the rest, so the person and the span the reader picked are kept here.
 document.addEventListener('change', (event) => {
@@ -1433,6 +1485,7 @@ function lightQuote(event) {
 }
 document.addEventListener('pointerover', lightQuote)
 document.addEventListener('focusin', lightQuote)
+for (const kind of ['pointerover', 'focusin']) document.addEventListener(kind, (event) => home.point(event))
 
 $('#question').addEventListener('input', resizeBox)
 new ResizeObserver(([entry]) => {
@@ -1441,8 +1494,7 @@ new ResizeObserver(([entry]) => {
 wideQuery.addEventListener('change', render)
 window.addEventListener('resize', () => drawPictures(document.body))
 // The canvas changes width with no change of the window when its scroll bar comes or goes.
-new ResizeObserver(() => drawPictures($('#home-canvas'))).observe($('#home-canvas'))
-darkQuery.addEventListener('change', render)
+new ResizeObserver(() => drawCanvas($('#home-canvas'))).observe($('#home-canvas'))
 setInterval(tick, 1000)
 setInterval(async () => {
 	if (state.view !== 'live' && state.liveStatus === 'off') return
@@ -1456,15 +1508,16 @@ try {
 		loadRows(),
 		loadFollowUp(),
 	])
-	state.project = server.project
+	state.project = { name: server.name, folder: server.project }
+	state.home.project = server.name
 	learnParts(server.parts)
 	state.model = server.model
 	if (server.live === true) await loadLive()
 	state.authors = recent.authors
 	render()
-	// An address that names a reply opens it over the home. A reply ken no longer has leaves the home.
+	// An address that names a reply opens it over the pages. A reply ken no longer has leaves the Home page.
 	const reply = readReply(location.hash)
-	await home.start()
+	await shell.start()
 	if (reply) await actions.open({ dataset: { id: reply } }).catch(() => {})
 } catch (error) {
 	state.home.problem = {

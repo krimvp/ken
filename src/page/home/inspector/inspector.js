@@ -1,14 +1,18 @@
-// The panel beside the picture: what ken says about the selection at the chosen detail. With nothing selected it is
-// about the whole level or the whole change. One line at its top says who wrote what: the explanations are the
+// The column beside the picture. While nothing is picked or opened on a level ken's model named, it is the board's
+// own: "Next for you" and what ken recorded. Once the reader picks or opens something it is the reading panel: what
+// ken says about the selection at the detail in use, or about the whole level or change, under one line on why ken
+// opened it that way and the press back to the board. One line says who wrote what: the explanations are the
 // model's, and a boxed card holds what plain code read from git or lines ken found there. While a run of ken's model
 // started from the home is under way, the panel shows that run in place of what it will fill, and when a run ends
-// with nothing to show, it says so. The code calls the panel the inspector.
+// with nothing to show, it says so. The code calls the column the inspector.
 import { stepDiffHtml } from '../../project/walk.js'
 import { count, day, esc, list, pathList, prose, runButton, short } from '../../views/format.js'
 import { LEGEND, storyHtml } from '../../views/reply.js'
 import { noModelHtml, workingHtml } from '../../views/states.js'
-import { changeName, mapLine, stateLine } from '../canvas/canvas.js'
-import { besideCanvas, diagramOf, firstUnseen, pathOf, placeOf, shownDetail, stoodOn } from '../state/content.js'
+import { boardHtml } from '../board/board.js'
+import { changeName } from '../canvas/canvas.js'
+import { stateLine } from '../canvas/part-box.js'
+import { besideCanvas, diagramOf, firstUnseen, pathOf, placeOf, shownDetail } from '../state/content.js'
 import { colourOf, DETAILS, levelName } from '../state/home-state.js'
 import { diffKey } from '../state/loads.js'
 import { DOING, isThere, levelOf } from '../state/runs.js'
@@ -19,6 +23,7 @@ import {
 	FROM_GIT,
 	factCard,
 	filesHtml,
+	isKnown,
 	knownFold,
 	lookInside,
 	outsideHtml,
@@ -70,8 +75,8 @@ function levelView(home, off) {
 				? `<div class="insp-main">${button(0, 'Start the tour', 'primary')}</div>`
 				: `<div class="insp-main insp-actions">${button(start, `<span class="nav-name">Go on with the tour</span><span class="nav-way">Stop ${start + 1} of ${path.length}: ${esc(path[start].part)}</span>`)}${button(0, 'Start again at stop 1', 'link')}</div>`
 	} else if (path.length > 0 && here) {
-		tour = `<div class="insp-main">${runButton({ act: 'run-tour', key: 'run-tour', text: 'Show me around', primary: true }, off)}
-			<p class="small muted">ken's model shows you the ${path.length} parts in turn, with their code, starting at ${esc(path[0].part)}. The order is the one ken's model named the parts in, with tests and upkeep last.</p></div>`
+		tour = `<div class="insp-main">${runButton({ act: 'run-explain', key: 'run-explain', text: 'Ask ken to explain these parts', primary: true }, off)}
+			<p class="small muted">ken's model explains the ${path.length} parts in turn, each as a brief resting on its code, starting at ${esc(path[0].part)}.</p></div>`
 	}
 	const colour = colourOf(home)
 	const order =
@@ -97,17 +102,15 @@ function levelView(home, off) {
 
 function partView(home, box) {
 	const title = { picked: true, title: esc(box.name), titleClass: `part-name ${colourOf(home)(box.name)}` }
-	if (stoodOn(box, [box.name]) === 'known' && !home.unfolded.has(box.name)) {
+	if (isKnown(box) && !home.unfolded.has(box.name)) {
 		return { ...title, body: knownFold(box.name) }
 	}
 	const state = stateLine(box, home.look)
-	const map = mapLine(box.map)
 	return {
 		...title,
 		body: `<p class="insp-lead">${prose(box.job ?? '')}</p>
 			<div class="small">${filesLine(box)}</div>
 			${state === '' ? '' : `<p class="small">${state}.</p>`}
-			${map === '' ? '' : `<p class="small">${map}.</p>`}
 			${usesHtml(home, box.name)}
 			<p class="insp-actions">${lookInside(box)}<button class="quiet-button" data-act="detail" data-detail="how" data-key="to-how">Read how it works</button></p>`,
 	}
@@ -323,7 +326,7 @@ const ENDED = {
 // What a run is doing, said to a reader who has left the level or the change it is for.
 const STILL = {
 	name: (level) => `ken's model is naming the parts of ${level}.`,
-	tour: (level) => `ken's model is writing the tour of ${level}.`,
+	explainAll: (level) => `ken's model is explaining the parts of ${level}.`,
 	story: () => "ken's model is reading the change you asked about.",
 	walk: () => "ken's model is ordering the change you asked about into steps.",
 	redraw: (level) => `ken's model is working on your request about ${level}.`,
@@ -332,7 +335,7 @@ const STILL = {
 // What a run made, said to a reader who has left the level or the change it was for.
 const FINISHED = {
 	name: (level) => `ken's model named the parts of ${level}.`,
-	tour: (level) => `ken finished the tour of ${level}.`,
+	explainAll: (level) => `ken's model explained the parts of ${level}.`,
 	story: () => "ken's model said what the change did.",
 	walk: () => "ken's model walked through the change.",
 	redraw: (level) => `ken answered your request about ${level}.`,
@@ -427,6 +430,20 @@ export function inspectorHtml(home, env) {
 	const run = env.running?.onHome ?? null
 	const working = run !== null && isThere(run, home)
 	const away = run !== null && !working ? awayHtml(STILL[run.kind](levelOf(run)), 'run') : ''
+	const noModel = env.model?.kind === 'unset' ? noModelHtml(env.model, env.asked, true) : ''
+	// While the server reads the level again for another change or commit, the column still shows the one before. It
+	// cannot be pressed or reached by the keyboard then, so a stop of the old path is not picked into the new one.
+	const closed = home.reading ? ' inert' : ''
+	// A level of folders has no board yet: its panel is the way to have ken's model name the parts.
+	const boarded = Boolean(home.look.named)
+	const reads = home.selected || home.opened || home.content.kind === 'drawn'
+	const says = working || home.said || home.ended || home.trouble
+	if (boarded && !reads && !says) {
+		return `<div class="insp-scroll board" id="insp-scroll"${closed}><div class="board-body">${away}${boardHtml(home)}${noModel}</div></div>`
+	}
+	const back = boarded
+		? `<p class="insp-why">${home.why ? `<span>${esc(home.why)}</span> ` : ''}<button class="link" data-act="home-board" data-key="home-board">Back to Next for you</button></p>`
+		: ''
 	const view = working ? workingView(home, env.running, env.seconds) : viewOf(home, env.off)
 	const whole =
 		home.content.kind === 'drawn'
@@ -439,11 +456,7 @@ export function inspectorHtml(home, env) {
 	const clear =
 		view.picked && !working ? `<button class="link" data-act="home-clear" data-key="home-clear">${whole}</button>` : ''
 	const notices = working ? '' : `${away}${troubleHtml(home.trouble)}${endedHtml(home.ended)}${saidHtml(home)}`
-	const noModel = env.model?.kind === 'unset' ? noModelHtml(env.model, env.asked, true) : ''
 	const nav = working ? '' : (view.nav ?? '')
-	// While the server reads the level again for another change or commit, the panel still shows the one before. It
-	// cannot be pressed or reached by the keyboard then, so a stop of the old path is not picked into the new one.
-	const closed = home.reading ? ' inert' : ''
 	// The line on who wrote what shows once the panel holds words of ken's model: a part's job, a story, a picture.
 	const { look, content } = home
 	const told =
@@ -451,6 +464,7 @@ export function inspectorHtml(home, env) {
 			? `<p class="insp-legend">${LEGEND}</p>`
 			: ''
 	return `<div class="insp-scroll" id="insp-scroll"${closed}>
+			${back}
 			${told}
 			<p class="insp-head"><span class="insp-detail">${DETAILS[shownDetail(home)]}</span>${view.where ? `<span class="insp-where">${view.where}</span>` : ''}${clear}<button class="link insp-up" data-act="home-up" data-key="home-up">Back to the picture</button></p>
 			<h2 class="insp-title ${view.titleClass ?? ''}" id="insp-title" data-key="insp-title" tabindex="-1">${view.title}</h2>

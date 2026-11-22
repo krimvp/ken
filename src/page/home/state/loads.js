@@ -2,7 +2,7 @@
 // level's content names. The server reads the level from git on every move.
 import { learnParts } from '../../project/part-colours.js'
 import { contentOf, picturesOf, repliesOf, sameList, shownDetail } from './content.js'
-import { DETAILS, FIRST_DETAIL } from './home-state.js'
+import { FIRST_DETAIL } from './home-state.js'
 
 // The server gives the diff of this many files at a time.
 const DIFF_PATHS = 10
@@ -12,9 +12,8 @@ export function diffKey(change, box) {
 }
 
 // app is the page: its state, render, read, which asks the server and gives back { ok, body } for any answer it
-// sends, fromView, which turns a saved question into the page's own shape, and stored, which reads a value this
-// browser kept.
-export function homeLoads({ state, render, read, post, fromView, stored }) {
+// sends, post, and fromView, which turns a saved question into the page's own shape.
+export function homeLoads({ state, render, read, post, fromView }) {
 	// The number of the newest request for a level. An answer to an older one is dropped: the reader has moved on.
 	let asked = 0
 	// A request the server never answered is an answer too: one that is not ok, with the reason.
@@ -33,10 +32,11 @@ export function homeLoads({ state, render, read, post, fromView, stored }) {
 
 	// A level as the server sent it becomes the level on screen. Its content is found at once, so the page never draws
 	// one level beside what ken said of another.
-	function showLevel({ look, changes, wayIn }) {
+	function showLevel({ look, changes, wayIn, levels }) {
 		const home = state.home
 		if (look.within.length === 0 && look.at === look.head) learnParts(look.boxes)
 		Object.assign(home, { look, changes, problem: null, change: look.change?.asked ?? 'none' })
+		if (levels) home.levels = levels
 		find()
 		// A field keeps what the reader typed in it only while the level on screen is the one it asked for.
 		if (look.at === look.head) home.typed.at = ''
@@ -49,7 +49,8 @@ export function homeLoads({ state, render, read, post, fromView, stored }) {
 	// screen and shows the reason in its place. While the server reads, the home says so: reading is "level" when the
 	// level on screen is another one, and "overlay" when it is the same level with another change or commit to come.
 	// False means a newer request took this one's place. again says the same level is read again with nothing else asked
-	// of it, so what is on screen stays in use meanwhile.
+	// of it, so what is on screen stays in use meanwhile, and stays when the server cannot answer: the reader asked
+	// for nothing.
 	async function loadLayout(again = false) {
 		const home = state.home
 		const { within } = home.trail.at(-1)
@@ -64,7 +65,7 @@ export function homeLoads({ state, render, read, post, fromView, stored }) {
 		if (mine !== asked) return false
 		home.reading = null
 		if (answer.ok) showLevel(answer.body)
-		else refuse(answer.body)
+		else if (!again) refuse(answer.body)
 		return true
 	}
 
@@ -104,6 +105,13 @@ export function homeLoads({ state, render, read, post, fromView, stored }) {
 	async function loadNotes() {
 		const answer = await ask('/api/notes')
 		state.home.notes = answer.ok ? answer.body.notes : []
+	}
+
+	// What ken recorded of the reader. Until the server has said, the board is without that panel, and an answer it
+	// cannot give later leaves the lines the board has.
+	async function loadReader() {
+		const answer = await ask('/api/reader')
+		if (answer.ok) state.home.reader = answer.body
 	}
 
 	// What ken has to say about the level on screen, from the saved questions, and the replies it names once read.
@@ -148,15 +156,13 @@ export function homeLoads({ state, render, read, post, fromView, stored }) {
 	// to review a change the reader's own work, or the newest merge when they have none.
 	async function enter(wayIn) {
 		const home = state.home
-		const kept = stored(`ken-detail-${wayIn}`)
 		const before = home.detail
 		Object.assign(home, { wayIn, at: '', shown: null, selected: null, change: wayIn === 'review' ? '' : 'none' })
 		if (wayIn === 'catch-up') home.change = home.changes.find((choice) => choice.kind === 'since')?.change ?? 'none'
 		if (!(await loadLayout())) return
 		// The detail of the way in comes with its level, so the panel does not show the old level at the new detail
-		// while the server reads. A detail the reader picked meanwhile stays.
-		if (home.detail === before)
-			home.detail = Object.keys(DETAILS).find((detail) => detail === kept) ?? FIRST_DETAIL[wayIn]
+		// while the server reads. A detail the reader picked for every part, or picked meanwhile, stays.
+		if (home.detail === before) home.detail = home.pinned ?? FIRST_DETAIL[wayIn]
 		if (wayIn === 'review' && !home.problem && !home.look.change) {
 			const newest = home.changes.find((choice) => choice.kind === 'merge' || choice.kind === 'commit')
 			if (newest) {
@@ -164,19 +170,6 @@ export function homeLoads({ state, render, read, post, fromView, stored }) {
 				await loadLayout()
 			}
 		}
-	}
-
-	// The first load reads the level with no change, which also says which way in ken suggests and what there is to
-	// catch up on. Then the way in decides what is laid over it. placed says the home already holds where the reader
-	// is, from the page's address: then that one level is read, and nothing else decides.
-	async function start(placed) {
-		const home = state.home
-		await Promise.all([loadLayout(), loadNotes()])
-		if (!placed) {
-			if (!home.picked && home.suggestion) home.wayIn = home.suggestion.suggested
-			await enter(home.wayIn)
-		}
-		await settle()
 	}
 
 	// The server brings back the picture before, and the home then reads the level as it reads any other, with the
@@ -193,5 +186,5 @@ export function homeLoads({ state, render, read, post, fromView, stored }) {
 		await refresh()
 	}
 
-	return { loadLayout, loadNotes, loadDiff, settle, refresh, enter, start, back }
+	return { loadLayout, loadNotes, loadReader, loadDiff, settle, refresh, enter, back }
 }

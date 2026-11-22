@@ -120,7 +120,7 @@ const model = await scriptedModel([
 	{ text: '' },
 ])
 const server = await openKen(root, readerHome(), model.baseUrl)
-await ask(server, { lens: { kind: 'tour', within: [], name: null } })
+await ask(server, { lens: { kind: 'explain', within: [], name: null, part: null } })
 await ask(server, view('Follow one command', []))
 await ask(server, view('Follow it again', []))
 await ask(server, view('Fewer parts', ['src']))

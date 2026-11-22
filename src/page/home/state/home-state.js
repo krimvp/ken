@@ -1,21 +1,43 @@
-// The home's state: one level of the project at a time, the way in the reader took, the detail they chose, and what
-// they picked in the picture. The names of the three ways in and the three details are kept here, once.
+// The home's state: one level of the project at a time, the way in the reader took, the detail in use, what they
+// picked in the picture, and what ken recorded of them. The names of the three ways in, the three details and the
+// order of the five levels of what ken thinks the reader knows are kept here, once.
 import { partClass } from '../../project/part-colours.js'
 
 export const WAYS = { learn: 'Learn the project', 'catch-up': 'Catch up', review: 'Review a change' }
 export const DETAILS = { big: 'Big picture', how: 'How it works', code: 'In the code' }
 export const FIRST_DETAIL = { learn: 'big', 'catch-up': 'big', review: 'how' }
 export const WHOLE = { name: 'Whole project', within: [] }
+// Weakest first, as the server orders them. The server sends the words for each.
+export const KNOWN = ['new', 'seen', 'read', 'code', 'said']
 
-// stored reads a value this browser kept: the reader's way in, and the detail they last chose for each way in.
+// stored reads a value this browser kept: the reader's way in, and the detail they pinned for every part.
 // ui holds the quotes and decisions open in the cards the home shows, as a thread's does.
 export function freshHome(stored, ui) {
 	const wayIn = Object.keys(WAYS).find((way) => way === stored('ken-way-in')) ?? null
+	const pinned = Object.keys(DETAILS).find((detail) => detail === stored('ken-detail')) ?? null
 	return {
+		// The project's name, as the header says it: the first step of the trail.
+		project: null,
 		// The reader's pick, else the way in ken suggests. picked says the reader chose it themselves.
 		wayIn: wayIn ?? 'learn',
 		picked: wayIn !== null,
-		detail: 'big',
+		// The detail in use. pinned is the one the reader picked for every part, and null while ken picks: each part
+		// then opens at the detail the server says.
+		detail: pinned ?? 'big',
+		pinned,
+		// The reader opened what ken says of the whole level or change, so the panel shows it in place of the board.
+		// why is the one line on why ken opened what is in the panel the way it did.
+		opened: false,
+		why: null,
+		// The words for the five levels, as the server sends them: [{ level, label }].
+		levels: [],
+		// What ken recorded of the reader, as GET /api/reader sends it, and whether every line of it shows.
+		reader: null,
+		recordedOpen: false,
+		// The box the readout line is about while none is picked: the one last pointed at or moved to. fixing is the
+		// box whose level the reader is correcting.
+		pointed: null,
+		fixing: null,
 		// The level on screen is the last of the boxes the reader opened to get here.
 		trail: [WHOLE],
 		// The text that asks the server for the change laid over the parts: "none" for no change, and "" for the
@@ -68,8 +90,18 @@ export function freshHome(stored, ui) {
 	}
 }
 
+// The project is called by its folder's name everywhere, once the server has said it.
+export function projectName(home) {
+	return home.project ?? 'The whole project'
+}
+
 export function levelName(home) {
-	return home.trail.length === 1 ? 'The whole project' : home.trail.at(-1).name
+	return home.trail.length === 1 ? projectName(home) : home.trail.at(-1).name
+}
+
+// The words the server sends for a level of what ken thinks the reader knows.
+export function levelLabel(home, level) {
+	return home.levels.find((each) => each.level === level)?.label ?? ''
 }
 
 // Inside a part, every box takes the colour of the top-level part it sits in.

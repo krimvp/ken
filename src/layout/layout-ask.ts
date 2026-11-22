@@ -37,14 +37,16 @@ export async function readLayoutAsk(
 		within.push(parsed.path)
 	}
 	const text = raw.change?.trim() ?? ''
+	const own = await ownWork(sources, signal)
 	const change =
 		text === NONE
 			? null
 			: text === ''
-				? { kind: 'ok' as const, change: await ownWork(sources, signal) }
-				: await changeOf(sources, text, now, signal)
+				? { kind: 'ok' as const, change: own }
+				: await changeOf(sources, text, own, now, signal)
 	if (change?.kind === 'refused') return { ...change, field: 'change' }
-	return { kind: 'ok', ask: { at: at.commit, within: [...new Set(within)].sort(), change: change?.change ?? null } }
+	const ask = { at: at.commit, within: [...new Set(within)].sort(), change: change?.change ?? null, own }
+	return { kind: 'ok', ask }
 }
 
 async function ownWork(sources: LayoutSources, signal?: AbortSignal): Promise<Change | null> {
@@ -62,20 +64,21 @@ function uncommitted(head: CommitHash, snapshot: CommitHash): Change {
 	return { kind: 'uncommitted', name: 'Uncommitted work', asked: UNCOMMITTED, range: { base: head, head: snapshot } }
 }
 
+// own is the reader's own work, which already holds the snapshot of what they have not committed.
 async function changeOf(
 	sources: LayoutSources,
 	text: string,
+	own: Change | null,
 	now: Date,
 	signal?: AbortSignal,
 ): Promise<{ kind: 'ok'; change: Change } | { kind: 'refused'; message: string }> {
-	const { repo, snapshots, root } = sources
+	const { repo } = sources
 	if (text.startsWith(SINCE)) return await spanOf(repo, text, now, signal)
 	if (text === UNCOMMITTED) {
-		const snapshot = await takeSnapshot(snapshots, repo, root, signal)
-		return {
-			kind: 'ok',
-			change: uncommitted(snapshot.head, snapshot.kind === 'taken' ? snapshot.commit : snapshot.head),
-		}
+		if (own?.kind === 'uncommitted') return { kind: 'ok', change: own }
+		const head = await repo.resolve('HEAD', signal)
+		if (head.kind !== 'ok') return { kind: 'refused', message: 'The project has no commits yet.' }
+		return { kind: 'ok', change: uncommitted(head.commit, head.commit) }
 	}
 	// With no "..", a branch is what it has that the main branch lacks, and any other commit is the change that one
 	// commit made: for a merge, what it brought to the line it merged into.

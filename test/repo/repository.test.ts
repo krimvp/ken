@@ -140,3 +140,28 @@ test('blame names the commit that last changed each line, and reports a missing 
 	assert.equal((await repo.blame(head, pathOf('src/app.ts'), { start: 5, end: 9 })).kind, 'bad-lines')
 	assert.equal((await repo.blame(head, pathOf('src/old_name.py'), { start: 1, end: 1 })).kind, 'no-file')
 })
+
+test('what landed after several commits is read at once: a side line merged later counts for a commit on the main line and not for its own, the merge and a commit of only .ken/ are left out, and a commit the project lacks has no answer', async () => {
+	const side = buildRepository([
+		{ message: 'start', files: { 'a.ts': 'a\n', 'b.ts': 'b\n' } },
+		{ message: 'main one', files: { 'a.ts': 'a1\n' } },
+		{ message: 'side one', files: { 'b.ts': 'b1\n' }, parent: 0 },
+		{ message: 'merge the side', files: {}, parent: 1, merge: 2 },
+		{ message: 'the record', files: { '.ken/record.jsonl': '{}\n' } },
+		{ message: 'main two', files: { 'a.ts': 'a2\n' } },
+	])
+	const [start = '', main = '', other = ''] = side.hashes
+	const git = gitRepository(side.root)
+	const head = await git.resolve('HEAD')
+	if (head.kind !== 'ok') assert.fail('the fixture has commits')
+	const gone = 'f'.repeat(40)
+
+	const read = await git.landedAfter(head.commit, [main, other, start, gone, 'not a hash'])
+	if (read.kind !== 'ok') assert.fail('the fixture log is small')
+	const subjects = (commit: string) => read.landed.get(commit)?.map((each) => each.subject) ?? null
+	assert.deepEqual(subjects(main), ['main two', 'side one'])
+	assert.deepEqual(subjects(other), ['main two', 'main one'])
+	assert.deepEqual(subjects(start), ['main two', 'side one', 'main one'])
+	assert.deepEqual([subjects(gone), subjects('not a hash')], [null, null])
+	assert.deepEqual(read.landed.get(main)?.[1]?.paths, ['b.ts'])
+})

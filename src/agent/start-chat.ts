@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { createSession, type RunResult } from 'aigent'
 import type { Tool } from 'aigent/plugin'
 import { followedNames, usedElsewhere } from '../checks/index.ts'
-import type { ReaderNotes, UnderstandingMap } from '../map/index.ts'
+import type { ReaderNotes, ReaderPrefs, UnderstandingMap } from '../map/index.ts'
 import { fileRecordStore } from '../record/index.ts'
 import { findRoot, gitRepository } from '../repo/index.ts'
 import { projectSessions } from '../transcripts/index.ts'
@@ -53,8 +53,8 @@ const STEPS: Record<Round['step'], { turns: number; notice: number; say: string 
 // Above the diff tool's own limit, so a whole diff reaches the model uncut.
 const MAX_TOOL_RESULT_CHARS = 64_000
 
-// reader is the reader's understanding map and their notes. A chat run by a script, such as "ken ask --json", has no
-// reader, so it has neither, and no tool to keep a note with.
+// reader is the reader's understanding map, their notes and how much text they chose to read. A chat run by a script,
+// such as "ken ask --json", has no reader, so it has none of them, and no tool to keep a note with.
 // env decides which saved sessions the agent may read (see projectSessions) and which values secretHider hides.
 // snapshots is ken's store of snapshots of uncommitted work (see the live module), which the agent's tools and the
 // quote check read as well as the project's own git.
@@ -62,7 +62,7 @@ export async function startChat(options: {
 	directory: string
 	model: ModelConfig
 	env: Record<string, string | undefined>
-	reader?: { map: UnderstandingMap; notes: ReaderNotes }
+	reader?: { map: UnderstandingMap; notes: ReaderNotes; prefs: ReaderPrefs }
 	snapshots?: string
 }): Promise<{ kind: 'ok'; chat: Chat } | { kind: 'no-repository'; message: string }> {
 	const found = await findRoot(options.directory)
@@ -195,7 +195,7 @@ export async function startChat(options: {
 		const started = performance.now()
 		const index = recordIndex(await store.read())
 		const known = reader
-			? `\n\n${readerIndex(await reader.map.read(new Date(), signal), await reader.notes.read())}`
+			? `\n\n${readerIndex(await reader.map.read(new Date(), signal), await reader.notes.read(), await reader.prefs.read())}`
 			: ''
 		const prompt = async (text: string, own: AbortController): Promise<RunResult> =>
 			await session

@@ -191,6 +191,58 @@ test('ken ask prints the words, then the cards in the order the reply gives them
 })
 
 // The fix branched from inside the change and was merged after it, so the change's head does not reach it.
+test('ken ask prints a brief in the order the page shows it: the line, each thing to know with its drawing named and its quoted lines, the terms, then the questions', async () => {
+	const model = await scriptedModel([
+		{
+			tool: 'ken__show',
+			args: {
+				brief: {
+					number: 1,
+					line: 'Adds up a list of items.',
+					points: [
+						{
+							line: 'total hands the list to sum.',
+							more: 'total returns what sum makes of the items.',
+							long: 'total does no adding of its own. It returns what sum makes of the list.',
+							drawing: { kind: 'fanin', label: 'sum' },
+							quotes: [{ path: 'app.py', text: '    return sum(items)' }],
+						},
+					],
+					terms: [
+						{ name: 'items', means: 'The list total adds up.', quote: { path: 'app.py', text: 'def total(items):' } },
+					],
+					questions: ['What does total return for an empty list?'],
+				},
+			},
+		},
+		{ text: 'That is all of it.' },
+	])
+	const { code, stdout, stderr } = await ken(['ask', 'Explain total', '--repo', buildRepository(COMMITS).root], {
+		...withModel(model.baseUrl),
+		KEN_HOME: mkdtempSync(path.join(tmpdir(), 'ken-home-')),
+	})
+	assert.equal(code, 0, stderr)
+	const order = [
+		'Brief 1. Adds up a list of items.',
+		'  1. total hands the list to sum.',
+		'drawn as fanin, "sum"',
+		'total returns what sum makes of the items.',
+		'total does no adding of its own. It returns what sum makes of the list.',
+		'    return sum(items)',
+		'  Terms',
+		'    items: The list total adds up.',
+		'def total(items):',
+		'  Questions worth asking',
+		'    - What does total return for an empty list?',
+		'That is all of it.',
+	]
+	const at = order.map((text) => stdout.indexOf(text))
+	assert.ok(
+		at.every((place, k) => place > (at[k - 1] ?? -1)),
+		`each part of the brief prints, in order: ${at}\n${stdout}`,
+	)
+})
+
 test('ken ask marks a risk that quotes a later commit as fixed since in that commit, even when the fix branched from inside the change', async () => {
 	const later = buildRepository([
 		{ message: 'feat: start', files: { 'app.py': 'def total(items):\n    return 0\n' } },

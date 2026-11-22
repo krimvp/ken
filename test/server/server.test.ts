@@ -218,6 +218,7 @@ test('a question streams its steps, the words and the cards in order, a diagram 
 			want: null,
 			steps: 0,
 			view: null,
+			brief: null,
 		},
 	])
 	const reopened = await json(later, `/api/questions/${saved.entry.id}`)
@@ -649,6 +650,14 @@ test('the layout comes from git with no model: the query picks the commit, a com
 		[{ name: 'src', paths: ['src'] }],
 		"the page knows the top level's parts, with their paths, so it can colour them and what sits in them before it lays them out",
 	)
+})
+
+test('the page calls the project what its package.json calls it, and by its folder when it has none', async () => {
+	const { root: named } = buildRepository([
+		{ message: 'feat: start', files: { 'package.json': '{ "name": "shop" }\n', 'src/pay.ts': 'export {}\n' } },
+	])
+	assert.equal((await json(await open(tempFolder('ken-home-'), null, named), '/api/state')).name, 'shop')
+	assert.equal((await json(await open(tempFolder('ken-home-'), null), '/api/state')).name, path.basename(root))
 })
 
 test('"Ask ken to name these parts" sends the folder split to the model, and the parts it names and what it says the level is then show in the layout with no model', async () => {

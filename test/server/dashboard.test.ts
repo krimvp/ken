@@ -317,6 +317,46 @@ test('a level the reader asks to see another way is stored with their own words 
 	assert.deepEqual(row.view, { within: ['src'], asked: words, drew: 'parts' })
 })
 
+test('the flows the model names with the parts of a level are sent with that level, a fourth flow is sent back, and a level named without any has none', async () => {
+	const { root } = buildRepository([
+		{
+			message: 'feat: start',
+			files: { 'src/server/serve.ts': 'export const port = 80\n', 'src/store/save.ts': 'export function save() {}\n' },
+		},
+	])
+	const layout = (within: string[], inside: string, flows?: string[]) => ({
+		within,
+		about: 'A server that answers from a store.',
+		parts: [
+			{ name: 'Server', job: 'serves', paths: [`${inside}server`] },
+			{ name: 'Store', job: 'saves', paths: [`${inside}store`] },
+		],
+		...(flows ? { flows } : {}),
+	})
+	const flows = ['How a request is answered', 'How an answer is saved']
+	const model = await scriptedModel([
+		{
+			tool: 'ken__show',
+			text: 'Two parts.',
+			args: { layout: layout(['src'], 'src/', [...flows, 'A third', 'A fourth']) },
+		},
+		{ tool: 'ken__show', args: { layout: layout(['src'], 'src/', flows) } },
+		{ text: '' },
+		{ tool: 'ken__show', text: 'Two parts.', args: { layout: layout([], 'src/') } },
+		{ text: '' },
+	])
+	const server = await openKen(root, readerHome(), model.baseUrl)
+	const lines = await ask(server, { lens: { kind: 'parts', within: ['src'], name: null } })
+	assert.ok(
+		lines.some((line) => line.step?.kind === 'sent-back' && /4 flows/.test(line.step.problems.join(' '))),
+		'the model is told it named too many',
+	)
+	assert.deepEqual((await json(server, '/api/layout?within=src')).look.named.flows, flows)
+
+	await ask(server, { lens: { kind: 'parts', within: [], name: null } })
+	assert.deepEqual((await json(server, '/api/layout')).look.named.flows, [])
+})
+
 test('a level the reader asks to see as a flow is answered with a diagram, which the reply keeps with their words and its row says it drew', async () => {
 	const { root } = buildRepository([
 		{

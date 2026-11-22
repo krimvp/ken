@@ -92,7 +92,7 @@ async function main(argv: string[]): Promise<number> {
 	}
 	// A script that asks for JSON is not a reader, so its questions leave the reader's map alone.
 	const opened = values.json ? null : await mapOf(directory)
-	const reader = opened?.kind === 'ok' ? { reader: { map: opened.map, notes: opened.notes } } : {}
+	const reader = opened?.kind === 'ok' ? { reader: { map: opened.map, notes: opened.notes, prefs: opened.prefs } } : {}
 	const started = await startChat({ directory, model: config.config, env: process.env, ...reader })
 	if (started.kind !== 'ok') {
 		process.stderr.write(`${started.message}\n`)

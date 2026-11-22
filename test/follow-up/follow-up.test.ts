@@ -248,7 +248,7 @@ function contentOf(entry: Extract<RecordEntry, { kind: 'decision' }>) {
 test("the spans for catching up start at the reader's last question when it was at an older commit, and at their own last commit, then the last days, each with the commits it holds, and a span with the same commits as one before it is left out", async () => {
 	const { repo, commit } = setUp()
 	const now = new Date('2026-11-16T12:00:00Z')
-	assert.deepEqual(await sinceChoices(repo, [], now), [], 'nothing landed after the one old commit')
+	assert.deepEqual(await sinceChoices(repo, [], null, now), [], 'nothing landed after the one old commit')
 
 	const asked = commit(OWNER, '2026-08-01T12:00:00Z', { 'README.md': '# demo\n\nOne.\n' })
 	const own = commit(OWNER, '2026-10-20T12:00:00Z', { 'README.md': '# demo\n\nTwo.\n' })
@@ -262,9 +262,9 @@ test("the spans for catching up start at the reader's last question when it was 
 		{ askedAt: '2026-08-03T12:00:00Z', head: null },
 	]
 	const changes = async (questions: { askedAt: string; head: string | null }[]) =>
-		(await sinceChoices(repo, questions, now)).map(({ choice }) => [choice.change, choice.commits])
+		(await sinceChoices(repo, questions, null, now)).map(({ choice }) => [choice.change, choice.commits])
 
-	const choices = await sinceChoices(repo, questions, now)
+	const choices = await sinceChoices(repo, questions, null, now)
 	assert.deepEqual(
 		choices.map(({ choice }) => [choice.change, choice.commits]),
 		[
@@ -308,7 +308,7 @@ test("the span since the reader's own last commit finds a commit that came in th
 		{ message: 'feat: d', files: { 'd.txt': 'd\n' }, author: decoy },
 	])
 	const [, , own, , head] = hashes
-	const choices = await sinceChoices(gitRepository(root), [], new Date('2026-11-16T12:00:00Z'))
+	const choices = await sinceChoices(gitRepository(root), [], null, new Date('2026-11-16T12:00:00Z'))
 	assert.deepEqual(
 		choices.map(({ anchor, choice }) => [anchor, choice.change]),
 		[['commit', `${own}..${head}`]],

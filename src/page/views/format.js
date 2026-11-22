@@ -12,9 +12,9 @@ export function prose(text) {
 	return esc(text).replace(/`([^`]+)`/g, '<code>$1</code>')
 }
 
-// The project by its folder name, with the full path in the title.
-export function folderHtml(project) {
-	return `<code title="${esc(project)}">${esc(project.split('/').at(-1))}</code>`
+// The project by its name, with the path of its folder in the title.
+export function projectHtml({ name, folder }) {
+	return `<code title="${esc(folder)}">${esc(name)}</code>`
 }
 
 export function short(hash) {

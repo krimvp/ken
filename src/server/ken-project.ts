@@ -1,28 +1,44 @@
+import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import path from 'node:path'
 import { type Chat, type ModelFlags, type ModelUnset, readModelConfig, startChat } from '../agent/index.ts'
 import { type History, kenHome, openHistory } from '../history/index.ts'
 import type { LayoutSources } from '../layout/index.ts'
 import { openSnapshots } from '../live/index.ts'
-import { openMap, openNotes, type ReaderNotes, type UnderstandingMap } from '../map/index.ts'
+import {
+	openMap,
+	openNotes,
+	openPrefs,
+	openSeen,
+	type ReaderNotes,
+	type ReaderPrefs,
+	type ReaderSeen,
+	type UnderstandingMap,
+} from '../map/index.ts'
 import { fileRecordStore, type RecordStore } from '../record/index.ts'
 import { findRoot, gitRepository, type Repository } from '../repo/index.ts'
 import { projectSessions } from '../transcripts/index.ts'
+import { conceptReads } from './concepts/brief.ts'
 import { type LiveRunner, liveRunner } from './live-runner.ts'
 import { questionDesk } from './question-desk.ts'
 
-// What "ken open" and "ken live" share for one project: its git, the reader's history, map and notes, the record, what
-// the layout reads, the chat when a model is set, the desk that runs one model call at a time, and live mode, which writes
-// its notes in a chat of its own. live is null without a model.
+// What "ken open" and "ken live" share for one project: its git, the reader's history, map and notes, the lines on what
+// they looked at, how much text they chose, the record, what the layout reads, the chat when a model is set, the desk that runs one model call at a time, and live mode, which writes
+// its notes in a chat of its own. live is null without a model. shown is the folder as the reader would type it, and
+// name what the page calls the project.
 export type KenProject = {
 	root: string
 	shown: string
+	name: string
 	repo: Repository
 	history: History
 	record: RecordStore
 	map: UnderstandingMap
 	readerNotes: ReaderNotes
+	seen: ReaderSeen
+	prefs: ReaderPrefs
 	layout: LayoutSources
+	concepts: ReturnType<typeof conceptReads>
 	model: { kind: 'ok'; chat: Chat; name: string } | ModelUnset
 	desk: ReturnType<typeof questionDesk>
 	live: LiveRunner | null
@@ -53,12 +69,18 @@ export async function openProject(options: {
 	const noted = await openNotes(home, repo)
 	if (noted.kind !== 'ok') throw new Error(`${root} has a history but no first commit`)
 	const readerNotes = noted.notes
+	const looked = await openSeen(home, repo)
+	if (looked.kind !== 'ok') throw new Error(`${root} has a history but no first commit`)
+	const { seen } = looked
+	const chosen = await openPrefs(home, repo)
+	if (chosen.kind !== 'ok') throw new Error(`${root} has a history but no first commit`)
+	const { prefs } = chosen
 	const store = await openSnapshots(home, repo, root)
 	const config = readModelConfig(options.flags, options.env)
 	let model: KenProject['model']
 	let notes: Chat | null = null
 	if (config.kind === 'ok') {
-		const reader = { map, notes: readerNotes }
+		const reader = { map, notes: readerNotes, prefs }
 		const chat = { directory: root, model: config.config, env: options.env, reader, snapshots: store.objects }
 		const [started, forNotes] = await Promise.all([startChat(chat), startChat(chat)])
 		if (started.kind !== 'ok') return { kind: 'refused', message: started.message }
@@ -69,8 +91,9 @@ export async function openProject(options: {
 		model = config
 	}
 	const withSnapshots = gitRepository(root, { alternate: store.objects })
-	const layout = { root, repo: withSnapshots, snapshots: store, record, map }
-	const desk = questionDesk(history, record, repo, map, layout)
+	const layout = { root, repo: withSnapshots, snapshots: store, record, map, seen }
+	const concepts = conceptReads(layout, history)
+	const desk = questionDesk(history, record, repo, map, layout, concepts)
 	const live = notes && liveRunner({ root, project: repo, withSnapshots, store, sessions, desk, chat: notes })
 	const shown = root.startsWith(`${homedir()}${path.sep}`) ? `~${root.slice(homedir().length)}` : root
 
@@ -83,6 +106,37 @@ export async function openProject(options: {
 
 	return {
 		kind: 'ok',
-		project: { root, shown, repo, history, record, map, readerNotes, layout, model, desk, live, close },
+		project: {
+			root,
+			shown,
+			name: await nameOf(root),
+			repo,
+			history,
+			record,
+			map,
+			readerNotes,
+			seen,
+			prefs,
+			layout,
+			concepts,
+			model,
+			desk,
+			live,
+			close,
+		},
 	}
+}
+
+// The project's own name: the one its package.json gives it, else the name of its folder. ken's model reads the same
+// file, so the sentence it writes on the project and the page call the project the same thing.
+async function nameOf(root: string): Promise<string> {
+	try {
+		const manifest: unknown = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'))
+		if (typeof manifest === 'object' && manifest !== null && 'name' in manifest) {
+			if (typeof manifest.name === 'string' && manifest.name !== '') return manifest.name
+		}
+	} catch {
+		// No package.json, or one that does not parse: the folder names the project.
+	}
+	return path.basename(root)
 }

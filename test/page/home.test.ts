@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { test } from 'node:test'
 import { fileRecordStore } from '../../src/record/index.ts'
@@ -26,6 +27,7 @@ const { canvasHtml }: { canvasHtml: (home: object, rows: object[]) => string } =
 type Place = { name: string; within: string[] }
 type Home = {
 	wayIn: string
+	opened: boolean
 	detail: string
 	trail: Place[]
 	change: string
@@ -38,7 +40,11 @@ const { freshHome }: { freshHome: (stored: () => null, ui: object) => Home } = a
 	path.join(HOME, 'state/home-state.js')
 )
 type Answer = { ok: boolean; body: object }
-type Loads = { loadLayout: () => Promise<boolean>; loadDiff: () => Promise<void>; refresh: () => Promise<void> }
+type Loads = {
+	loadLayout: (again?: boolean) => Promise<boolean>
+	loadDiff: () => Promise<void>
+	refresh: () => Promise<void>
+}
 const { homeLoads }: { homeLoads: (app: object) => Loads } = await import(path.join(HOME, 'state/loads.js'))
 const {
 	homeRuns,
@@ -142,14 +148,14 @@ const model = await scriptedModel([
 ])
 const server = await openKen(root, readerHome(), model.baseUrl)
 // The three runs as the home sends them.
-await ask(server, { lens: { kind: 'tour', within: [], name: null } })
+await ask(server, { lens: { kind: 'explain', within: [], name: null, part: null } })
 await ask(server, { lens: { kind: 'change', change: REVIEWED, want: 'story' } })
 await ask(server, { lens: { kind: 'change', change: REVIEWED, want: 'walk' } })
 const rows: { id: string }[] = (await json(server, '/api/questions')).questions
 const [tourRow, storyRow, walkRow] = rows
 
 const lookAt = async (query: string) =>
-	(await json(server, `/api/layout?${query}`)) as { look: object; changes: object[] }
+	(await json(server, `/api/layout?${query}`)) as { look: object; changes: object[]; levels: object[] }
 
 // A saved question as the page holds it once read.
 async function saved(id: string) {
@@ -157,9 +163,10 @@ async function saved(id: string) {
 	return { ...view.entry, topics: view.topics }
 }
 
-// The home on one level, with every reply its content names already read.
-async function homeOn(query: string, detail: string, selected: object | null) {
-	const { look, changes } = await lookAt(query)
+// The home on one level, with every reply its content names already read. The reader opened what ken says of the
+// level, so the column beside the picture is the reading panel: board says they did not, and it is the board.
+async function homeOn(query: string, detail: string, selected: object | null, board = false) {
+	const { look, changes, levels } = await lookAt(query)
 	const replies = new Map<string, object>()
 	for (const row of rows) replies.set(row.id, await saved(row.id))
 	const ui = {
@@ -169,7 +176,8 @@ async function homeOn(query: string, detail: string, selected: object | null) {
 		unfolded: new Set(),
 		wide: false,
 	}
-	return { ...freshHome(() => null, ui), look, changes, detail, selected, content: contentOf(look, rows, replies) }
+	const content = contentOf(look, rows, replies)
+	return { ...freshHome(() => null, ui), look, changes, levels, detail, selected, content, opened: !board }
 }
 
 const ENV = {
@@ -221,7 +229,7 @@ test('the home shows the stored tour of the level on screen and the stored story
 test('for a toured level the panel offers the stored tour at the big picture, opens the picked stop with its words and arrows at "How it works", and shows that stop\'s quoted lines at "In the code"', async () => {
 	const big = await panel('change=none', 'big', null)
 	assert.match(big, /Start the tour/, 'the stored tour starts with no run')
-	assert.doesNotMatch(big, /Show me around/, 'so no run is offered')
+	assert.doesNotMatch(big, /Ask ken to explain these parts/, 'so no run is offered')
 
 	const picked = { kind: 'part', name: 'Core' }
 	const how = await panel('change=none', 'how', picked)
@@ -284,7 +292,7 @@ const fromServer = async (url: string) => {
 
 test('a change nobody asked ken about still says what git knows: its commits, the changed files of each part, and the diff of the part the reader picks', async () => {
 	const { home, loads } = pageOn(fromServer)
-	Object.assign(home, { wayIn: 'review', change: `${first}..${docs}`, detail: 'how' })
+	Object.assign(home, { wayIn: 'review', change: `${first}..${docs}`, detail: 'how', opened: true })
 	await loads.refresh()
 	const how = said(inspectorHtml(home, ENV))
 	assert.match(how, /docs: say what the store is for/, 'the commit of the change')
@@ -368,9 +376,27 @@ test('a level the server answers late does not replace the one the reader asked 
 	assert.equal(home.reading, null, 'and the home no longer says it is reading')
 })
 
+test('a level read again behind the screen stays as it is when the server cannot answer, and a level the reader asked for says why it is gone', async () => {
+	let down = false
+	const { home, loads } = pageOn(async (url) =>
+		down ? { ok: false, body: { message: 'git is busy.' } } : fromServer(url),
+	)
+	home.change = 'none'
+	await loads.refresh()
+	down = true
+
+	await loads.loadLayout(true)
+	assert.match(said(canvasHtml(home, rows)), /Store Saves what the core makes/, 'the picture is still there')
+	assert.equal(home.reading, null)
+
+	await loads.loadLayout()
+	assert.match(said(canvasHtml(home, rows)), /ken could not show this\. git is busy\./)
+	assert.equal(home.reading, null, 'and the home no longer says it is reading')
+})
+
 test('a run is judged against the level it started on: a reader who looked inside a part meanwhile is told it finished there, and one who stayed sees what it made', async () => {
 	const whole = { name: 'Whole project', within: [] }
-	const started = { kind: 'tour', trail: [whole], change: 'none' }
+	const started = { kind: 'explainAll', trail: [whole], change: 'none' }
 	const tour = await saved(tourRow?.id ?? '')
 
 	const moved = pageOn(fromServer)
@@ -379,7 +405,7 @@ test('a run is judged against the level it started on: a reader who looked insid
 	const running = { ...ENV, off: 'busy', running: { onHome: started, q: { steps: [], typing: '' }, started: 0 } }
 	assert.match(
 		said(inspectorHtml(moved.home, running)),
-		/ken's model is writing the tour of the whole project\. Go there .*Core/,
+		/ken's model is explaining the parts of the whole project\. Go there .*Core/,
 		'while the run goes on elsewhere, one line says so and the panel still shows where the reader is',
 	)
 	await moved.runs.ended(started, tour)
@@ -398,4 +424,54 @@ test('a run is judged against the level it started on: a reader who looked insid
 	await stopped.loads.refresh()
 	await stopped.runs.ended(started, { ...tour, outcome: 'stopped', reply: null })
 	assert.equal(stopped.home.ended?.kind, 'nothing', 'a run that made nothing says so')
+})
+
+type Seen = { did: string; paths: string[]; after: number; change?: { base: string; head: string } } | null
+const { onScreen }: { onScreen: (home: object) => Seen } = await import(path.join(HOME, 'state/seen.js'))
+const { readoutHtml }: { readoutHtml: (home: object) => string } = await import(path.join(HOME, 'board/readout.js'))
+
+test('what the page tells ken follows what stays on screen: a tour stop is read after ten seconds, its quoted files are code after five, a step or a part of a change is that change, and a part at the big picture is only opened', async () => {
+	const core = { kind: 'part', name: 'Core' }
+	const sent = (seen: Seen) => seen && [seen.did, seen.paths, seen.after]
+	assert.deepEqual(sent(onScreen(await homeOn('change=none', 'how', core))), ['read', ['src/core'], 10_000])
+	assert.deepEqual(sent(onScreen(await homeOn('change=none', 'code', core))), ['code', ['src/core/run.ts'], 5_000])
+	assert.equal(onScreen(await homeOn('change=none', 'big', core)), null)
+	assert.equal(onScreen(await homeOn('change=none', 'how', null)), null, 'the whole path is no one part')
+
+	const range = { base: docs, head }
+	const step = onScreen(await homeOn(`change=${REVIEWED}`, 'how', { kind: 'step', number: 2 }))
+	assert.deepEqual([sent(step), step?.change], [['change', ['src/store/db.ts'], 5_000], range])
+	const diff = onScreen(await homeOn(`change=${REVIEWED}`, 'code', core))
+	assert.deepEqual([sent(diff), diff?.change], [['change', ['src/core/run.ts'], 5_000], range])
+	assert.equal(onScreen(await homeOn(`change=${REVIEWED}`, 'how', core)), null, 'its diff is not on screen yet')
+})
+
+test('with nothing picked the column is the board, and a picked part gives the panel with the way back; the box and the readout say what ken thinks the reader knows of the part, how many commits landed since, and offer the five levels', async () => {
+	// The reader opened the store's code on an earlier visit, at the first commit. Two commits touched the store since.
+	const { file } = await json(server, '/api/reader')
+	mkdirSync(path.dirname(file), { recursive: true })
+	const line = { at: '2026-01-02T10:00:00.000Z', did: 'code', paths: ['src/store/db.ts'], head: first }
+	writeFileSync(file, `${JSON.stringify(line)}\n`)
+
+	const home = await homeOn('change=none', 'big', null, true)
+	const reader = await json(server, '/api/reader')
+	const [next] = (home.look as { next: { items: { title: string; parts: string[] }[] } }).next.items
+	assert.deepEqual(next?.parts, ['Store'], 'the part that changed since they looked leads')
+	const board = said(inspectorHtml({ ...home, reader }, ENV))
+	assert.ok(board.includes(next?.title ?? 'no item'), 'the board lists what to look at next')
+	assert.ok(board.includes(reader.learned[0].text), 'and what ken recorded')
+	assert.doesNotMatch(board, /Back to Next for you/)
+
+	const store = /Store Saves what the core makes .{0,40}Read the code 2 commits since you looked Core/
+	assert.match(said(canvasHtml(home, rows)), store, 'the box says the level in words and the commits since')
+
+	const picked = { ...home, reader, selected: { kind: 'part', name: 'Store' } }
+	const panel = said(inspectorHtml(picked, ENV))
+	assert.match(panel, /Back to Next for you/)
+	assert.ok(!panel.includes(next?.title ?? 'no item'), 'the panel explains the part in place of the board')
+	const readout = said(readoutHtml(picked))
+	assert.match(readout, /ken thinks you have read the code of Store\..*2 commits since you looked\. Not right/)
+
+	const levels = said(readoutHtml({ ...picked, fixing: 'Store' }))
+	assert.match(levels, /It is new to me I have only seen it I have read about it I have read its code I know it/)
 })
