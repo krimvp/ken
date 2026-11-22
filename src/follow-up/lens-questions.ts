@@ -4,7 +4,7 @@
 // agent at all.
 import { LIST_SAID, linesText, type TopicState } from '../map/index.ts'
 import type { RecordRead, Who } from '../record/index.ts'
-import type { Repository } from '../repo/index.ts'
+import type { Range, Repository } from '../repo/index.ts'
 import type { ChangeCommit, OpenItems, OpenTopic } from './open-items.ts'
 import { authorsOf, findAuthor, type PersonChanges, personChanges } from './person.ts'
 import { type Since, sinceOf, type TimeRange, timeRange } from './time-range.ts'
@@ -407,7 +407,7 @@ export type AnswerAbout = {
 		line: string
 		paths: string[]
 		told: string[]
-		knows: { why: string; since: number } | null
+		knows: string | null
 	}
 	bounds: ExplainLevel['bounds']
 	drawings: Record<string, string>
@@ -421,9 +421,7 @@ export function answerQuestion(question: AnswerAbout): LensQuestion {
 			question.asked,
 			LIST_SAID,
 			`- You ask this about the ${about.kind} ${about.name}${places}${about.line ? `: ${about.line}` : '.'}`,
-			...(about.knows
-				? [`- Your map: ${about.knows.why}${about.knows.since ? ' The code has changed since you looked.' : ''}`]
-				: []),
+			...(about.knows ? [`- Your map: ${about.knows}`] : []),
 			...(about.told.length > 0
 				? ['- Its brief already says, with the lines each point quotes:', ...about.told.map((line) => `  - ${line}`)]
 				: []),
@@ -492,4 +490,14 @@ function count(commits: number): string {
 
 function short(hash: string): string {
 	return hash.slice(0, 7)
+}
+
+// This question also identifies the saved explanation in the reader's history. Both commit ends and every path
+// are part of it, so a new change or a different set of files gets a new explanation.
+export function partChangeQuestion(part: string, range: Range, within: string[]): string {
+	return [
+		`What changed in ${part.replace(/\s+/g, ' ').trim()} for the people who use it?`,
+		`Compare ${range.base} to ${range.head}. Use diff with path for each of these files or directories: ${JSON.stringify(within)}.`,
+		'Lead with what changes for someone using this part. Include other changes they would notice, such as limits or error messages. Ground those effects in the diff and say when their purpose is unclear.',
+	].join('\n')
 }

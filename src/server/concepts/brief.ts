@@ -46,6 +46,11 @@ export const TRUST = "ken's model wrote the words. ken found each quoted line in
 // What a brief says of its words while ken's model has said nothing of the concept.
 export const GIT_TRUST = "ken found this in git. ken's model has not explained it yet."
 
+// The same evidence goes to a scoped question and to an agent that recalls this part later.
+export function readerLine(knows: Knows | null): string | null {
+	return knows ? knows.why + (knows.since ? ' The code has changed since you looked.' : '') : null
+}
+
 type Named = { id: string; name: string }
 type Neighbour = Named & { verb: string }
 
@@ -124,6 +129,36 @@ export function conceptReads(layout: LayoutSources, history: History) {
 		return { read, answered, answers: answersOf(answered), drawn: drawnOf(answered, read), now }
 	}
 	type Held = Awaited<ReturnType<typeof held>>
+
+	// A single scan shares the saved replies across its parts. The next scan checks the new head and replies again.
+	async function levelProgress(look: LayoutLook, now: Date) {
+		const all = await held(now)
+		return {
+			hasProcess: all.drawn.length > 0,
+			async firstQuestions(name: string, limit: number) {
+				const told = toldOfPart(all.answered, look.within, name)
+				if (!told || (await stalePoints(look.head, told.points))) return null
+				if (limit === 0) return []
+				const concept = partId(look.within, name)
+				const first = questionsAbout(concept, told.questions, all.answers).slice(0, limit)
+				// Reader-written questions stay private. Only questions from the brief can need another background run.
+				for (const question of first.slice(0, told.questions.length)) {
+					if (!question.answered) continue
+					const answer = all.answers.find((each) => each.id === question.id)
+					if (answer && (await stalePoints(look.head, answer.told.points))) question.answered = false
+				}
+				return first
+			},
+		}
+	}
+
+	function stalePoints(head: CommitHash | undefined, points: BriefPoint[]) {
+		return staleFiles(
+			layout.repo,
+			head,
+			points.flatMap((point) => point.quotes),
+		)
+	}
 
 	async function brief(id: string, now: Date): Promise<Brief | null> {
 		const made = await briefOf(id, now)
@@ -209,11 +244,7 @@ export function conceptReads(layout: LayoutSources, history: History) {
 		return {
 			...blank(id, file ? 'file' : 'part', box.name, line),
 			...fields,
-			staleFiles: await staleFiles(
-				layout.repo,
-				look.head,
-				fields.points.flatMap((point) => point.quotes),
-			),
+			staleFiles: await stalePoints(look.head, fields.points),
 			minutes: told ? fields.minutes : minutesFor([line, ...connections, ...written]),
 			explain: { lens: { kind: 'explain', within: look.within, part: box.name } },
 			questions: questionsAbout(id, written, all.answers),
@@ -355,11 +386,7 @@ export function conceptReads(layout: LayoutSources, history: History) {
 		}
 		const top = await levelAt([], all.now)
 		const quoted = [...new Set(answer.told.points.flatMap((point) => point.quotes.map((quote) => quote.path)))]
-		const changed = await staleFiles(
-			layout.repo,
-			top?.head,
-			answer.told.points.flatMap((point) => point.quotes),
-		)
+		const changed = await stalePoints(top?.head, answer.told.points)
 		const boxes = (top?.boxes ?? []).filter((box) =>
 			quoted.some((path) => box.paths.some((place) => under(path, place))),
 		)
@@ -512,7 +539,7 @@ export function conceptReads(layout: LayoutSources, history: History) {
 		}
 	}
 
-	return { brief, concepts, processes, levelTold }
+	return { brief, concepts, processes, levelProgress, levelTold }
 }
 
 // A brief with nothing in it but what every kind has.

@@ -219,7 +219,7 @@ function tabsHtml(chg, waiting, live) {
 		.join('')}</div>`
 }
 
-function partChangeHtml({ part, partDiff }) {
+function partChangeHtml({ part, partDiff }, env) {
 	const heading = `<button class="k-link" data-act="chg-part" data-key="chg-all">All changes in this range</button><h2 id="chg-name" tabindex="-1">Changes in ${esc(part)}</h2>`
 	if (!partDiff || partDiff.message || partDiff.tooLarge) {
 		const why =
@@ -234,7 +234,15 @@ function partChangeHtml({ part, partDiff }) {
 		const name = path === oldPath ? esc(path) : `${esc(oldPath)} to ${esc(path)}`
 		return `<li><code>${name}</code>${binary.includes(path) || binary.includes(oldPath) ? ' (binary file)' : ''}</li>`
 	})
+	const saved = env.rows?.findLast((row) => row.outcome === 'answered' && row.question === partDiff.question)
+	let explain = ''
+	if (saved) {
+		explain = `<button class="k-btn is-quiet" data-act="open" data-id="${esc(saved.id)}" data-key="chg-explain-part">Read the explanation</button>`
+	} else if (files.length) {
+		explain = `<div class="k-chg-offers"><button class="k-btn is-quiet k-run-btn" data-act="chg-explain-part" data-key="chg-explain-part"${env.off ? ' disabled' : ''}><span>Explain this change</span><small>${RUN_COST}</small></button></div>${env.off ? `<p class="k-muted">${esc(env.off)}</p>` : ''}`
+	}
 	return `${heading}<p>${count(files.length, 'changed file', 'changed files')} · <code>${esc(short(range.base))}..${esc(short(range.head))}</code></p>
+		${explain}
 		${partDiff.historyTooLarge ? '<p>Too many commits to list.</p>' : commitsHtml(partDiff, true)}
 		${hunks.length ? stepDiffHtml(partDiff, range) : ''}
 		${partDiff.cut ? '<p>Only the first 400 changed lines are shown.</p>' : ''}
@@ -250,7 +258,7 @@ export function changesPageHtml({ home, chg, env, timeline, waiting, live, older
 	if (chg.tab !== 'changes')
 		return `<div class="k-chg-page">${tabs}<section class="k-tile k-chg-older">${older}</section></div>`
 	if (chg.part)
-		return `<div class="k-chg-page">${tabs}<section class="k-tile k-chg-older">${partChangeHtml(chg)}</section></div>`
+		return `<div class="k-chg-page">${tabs}<section class="k-tile k-chg-older">${partChangeHtml(chg, env)}</section></div>`
 	const { look } = home
 	if (!look) {
 		const said = home.problem ? esc(home.problem.message) : 'Reading what landed, from git.'

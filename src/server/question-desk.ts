@@ -19,6 +19,7 @@ import {
 	type LensFacts,
 	onDay,
 	openItems,
+	partChangeQuestion,
 	partsQuestion,
 	personLens,
 	rangeLens,
@@ -41,8 +42,8 @@ import { type About, holdsSnapshot } from '../live/index.ts'
 import { areaQuestion, catchUpQuestion, deeperQuestion, type TopicState, type UnderstandingMap } from '../map/index.ts'
 import { type RecordStore, sameName } from '../record/index.ts'
 import { parsePath, type Repository } from '../repo/index.ts'
-import type { conceptReads } from './concepts/brief.ts'
-import { partId, questionId } from './concepts/concept.ts'
+import { type conceptReads, readerLine } from './concepts/brief.ts'
+import { parseConcept, partId, questionId } from './concepts/concept.ts'
 import { type Layer, type Looking, type layerPlan, lensKey } from './concepts/layers.ts'
 import { toldWithLines } from './concepts/told.ts'
 
@@ -255,6 +256,7 @@ export function questionDesk(
 			askedAt: new Date().toISOString(),
 			head: await headNow(),
 			thread: chat.thread,
+			...(as?.kind === 'question' && as.focus ? { focus: as.focus } : {}),
 		}
 		send({ kind: 'asked', question })
 		const events: ChatEvent[] = []
@@ -483,7 +485,40 @@ export function questionDesk(
 			if (text.length > MAX_QUESTION_CHARS) {
 				return { kind: 'refused', problem: `Keep the question under ${MAX_QUESTION_CHARS} characters.` }
 			}
-			return { kind: 'ok', text: text.trim() }
+			const focus = fieldOf(body, 'focus')
+			if (focus === undefined) return { kind: 'ok', text: text.trim() }
+			const view = fieldOf(focus, 'view')
+			const commit = fieldOf(focus, 'commit')
+			if (typeof commit !== 'string' || !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(commit))
+				return { kind: 'refused', problem: 'Open the source or drawing to ask about it again.' }
+			if (view !== undefined) {
+				const concepts = fieldOf(focus, 'concepts')
+				const earlier = fieldOf(focus, 'earlier')
+				if (
+					(view !== 'parts' && view !== 'world' && view !== 'runtime') ||
+					!Array.isArray(concepts) ||
+					concepts.length > 8 ||
+					!concepts.every((id) => typeof id === 'string' && id.length <= 120 && parseConcept(id)) ||
+					typeof earlier !== 'boolean'
+				)
+					return { kind: 'refused', problem: 'Open the architecture view to ask about it again.' }
+				return { kind: 'ok', text: text.trim(), as: { kind: 'question', focus: { view, commit, concepts, earlier } } }
+			}
+			const raw = fieldOf(focus, 'path')
+			const path = parsePath(typeof raw === 'string' && raw.length <= 4096 ? raw : '')
+			const start = fieldOf(focus, 'start')
+			const end = fieldOf(focus, 'end')
+			if (
+				path.kind !== 'ok' ||
+				typeof start !== 'number' ||
+				!Number.isSafeInteger(start) ||
+				start < 1 ||
+				typeof end !== 'number' ||
+				!Number.isSafeInteger(end) ||
+				end < start
+			)
+				return { kind: 'refused', problem: 'Choose the file and lines to ask about again.' }
+			return { kind: 'ok', text: text.trim(), as: { kind: 'question', focus: { path: path.path, commit, start, end } } }
 		}
 		if (kind === 'catch-up') {
 			const [{ states }, read, asked] = await Promise.all([map.read(new Date()), record.read(), history.list()])
@@ -615,7 +650,7 @@ export function questionDesk(
 				about: {
 					kind: about.kind,
 					name: about.name,
-					knows: about.knows,
+					knows: readerLine(about.knows),
 					line: about.staleFiles ? '' : about.line,
 					paths,
 					told: about.staleFiles ? [] : about.points.map(toldWithLines),
@@ -637,10 +672,29 @@ export function questionDesk(
 				return { kind: 'refused', problem: `Send the change, and what you want of it: one of ${wants}.` }
 			}
 			// The layout reads the change, so the question is about the same commits the page lays over the picture.
-			const ask = await readLayoutAsk(layout, { change: asked }, new Date())
+			const part = fieldOf(lens, 'part')
+			const paths = fieldOf(lens, 'within')
+			if (
+				part !== undefined &&
+				(want !== 'story' ||
+					typeof part !== 'string' ||
+					!part.trim() ||
+					!Array.isArray(paths) ||
+					!paths.length ||
+					!paths.every((path) => typeof path === 'string'))
+			) {
+				return { kind: 'refused', problem: 'Send the name and paths of the part to explain.' }
+			}
+			const within = part === undefined ? [] : (paths as string[])
+			const ask = await readLayoutAsk(layout, { change: asked, within }, new Date())
 			if (ask.kind !== 'ok') return { kind: 'refused', problem: ask.message }
 			const { change } = ask.ask
 			if (change === null) return { kind: 'refused', problem: 'Name the change to ask about.' }
+			if (typeof part === 'string') {
+				const text = partChangeQuestion(part, change.range, ask.ask.within)
+				// A reply about one part belongs in the conversation, not in the saved story of the whole change.
+				return change.range.base === change.range.head ? { kind: 'empty', text } : { kind: 'ok', text }
+			}
 			const own = change.kind === 'uncommitted' || (await holdsSnapshot(layout.snapshots, change.range.head))
 			const landed = own ? null : await landedIn(layout.repo, change)
 			const name = own ? 'your uncommitted work' : await changeName(layout.repo, change, landed?.commits ?? 0)

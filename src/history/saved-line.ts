@@ -11,6 +11,7 @@ import {
 	type Reply,
 	type Risk,
 	type Step,
+	unverifiedSource,
 	type Withdrawn,
 } from '../agent/index.ts'
 import type { Decision, RecordEntry } from '../record/index.ts'
@@ -31,6 +32,7 @@ type OldAnswer = {
 
 const OUTCOMES = new Set([
 	'answered',
+	'unverified',
 	'rejected',
 	'no-answer',
 	'incomplete',
@@ -74,7 +76,7 @@ export function parseLine(line: string, decisions: RecordEntry[]): HistoryEntry 
 		const reply = replyOf(answer as OldAnswer, typeof note === 'string' ? note : '', [...stored, ...kept])
 		return { ...rest, outcome: 'answered', reply, recorded: named } as HistoryEntry
 	}
-	if (outcome === 'answered' || outcome === 'partial') {
+	if (outcome === 'answered' || outcome === 'unverified' || outcome === 'partial') {
 		const reply = value.reply
 		if (!isObject(reply) || !Array.isArray(reply.items) || !strings(reply.topics)) return null
 		if (reply.tour !== undefined || reply.answers !== undefined) {
@@ -119,6 +121,8 @@ export function parseLine(line: string, decisions: RecordEntry[]): HistoryEntry 
 				: { ...base, outcome: 'incomplete', retry }
 		}
 	}
+	if (entry.outcome === 'answered' && unverifiedSource(entry.focus, entry.reply.items))
+		return { ...entry, outcome: 'unverified' }
 	return entry
 }
 

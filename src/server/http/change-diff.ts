@@ -1,5 +1,6 @@
 // The changed lines for a list of files or for a part. A part also gets its own commits and the names of files
 // whose changes have no lines, such as files that moved or changed mode.
+import { partChangeQuestion } from '../../follow-up/index.ts'
 import { type LayoutSources, readLayoutAsk, under } from '../../layout/index.ts'
 import { type Hunk, parsePath } from '../../repo/index.ts'
 
@@ -38,11 +39,13 @@ export async function readChangeDiff(layout: LayoutSources, query: URLSearchPara
 	const binary = asked.flatMap((file) => (file.kind === 'binary' ? [file.path, file.oldPath].filter(matches) : []))
 	const body = { ...cutAt(hunks, DIFF_LINES), binary: [...new Set(binary)], tooLarge: false }
 	if (!byPart) return { status: 200, body }
+	const part = query.get('part')
 	return {
 		status: 200,
 		body: {
 			...body,
 			range: change.range,
+			...(part ? { question: partChangeQuestion(part, change.range, scope) } : {}),
 			files: asked.map(({ path, oldPath }) => ({ path, oldPath })),
 			commits:
 				history?.kind === 'ok' ? history.commits.map(({ hash, subject, date }) => ({ hash, subject, date })) : [],

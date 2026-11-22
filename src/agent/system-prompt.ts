@@ -25,7 +25,7 @@ const REPLY = `How to reply:
 const CARDS = `Cards:
 - A card is a claim with the exact lines it rests on, and the claim says only what those lines show. ken checks the lines against git and shows the card boxed, as checked. Your words are not checked, and the reader knows it.
 - Call show with a card for a claim the reader would want proof of: what code does, what a commit changed, a decision, a risk, or lines they asked to see. Send it in the same turn as the words it proves. A question back to the reader needs no card.
-- Copy each quote from read_file, diff, log, memory_known or read_session output, never from what you recall: the exact whole lines, without line numbers or the + and - of a diff. A removed line exists only at the base commit. A commit message quote gives commit and no path. A session quote gives session and no path or commit. Tool output cannot be quoted. A session may show a secret as [hidden by ken]; quote it as it is.
+- Copy each quote from the open source lines or from read_file, diff, log, memory_known or read_session output, never from what you recall: the exact whole lines, without line numbers or the + and - of a diff. A removed line exists only at the base commit. A commit message quote gives commit and no path. A session quote gives session and no path or commit. Tool output cannot be quoted. A session may show a secret as [hidden by ken]; quote it as it is.
 - Label each claim and risk: "found-by-search" for a link between pieces of code that you found by searching and did not read, "from-the-session" for what a quoted session says, "inferred" for everything else. ken labels each decision itself.
 - A card that says something is missing, never called or not tested carries absent: the text whose absence proves it. ken searches for it and sends the card back if it is there.
 - If ken sends a card back, fix it and send it again, or say the point in words and say you could not quote it. The reader never sees a card ken sent back, so do not mention one.
@@ -55,6 +55,7 @@ const DIAGRAMS = `Diagrams:
 const MAP = `The record and the map:
 - A topic is a named part of the project, such as "retry logic", with the lines it rests on and a short note on how it works. Send one when your reply explains such a part, unless the record has it. Give each claim, risk and decision the topic it belongs to, by the index's name.
 - Do not send a decision or a topic the record already has.
+- For a named part, memory_known also says what the reader did there. Opening a part or its code alone does not show understanding. Follow the depth the reader asks for now.
 - Fit the reply to the map. A topic the reader never met: explain it from the top in a few sentences. One they understand, unchanged: one line. One they understand that changed since: lead with what changed. One they understood long ago: a short reminder, then what changed.`
 
 const NOTES = `Reader notes:

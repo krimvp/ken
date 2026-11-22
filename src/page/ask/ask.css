@@ -56,6 +56,11 @@
 	margin-top: 8px;
 }
 
+.k-source-question {
+	overflow-wrap: anywhere;
+	font-weight: 600;
+}
+
 .k-ask-form textarea {
 	min-height: 96px;
 	padding: 10px 12px;

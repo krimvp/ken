@@ -93,11 +93,11 @@ const FROM_MAP: Record<MapEvidence, Kind> = {
 // files, while looking at a file's code or change counts for the part that holds it.
 export function looksAt(paths: string[], lines: SeenLine[], states: TopicState[]): Looks {
 	const counted = lines.filter((line) => {
-		if (line.did === 'opened')
-			return line.paths.length === paths.length && line.paths.every((file) => paths.includes(file))
 		const inside = (file: string) => paths.some((place) => under(file, place))
-		// Code and change events name individual files. The other events describe the whole group the reader saw.
-		return line.did === 'code' || line.did === 'change' ? line.paths.some(inside) : line.paths.every(inside)
+		if (line.did === 'code' || line.did === 'change') return line.paths.some(inside)
+		if (line.did === 'read') return line.paths.every(inside)
+		// A reader who opens or corrects a single part says nothing about the parts above or below it.
+		return line.paths.length === paths.length && line.paths.every((file) => paths.includes(file))
 	})
 	const looked: Evidence[] = counted.map((line) =>
 		line.did === 'set' ? { kind: 'set', level: line.level, at: line.at } : { kind: line.did, at: line.at },

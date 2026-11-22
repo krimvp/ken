@@ -8,6 +8,7 @@ import { archActions, freshArch } from './architecture/arch-actions.js'
 import { askActions, freshAsk } from './ask/ask-actions.js'
 import { briefActions, freshBrief } from './brief/brief-actions.js'
 import { briefStore } from './brief/briefs.js'
+import { partId } from './brief/concept-id.js'
 import { changeActions, freshChanges } from './changes/change-actions.js'
 import { fillDrawings, markPart, numberAt } from './draw-diagrams.js'
 import { freshJobs, jobsActions } from './jobs/jobs.js'
@@ -23,12 +24,13 @@ import { atRest, drawPictures, lightPicture } from './project/parts-picture.js'
 import { tourKey } from './project/tour-card.js'
 import { partOf, stepDiffHtml, stopState, stopTopics, tourStart, walkOf } from './project/walk.js'
 import { fitWords } from './shell/fit-words.js'
+import { writePlace } from './shell/place.js'
 import { readerPrefs } from './shell/prefs.js'
 import { freshShell, shellActions } from './shell/shell-actions.js'
 import { checksHtml, quoteCardHtml } from './views/checks.js'
 import { decisionsViewHtml } from './views/decisions.js'
 import { elementKey } from './views/diagram.js'
-import { count, duration, esc, projectHtml, prose, short, when } from './views/format.js'
+import { count, duration, esc, focusLabel, projectHtml, prose, short, when } from './views/format.js'
 import { changedLine, changedTopics, lensHtml } from './views/map.js'
 import { changedParts, openCount, openViewHtml } from './views/open.js'
 import { cardsOf, isMoved, itemsOf, knowPartHtml, LEGEND, replyHtml, stepCardsHtml } from './views/reply.js'
@@ -266,6 +268,7 @@ async function send(body, onHome = null) {
 	const q = {
 		id: null,
 		question,
+		focus: body.focus,
 		askedAt: new Date().toISOString(),
 		head: null,
 		headNow: null,
@@ -323,7 +326,11 @@ async function send(body, onHome = null) {
 				// the reader is reading.
 				saved = { ...fromView(event.view), topics: q.topics }
 				state.thread = state.thread.map((each) => (each === q ? saved : each))
-				if (state.open === q) state.open = saved
+				if (picked === q) picked = saved
+				if (state.open === q) {
+					state.open = saved
+					if (state.view === 'question') addressReply(saved.id)
+				}
 			} else {
 				addEvent(q, event)
 			}
@@ -367,7 +374,11 @@ async function runEnded(q, saved, controller, onHome) {
 	else if (onHome?.kind === 'draw') await procs.ended(made)
 	else if (onHome?.kind === 'views') await arch.viewsEnded(made)
 	else if (onHome !== null) await level.ended(onHome, made)
-	else if (state.thread.includes(q) && stopped) await openQuestion(last.id)
+	else if (state.thread.includes(q) && stopped) {
+		const viewing = state.open === q && state.view === 'question'
+		await openQuestion(last.id)
+		if (viewing && state.open?.id === last.id && state.view === 'question') addressReply(last.id)
+	}
 }
 
 async function loadRows() {
@@ -416,6 +427,7 @@ function schedule() {
 function rowMeta(row) {
 	const ended = {
 		stopped: 'You stopped it',
+		unverified: 'Unverified source answer',
 		incomplete: 'No checked brief',
 		partial: 'Some parts still need a brief',
 		error: "ken's model did not reply",
@@ -493,15 +505,30 @@ function turnHtml(q, t, ui) {
 	let body
 	if (q.reply) {
 		const reply = replyHtml(q, t, ui, { running: state.running !== null, inThread: true })
-		body = `${q.live ? '' : runLine(q, t, ui)}${q.outcome === 'partial' ? endedHtml(q, t) : ''}${reply}${working}`
+		body = `${q.live ? '' : runLine(q, t, ui)}${q.outcome === 'partial' || q.outcome === 'unverified' ? endedHtml(q, t) : ''}${reply}${working}`
 	} else if (q.live) body = working
 	else body = runLine(q, t, ui) + endedHtml(q, t)
 	return `<article class="turn" id="turn-${t}">
 		<p class="asked">You asked ${when(q.askedAt)}<span class="described-note">What ken checked for this reply is on the right.</span></p>
 		${questionHtml(q.question, ui)}
+		${focusHtml(q)}
 		${movedHtml(q, t)}
 		${body}
 	</article>`
+}
+
+function focusHtml(q) {
+	if (!q.focus) return ''
+	const label = esc(focusLabel(q.focus))
+	if (!('path' in q.focus)) return `<p class="muted">About ${label}</p>`
+	const { path, commit, start } = q.focus
+	const address = writePlace({
+		page: 'home',
+		brief: partId([path], path),
+		on: 'source',
+		source: { path, commit, line: start },
+	})
+	return `<p class="muted"><a href="${esc(address)}">Read ${label}</a></p>`
 }
 
 // A lens's question is its first line and the list ken wrote under it, each item a line that starts with "- ". Any
@@ -1054,12 +1081,18 @@ app.older = {
 const shell = shellActions(app)
 app.shell = shell
 
+function addressReply(id) {
+	const address = replyAddress(id)
+	if (location.hash !== address) history.pushState(null, '', address)
+}
+
 async function showReply(id) {
 	await openQuestion(id)
+	state.ask.open = false
 	state.menuOpen = false
 	state.view = state.base = 'question'
 	picked = state.open
-	render()
+	if (!brief.close()) render()
 	const turn = `#turn-${state.thread.indexOf(state.open)}`
 	$(turn)?.scrollIntoView({ block: 'start' })
 	$(`${turn} .q-row, ${turn} button`)?.focus({ preventScroll: true })
@@ -1145,8 +1178,7 @@ const actions = {
 	// opens the reply again.
 	async open(el) {
 		await showReply(el.dataset.id)
-		const address = replyAddress(el.dataset.id)
-		if (location.hash !== address) history.pushState(null, '', address)
+		addressReply(el.dataset.id)
 	},
 	async 'open-running'() {
 		state.menuOpen = false
@@ -1217,7 +1249,7 @@ const actions = {
 	},
 	again: (el) => {
 		const q = state.thread[Number(el.dataset.turn)]
-		return send(q.retry ? { lens: q.retry } : { question: q.question })
+		return send(q.retry ? { lens: q.retry } : { question: q.question, focus: q.focus })
 	},
 	stop() {
 		state.running?.controller.abort()

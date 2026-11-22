@@ -104,7 +104,8 @@ export function briefActions(app) {
 	function draw(env) {
 		const drawer = $('#brief')
 		const now = found()
-		drawer.hidden = now === null
+		drawer.hidden = now === null || state.ask.open
+		if (state.ask.open) return
 		if (now === null) return fill(drawer, '')
 		if (now.kind === 'ok') {
 			const { brief } = now

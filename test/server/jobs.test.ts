@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
+import { writeFileSync } from 'node:fs'
 import { request as httpRequest } from 'node:http'
+import path from 'node:path'
 import { test } from 'node:test'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { fileRecordStore } from '../../src/record/index.ts'
@@ -218,7 +221,7 @@ test('ken answers ahead only the first two questions of the parts the reader ope
 	const asked = ['What does run give back?', 'Who calls run?', 'Why does run give back one?']
 	const home = homes[2] ?? ''
 	const first = await scriptedModel([
-		brief('Runs the work and gives back one.', 'src/core/run.ts', '\treturn 1', asked),
+		brief('Runs the work.', 'src/core/run.ts', 'export function run() {', asked),
 		brief('Starts a run when a person types the command.', 'src/cli/main.ts', 'run()', ['What starts main?']),
 	])
 	const before = await openKen(root, home, first.baseUrl)
@@ -239,6 +242,22 @@ test('ken answers ahead only the first two questions of the parts the reader ope
 		],
 		"with the first answered, neither Core's third question nor Command's joins the line",
 	)
+	await server.close()
+	const file = 'src/core/run.ts'
+	writeFileSync(path.join(root, file), FILES[file].replace('return 1', 'return 2'))
+	execFileSync('git', ['-c', 'commit.gpgsign=false', 'commit', '-qm', 'return two', '--', file], { cwd: root })
+	const refresh = await scriptedModel([brief('Run gives back two.', file, '\treturn 2'), { hang: () => {} }])
+	const later = await openKen(root, home, refresh.baseUrl, BACKGROUND)
+	const stream = jobLines(later)
+	const finished = await until(
+		() => stream.lines.at(-1)?.find((job) => job.state.kind === 'done'),
+		(job) => job !== undefined,
+	)
+	stream.close()
+	assert.equal(finished?.title, `ken is answering a question ahead of you: ${asked[0]}`)
+	const [question] = (await json(later, '/api/brief?concept=part%3A%3ACore')).questions
+	const answer = await json(later, `/api/brief?concept=${encodeURIComponent(question.id)}`)
+	assert.equal(answer.points[0].quotes[0].text, '\treturn 2', "the queue refreshed the answer's own changed quote")
 })
 
 test("a brief the model endpoint refused says the endpoint's reason, stays out of the reader's list, and waits to be tried again while the next part goes on", async () => {

@@ -5,7 +5,7 @@
 // so the queue ends. Plain code: it reads the layout, the
 // reader's history and what they opened, and asks no model. What is missing is worked out again from what exists each
 // time, so a server that starts again, or a run that failed halfway, ends with the same jobs.
-import { type LayoutSources, lookAtLayout, readLayoutAsk, tourOrder, under } from '../../layout/index.ts'
+import { type LayoutSources, lookAtLayout, under } from '../../layout/index.ts'
 import type { ReaderSeen } from '../../map/index.ts'
 import type { conceptReads } from './brief.ts'
 import { parseConcept, partId, questionId } from './concept.ts'
@@ -62,11 +62,6 @@ export function layerPlan(layout: LayoutSources, reads: ReturnType<typeof concep
 	let looking: Looking = { brief: null, within: null }
 	let openedArchitecture = false
 
-	async function levelAt(within: string[], now: Date) {
-		const ask = await readLayoutAsk(layout, { within, change: 'none' }, now)
-		return ask.kind === 'ok' ? await lookAtLayout(layout, ask.ask, now) : null
-	}
-
 	// The paths of the parts the reader opened, from the lines ken keeps on what they looked at.
 	async function opened(): Promise<string[]> {
 		const { lines } = await seen.read()
@@ -75,8 +70,10 @@ export function layerPlan(layout: LayoutSources, reads: ReturnType<typeof concep
 
 	// Every job whose thing is missing or no longer matches the code, in the order of the layers.
 	async function missing(now: Date): Promise<LayerJob[]> {
-		const top = await levelAt([], now)
-		if (!top) return []
+		const head = await layout.repo.resolve('HEAD')
+		if (head.kind !== 'ok') return []
+		// Jobs prepare explanations of committed code. The reader's uncommitted changes need no snapshot here.
+		const top = await lookAtLayout(layout, { at: head.commit, within: [], change: null, own: null }, now)
 		const job = (made: Omit<LayerJob, 'key'>): LayerJob => ({ ...made, key: lensKey(made.lens) ?? '' })
 		if (!top.named) {
 			const lens = { kind: 'parts', within: [], name: null }
@@ -98,39 +95,37 @@ export function layerPlan(layout: LayoutSources, reads: ReturnType<typeof concep
 			)
 		}
 		const [flow] = top.named.flows
-		const drawn = (await reads.processes([], now))?.processes ?? []
-		if (flow && drawn.length === 0) {
+		const progress = await reads.levelProgress(top, now)
+		if (flow && !progress.hasProcess) {
 			const lens = { kind: 'view', within: [], name: null, text: flow }
 			const title = `ken is drawing a process: ${flow}.`
 			jobs.push(job({ kind: 'process', concept: null, title, order: 1, layer: 0, lens }))
 		}
 		const looked = await opened()
-		const order = tourOrder(top.boxes.filter((box) => box.state !== 'gone'))
-		// The first questions of the opened parts, so answering or stopping one never brings the next one in.
+		const order = top.tour ?? []
 		let ahead = QUESTIONS_AHEAD
 		for (const [at, stop] of order.entries()) {
 			const concept = partId([], stop.name)
-			const brief = await reads.brief(concept, now)
-			if (!brief) continue
-			if (!brief.explained || brief.staleFiles) {
+			const opened = looked.some((path) => stop.paths.some((place) => under(path, place)))
+			const questions = await progress.firstQuestions(stop.name, opened ? ahead : 0)
+			if (!questions) {
 				const lens = { kind: 'explain', within: [], part: stop.name }
 				const title = `ken is explaining ${stop.name}.`
 				jobs.push(job({ kind: 'explain', concept, title, order: 100 + at, layer: 1, lens }))
 				continue
 			}
-			const box = top.boxes.find((each) => each.name === stop.name)
-			if (!box || !looked.some((path) => box.paths.some((place) => under(path, place)))) continue
-			const first = brief.questions.slice(0, ahead)
-			ahead -= first.length
-			for (const [k, question] of first.entries()) {
+			if (!opened) continue
+			// An answered or stopped question still uses its place in the two the project prepares.
+			ahead -= questions.length
+			for (const [k, question] of questions.entries()) {
 				if (question.answered) continue
 				const lens = { kind: 'answer', concept, text: question.text }
 				const title = `ken is answering a question ahead of you: ${question.text}`
 				jobs.push(job({ kind: 'answer', concept: question.id, title, order: 300 + at * 10 + k, layer: 3, lens }))
 			}
-			if (!box.opens) continue
+			const box = top.boxes.find((each) => each.name === stop.name)
+			if (!box?.opens || box.inside !== null) continue
 			const within = box.paths.toSorted()
-			if ((await levelAt(within, now))?.named) continue
 			const lens = { kind: 'parts', within, name: box.name }
 			const title = `ken is naming the parts inside ${box.name}.`
 			jobs.push(job({ kind: 'inner', concept, title, order: 200 + at, layer: 2, lens }))

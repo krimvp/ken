@@ -87,8 +87,12 @@ export type Round = {
 // or the files whose quoted lines changed since its brief), and typed is true when the reader typed it.
 // view: the reader asked, in the words of text, for another way to show the level whose paths are within. parts: the
 // main parts of a level, named from what ken wrote of it. views: the drawings of where the project runs.
+export type QuestionFocus =
+	| { path: string; commit: string; start: number; end: number }
+	| { view: 'parts' | 'world' | 'runtime'; commit: string; concepts: string[]; earlier: boolean }
+
 export type Asking =
-	| { kind: 'question' }
+	| { kind: 'question'; focus?: QuestionFocus }
 	| { kind: 'parts'; within: string[]; parts: { name: string; paths: string[] }[] }
 	| { kind: 'views' }
 	| { kind: 'note' }
@@ -139,7 +143,11 @@ export type ShowField = keyof typeof SHOW_SCHEMA.properties
 export function showTool(
 	gate: Gate,
 	round: () => Round,
-	{ fields, shorten, freeQuestion }: { fields?: readonly ShowField[]; shorten?: Shorten; freeQuestion?: boolean } = {},
+	{
+		fields,
+		shorten,
+		formats,
+	}: { fields?: readonly ShowField[]; shorten?: Shorten; formats?: ReturnType<typeof showFormats> } = {},
 ): Tool {
 	const brief = fields?.includes('brief') === true
 	return {
@@ -147,7 +155,7 @@ export function showTool(
 		description: brief
 			? 'Show the reader the brief the question asks for, with its checked quotes.'
 			: 'Show the reader cards that prove what you say: claims, decisions, risks, diagrams, topics, the parts of the project and the brief of a part, each with the exact lines it rests on. ken checks each card alone against git and shows it after the words you write in this turn. A card that fails comes back with its problems, and the reader sees nothing of it. Every field is optional.',
-		parameters: allowJsonText(fields ? offered(fields) : freeQuestion ? QUESTION_SCHEMA : SHOW_SCHEMA),
+		parameters: allowJsonText(fields ? offered(fields) : (formats?.schema ?? SHOW_SCHEMA)),
 		async execute(args, ctx) {
 			const current = round()
 			if (current.sentBack >= sentBackLimit(current)) return refuse(spent(current))
@@ -1102,28 +1110,32 @@ const FORMATS = [
 	['views', 'Outside systems, runtime containers, stores and calls'],
 ] as const
 
-export const showFormats: Skill[] = FORMATS.map(([name, description]) => ({
-	name,
-	description,
-	load: () => JSON.stringify(SHOW_SCHEMA.properties[name]),
-}))
+const FOCUSED_FORMATS = [
+	...FORMATS,
+	['decisions', 'A choice for the reader, with alternatives and evidence'],
+	['risks', 'A risk, its effect and the lines that show it'],
+	['step', 'One step of a walkthrough'],
+] as const
 
-const QUESTION_SCHEMA = {
-	...SHOW_SCHEMA,
-	properties: {
-		...SHOW_SCHEMA.properties,
-		...Object.fromEntries(
-			FORMATS.map(([name, description]) => {
-				const shape = SHOW_SCHEMA.properties[name]
-				return [
-					name,
-					{
-						type: shape.type,
-						...(shape.type === 'array' ? { items: { type: 'object' } } : {}),
-						description: `${description}. Load ken__${name} with core__load_skill for its fields.`,
-					},
-				]
-			}),
-		),
-	},
+export function showFormats(focused: boolean) {
+	const formats = focused ? FOCUSED_FORMATS : FORMATS
+	const skills: Skill[] = formats.map(([name, description]) => ({
+		name,
+		description,
+		load: () => JSON.stringify(SHOW_SCHEMA.properties[name]),
+	}))
+	const properties = Object.fromEntries(
+		formats.map(([name, description]) => {
+			const shape = SHOW_SCHEMA.properties[name]
+			return [
+				name,
+				{
+					type: shape.type,
+					...(shape.type === 'array' ? { items: { type: 'object' } } : {}),
+					description: `${description}. Load ken__${name} with core__load_skill for its fields.`,
+				},
+			]
+		}),
+	)
+	return { skills, schema: { ...SHOW_SCHEMA, properties: { ...SHOW_SCHEMA.properties, ...properties } } }
 }

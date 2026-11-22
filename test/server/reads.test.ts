@@ -48,3 +48,42 @@ test("the reader's choice of how much text is kept in their own files, and ken t
 	const later = await openKen(root, home)
 	assert.deepEqual(await json(later, '/api/prefs'), { text: 'words' }, 'the choice outlives the server')
 })
+
+test('a question about open lines keeps their file, commit and range when reopened', async () => {
+	const { root, hashes } = buildRepository([
+		{ message: 'First pickup time', files: { 'Pickup.js': 'export function pickup() {\n  return 12\n}\n' } },
+		{ message: 'Later pickup time', files: { 'Pickup.js': 'export function pickup() {\n  return 18\n}\n' } },
+	])
+	const invented = 'Pickup was at midnight.'
+	const model = await scriptedModel([{ text: invented }, { text: 'I will read it again.' }])
+	const home = readerHome()
+	const server = await openKen(root, home, model.baseUrl)
+	const focus = { path: 'Pickup.js', commit: hashes[0], start: 2, end: 3 }
+	const question = 'What time does this return?'
+	const lines = await ask(server, { question, focus })
+	const entry = lines.find((line) => line.kind === 'saved')?.view.entry
+	assert.ok(entry)
+	const reopened = await json(server, `/api/questions/${entry.id}`)
+	assert.equal(reopened.entry.question, question)
+	assert.deepEqual(reopened.entry.focus, focus)
+	assert.equal(lines.find((line) => line.kind === 'done')?.outcome, 'unverified')
+	assert.equal(reopened.entry.outcome, 'unverified')
+	const prompt = String(model.requests[0]?.messages.at(-1)?.content)
+	assert.ok(prompt.includes(focus.path) && prompt.includes(hashes[0] ?? 'missing'))
+	assert.match(prompt, /lines 2 to 3/)
+	assert.ok(prompt.includes('return 12') && !prompt.includes('return 18'))
+	assert.ok(JSON.stringify(reopened.entry.reply).includes(invented), 'the reader can still open the original answer')
+	const source = `Pickup.js:2-3@${hashes[0]}`
+	await ask(server, { question: 'What did we just look at?' })
+	const recent = String(model.requests[1]?.messages.at(-1)?.content)
+	assert.ok(recent.includes(source) && !recent.includes(invented))
+	await server.close()
+	const next = await scriptedModel([
+		{ tool: 'ken__memory_known', args: { about: entry.id } },
+		{ text: 'I found the lines.' },
+	])
+	const later = await openKen(root, home, next.baseUrl)
+	await ask(later, { question: 'Do you remember that source?' })
+	const recalled = JSON.stringify(next.requests[1]?.messages.find((msg) => msg.role === 'tool')?.content)
+	assert.ok(recalled.includes(source) && !recalled.includes(invented))
+})

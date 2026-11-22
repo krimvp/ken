@@ -410,6 +410,7 @@ function sourceHtml(page, back) {
 			: ''
 	const range = lineSpan(page.start, page.start + page.lines.length - 1)
 	return `${heading}${page.where.line > page.total ? `<p>This version ends before line ${page.where.line}. Showing the end of the file.</p>` : ''}<p class="q-source">${range} of ${page.total} at commit <code>${esc(page.where.commit.slice(0, 7))}</code></p>
+		<button class="k-link" data-act="ask-open" data-key="ask-source">Ask about these lines</button>
 		${page.shortened ? '<p>Long lines end with an ellipsis here.</p>' : ''}
 		<pre class="code"><code>${codeLines(
 			page.lines,

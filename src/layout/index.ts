@@ -15,7 +15,7 @@ export {
 	type Touched,
 } from './layout-look.ts'
 export { type Knows, LEVELS, type Level } from './reader/box-knows.ts'
-export { type Known, knowsOf } from './reader/knows-of.ts'
+export { type Known, knowsOf, readerPart } from './reader/knows-of.ts'
 export type { Go, NextItem } from './reader/next-items.ts'
 export type { BoxMap, BoxTopic, Mark, Next, Standing } from './reader/reader-marks.ts'
 export { pullRequestOf } from './reader/to-review.ts'

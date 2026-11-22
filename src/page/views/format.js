@@ -80,6 +80,16 @@ export function lineSpan(start, end) {
 	return start === end ? `line ${start}` : `lines ${start} to ${end}`
 }
 
+export function focusLabel(focus) {
+	if (focus.view) {
+		const name = { parts: 'how the code is split', runtime: 'where it runs', world: 'what the project talks to' }[
+			focus.view
+		]
+		return `${name} at ${focus.commit.slice(0, 7)}`
+	}
+	return `${focus.path}, ${lineSpan(focus.start, focus.end)} at ${focus.commit.slice(0, 7)}`
+}
+
 // A session quote counts its lines within the one message it quotes.
 function quoteLines(quote) {
 	return `${lineSpan(quote.startLine, quote.endLine)}${isSession(quote) ? ' of the message' : ''}`

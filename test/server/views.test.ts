@@ -7,7 +7,7 @@ import { fileRecordStore } from '../../src/record/index.ts'
 import { gitRepository } from '../../src/repo/index.ts'
 import { buildRepository } from '../fixtures/build-repository.ts'
 import { ask, json, openKen, readerHome } from '../fixtures/ken-server.ts'
-import { scriptedModel } from '../fixtures/scripted-model.ts'
+import { scriptedModel, toolResults } from '../fixtures/scripted-model.ts'
 
 // An entry that starts a worker, a compose file and one Kubernetes manifest.
 const FILES = {
@@ -127,6 +127,13 @@ const model = await scriptedModel([
 	{ tool: 'ken__show', args: { views: VIEWS } },
 	{ text: 'It runs in one process with a worker thread.' },
 	{
+		calls: [
+			{ tool: 'ken__memory_known', args: { about: 'crossing:to-worker' } },
+			{ tool: 'ken__memory_known', args: { about: 'frame:worker' } },
+		],
+	},
+	{ text: 'Done.' },
+	{
 		tool: 'ken__show',
 		args: {
 			layout: RENAMED,
@@ -231,6 +238,16 @@ test('a changed worker call marks its drawing and brief until they are redrawn; 
 	assert.equal(crossing.checkedAt, look.head)
 	assert.deepEqual(crossing.explain.lens, { kind: 'views', within: [] })
 	assert.equal((await json(server, '/api/brief?concept=frame:proc')).staleFiles, undefined)
+	await ask(server, {
+		question: 'What is this connection?',
+		focus: { view: 'runtime', commit: look.head, concepts: ['crossing:to-worker', 'frame:worker'], earlier: true },
+	})
+	const [edge = '', frame = ''] = toolResults(model.requests.at(-1))
+	assert.match(edge, /src\/main\.ts:2 \(changed since/)
+	assert.match(frame, /src\/main\.ts:2 \(changed since/)
+	const incoming = frame.split('\n').find((line) => line.includes('(crossing:to-worker)')) ?? ''
+	assert.match(incoming, /Entry.*worker/)
+	assert.match(incoming, /worker messages/)
 })
 
 test('naming the parts of the top level names its drawings in the same run, against the new parts', async () => {

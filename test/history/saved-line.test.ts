@@ -91,17 +91,18 @@ test('damaged saved briefs leave the next question readable and an old unchecked
 		reply,
 	]
 	mkdirSync(path.dirname(opened.history.file), { recursive: true })
-	writeFileSync(
-		opened.history.file,
-		rows.map((reply, id) => JSON.stringify({ ...base, id: String(id), reply })).join('\n'),
-	)
+	const saved = rows.map((reply, id) => JSON.stringify({ ...base, id: String(id), reply }))
+	const focus = { path: 'retry.ts', start: 1, end: 1, commit: hashes[0] }
+	const prose = { topics: [], change: null, items: [{ kind: 'words', text: 'The model guessed.' }] }
+	saved.push(JSON.stringify({ ...base, id: '8', focus, reply: prose }))
+	writeFileSync(opened.history.file, saved.join('\n'))
 	const entries = await opened.history.list()
 	assert.deepEqual(
 		entries.map((each) => each.outcome),
-		['incomplete', 'answered'],
+		['incomplete', 'answered', 'unverified'],
 	)
 	assert.deepEqual(
 		(await opened.history.readSaved()).map((each) => each.id),
-		['7'],
+		['7', '8'],
 	)
 })

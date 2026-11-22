@@ -5,7 +5,7 @@ import path from 'node:path'
 import { test } from 'node:test'
 import { buildRepository, type FixtureCommit } from '../fixtures/build-repository.ts'
 import { ask, call, json, openKen, readerHome } from '../fixtures/ken-server.ts'
-import { scriptedModel } from '../fixtures/scripted-model.ts'
+import { scriptedModel, toolResults } from '../fixtures/scripted-model.ts'
 
 const lines = (count: number, prefix = 'line') =>
 	Array.from({ length: count }, (_, at) => `${prefix} ${at + 1}\n`).join('')
@@ -261,4 +261,46 @@ test('the diff of a change comes from git for the files asked, as hunks with the
 	for (const refused of [diffOf(eleven), diffOf([]), diffOf(['src/a.ts'], 'nope..HEAD'), diffOf(['../outside'])]) {
 		assert.equal((await call(server, refused)).status, 400, refused)
 	}
+})
+
+test("explaining one part reads its changed files and keeps the whole change's story available", async () => {
+	const { root, hashes } = buildRepository([
+		{ message: 'First receipt', files: { 'receipts/lookup.js': 'lookup', 'other.js': 'older' } },
+		{
+			message: 'Expand support lookup',
+			files: {
+				'receipts/lookup.js': 'retain',
+				'receipts/status.js': 'saved',
+				'policy/days.js': 'thirty days',
+				'other.js': 'unrelated',
+			},
+		},
+	])
+	const [base, head] = hashes
+	const within = ['receipts', 'policy/days.js']
+	const model = await scriptedModel([
+		{ calls: within.map((path) => ({ tool: 'ken__diff', args: { base, head, path } })) },
+		{ text: 'The policy allows thirty days.' },
+	])
+	const server = await openKen(root, readerHome(), model.baseUrl)
+	const [asked] = await ask(server, {
+		lens: { kind: 'change', want: 'story', change: `${base}..${head}`, part: 'Receipts', within },
+	})
+	assert.match(asked.question, /^What changed in Receipts/)
+	for (const path of within) assert.ok(asked.question.includes(JSON.stringify(path)))
+	const [folder, file] = toolResults(model.requests[1])
+	assert.match(folder ?? '', /receipts\/lookup.js/)
+	assert.match(folder ?? '', /receipts\/status.js/)
+	assert.match(file ?? '', /thirty days/)
+	assert.doesNotMatch([folder, file].join(' '), /other.js|unrelated/)
+	const row = (await json(server, '/api/questions')).questions.at(-1)
+	assert.equal(row?.want, null)
+	const query = new URLSearchParams({ change: `${base}..${head}`, part: 'Receipts' })
+	for (const path of within.toReversed()) query.append('within', path)
+	const same = await json(server, `/api/change/diff?${query}`)
+	assert.equal(same.question, row.question, 'reopening the same paths finds the saved explanation')
+	query.delete('within')
+	query.append('within', 'receipts')
+	const narrower = await json(server, `/api/change/diff?${query}`)
+	assert.notEqual(narrower.question, row.question)
 })

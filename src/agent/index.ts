@@ -20,7 +20,7 @@ export {
 	readModelConfig,
 } from './model-config.ts'
 export { type NoteFacts, noteQuestion } from './note-question.ts'
-export { changedHunks } from './reply/check-card.ts'
+export { changedHunks, unverifiedSource } from './reply/check-card.ts'
 export {
 	briefCoverage,
 	CARD_KINDS,
@@ -38,7 +38,7 @@ export {
 	type Want,
 	type Withdrawn,
 } from './reply/reply.ts'
-export type { Asking } from './reply/show-tool.ts'
+export type { Asking, QuestionFocus } from './reply/show-tool.ts'
 export type { SavedAnswer } from './reply/thread-memory.ts'
 export { type Chat, startChat } from './start-chat.ts'
 export type { Fact, Known, KnownLevel, Memory, MemoryQuote } from './tools/memory-tool.ts'

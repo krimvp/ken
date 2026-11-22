@@ -96,6 +96,7 @@ export function endedHtml(q, t) {
 			'Some parts still need a brief',
 			`Still to cover: ${(q.reply?.missingParts ?? []).map(esc).join(', ')}. Ask again to cover them.`,
 		],
+		unverified: ['Unverified source answer', "ken's model gave an explanation without a checked quote from a file."],
 		incomplete: ['The brief is incomplete', "ken's model did not give a point it could check against the code."],
 		'no-answer': ["ken's model stopped without a reply", 'It read the project but wrote nothing back.'],
 		'out-of-turns': [
