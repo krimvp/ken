@@ -6,8 +6,7 @@ import { learnParts } from '../project/part-colours.js'
 import { stepParts, stopTopics } from '../project/walk.js'
 import { chipQuestion } from '../views/reply.js'
 import { askedQuestion } from './ask-drawer.js'
-import { contentOf, pathOf, placeOf, repliesOf, shownDetail, stoodOn } from './content.js'
-import { tourStart } from './reading-path.js'
+import { contentOf, firstUnseen, pathOf, placeOf, repliesOf, shownDetail, stoodOn } from './content.js'
 
 const WHOLE = { name: 'Whole project', within: [] }
 const WAYS = ['learn', 'catch-up', 'review']
@@ -232,7 +231,7 @@ export function homeActions({ state, render, getJson, post, send, stored, store,
 		const path = pathOf(home.look, home.content)
 		if (path.length === 0) return false
 		const at = placeOf(path, home.selected)
-		void stepTo(at < 0 ? (home.content.kind === 'level' ? tourStart(home, path) : 0) : at + by)
+		void stepTo(at < 0 ? (home.content.kind === 'level' ? firstUnseen(home.look, path) : 0) : at + by)
 		return true
 	}
 
@@ -279,7 +278,7 @@ export function homeActions({ state, render, getJson, post, send, stored, store,
 			home.said = { asked: home.redraw.asked, words: words.join('\n\n'), id: q.id }
 		} else if (kind === 'tour' && home.detail === 'big') {
 			home.detail = 'how'
-			await stepTo(tourStart(home, pathOf(home.look, content)))
+			await stepTo(firstUnseen(home.look, pathOf(home.look, content)))
 		}
 		render()
 	}
@@ -326,7 +325,7 @@ export function homeActions({ state, render, getJson, post, send, stored, store,
 		'home-tour'() {
 			const home = state.home
 			home.detail = 'how'
-			return stepTo(tourStart(home, pathOf(home.look, home.content)))
+			return stepTo(firstUnseen(home.look, pathOf(home.look, home.content)))
 		},
 		'home-open'() {
 			const box = boxNamed(state.home.selected.name)

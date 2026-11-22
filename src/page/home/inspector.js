@@ -6,8 +6,8 @@ import { at, count, esc, list, prose, runButton, short } from '../views/format.j
 import { storyHtml, wordsHtml } from '../views/reply.js'
 import { noModelHtml, workingHtml } from '../views/states.js'
 import { changeName, colourOf, levelName, stateLine } from './canvas.js'
-import { pathOf, shownDetail, stoodOn } from './content.js'
-import { asksHtml, factCard, pathView, tourStart, usesHtml } from './reading-path.js'
+import { firstUnseen, pathOf, shownDetail, stoodOn } from './content.js'
+import { asksHtml, factCard, pathView, usesHtml } from './reading-path.js'
 
 export const DETAILS = { big: 'Big picture', how: 'How it works', code: 'In the code' }
 
@@ -51,7 +51,7 @@ function levelView(home, off) {
 			: ''
 	let tour = ''
 	if (content.tour) {
-		const start = tourStart(home, path)
+		const start = firstUnseen(look, path)
 		const given = content.tour.q ? ` ${at(content.tour.q.askedAt)}` : ''
 		tour = `<div class="insp-main"><button class="primary" data-act="home-tour" data-key="home-tour">${start === 0 ? 'Start the tour' : `Go on with the tour at stop ${start + 1}`}</button>
 			<p class="small muted">ken's model gave this tour${given}. Opening it runs no model.</p></div>`
@@ -153,11 +153,16 @@ function commitsHtml(commits) {
 	return `<li><details class="insp-more"><summary>${count(real.length, 'commit', 'commits')}</summary><ol class="insp-commits">${rows.join('')}</ol></details></li>`
 }
 
+// What git says of a change, as a stored reply about it holds it: its commits, newest first.
+function toldOf(content) {
+	return (content.story?.q ?? content.walk?.q)?.reply.change ?? null
+}
+
 // A change, nothing selected: what git says of it, then its story in the model's words, or the run that asks for one.
 function changeView(home, off) {
 	const { look, content, changes } = home
 	const { change } = look
-	const told = (content.story?.q ?? content.walk?.q)?.reply.change
+	const told = toldOf(content)
 	const picked = changes.find((choice) => choice.change === change.asked)
 	const touched = look.boxes.filter((box) => box.touched).length
 	const noun = look.named ? 'part' : 'folder'
@@ -190,7 +195,7 @@ function changeView(home, off) {
 		: `<div class="insp-main">${runButton({ act: 'run-name', key: 'run-name', text: 'Ask ken to name these parts' }, off)}</div>`
 	return {
 		where: 'Nothing is selected',
-		title: esc(changeName(look, changes)),
+		title: esc(changeName(look, changes, told)),
 		body: `${factCard('What git says', 'From git', `<ul class="fact-list">${facts.join('')}</ul>`)}
 			${story}${walk}${name}`,
 	}
@@ -272,7 +277,9 @@ function viewOf(home, off) {
 	const box = selected?.kind === 'part' ? look.boxes.find((each) => each.name === selected.name) : null
 	if (content.kind === 'change') {
 		if (box) return touchedView(home, box)
-		return big ? changeView(home, off) : { title: esc(changeName(look, home.changes)), ...pathView(home, off) }
+		return big
+			? changeView(home, off)
+			: { title: esc(changeName(look, home.changes, toldOf(content))), ...pathView(home, off) }
 	}
 	if (content.kind === 'folders') return box ? folderView(box) : foldersView(home, off)
 	if (!big) return { title: esc(levelName(home)), ...pathView(home, off) }

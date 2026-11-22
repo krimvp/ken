@@ -7,7 +7,7 @@ import { colourOf } from './canvas.js'
 const SHOWN_QUESTIONS = 5
 
 // The part a question from the drawer is about: the one selected, unless the reader dropped it.
-export function askedPart(home) {
+function askedPart(home) {
 	if (home.askWhole || home.selected?.kind !== 'part') return null
 	return home.look?.boxes.find((box) => box.name === home.selected.name) ?? null
 }

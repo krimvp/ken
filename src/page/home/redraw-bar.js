@@ -3,12 +3,7 @@
 // keeps sit under the box, each with a way to remove it. On a narrow screen the bar folds to one line.
 import { esc, runButton } from '../views/format.js'
 
-const EXAMPLES = [
-	'Group by feature',
-	'Fewer, bigger parts',
-	'Follow one request through the code',
-	'I am new to this language',
-]
+const EXAMPLES = ['Group by feature', 'Fewer, bigger parts', 'Follow one request', 'I am new to this language']
 
 // off is the reason no run of ken's model can start now, or null.
 export function redrawBarHtml(home, off) {
@@ -32,7 +27,7 @@ export function redrawBarHtml(home, off) {
 			: `<p class="redraw-row"><span class="redraw-said">ken keeps in mind:</span>${home.notes
 					.map(
 						(note) =>
-							`<span class="note-chip">${esc(note.text)} <button type="button" class="link" data-act="note-remove" data-id="${esc(note.id)}" data-key="note-${esc(note.id)}" aria-label="Remove the note: ${esc(note.text)}">Remove</button></span>`,
+							`<span class="note-chip"><span class="note-text">${esc(note.text)}</span> <button type="button" class="link" data-act="note-remove" data-id="${esc(note.id)}" data-key="note-${esc(note.id)}" aria-label="Remove the note: ${esc(note.text)}">Remove</button></span>`,
 					)
 					.join('')}</p>`
 	const problem = home.redraw.problem ? `<p class="home-error" role="alert">${esc(home.redraw.problem)}</p>` : ''

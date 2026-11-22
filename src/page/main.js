@@ -301,6 +301,11 @@ async function send(body, onHome = null) {
 		q.typing = ''
 		state.running = null
 		await Promise.all([loadRows(), loadFollowUp()])
+		// ken saves a stopped question a moment after the page lets go of it, so the list is read once more.
+		if (controller.signal.aborted && state.rows.at(-1)?.question !== q.question) {
+			await new Promise((resolve) => setTimeout(resolve, 500))
+			await loadRows()
+		}
 		const last = state.rows.at(-1)
 		// A stopped question has no saved line, so it is read back from the history.
 		const stopped = controller.signal.aborted && last?.question === q.question

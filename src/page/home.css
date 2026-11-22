@@ -476,6 +476,8 @@ button.brand {
 /* "Show it another way", docked under the canvas. */
 .home-redraw {
 	grid-column: 1;
+	max-height: 40vh;
+	overflow-y: auto;
 	padding: var(--space-3) var(--space-5);
 	border-top: 1px solid var(--color-border);
 	background: var(--color-card);
@@ -508,7 +510,7 @@ button.brand {
 
 .redraw-ask {
 	display: flex;
-	align-items: stretch;
+	align-items: flex-start;
 	gap: var(--space-3);
 }
 
@@ -530,9 +532,17 @@ button.brand {
 	opacity: 1;
 }
 
+/* The reason the button is off runs under the row, so the box keeps its width. */
+.redraw-ask {
+	flex-wrap: wrap;
+}
+
 .redraw-ask .run {
-	flex: none;
-	max-width: 60%;
+	display: contents;
+}
+
+.redraw-ask .run-off {
+	flex-basis: 100%;
 }
 
 .redraw-row {
@@ -548,6 +558,10 @@ button.brand {
 	color: var(--color-note);
 }
 
+.note-chip .link {
+	flex: none;
+}
+
 .redraw-chip {
 	min-height: 1.875rem;
 	padding: 0 var(--space-3);
@@ -556,12 +570,26 @@ button.brand {
 	font-weight: 500;
 }
 
+/* A note shows its first line until the reader points at it or moves to it, so the bar leaves room for the picture. */
+.note-text {
+	min-width: 0;
+	display: -webkit-box;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 1;
+	overflow: hidden;
+}
+
+.note-chip:is(:hover, :focus-within) .note-text {
+	display: inline;
+}
+
 .note-chip {
 	display: inline-flex;
-	flex-wrap: wrap;
 	align-items: baseline;
 	gap: 0 var(--space-3);
+	max-width: 100%;
 	padding: 2px var(--space-3);
+	font-size: var(--text-sm);
 	border: 1px solid var(--color-warn-border);
 	border-radius: var(--radius-md);
 	background: var(--color-warn-bg);
@@ -1049,26 +1077,29 @@ button.brand {
 		padding: var(--space-2) var(--gutter);
 	}
 
+	/* Each control shows its three choices side by side at equal width, so none is off the screen. */
 	.control {
 		display: grid;
-		grid-template-columns: 3.75rem minmax(0, 1fr);
-	}
-
-	.control-note {
-		grid-column: 2;
+		grid-template-columns: minmax(0, 1fr);
 	}
 
 	.segs {
+		display: grid;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
 		overflow-x: auto;
 	}
 
 	.seg {
-		flex: 1 0 auto;
+		justify-content: flex-start;
 		padding: var(--space-1) var(--space-2);
 	}
 
+	.seg-text {
+		white-space: normal;
+	}
+
 	.seg-fact {
-		max-width: 8.5rem;
+		max-width: 100%;
 	}
 
 	.home-canvas {
@@ -1077,12 +1108,21 @@ button.brand {
 	}
 
 	.home-redraw {
+		max-height: none;
 		padding: var(--space-3) var(--gutter);
 	}
 
 	.redraw-form,
 	.redraw-body {
 		display: block;
+	}
+
+	.note-text {
+		display: inline;
+	}
+
+	.note-chip {
+		flex-wrap: wrap;
 	}
 
 	.redraw-top {
@@ -1106,10 +1146,6 @@ button.brand {
 
 	.redraw-ask {
 		flex-direction: column;
-	}
-
-	.redraw-ask .run {
-		max-width: none;
 	}
 
 	.home-inspector {

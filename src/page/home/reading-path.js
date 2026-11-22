@@ -6,7 +6,7 @@ import { cardPaths, stepDiffHtml, stepTitle, stopTopics } from '../project/walk.
 import { count, esc, prose, quoteBody, runButton } from '../views/format.js'
 import { stepCardsHtml, storyHtml, wordsHtml } from '../views/reply.js'
 import { colourOf, pathsLine } from './canvas.js'
-import { pathOf, placeOf, shownDetail, stoodOn } from './content.js'
+import { firstUnseen, pathOf, placeOf, shownDetail, stoodOn } from './content.js'
 
 // A boxed card of facts ken read from git. tag says how ken knows them.
 export function factCard(title, tag, body) {
@@ -186,15 +186,6 @@ function navHtml(path, at, titles, start) {
 	return `<div class="insp-nav">${back}${next}</div>`
 }
 
-// The stop a tour starts at: the first whose part the reader has not met, or the first.
-export function tourStart(home, path) {
-	const fresh = path.findIndex((step) => {
-		const box = home.look.boxes.find((each) => each.name === step.part)
-		return box && stoodOn(box, stopTopics(step)) === 'new'
-	})
-	return Math.max(fresh, 0)
-}
-
 // The two quiet questions under a change's story or walkthrough. Each is a question of its own in the thread.
 export function asksHtml(off) {
 	const chip = (kind, text) =>
@@ -236,7 +227,7 @@ export function pathView(home, off) {
 				<p class="small muted">ken's model orders the change into steps a reviewer can read one at a time, each with its diff.</p>`
 	}
 	const titles = path.map((step) => (tour ? step.part : stepTitle(step)))
-	const start = { word, k: tour ? tourStart(home, path) : 0 }
+	const start = { word, k: tour ? firstUnseen(look, path) : 0 }
 	return {
 		where:
 			at >= 0

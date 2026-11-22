@@ -34,16 +34,17 @@ function plainName(choice) {
 	return choice.name.replace(/^[0-9a-f]{7} /, '')
 }
 
-// What the change laid over the parts is, to the reader.
-export function changeName(look, changes) {
+// What the change laid over the parts is, to the reader. A change the picker does not list, such as one ken explained
+// before, is named by its newest commit when a stored reply holds its commits (told).
+export function changeName(look, changes, told = null) {
 	const picked = changes.find((choice) => choice.change === look.change.asked)
 	if (look.change.asked === 'uncommitted') return 'Your uncommitted work'
 	if (picked?.kind === 'branch') return `The branch ${look.change.name}`
-	return picked ? plainName(picked) : look.change.name
+	return picked ? plainName(picked) : (told?.commits[0]?.subject ?? look.change.name)
 }
 
 // The arrows as box indexes, for the picture.
-export function linksOf(look) {
+function linksOf(look) {
 	const at = (name) => look.boxes.findIndex((box) => box.name === name)
 	return look.arrows.map((arrow) => ({ from: at(arrow.from), to: at(arrow.to), text: arrow.text }))
 }
@@ -77,7 +78,7 @@ export function stateLine(box, look) {
 }
 
 // What a change did to a part, as the box and the inspector say it.
-export function touchedHtml(touched) {
+function touchedHtml(touched) {
 	return `${count(touched.files, 'file', 'files')} <span class="home-plus"><span class="visually-hidden">, lines added: </span>+${touched.added}</span> <span class="home-minus"><span class="visually-hidden">, removed: </span>-${touched.removed}</span>`
 }
 

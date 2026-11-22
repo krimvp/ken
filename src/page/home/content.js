@@ -2,7 +2,7 @@
 // ken's model named may have a tour, and a change may have a story and a walkthrough. Each is the newest answered
 // question about exactly that subject, so the home opens it again with no run of the model. The reading path is what
 // the home walks through at "How it works" and "In the code": the stops of a tour, or the steps of a walkthrough.
-import { walkOf } from '../project/walk.js'
+import { stopTopics, walkOf } from '../project/walk.js'
 
 const same = (a, b) => a.length === b.length && a.every((each, i) => each === b[i])
 
@@ -76,4 +76,13 @@ export function stoodOn(box, names) {
 	if (marks.length === 0) return 'none'
 	if (marks.every((mark) => mark === 'understood')) return 'known'
 	return marks.includes('new') ? 'new' : 'met'
+}
+
+// The stop a tour starts at: the first whose part the reader has not met, or the first.
+export function firstUnseen(look, path) {
+	const fresh = path.findIndex((step) => {
+		const box = look.boxes.find((each) => each.name === step.part)
+		return box && stoodOn(box, stopTopics(step)) === 'new'
+	})
+	return Math.max(fresh, 0)
 }
