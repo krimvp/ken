@@ -6,7 +6,7 @@
 // diagram ken's model drew because the reader asked to see it another way: a drawn picture, shown in place of the
 // parts when the reader picks it. The reading path is what the home walks through at "How it works" and "In the
 // code": the stops of a tour, the steps of a walkthrough, or the numbered boxes and arrows of a drawn picture.
-import { stopTopics, walkOf } from '../../project/walk.js'
+import { walkOf } from '../../project/walk.js'
 
 // Whether two lists, such as the paths of two levels, hold the same things in the same order.
 export const sameList = (a, b) => a.length === b.length && a.every((each, i) => each === b[i])
@@ -135,11 +135,12 @@ export function stoodOn(box, names) {
 	return marks.includes('new') ? 'new' : 'met'
 }
 
-// The stop a tour starts at: the first whose part the reader has not met, or the first.
+// The stop a tour starts at: the first whose part ken thinks the reader has not read, or the first. The server picks
+// the tour's item of "Next for you" by the same rule.
 export function firstUnseen(look, path) {
 	const fresh = path.findIndex((step) => {
-		const box = look.boxes.find((each) => each.name === step.part)
-		return box && stoodOn(box, stopTopics(step)) === 'new'
+		const level = look.boxes.find((each) => each.name === step.part)?.knows.level
+		return level === 'new' || level === 'seen'
 	})
 	return Math.max(fresh, 0)
 }

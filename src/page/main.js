@@ -4,7 +4,7 @@
 // page talks only to the server that sent it.
 import { fillDrawings, markPart, numberAt } from './draw-diagrams.js'
 import { homeActions } from './home/home-actions.js'
-import { showHome } from './home/home-view.js'
+import { drawCanvas, showHome } from './home/home-view.js'
 import { readReply, replyAddress } from './home/state/address.js'
 import { freshHome } from './home/state/home-state.js'
 import { DOING } from './home/state/runs.js'
@@ -17,7 +17,7 @@ import { partOf, stepDiffHtml, stopState, stopTopics, tourStart, walkOf } from '
 import { allQuotesHtml, checksHtml, quoteCardHtml } from './views/checks.js'
 import { decisionsViewHtml } from './views/decisions.js'
 import { elementKey } from './views/diagram.js'
-import { count, duration, esc, folderHtml, prose, short, when } from './views/format.js'
+import { count, duration, esc, projectHtml, prose, short, when } from './views/format.js'
 import { changedLine, changedTopics, lensHtml, mapViewHtml } from './views/map.js'
 import { openCount, openViewHtml } from './views/open.js'
 import { cardsOf, isMoved, itemsOf, knowPartHtml, LEGEND, replyHtml, stepCardsHtml } from './views/reply.js'
@@ -59,7 +59,7 @@ const freshUi = () => ({
 })
 
 const state = {
-	project: '',
+	project: null,
 	model: null,
 	rows: [],
 	// The thread on screen, oldest question first: saved ones from the history, and the one running now. open is the
@@ -571,6 +571,7 @@ function renderHome() {
 	}
 	showHome($('#home'), state.home, env, schedule)
 	home.address()
+	home.watch()
 }
 
 // What the reader typed stays where they typed it when the box they type in is drawn again.
@@ -609,7 +610,7 @@ function render() {
 		focusLost = now?.closest('[inert]') ? focused : null
 	}
 	const onHome = state.view === 'home'
-	$('#project').innerHTML = state.project ? `<span class="reads">reads </span>${folderHtml(state.project)}` : ''
+	$('#project').innerHTML = state.project ? `<span class="reads">reads </span>${projectHtml(state.project)}` : ''
 	$('#menu').innerHTML = menuHtml()
 	$('#home').hidden = !onHome
 	$('.skip').hidden = !onHome
@@ -1161,6 +1162,7 @@ const actions = {
 		if (uiNow().wide && !el.closest('#panel')) return choose(key, quote)
 		toggle(uiNow().openQuotes, `${key}-q${quote}`)
 		render()
+		if (state.view === 'home') home.quoted()
 		// "Show all" goes away once the lines are open, so the quote's own row takes the focus.
 		if (el.matches('.q-all')) document.querySelector(`[data-key="${key}-q${quote}"]`)?.focus({ preventScroll: true })
 	},
@@ -1433,6 +1435,7 @@ function lightQuote(event) {
 }
 document.addEventListener('pointerover', lightQuote)
 document.addEventListener('focusin', lightQuote)
+for (const kind of ['pointerover', 'focusin']) document.addEventListener(kind, (event) => home.point(event))
 
 $('#question').addEventListener('input', resizeBox)
 new ResizeObserver(([entry]) => {
@@ -1441,7 +1444,7 @@ new ResizeObserver(([entry]) => {
 wideQuery.addEventListener('change', render)
 window.addEventListener('resize', () => drawPictures(document.body))
 // The canvas changes width with no change of the window when its scroll bar comes or goes.
-new ResizeObserver(() => drawPictures($('#home-canvas'))).observe($('#home-canvas'))
+new ResizeObserver(() => drawCanvas($('#home-canvas'))).observe($('#home-canvas'))
 darkQuery.addEventListener('change', render)
 setInterval(tick, 1000)
 setInterval(async () => {
@@ -1456,7 +1459,8 @@ try {
 		loadRows(),
 		loadFollowUp(),
 	])
-	state.project = server.project
+	state.project = { name: server.name, folder: server.project }
+	state.home.project = server.name
 	learnParts(server.parts)
 	state.model = server.model
 	if (server.live === true) await loadLive()

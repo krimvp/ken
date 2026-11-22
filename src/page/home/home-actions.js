@@ -2,12 +2,14 @@
 // also reads the level from the server and holds the runs of ken's model the home starts.
 import { numberAt } from '../draw-diagrams.js'
 import { stepParts, stopTopics } from '../project/walk.js'
+import { boardActions } from './board/board-actions.js'
 import { askedQuestion } from './inspector/ask-drawer.js'
 import { readAddress, writeAddress } from './state/address.js'
 import { firstUnseen, pathOf, placeOf, shownDetail, stoodOn } from './state/content.js'
-import { WHOLE } from './state/home-state.js'
+import { FIRST_DETAIL, WHOLE } from './state/home-state.js'
 import { homeLoads } from './state/loads.js'
 import { homeRuns } from './state/runs.js'
+import { homeSeen } from './state/seen.js'
 
 // app is the page: its state, render, the calls to the server, send, which asks ken's model a question, and the two
 // small stores of this browser.
@@ -16,7 +18,8 @@ export function homeActions(app) {
 	const $ = (selector) => document.querySelector(selector)
 	const level = () => state.home.trail.at(-1)
 	const loads = homeLoads(app)
-	const { loadLayout, settle, refresh, enter } = loads
+	const { settle, refresh, enter } = loads
+	const seen = homeSeen(app, loads)
 	// From 1200 pixels the picture and the panel stand side by side, each scrolling by itself. Under that they are one
 	// column and the page scrolls.
 	const sideBySide = matchMedia('(min-width: 1200px)')
@@ -48,7 +51,7 @@ export function homeActions(app) {
 	async function back() {
 		const place = readAddress(location.hash)
 		if (!place) return
-		Object.assign(state.home, place, { askOpen: false, openArrows: new Set() })
+		Object.assign(state.home, place, { askOpen: false, openArrows: new Set(), opened: false, why: null, fixing: null })
 		addressed = JSON.stringify([place.wayIn, place.trail])
 		await show()
 		toPicture()
@@ -63,15 +66,6 @@ export function homeActions(app) {
 
 	const boxNamed = (name) => state.home.look.boxes.find((box) => box.name === name)
 
-	// The reader reached a stop of a stored tour whose part they had not met: their map learns it.
-	async function reach() {
-		const home = state.home
-		const step = stopOn()
-		if (!step || !home.content.tour?.q || shownDetail(home) === 'big') return
-		if (stoodOn(boxNamed(step.part), stopTopics(step)) !== 'new') return
-		await learn(step, 'toured')
-	}
-
 	function stopOn() {
 		const home = state.home
 		if (home.content.kind !== 'level' || home.selected?.kind !== 'part') return null
@@ -79,14 +73,21 @@ export function homeActions(app) {
 		return path[placeOf(path, home.selected)] ?? null
 	}
 
-	async function learn(step, signal) {
+	// "I know this part": ken writes that the reader said so, and their map learns the topics ken keeps for the part.
+	async function know() {
+		const home = state.home
+		const box = boxNamed(home.selected.name)
+		const step = stopOn()
+		const topics = step ? stopTopics(step) : []
 		try {
-			await post('/api/map', { signal, topics: stopTopics(step) })
+			await Promise.all([
+				post('/api/seen', { did: 'said', paths: box.paths }),
+				...(stoodOn(box, topics) === 'none' ? [] : [post('/api/map', { signal: 'know', topics })]),
+			])
 		} catch (error) {
-			state.home.trouble = { said: 'ken could not save that to your map.', message: error.message, again: false }
+			home.trouble = { said: 'ken could not save that.', message: error.message, again: false }
 		}
-		// The same level read again: nothing on screen is out of date, so the home does not say it is reading.
-		await loadLayout(true)
+		await seen.recorded()
 		render()
 	}
 
@@ -98,6 +99,9 @@ export function homeActions(app) {
 		const home = state.home
 		home.selected = selected
 		render()
+		// A part the reader picked, in the picture or on the reading path, is a part they opened.
+		const box = selected?.kind === 'part' ? boxNamed(selected.name) : null
+		if (box) void seen.tell({ did: 'opened', paths: box.paths })
 		if (selected) {
 			const path = pathOf(home.look, home.content)
 			const open = document.getElementById(`path-${placeOf(path, selected)}`)
@@ -112,7 +116,15 @@ export function homeActions(app) {
 			if (focus) open?.querySelector('.path-head')?.focus({ preventScroll: true })
 		}
 		void loads.loadDiff()
-		await reach()
+	}
+
+	// The reader picks a part in the picture: while ken picks the detail, the part opens where the server says for
+	// this reader.
+	function pick(box) {
+		const home = state.home
+		if (home.pinned === null && home.look.named) home.detail = box.knows.go.detail
+		Object.assign(home, { why: board.whyOf(box), fixing: null })
+		return select({ kind: 'part', name: box.name })
 	}
 
 	function stepTo(k, focus = false) {
@@ -130,6 +142,8 @@ export function homeActions(app) {
 		const path = pathOf(home.look, home.content)
 		if (path.length === 0) return false
 		const at = placeOf(path, home.selected)
+		// Moving on from a tour stop says the reader read it.
+		if (by > 0) seen.now('read')
 		void stepTo(at < 0 ? (home.content.kind === 'level' ? firstUnseen(home.look, path) : 0) : at + by, true)
 		return true
 	}
@@ -142,13 +156,35 @@ export function homeActions(app) {
 
 	// The level changes under the reader's focus, so focus goes to the level's heading, which names where they are,
 	// and the opened picture comes into view.
+	// With nothing open, the picture shows at the detail the reader pinned, else at the one its way in starts at.
+	const atRest = () => ({
+		opened: false,
+		why: null,
+		fixing: null,
+		detail: state.home.pinned ?? FIRST_DETAIL[state.home.wayIn],
+	})
+
 	async function moveTo(trail) {
-		Object.assign(state.home, { trail, shown: null, selected: null, openArrows: new Set() })
+		Object.assign(state.home, { trail, shown: null, selected: null, openArrows: new Set(), pointed: null, ...atRest() })
 		await refresh()
 		toPicture()
 	}
 
 	const { run, ended } = homeRuns(app, loads, stepTo)
+	const board = boardActions(app, loads, select)
+
+	// The detail in use changes. One the reader pinned for every part moves with it, so the control says what shows.
+	function toDetail(detail) {
+		const home = state.home
+		home.detail = detail
+		if (home.pinned !== null) {
+			home.pinned = detail
+			store('ken-detail', detail)
+		}
+		// The big picture of a change shows no steps, so a step picked at a finer detail is let go.
+		if (detail === 'big' && home.selected?.kind === 'step') home.selected = null
+		return select(home.selected)
+	}
 
 	const levelLens = (kind) => ({
 		kind,
@@ -158,22 +194,31 @@ export function homeActions(app) {
 
 	const actions = {
 		home: show,
+		// A way in lays its change over the picture, and the panel shows what ken says of the whole of it.
 		async 'way-in'(el) {
 			const home = state.home
-			home.picked = true
+			Object.assign(home, { picked: true, opened: true, why: null, fixing: null })
 			store('ken-way-in', el.dataset.way)
 			await enter(el.dataset.way)
 			await settle()
 		},
-		detail(el) {
-			const home = state.home
-			home.detail = el.dataset.detail
-			store(`ken-detail-${home.wayIn}`, home.detail)
-			// The big picture of a change shows no steps, so a step picked at a finer detail is let go.
-			if (home.detail === 'big' && home.selected?.kind === 'step') home.selected = null
-			return select(home.selected)
+		// A press in the panel that goes to a finer detail. One that opens code or a diff says so to ken at once.
+		async detail(el) {
+			await toDetail(el.dataset.detail)
+			if (el.dataset.detail === 'code') seen.now()
 		},
-		// A box picks its part. On a change with a walkthrough it picks the next step that quotes the part's files.
+		// The Detail control. "ken picks" lets each part open where the server says, and any other detail stays for
+		// every part until the reader picks "ken picks" again.
+		'detail-pin'(el) {
+			const home = state.home
+			const pinned = el.dataset.detail === 'ken' ? null : el.dataset.detail
+			home.pinned = pinned
+			store('ken-detail', pinned ?? '')
+			const box = home.selected?.kind === 'part' ? boxNamed(home.selected.name) : null
+			return toDetail(pinned ?? box?.knows.go.detail ?? FIRST_DETAIL[home.wayIn])
+		},
+		// A box picks its part, and a second press goes into it. On a change with a walkthrough it picks the next step
+		// that quotes the part's files.
 		'home-box'(el) {
 			const home = state.home
 			const box = home.look.boxes[Number(el.dataset.index)]
@@ -185,7 +230,9 @@ export function homeActions(app) {
 				if (next) return select({ kind: 'step', number: next.number })
 			}
 			const same = home.selected?.kind === 'part' && home.selected.name === box.name
-			return select(same ? null : { kind: 'part', name: box.name })
+			if (!same) return pick(box)
+			// A box of one file has no level inside, so a second press lets it go.
+			return box.opens ? actions['home-open']() : select(null)
 		},
 		'home-step'(el) {
 			const k = Number(el.dataset.index)
@@ -193,21 +240,40 @@ export function homeActions(app) {
 			// The line of the open step closes it. Back and Next always move, and the keyboard goes with them: their
 			// own buttons are drawn again under other names.
 			if (el.matches('.path-head') && placeOf(path, state.home.selected) === k) return select(null)
+			// Next from a tour stop says the reader read it.
+			if (k > placeOf(path, state.home.selected)) seen.now('read')
 			return stepTo(k, true)
 		},
-		'home-clear': () => select(null),
+		// What ken says of the whole level or change, in place of the part or step that was picked.
+		'home-clear'() {
+			Object.assign(state.home, { opened: true, why: null })
+			return select(null)
+		},
+		// Back to the board: nothing is picked, and the column beside the picture is "Next for you" again.
+		async 'home-board'() {
+			const home = state.home
+			const drawn = home.shown !== null
+			Object.assign(home, { shown: null, ...atRest() })
+			await select(null)
+			if (drawn) await settle()
+			$('#insp-title')?.focus({ preventScroll: true })
+		},
 		'home-picture'(el) {
 			Object.assign(state.home, { shown: el.dataset.id || null, selected: null })
 			return settle()
 		},
 		'home-tour'(el) {
-			state.home.detail = 'how'
+			const home = state.home
+			// A tour is read at "How it works", unless the reader pinned the code.
+			home.detail = home.pinned === 'code' ? 'code' : 'how'
+			if (home.pinned !== null) home.pinned = home.detail
 			return stepTo(Number(el.dataset.index), true)
 		},
+		// The last stop or step is behind the reader: the board says what is next.
 		async 'home-done'() {
 			const home = state.home
-			home.detail = 'big'
-			store(`ken-detail-${home.wayIn}`, 'big')
+			seen.now('read')
+			Object.assign(home, atRest())
 			await select(null)
 			toPicture()
 		},
@@ -229,7 +295,7 @@ export function homeActions(app) {
 			else open.add(i)
 			render()
 		},
-		'home-know': () => learn(stopOn(), 'know'),
+		'home-know': know,
 		'home-unfold'(el) {
 			state.home.unfolded.add(el.dataset.name)
 			render()
@@ -239,7 +305,7 @@ export function homeActions(app) {
 			render()
 		},
 		async 'home-reset'() {
-			Object.assign(state.home, { trail: [WHOLE], at: '', typed: { at: '', since: '', another: '' } })
+			Object.assign(state.home, { trail: [WHOLE], at: '', typed: { at: '', since: '', another: '' }, opened: false })
 			await enter(state.home.wayIn)
 			await settle()
 		},
@@ -313,6 +379,7 @@ export function homeActions(app) {
 			render()
 			$('#ask-text')?.focus()
 		},
+		...board.actions,
 	}
 
 	function closeAsk() {
@@ -388,9 +455,13 @@ export function homeActions(app) {
 	function key(event) {
 		const home = state.home
 		const typing = event.target.matches?.('input, textarea, select')
+		// Esc closes what is open, the nearest first: the drawer, a correction, what the panel shows in place of the
+		// board, and then the level, which goes up one.
 		if (event.key === 'Escape') {
 			if (home.askOpen) closeAsk()
-			else if (home.selected) void select(null)
+			else if (home.fixing) actions['home-fix']({ dataset: {} })
+			else if (home.selected || home.opened || home.shown !== null) void actions['home-board']()
+			else if (home.trail.length > 1 && !typing) void moveTo(home.trail.slice(0, -1))
 			else return false
 			return true
 		}
@@ -416,12 +487,14 @@ export function homeActions(app) {
 			change,
 			shown: null,
 			selected: null,
+			opened: false,
+			why: null,
 		})
 		await show()
 		$('#home-level')?.focus({ preventScroll: true })
 	}
 
-	function pick(target) {
+	function pickInDrawing(target) {
 		const number = target.closest('#home-canvas') ? numberAt(target) : null
 		if (number === null) return
 		const { selected } = state.home
@@ -434,5 +507,24 @@ export function homeActions(app) {
 		if (event.target.closest?.('#redraw-form') && event.target.id !== 'redraw-text') event.preventDefault()
 	}
 
-	return { actions, start, back, address, ended, submit, input, change, key, press, openAt, pick }
+	// A quoted line opened in the panel is code the reader opened.
+	const quoted = () => seen.now('code')
+
+	return {
+		actions,
+		start,
+		back,
+		address,
+		ended,
+		submit,
+		input,
+		change,
+		key,
+		press,
+		openAt,
+		pick: pickInDrawing,
+		point: board.point,
+		watch: seen.watch,
+		quoted,
+	}
 }
