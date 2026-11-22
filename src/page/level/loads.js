@@ -94,8 +94,7 @@ export function homeLoads({ state, render, read, post, fromView }) {
 		// A drawn picture this level does not have gives its place to the parts.
 		if (home.content.kind !== 'drawn') home.shown = null
 		render()
-		// shortcut: a tab names its picture by the diagram's title, which only the reply holds, so the reply of every
-		// drawn picture of the level is read. Send the title with the row when a level has more than a few dozen.
+		// The canvas's Processes layer draws each drawn picture from its diagram, which only the reply holds.
 		const named = [...repliesOf(home.content), ...home.pictures.slice(1)].map((each) => each.id)
 		const unread = [...new Set(named)].filter((id) => !home.replies.has(id))
 		if (unread.length === 0) return

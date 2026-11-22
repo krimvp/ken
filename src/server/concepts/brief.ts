@@ -15,6 +15,7 @@ import {
 	under,
 } from '../../layout/index.ts'
 import { type RecordRead, sameName } from '../../record/index.ts'
+import { type CommitHash, parsePath } from '../../repo/index.ts'
 import {
 	arrowId,
 	type Concept,
@@ -40,6 +41,8 @@ import {
 } from './told.ts'
 
 export const TRUST = "ken's model wrote the words. ken found each quoted line in git."
+// What a brief says of its words while ken's model has said nothing of the concept.
+export const GIT_TRUST = "ken found this in git. ken's model has not explained it yet."
 
 type Named = { id: string; name: string }
 type Neighbour = Named & { verb: string }
@@ -67,12 +70,27 @@ export type Brief = {
 	trust: string
 	about?: Named
 	usedIn?: Named[]
+	// For a question: the parts of the top level its answer quotes, which its picture lights.
+	lit?: string[]
 	quotes?: BriefQuote[]
 	why?: string
 }
 
 // One row of what search can find. level is what ken thinks the reader knows of it, null when ken holds nothing.
-export type ConceptRow = { id: string; kind: ConceptKind; name: string; line: string; level: Knows['level'] | null }
+export type ConceptRow = {
+	id: string
+	kind: ConceptKind
+	name: string
+	line: string
+	minutes: number
+	level: Knows['level'] | null
+}
+
+// A part of a level that is one file: its lines at HEAD, and the sentence ken's model wrote of it, or null.
+export type FileTold = { name: string; lines: number; line: string | null }
+
+// The question that asks ken's model what a term means.
+const meansWhat = (term: string) => `What does "${term}" mean in this project?`
 
 // A reader reads about this many words a minute when the words are short and a drawing sits beside them.
 const WORDS_A_MINUTE = 150
@@ -96,6 +114,11 @@ export function conceptReads(layout: LayoutSources, history: History) {
 	type Held = Awaited<ReturnType<typeof held>>
 
 	async function brief(id: string, now: Date): Promise<Brief | null> {
+		const made = await briefOf(id, now)
+		return made && !made.explained ? { ...made, trust: GIT_TRUST } : made
+	}
+
+	async function briefOf(id: string, now: Date): Promise<Brief | null> {
 		const concept = parseConcept(id)
 		if (concept === null) return null
 		const all = await held(now)
@@ -179,10 +202,16 @@ export function conceptReads(layout: LayoutSources, history: History) {
 		const parts = top ? partsOf(top) : []
 		const [knows = null] = await knowsOf(layout, [knownTerm(topic.name, quotes)], all.now)
 		const meaning = meaningOf(all.read, topic.id)
+		// ken's model explains a term by answering what it means here, and its newest answer is the term's brief.
+		const told = all.answers.find((answer) => answer.concept === id && answer.text === meansWhat(topic.name))?.told
+		const words = told ? toldFields(told, all.read) : null
 		return {
-			...blank(id, 'term', topic.name, meaning ?? ''),
-			explained: meaning !== null,
-			points: quotes.slice(0, TERM_PLACES).map(placePoint),
+			...blank(id, 'term', topic.name, told?.line ?? meaning ?? ''),
+			explained: meaning !== null || told !== undefined,
+			explain: { lens: { kind: 'answer', concept: id, text: meansWhat(topic.name) } },
+			points: [...(words?.points ?? []), ...quotes.slice(0, TERM_PLACES).map(placePoint)],
+			terms: words?.terms.filter((term) => term.id !== id) ?? [],
+			minutes: Math.max(words?.minutes ?? 1, minutesFor([meaning ?? ''])),
 			questions: questionsAbout(id, [], all.answers),
 			decisions: decisionsOf(all.read, (decision) => decision.topic !== null && sameName(decision.topic, topic.name)),
 			knows,
@@ -249,7 +278,43 @@ export function conceptReads(layout: LayoutSources, history: History) {
 		if (!answer) {
 			return { ...base, explain: { lens: { kind: 'answer', concept: written.concept, text: written.text } }, about }
 		}
-		return { ...base, ...toldFields(answer.told, all.read), about }
+		const top = await levelAt([], all.now)
+		const quoted = answer.told.points.flatMap((point) => point.quotes.map((quote) => quote.path))
+		const lit = (top?.boxes ?? [])
+			.filter((box) => quoted.some((path) => box.paths.some((place) => under(path, place))))
+			.map((box) => box.name)
+		return { ...base, ...toldFields(answer.told, all.read), about, lit }
+	}
+
+	// The words ken's model wrote of a term so far, for how long its brief takes to read.
+	function termTold(id: string, all: Held): string[] {
+		const told = all.answers.find((answer) => answer.concept === id)?.told
+		return told ? [told.line ?? '', ...told.points.map((point) => point.line)] : []
+	}
+
+	// What ken's model said of each part of a level: how many parts it explained, and for a part that is one file, the
+	// lines it has at HEAD and the sentence the model wrote of it.
+	async function levelTold(look: LayoutLook): Promise<{ explained: number; files: FileTold[] }> {
+		const all = await held(new Date())
+		const told = look.boxes.map((box) => toldOfPart(all.answered, look.within, box.name))
+		const files = await Promise.all(
+			look.boxes.flatMap((box, at) => {
+				const [path] = box.paths
+				const file = box.files === 1 && box.paths.length === 1 && path?.split('/').at(-1) === box.name
+				if (!file || !path) return []
+				return [fileTold(box.name, path, look.head, told[at]?.line ?? null)]
+			}),
+		)
+		return { explained: told.filter(Boolean).length, files: files.flatMap((each) => each ?? []) }
+	}
+
+	async function fileTold(name: string, raw: string, head: CommitHash, line: string | null): Promise<FileTold | null> {
+		const path = parsePath(raw)
+		if (path.kind !== 'ok') return null
+		const read = await layout.repo.readFile(head, path.path)
+		return read.kind === 'ok'
+			? { name, lines: read.text.split('\n').length - (read.text.endsWith('\n') ? 1 : 0), line }
+			: null
 	}
 
 	function writtenQuestion(id: string, all: Held): { concept: string; text: string } | null {
@@ -284,13 +349,18 @@ export function conceptReads(layout: LayoutSources, history: History) {
 			(look) => look ?? [],
 		)
 		const parts = looks.flatMap((look) =>
-			look.boxes.map((box) => ({
-				id: partId(look.within, box.name),
-				kind: 'part' as const,
-				name: box.name,
-				line: toldOfPart(all.answered, look.within, box.name)?.line ?? box.job ?? folderLine(box),
-				level: box.knows.level,
-			})),
+			look.boxes.map((box) => {
+				const told = toldOfPart(all.answered, look.within, box.name)
+				const line = told?.line ?? box.job ?? folderLine(box)
+				return {
+					id: partId(look.within, box.name),
+					kind: 'part' as const,
+					name: box.name,
+					line,
+					minutes: told ? toldFields(told, all.read).minutes : minutesFor([line]),
+					level: box.knows.level,
+				}
+			}),
 		)
 		const topics = all.read.current.flatMap((entry) =>
 			entry.kind === 'topic' && !parts.some((part) => sameName(part.name, entry.name)) ? [entry] : [],
@@ -312,6 +382,7 @@ export function conceptReads(layout: LayoutSources, history: History) {
 				kind: 'term' as const,
 				name: topic.name,
 				line: meaningOf(all.read, topic.id) ?? '',
+				minutes: minutesFor([meaningOf(all.read, topic.id) ?? '', ...termTold(termId(topic.name), all)]),
 				level: known[at]?.level ?? null,
 			})),
 			...processes.map((process, at) => ({
@@ -319,6 +390,7 @@ export function conceptReads(layout: LayoutSources, history: History) {
 				kind: 'process' as const,
 				name: process.name,
 				line: processLine(process),
+				minutes: minutesFor(process.messages.map((message) => message.line)),
 				level: known[topics.length + at]?.level ?? null,
 			})),
 		]
@@ -339,7 +411,7 @@ export function conceptReads(layout: LayoutSources, history: History) {
 		}
 	}
 
-	return { brief, concepts, processes }
+	return { brief, concepts, processes, levelTold }
 }
 
 // A brief with nothing in it but what every kind has.

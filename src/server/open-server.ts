@@ -88,8 +88,16 @@ export async function openServer(options: {
 		const { own } = ask
 		const isTop = ask.within.length === 0 && ask.change === null && ask.at === look.head
 		const top = isTop ? look : await lookAtLayout(layout, { at: look.head, within: [], change: null, own }, now)
-		const wayIn = await suggestWayIn(layout, { history, questions, visit, spans: since, own, top }, now)
-		return { look, changes, wayIn, levels: LEVELS }
+		const [wayIn, told] = await Promise.all([
+			suggestWayIn(layout, { history, questions, visit, spans: since, own, top }, now),
+			reads.levelTold(look),
+		])
+		// How many parts ken's model explained, and for a part that is one file, its lines and what the model said of it.
+		const boxes = look.boxes.map((box) => {
+			const file = told.files.find((each) => each.name === box.name)
+			return file ? { ...box, lines: file.lines, told: file.line } : box
+		})
+		return { look: { ...look, boxes, explained: told.explained }, changes, wayIn, levels: LEVELS }
 	}
 
 	async function route(request: IncomingMessage, response: ServerResponse) {

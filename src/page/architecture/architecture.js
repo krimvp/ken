@@ -112,7 +112,8 @@ function notesHtml(home, env, arch, stops) {
 		const name = `<button class="k-link" data-act="run-name" data-key="run-name"${env.off ? ' disabled' : ''}>Ask ken to name them</button> <span class="k-muted">${env.off ? esc(env.off) : RUN_COST}</span>`
 		said.push(`These blocks are folders. ken's model has not named the parts ${where} yet. ${name}`)
 	}
-	if (look.named && look.at === look.head && home.content.kind === 'level' && !home.content.tour && !env.running) {
+	const unexplained = (look.explained ?? 0) < look.boxes.length
+	if (look.named && look.at === look.head && home.content.kind === 'level' && unexplained && !env.running) {
 		const button = `<button class="k-link" data-act="run-explain" data-key="run-explain"${env.off ? ' disabled' : ''}>Ask ken to explain these parts</button>`
 		said.push(
 			`ken's model has not explained these parts yet. ${button} <span class="k-muted">${env.off ? esc(env.off) : RUN_COST}</span>`,

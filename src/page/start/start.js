@@ -123,7 +123,9 @@ function conceptsHtml(look, concepts, home) {
 		const level = each.level
 			? `${levelMark(each.level, 15)}<span class="visually-hidden">${esc(levelLabel(home, each.level))}</span>`
 			: ''
-		return `<li><button class="k-chip k-concept" data-act="brief-open" data-concept="${esc(each.id)}" data-key="concept-${i}">${lead}<span class="k-concept-name">${prose(each.name)}</span>${level}</button></li>`
+		const minutes = concepts.find((row) => row.id === each.id)?.minutes ?? each.minutes
+		const time = minutes ? `<span class="k-concept-min k-num">${minutes} min</span>` : ''
+		return `<li><button class="k-chip k-concept" data-act="brief-open" data-concept="${esc(each.id)}" data-key="concept-${i}">${lead}<span class="k-concept-name">${prose(each.name)}</span>${level}${time}</button></li>`
 	})
 	return `<section class="k-tile k-tile-concepts"><div class="k-tile-head"><h2 class="k-eyebrow">Concepts</h2><span class="k-tile-note">a few minutes each</span></div><ul class="k-concepts">${rows.join('')}</ul></section>`
 }
