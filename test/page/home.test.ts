@@ -11,14 +11,11 @@ import { scriptedModel, type Turn } from '../fixtures/scripted-model.ts'
 const HOME = path.join(import.meta.dirname, '../../src/page/home')
 type Found = { id: string; q: object | null } | null
 type Content = { kind: string; tour?: Found; story?: Found; walk?: Found }
-type Picture = { kind: 'parts' } | { kind: 'drawn'; id: string; title: string | null; asked: string }
 type Replies = Map<string, object>
 const {
 	contentOf,
-	picturesOf,
 }: {
 	contentOf: (look: object, rows: object[], replies?: Replies, shown?: string | null) => Content
-	picturesOf: (look: object, rows: object[], replies?: Replies) => Picture[]
 } = await import(path.join(HOME, 'state/content.js'))
 const { inspectorHtml }: { inspectorHtml: (home: object, env: object) => string } = await import(
 	path.join(HOME, 'inspector/inspector.js')
@@ -28,8 +25,11 @@ const { canvasHtml }: { canvasHtml: (home: object, rows: object[]) => string } =
 )
 type Place = { name: string; within: string[] }
 type Home = {
+	wayIn: string
+	detail: string
 	trail: Place[]
 	change: string
+	selected: object | null
 	look: { change: { range: { head: string } } | null } | null
 	reading: string | null
 	ended: { kind: string; level?: string } | null
@@ -38,7 +38,7 @@ const { freshHome }: { freshHome: (stored: () => null, ui: object) => Home } = a
 	path.join(HOME, 'state/home-state.js')
 )
 type Answer = { ok: boolean; body: object }
-type Loads = { loadLayout: () => Promise<boolean>; refresh: () => Promise<void> }
+type Loads = { loadLayout: () => Promise<boolean>; loadDiff: () => Promise<void>; refresh: () => Promise<void> }
 const { homeLoads }: { homeLoads: (app: object) => Loads } = await import(path.join(HOME, 'state/loads.js'))
 const {
 	homeRuns,
@@ -168,78 +168,155 @@ async function homeOn(query: string, detail: string, selected: object | null) {
 	return { ...freshHome(() => null, ui), look, changes, detail, selected, content: contentOf(look, rows, replies) }
 }
 
-const ENV = { off: null, running: null, seconds: 0, model: { kind: 'ok', name: 'scripted' }, rows, asked: true }
-// The stop or step that is open in the reading path.
-const open = (html: string) =>
-	html.match(/<li class="path-step is-on"[\s\S]*?<\/li>\s*(?=<li class="path-step|<\/ol>)/)?.[0] ?? ''
+const ENV = {
+	off: null,
+	running: null,
+	seconds: 0,
+	model: { kind: 'ok', name: 'scripted' },
+	rows,
+	asked: true,
+	lenses: { open: false, pick: {} },
+}
 
-test('the home shows the stored tour of the level on screen and the stored story and walkthrough of the change laid over it, and none that is about another level or another change', async () => {
+// What a reader sees of a piece of the page: its words in order, with the markup taken out.
+const said = (html: string) =>
+	html
+		.replace(/<[^>]*>/g, ' ')
+		.replace(/&quot;/g, '"')
+		.replace(/&#39;/g, "'")
+		.replace(/&lt;/g, '<')
+		.replace(/&gt;/g, '>')
+		.replace(/&amp;/g, '&')
+		.replace(/\s+/g, ' ')
+const panel = async (query: string, detail: string, selected: object | null) =>
+	said(inspectorHtml(await homeOn(query, detail, selected), ENV))
+
+test('the home shows the stored tour of the level on screen and the stored story and walkthrough of the change laid over it, and none that is about another level, another change, or another question about the same change', async () => {
 	const whole = contentOf((await lookAt('change=none')).look, rows)
 	assert.deepEqual([whole.kind, whole.tour?.id], ['level', tourRow?.id])
 
 	const inside = contentOf((await lookAt('change=none&within=src/core')).look, rows)
 	assert.equal(inside.kind, 'folders', 'nobody named the parts inside the core, so it has no tour')
 
-	const reviewed = contentOf((await lookAt(`change=${REVIEWED}`)).look, rows)
-	assert.deepEqual(
-		[reviewed.kind, reviewed.story?.id, reviewed.walk?.id],
-		['change', storyRow?.id, walkRow?.id],
-		'the reply with no steps is the story, and the one with steps the walkthrough',
+	const { look } = await lookAt(`change=${REVIEWED}`)
+	const reviewed = contentOf(look, rows)
+	assert.deepEqual([reviewed.kind, reviewed.story?.id, reviewed.walk?.id], ['change', storyRow?.id, walkRow?.id])
+
+	// A later question about the same change that asked for neither, as "what could go wrong" does.
+	const later = { ...storyRow, id: 'a later question', want: null }
+	assert.equal(
+		contentOf(look, [...rows, later]).story?.id,
+		storyRow?.id,
+		'the story is the reply that was asked for it',
 	)
 
 	const earlier = contentOf((await lookAt(`change=${first}..${docs}`)).look, rows)
 	assert.deepEqual([earlier.story, earlier.walk], [null, null], 'ken explained the last commit, not the one before')
 })
 
-test('for a toured level the inspector offers the stored tour at the big picture, opens the picked stop with its words at "How it works", and shows that stop\'s quoted lines at "In the code"', async () => {
-	const big = inspectorHtml(await homeOn('change=none', 'big', null), ENV)
-	assert.match(big, /data-act="home-tour"/, 'the stored tour starts with no run')
-	assert.doesNotMatch(big, /data-act="run-tour"/)
+test('for a toured level the panel offers the stored tour at the big picture, opens the picked stop with its words and arrows at "How it works", and shows that stop\'s quoted lines at "In the code"', async () => {
+	const big = await panel('change=none', 'big', null)
+	assert.match(big, /Start the tour/, 'the stored tour starts with no run')
+	assert.doesNotMatch(big, /Show me around/, 'so no run is offered')
 
 	const picked = { kind: 'part', name: 'Core' }
-	const how = await homeOn('change=none', 'how', picked)
-	const stop = open(inspectorHtml(how, ENV))
-	assert.match(stop, /class="path-n">2</, 'the core is the second stop: the tour starts at the store, which it uses')
-	assert.match(stop, /The core runs the work\./)
-	assert.doesNotMatch(stop, /The store saves it\./)
-	assert.equal(stop.match(/data-act="home-arrow"/g)?.length, 3, 'three arrows start or end at the core')
-	assert.match(stop, /data-act="home-know"/)
-	assert.match(inspectorHtml(how, ENV), /data-key="home-nav-Next, stop 3"[\s\S]*?nav-name">Command</)
-	assert.match(
-		canvasHtml(how, rows),
-		/aria-pressed="true"><span class="pv-badge">Stop 2<\/span>\s*<span class="pv-name">Core</,
-	)
+	const how = await panel('change=none', 'how', picked)
+	assert.match(how, /Stop 2 of 4/, 'the core is the second stop: the tour starts at the store, which it uses')
+	assert.match(how, /2 Core The core runs the work\./)
+	for (const arrow of ['Tests tests Core', 'Core saves to Store', 'Command runs Core']) {
+		assert.match(how, new RegExp(arrow), 'the open stop lists each arrow that starts or ends at the core')
+	}
+	assert.match(how, /I know this part/)
+	assert.match(how, /Back to stop 1 Store/)
+	assert.match(how, /Next, stop 3 Command/)
+	assert.match(said(canvasHtml(await homeOn('change=none', 'how', picked), rows)), /Stop 2 Core Runs the work/)
 
-	const code = open(inspectorHtml(await homeOn('change=none', 'code', picked), ENV))
+	const code = await panel('change=none', 'code', picked)
 	assert.match(code, /src\/core\/run\.ts/)
 	assert.match(code, /export function run\(\) \{/, "the stop's quoted line shows as code")
 	assert.doesNotMatch(code, /export function save\(\) \{/, "another stop's quote stays with its stop")
 })
 
-test('for a walked change the inspector tells its story at the big picture, opens the picked step with its files at "How it works", and shows that step\'s diff at "In the code"', async () => {
-	const big = inspectorHtml(await homeOn(`change=${REVIEWED}`, 'big', null), ENV)
+test('for a walked change the panel tells its story at the big picture, opens the picked step with its files at "How it works", and shows that step\'s diff at "In the code"', async () => {
+	const big = await panel(`change=${REVIEWED}`, 'big', null)
 	assert.match(big, /The core now waits before it saves\./)
-	assert.doesNotMatch(big, /data-act="run-story"/, 'a stored story needs no run')
-	assert.match(big, /data-chip="risks"/)
+	assert.doesNotMatch(big, /Ask ken what this change did/, 'a stored story needs no run')
+	assert.match(big, /Ask what could go wrong/)
+	assert.match(big, /feat: the core waits before it saves/, 'git names the commit of the change, with no model')
 
 	const picked = { kind: 'step', number: 2 }
-	const whole = inspectorHtml(await homeOn(`change=${REVIEWED}`, 'how', picked), ENV)
+	const how = await panel(`change=${REVIEWED}`, 'how', picked)
+	assert.match(how, /Step 2 of 2/)
 	assert.ok(
-		whole.indexOf('The core now waits before it saves.') < whole.indexOf('class="path"'),
+		how.indexOf('The core now waits before it saves.') < how.indexOf('The core waits first'),
 		'the story opens the reading path',
 	)
-	const how = open(whole)
-	assert.match(how, /The store keeps what it saved\./)
+	assert.match(how, /2 The store keeps what it saved/)
+	assert.match(how, /src\/store\/db\.ts lines added: \+3 removed: -1/, 'the open step lists its file with its lines')
+	assert.equal(how.match(/lines added:/g)?.length, 1, "the other step's file is not listed with it")
 	assert.match(
 		how,
-		/<code>src\/store\/db\.ts<\/code> <span class="home-plus">\+3<\/span> <span class="home-minus">-1<\/span>/,
+		/The steps quote 2 of 2 changed blocks\./,
+		'and the walkthrough says how much of the change it quotes',
 	)
-	assert.doesNotMatch(how, /src\/core\/run\.ts/, "the other step's file is not in this step")
-	assert.match(how, /data-detail="code"/)
 
-	const code = open(inspectorHtml(await homeOn(`change=${REVIEWED}`, 'code', picked), ENV))
-	assert.match(code, /<span class="lc add">.*keep\(\)/)
+	const code = await panel(`change=${REVIEWED}`, 'code', picked)
+	assert.match(code, /keep\(\)/)
 	assert.doesNotMatch(code, /wait\(\)/, "the other step's diff stays with its step")
+})
+
+// The page asks the server through one function, which says whether the answer is ok.
+const fromServer = async (url: string) => {
+	const { status, text } = await call(server, url)
+	return { ok: status === 200, body: JSON.parse(text) }
+}
+
+test('a change nobody asked ken about still says what git knows: its commits, the changed files of each part, and the diff of the part the reader picks', async () => {
+	const { home, loads } = pageOn(fromServer)
+	Object.assign(home, { wayIn: 'review', change: `${first}..${docs}`, detail: 'how' })
+	await loads.refresh()
+	const how = said(inspectorHtml(home, ENV))
+	assert.match(how, /docs: say what the store is for/, 'the commit of the change')
+	assert.match(how, /Store .*src\/store\/db\.ts lines added: \+1 removed: -0/, 'the file it changed, under its part')
+	assert.match(how, /Ask ken to walk me through it/)
+
+	Object.assign(home, { detail: 'code', selected: { kind: 'part', name: 'Store' } })
+	await loads.loadDiff()
+	const code = said(inspectorHtml(home, ENV))
+	assert.match(code, /Added: \/\/ Saves\./, 'the line the change added to the store, read from git')
+	assert.doesNotMatch(code, /Ask ken to walk me through it/, 'the picked part shows its own diff')
+})
+
+const address: { writeAddress: (place: object) => string; readAddress: (hash: string) => object | null } = await import(
+	path.join(HOME, 'state/address.js')
+)
+
+test('the address of a place on the home reads back as the same place, and an address that names none reads as none', () => {
+	const place = {
+		wayIn: 'review',
+		detail: 'code',
+		trail: [
+			{ name: 'Whole project', within: [] },
+			{ name: 'Code & "tests": all of it', within: ['src/core', 'test/a b.ts'] },
+		],
+		change: `${docs}..${head}`,
+		at: '',
+		shown: null,
+		selected: { kind: 'part', name: 'Core: the #1 part' },
+	}
+	assert.deepEqual(address.readAddress(address.writeAddress(place)), place)
+
+	const drawnPicture = {
+		...place,
+		change: 'none',
+		at: 'abc1234',
+		shown: 'q-17',
+		selected: { kind: 'element', number: 4 },
+	}
+	assert.deepEqual(address.readAddress(address.writeAddress(drawnPicture)), drawnPicture)
+
+	assert.equal(address.readAddress(''), null, 'a first visit has no place')
+	assert.equal(address.readAddress('#way=sideways&detail=big'), null, 'a way in ken does not have is no place')
 })
 
 // The page's own state around the home, with the server asked the way the page asks it.
@@ -281,15 +358,11 @@ test('a level the server answers late does not replace the one the reader asked 
 })
 
 test('a run is judged against the level it started on: a reader who looked inside a part meanwhile is told it finished there, and one who stayed sees what it made', async () => {
-	const read = async (url: string) => {
-		const { status, text } = await call(server, url)
-		return { ok: status === 200, body: JSON.parse(text) }
-	}
 	const whole = { name: 'Whole project', within: [] }
 	const started = { kind: 'tour', trail: [whole], change: 'none' }
 	const tour = await saved(tourRow?.id ?? '')
 
-	const moved = pageOn(read)
+	const moved = pageOn(fromServer)
 	moved.home.trail = [whole, { name: 'Core', within: ['src/core'] }]
 	await moved.loads.refresh()
 	await moved.runs.ended(started, tour)
@@ -299,134 +372,13 @@ test('a run is judged against the level it started on: a reader who looked insid
 		'the tour was made, so the home says where, and shows no failure',
 	)
 
-	const stayed = pageOn(read)
+	const stayed = pageOn(fromServer)
 	await stayed.loads.refresh()
 	await stayed.runs.ended(started, tour)
 	assert.equal(stayed.home.ended, null, 'the reader is where the tour is, so nothing needs saying')
 
-	const stopped = pageOn(read)
+	const stopped = pageOn(fromServer)
 	await stopped.loads.refresh()
 	await stopped.runs.ended(started, { ...tour, outcome: 'stopped', reply: null })
 	assert.equal(stopped.home.ended?.kind, 'nothing', 'a run that made nothing says so')
-})
-
-test('a level ken drew again has no tour until ken gives one for its new parts', async () => {
-	await draw([part('Code', 'All the code', 'src'), part('Tests', 'Tests the core', 'test')], [])
-	const redrawn = contentOf((await lookAt('change=none')).look, rows)
-	assert.deepEqual([redrawn.kind, redrawn.tour], ['level', null])
-})
-
-// What the reader asks on "Show it another way", as the home sends it, and a diagram the model answers with.
-const view = (text: string, within: string[]) => ({ lens: { kind: 'view', text, within, name: null } })
-const flow = (title: string) => ({
-	kind: 'sequence',
-	title,
-	label: 'inferred',
-	participants: [{ name: 'Command' }, { name: 'Core' }],
-	messages: [
-		{ from: 'Command', to: 'Core', text: 'runs the work', quotes: [quote('src/cli/main.ts', 'run()')] },
-		{ from: 'Core', to: 'Command', text: 'returns once it saved', quotes: [quote('src/core/run.ts', '\tsave()')] },
-	],
-})
-const drawing = (title: string, text: string): Turn[] => [
-	{ tool: 'ken__show', text, args: { diagrams: [flow(title)] } },
-	{ text: '' },
-]
-
-// Four requests to see a level another way: two diagrams of the whole project, then inside src the parts drawn again
-// and one diagram.
-async function drawnPictures() {
-	const again = {
-		within: ['src'],
-		about: 'The code a person runs.',
-		parts: [part('Front', 'Takes the command and runs it', 'src/cli'), part('Rest', 'Runs and saves', 'src/core')],
-	}
-	const drawer = await scriptedModel([
-		...drawing('One command through the code', 'The command runs the core.'),
-		...drawing('The same command, once more', 'The same flow again.'),
-		{ tool: 'ken__show', text: 'Two parts now.', args: { layout: again } },
-		{ text: '' },
-		...drawing('Inside src', 'Only the code in src.'),
-	])
-	const desk = await openKen(root, readerHome(), drawer.baseUrl)
-	await ask(desk, view('Follow one command', []))
-	await ask(desk, view('Follow it again', []))
-	await ask(desk, view('Fewer parts', ['src']))
-	await ask(desk, view('Follow it inside src', ['src']))
-	const asked: { id: string }[] = (await json(desk, '/api/questions')).questions
-	const replies: Replies = new Map()
-	for (const row of asked) {
-		const read = await json(desk, `/api/questions/${row.id}`)
-		replies.set(row.id, { ...read.entry, topics: read.topics })
-	}
-	const look = async (query: string) => (await json(desk, `/api/layout?${query}`)).look as object
-	return { asked, replies, whole: await look('change=none'), src: await look('change=none&within=src') }
-}
-const drawn = await drawnPictures()
-
-test("a level's pictures are its parts and then, newest first, each diagram ken drew because the reader asked to see that level another way", () => {
-	const { asked, replies, whole, src } = drawn
-	const [first, second, , inside] = asked.map((row) => row.id)
-
-	assert.deepEqual(
-		picturesOf(whole, asked),
-		[
-			{ kind: 'parts' },
-			{ kind: 'drawn', id: second, title: null, asked: 'Follow it again' },
-			{ kind: 'drawn', id: first, title: null, asked: 'Follow one command' },
-		],
-		'until its reply is read a drawn picture has only the words the reader asked with',
-	)
-	assert.deepEqual(
-		picturesOf(whole, asked, replies).map((picture) => (picture.kind === 'drawn' ? picture.title : null)),
-		[null, 'The same command, once more', 'One command through the code'],
-	)
-	assert.deepEqual(
-		picturesOf(src, asked, replies),
-		[{ kind: 'parts' }, { kind: 'drawn', id: inside, title: 'Inside src', asked: 'Follow it inside src' }],
-		'the request that drew the parts of src again is not a picture of its own, and neither is a diagram of the whole project',
-	)
-
-	assert.equal(contentOf(whole, asked, replies, first).kind, 'drawn')
-	assert.equal(
-		contentOf(src, asked, replies, first).kind,
-		'level',
-		'inside src the parts show, not a picture of the whole project',
-	)
-})
-
-test('a drawn picture shows its drawing on the canvas under its own tab, and the inspector tells it by the detail: the words of ken, the picked arrow, then the line that arrow quotes', () => {
-	const { asked, replies, whole } = drawn
-	const first = asked[0]?.id ?? ''
-	const ui = { panel: { kind: 'checks' }, openQuotes: new Set(), openDecisions: new Set(), unfolded: new Set() }
-	const home = (detail: string, selected: object | null) => ({
-		...freshHome(() => null, ui),
-		look: whole,
-		detail,
-		selected,
-		pictures: picturesOf(whole, asked, replies),
-		shown: first,
-		content: contentOf(whole, asked, replies, first),
-	})
-
-	const canvas = canvasHtml(home('big', null), asked)
-	assert.match(canvas, new RegExp(`data-id="${first}"[^>]*aria-pressed="true"`), 'its tab is the pressed one')
-	assert.match(canvas, /data-mermaid="sequenceDiagram/)
-	assert.doesNotMatch(canvas, /class="pv-box/, 'the parts give their place to the drawing')
-
-	const big = inspectorHtml(home('big', null), ENV)
-	assert.match(big, /The command runs the core\./)
-	assert.doesNotMatch(big, /data-mermaid/, 'the drawing is on the canvas, so the inspector does not draw it again')
-
-	// ken numbers the two participants 1 and 2, so the second message is number 4.
-	const picked = { kind: 'element', number: 4 }
-	const how = open(inspectorHtml(home('how', picked), ENV))
-	assert.match(how, /class="path-n">4</)
-	assert.match(how, /From Core to Command: returns once it saved/)
-	assert.match(how, /src\/core\/run\.ts/, 'it says where the line it quotes is')
-	assert.doesNotMatch(how, /class="code"/, 'the line itself waits for "In the code"')
-
-	const code = open(inspectorHtml(home('code', picked), ENV))
-	assert.match(code, /class="code"[\s\S]*save\(\)/)
-	assert.doesNotMatch(code, /runs the work/, "the other arrow's row is not in this one")
 })

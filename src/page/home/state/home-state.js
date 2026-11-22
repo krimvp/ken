@@ -19,9 +19,11 @@ export function freshHome(stored, ui) {
 		// The level on screen is the last of the boxes the reader opened to get here.
 		trail: [WHOLE],
 		// The text that asks the server for the change laid over the parts: "none" for no change, and "" for the
-		// reader's own work. at is another commit to look at, as typed.
+		// reader's own work. at is another commit to look at. typed holds what the reader wrote in the picker's two
+		// fields and has not sent yet, or sent and had refused.
 		change: 'none',
 		at: '',
+		typed: { at: '', since: '' },
 		look: null,
 		// While the server reads a level: "level" when the one on screen is another, "overlay" when it is the same one
 		// with another change or commit to come.
@@ -38,6 +40,8 @@ export function freshHome(stored, ui) {
 		content: { kind: 'folders' },
 		// The saved questions the content names, by id, once read.
 		replies: new Map(),
+		// The diff of the files a change touched in one part, by diffKey: null while the server reads it.
+		diffs: new Map(),
 		// text is the box of "Show it another way", asked the request the model is working on, problem why it was not sent.
 		redraw: { text: '', asked: '', problem: null },
 		redrawOpen: false,
@@ -51,7 +55,7 @@ export function freshHome(stored, ui) {
 		trouble: null,
 		stepsOpen: false,
 		storyOpen: false,
-		formOpen: false,
+
 		openArrows: new Set(),
 		// The parts the reader knows whose words they asked to see anyway.
 		unfolded: new Set(),

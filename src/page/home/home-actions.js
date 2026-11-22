@@ -4,6 +4,7 @@ import { numberAt } from '../draw-diagrams.js'
 import { stepParts, stopTopics } from '../project/walk.js'
 import { chipQuestion } from '../views/reply.js'
 import { askedQuestion } from './inspector/ask-drawer.js'
+import { readAddress, writeAddress } from './state/address.js'
 import { firstUnseen, pathOf, placeOf, shownDetail, stoodOn } from './state/content.js'
 import { WHOLE } from './state/home-state.js'
 import { homeLoads } from './state/loads.js'
@@ -16,7 +17,42 @@ export function homeActions(app) {
 	const $ = (selector) => document.querySelector(selector)
 	const level = () => state.home.trail.at(-1)
 	const loads = homeLoads(app)
-	const { loadLayout, settle, refresh, enter, start } = loads
+	const { loadLayout, settle, refresh, enter } = loads
+	// From 1200 pixels the picture and the panel stand side by side, each scrolling by itself. Under that they are one
+	// column and the page scrolls.
+	const sideBySide = matchMedia('(min-width: 1200px)')
+
+	// The address follows the reader once the home has read where it starts. A new level or way in is a new entry in
+	// the browser's history, so Back goes to the one before. Anything finer rewrites the entry it is in.
+	let addressed = null
+	function address() {
+		const home = state.home
+		const hash = writeAddress(home)
+		const coarse = JSON.stringify([home.wayIn, home.trail])
+		if (addressed !== null && hash !== location.hash) {
+			history[coarse === addressed ? 'replaceState' : 'pushState'](null, '', hash)
+		}
+		if (addressed !== null) addressed = coarse
+	}
+
+	// A place from the address becomes where the reader is. With none, ken's suggestion and what this browser kept
+	// decide, as on a first visit.
+	async function start() {
+		const place = readAddress(location.hash)
+		if (place) Object.assign(state.home, place)
+		await loads.start(place !== null)
+		addressed = JSON.stringify([state.home.wayIn, state.home.trail])
+		address()
+	}
+
+	// Back and Forward in the browser: the home goes to the place the address names.
+	async function back() {
+		const place = readAddress(location.hash)
+		if (!place) return
+		Object.assign(state.home, place, { askOpen: false })
+		addressed = JSON.stringify([place.wayIn, place.trail])
+		await show()
+	}
 
 	async function show() {
 		state.view = state.base = 'home'
@@ -54,30 +90,36 @@ export function homeActions(app) {
 		render()
 	}
 
-	// What the reader picks shows in the inspector. On a narrow screen the inspector is under the picture, so its
-	// heading comes into view. A picked stop or step comes into view in the path.
-	async function select(selected) {
+	// What the reader picks shows in the panel. A picked stop or step comes to the top of the panel, whole, and what
+	// was picked in the picture comes into view there. In one column the panel is under the picture, so the page
+	// scrolls to it: to the open stop, or to the panel's top, which names the part. focus moves the keyboard to the
+	// open stop's line, for a reader who came by the arrow keys.
+	async function select(selected, focus = false) {
 		const home = state.home
 		home.selected = selected
 		render()
 		if (selected) {
 			const path = pathOf(home.look, home.content)
 			const open = document.getElementById(`path-${placeOf(path, selected)}`)
-			if (!state.ui.wide) (open ?? $('#insp-title'))?.scrollIntoView({ block: 'start' })
-			else if (open) open.scrollIntoView({ block: 'nearest' })
-			else if ($('#insp-scroll')) $('#insp-scroll').scrollTop = 0
-			// A drawn picture can be longer and wider than the canvas, so the number picked in the list comes into view.
-			if (state.ui.wide) $('#home-canvas .drawing .is-open')?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+			if (!sideBySide.matches) (open ?? $('#home-inspector')).scrollIntoView({ block: 'start' })
+			else {
+				if (open) open.scrollIntoView({ block: 'start' })
+				else if ($('#insp-scroll')) $('#insp-scroll').scrollTop = 0
+				$('#home-canvas :is(.is-chosen, .drawing .is-open)')?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+			}
+			if (focus) open?.querySelector('.path-head')?.focus({ preventScroll: true })
 		}
+		void loads.loadDiff()
 		await reach()
 	}
 
-	function stepTo(k) {
+	function stepTo(k, focus = false) {
 		const home = state.home
 		const step = pathOf(home.look, home.content)[k]
 		if (!step) return
-		if (home.content.kind === 'drawn') return select({ kind: 'element', number: step.number })
-		return select(step.part === null ? { kind: 'step', number: step.number } : { kind: 'part', name: step.part })
+		if (home.content.kind === 'drawn') return select({ kind: 'element', number: step.number }, focus)
+		const picked = step.part === null ? { kind: 'step', number: step.number } : { kind: 'part', name: step.part }
+		return select(picked, focus)
 	}
 
 	function stepBy(by) {
@@ -86,16 +128,23 @@ export function homeActions(app) {
 		const path = pathOf(home.look, home.content)
 		if (path.length === 0) return false
 		const at = placeOf(path, home.selected)
-		void stepTo(at < 0 ? (home.content.kind === 'level' ? firstUnseen(home.look, path) : 0) : at + by)
+		void stepTo(at < 0 ? (home.content.kind === 'level' ? firstUnseen(home.look, path) : 0) : at + by, true)
 		return true
 	}
 
-	// The level changes under the reader's focus, so focus goes to the level's heading, which names where they are.
+	// The picture comes to the top of what the reader sees: of the canvas, and in one column of the page.
+	function toPicture() {
+		$('#home-canvas').scrollTop = 0
+		if (!sideBySide.matches) $('#home-canvas').scrollIntoView({ block: 'start' })
+		$('#home-level')?.focus({ preventScroll: true })
+	}
+
+	// The level changes under the reader's focus, so focus goes to the level's heading, which names where they are,
+	// and the opened picture comes into view.
 	async function moveTo(trail) {
 		Object.assign(state.home, { trail, shown: null, selected: null, openArrows: new Set() })
 		await refresh()
-		$('#home-level')?.focus({ preventScroll: true })
-		$('#home-canvas').scrollTop = 0
+		toPicture()
 	}
 
 	const { run, ended } = homeRuns(app, loads, stepTo)
@@ -184,9 +233,14 @@ export function homeActions(app) {
 			render()
 		},
 		async 'home-reset'() {
-			Object.assign(state.home, { trail: [WHOLE], at: '', formOpen: false })
+			Object.assign(state.home, { trail: [WHOLE], at: '', typed: { at: '', since: '' } })
 			await enter(state.home.wayIn)
 			await settle()
+		},
+		'home-up': toPicture,
+		// The first stop for the Tab key: past the header, the controls and the picture, to what ken says.
+		skip() {
+			$('#insp-title')?.focus()
 		},
 		'home-chip': (el) => send({ question: chipQuestion(el.dataset.chip, state.home.look.change.range) }),
 		'run-name': () => run('name', levelLens('parts')),
@@ -297,7 +351,14 @@ export function homeActions(app) {
 			$('#redraw-text').value = ''
 			void run('redraw', { ...levelLens('view'), text })
 		} else if (form.id === 'ask-form') sendAsk()
-		else void refresh()
+		else {
+			// The picker sends the one field it shows: a span of time to catch up on, or a commit to look at.
+			const since = home.typed.since.trim()
+			if (home.wayIn === 'catch-up' && since !== '') home.change = `since:${since}`
+			else home.at = home.typed.at.trim()
+			home.selected = null
+			void refresh()
+		}
 		return true
 	}
 
@@ -307,7 +368,8 @@ export function homeActions(app) {
 		const { id, value } = event.target
 		if (id === 'redraw-text') home.redraw.text = value
 		else if (id === 'ask-text') home.askText = value
-		else if (id === 'home-at') home.at = value
+		else if (id === 'home-at') home.typed.at = value
+		else if (id === 'home-since') home.typed.since = value
 		else return false
 		return true
 	}
@@ -315,6 +377,7 @@ export function homeActions(app) {
 	function change(event) {
 		if (event.target.id !== 'home-change') return false
 		Object.assign(state.home, { change: event.target.value, selected: null, storyOpen: false })
+		state.home.typed.since = ''
 		void refresh()
 		return true
 	}
@@ -366,5 +429,11 @@ export function homeActions(app) {
 		void select(selected?.number === number ? null : { kind: 'element', number })
 	}
 
-	return { actions, start, ended, submit, input, change, key, openAt, pick }
+	// A press on an example or a note must not take the keyboard out of the box of "Show it another way": the examples
+	// show only while the box has it.
+	function press(event) {
+		if (event.target.closest?.('.redraw-more')) event.preventDefault()
+	}
+
+	return { actions, start, back, address, ended, submit, input, change, key, press, openAt, pick }
 }

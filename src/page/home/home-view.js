@@ -1,9 +1,9 @@
-// The home's frame: the toolbar with the two controls, the canvas, the "Show it another way" bar, the inspector, and
-// the "Ask ken" drawer over it. Each region is drawn again only when what it shows changed, so a box the reader points
-// at and a text they type stay as they are while another region updates.
+// The home's frame: the toolbar with the two controls, the canvas, the "Show it another way" bar, the panel beside the
+// picture, and the "Ask ken" drawer over it. Each region is drawn again only when what it shows changed, so a box the
+// reader points at and a text they type stay as they are while another region updates.
 import { fillDrawings, markPart } from '../draw-diagrams.js'
 import { drawPictures } from '../project/parts-picture.js'
-import { esc } from '../views/format.js'
+import { count, esc } from '../views/format.js'
 import { canvasHtml } from './canvas/canvas.js'
 import { redrawBarHtml } from './canvas/redraw-bar.js'
 import { askDrawerHtml } from './inspector/ask-drawer.js'
@@ -11,10 +11,22 @@ import { inspectorHtml } from './inspector/inspector.js'
 import { shownDetail } from './state/content.js'
 import { DETAILS, WAYS } from './state/home-state.js'
 
+// The second line of "Catch up": the span on screen while the reader catches up, and before that the first span ken
+// found commits in.
+function catchUpFact(home) {
+	const { look, changes, suggestion } = home
+	if (home.wayIn !== 'catch-up' || !look?.change) return suggestion?.facts['catch-up'] ?? null
+	const commits = count(look.change.commits.length + look.change.moreCommits, 'commit', 'commits')
+	const picked = changes.find((choice) => choice.kind === 'since' && choice.change === look.change.asked)
+	const span = picked ? picked.name.slice(0, picked.name.lastIndexOf(': ')) : look.change.name
+	return `${commits} ${span.replace(/^The last/, 'in the last').replace(/^./, (c) => c.toLowerCase())}`
+}
+
 // The two controls, each a group of three buttons with one pressed. A way in carries one live fact from git. On a
-// level of folders the detail control waits: there is nothing finer to show until the parts have names.
+// level of folders the detail control waits: there is nothing finer to show until the parts have names, so its
+// buttons are greyed and out of the tab order, and one line says why.
 function toolbarHtml(home) {
-	const facts = home.suggestion?.facts ?? {}
+	const facts = { ...home.suggestion?.facts, 'catch-up': catchUpFact(home) }
 	const ways = Object.entries(WAYS).map(
 		([way, text]) =>
 			`<button class="seg" data-act="way-in" data-way="${way}" data-key="way-${way}" aria-pressed="${home.wayIn === way}"><span class="seg-text">${text}</span>${facts[way] ? `<span class="seg-fact">${esc(facts[way])}</span>` : ''}</button>`,
@@ -23,17 +35,22 @@ function toolbarHtml(home) {
 	const shown = shownDetail(home)
 	const details = Object.entries(DETAILS).map(
 		([detail, text]) =>
-			`<button class="seg" data-act="detail" data-detail="${detail}" data-key="detail-${detail}" aria-pressed="${shown === detail}"${waits ? ' disabled' : ''}><span class="seg-text">${text}</span></button>`,
+			`<button class="seg" data-act="detail" data-detail="${detail}" data-key="detail-${detail}" aria-pressed="${!waits && shown === detail}"${waits ? ' disabled' : ''}><span class="seg-text">${text}</span></button>`,
 	)
 	return `<div class="control" role="group" aria-labelledby="way-label"><span class="control-label" id="way-label">Way in</span><div class="segs">${ways.join('')}</div></div>
-		<div class="control" role="group" aria-labelledby="detail-label"><span class="control-label" id="detail-label">Detail</span><div class="segs">${details.join('')}</div>${waits ? `<span class="control-note small">Detail opens once ken's model has named the parts.</span>` : ''}</div>`
+		<div class="control${waits ? ' is-waiting' : ''}" role="group" aria-labelledby="detail-label"${waits ? ' aria-describedby="detail-waits"' : ''}><span class="control-label" id="detail-label">Detail</span><div class="segs">${details.join('')}</div>${waits ? `<span class="control-note small" id="detail-waits">Detail opens once ken's model has named the parts.</span>` : ''}</div>`
 }
 
 const drawn = new WeakMap()
 
+// Draws a region again when what it shows changed. A list the reader unfolded stays unfolded: each is known by its
+// key, or by the words of its line.
 function fill(region, html) {
 	if (drawn.get(region) === html) return false
+	const key = (details) => details.dataset.key ?? details.querySelector('summary')?.textContent
+	const open = new Set([...region.querySelectorAll('details[open]')].map(key))
 	region.innerHTML = html
+	for (const details of region.querySelectorAll('details')) if (open.has(key(details))) details.open = true
 	drawn.set(region, html)
 	return true
 }

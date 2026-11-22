@@ -1,5 +1,6 @@
 // The states of a question with no reply to show: the model at work, and each way a question can end without a reply.
-// Also the list of steps, which the working state and "Show the steps" share.
+// Also the list of what the model did, which the working state and "Show the actions" share. The page calls each
+// thing the model did an action, since a walkthrough of a change has steps.
 import { count, duration, esc, list, prose, withCost } from './format.js'
 
 // The project record is ken's own word, so the first step that names it says what it is.
@@ -31,9 +32,9 @@ export function workingHtml(q, t, open, seconds, doing = "ken's model is reading
 	const earlier =
 		hidden === 0
 			? ''
-			: `<p class="small"><button class="link" data-act="steps" data-turn="${t}" data-key="steps-${t}">Show ${count(hidden, 'earlier step', 'earlier steps')}</button></p>`
+			: `<p class="small"><button class="link" data-act="steps" data-turn="${t}" data-key="steps-${t}">Show ${count(hidden, 'earlier action', 'earlier actions')}</button></p>`
 	const steps = [...q.steps.slice(hidden), ...(q.typing ? [{ kind: 'text', text: q.typing }] : [])]
-	return `<div class="working"><p class="working-head" aria-live="polite"><span>${doing}</span><span class="small muted" id="working-clock">${duration(seconds)} so far, ${count(tools, 'step', 'steps')}</span></p>
+	return `<div class="working"><p class="working-head" aria-live="polite"><span>${doing}</span><span class="small muted" id="working-clock">${duration(seconds)} so far, ${count(tools, 'action', 'actions')}</span></p>
 		${earlier}
 		${steps.length === 0 ? '<p class="small muted">Starting.</p>' : stepsHtml(steps, Boolean(q.typing))}
 		<p class="actions"><button class="quiet-button" data-act="stop" data-key="stop">Stop</button></p></div>`
@@ -87,7 +88,7 @@ export function endedHtml(q, t) {
 		</div>`
 	}
 	if (q.outcome === 'unasked') {
-		return `<div class="notice" role="status"><h3>ken did not ask its model</h3><p>${esc(q.error)}</p></div>`
+		return `<div class="notice" role="status"><h3>ken did not start its model for this request</h3>${q.error ? `<p>${esc(q.error)}</p>` : ''}</div>`
 	}
 	const said = {
 		stopped: ['You stopped this question', ''],
@@ -131,6 +132,6 @@ export function noModelHtml(model, hasHistory, heading) {
 			<li>Stop ken with Ctrl-C in the terminal where it runs.</li>
 			${settings}
 		</ol>
-		${hasHistory ? '<p class="muted">Until then you can still read your earlier questions under Your questions.</p>' : ''}
+		${hasHistory ? '<p class="muted">Until then you can still read what ken told you before, under Earlier replies.</p>' : ''}
 	</div>`
 }

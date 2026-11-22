@@ -140,7 +140,7 @@ const LENS_TITLES = {
 	note: 'Go deeper on this note',
 	parts: 'Name the main parts',
 	tour: 'Show me around',
-	change: 'Explain this change',
+	change: 'What did this change do, and why?',
 	view: 'Show it another way',
 }
 
@@ -258,6 +258,7 @@ async function send(body, onHome = null) {
 		state.thread = [...state.thread, q]
 		state.open = picked = q
 		state.menuOpen = false
+		state.home.askOpen = false
 		state.view = state.base = 'question'
 		if (!body.lens) $('#question').value = ''
 		resizeBox()
@@ -395,7 +396,7 @@ function firstLine(question) {
 	return old ? `Go deeper on the ${old[2]} UTC note about ${old[1]}` : first
 }
 
-// The header: the views, the reader's questions in a menu, and the one button that opens the "Ask ken" drawer. The
+// The header: the views, ken's earlier replies in a menu, and the one button that opens the "Ask ken" drawer. The
 // brand goes home. On a phone the views go into the menu too, beside the questions, and the menu button carries live
 // mode's mark, so the project's name keeps its room.
 function menuHtml() {
@@ -418,7 +419,7 @@ function menuHtml() {
 	const questions =
 		n === 0
 			? ''
-			: `<button class="link top-wide" data-act="menu" data-key="menu" aria-expanded="${state.menuOpen}">Your questions (${n})</button>`
+			: `<button class="link top-wide" data-act="menu" data-key="menu" aria-expanded="${state.menuOpen}">Earlier replies (${n})</button>`
 	const narrow = `<button class="link top-narrow" data-act="menu" data-key="menu-narrow" aria-expanded="${state.menuOpen}" aria-label="Menu${said ? `, live${said}` : ''}">${mark}Menu</button>`
 	const bar = `<span class="top-views top-wide">${views}</span>${questions}${ask}${narrow}`
 	if (!state.menuOpen) return bar
@@ -429,7 +430,7 @@ function menuHtml() {
 	const list =
 		n === 0 && !running
 			? ''
-			: `<p class="menu-head">Your questions about this project, newest first. ken keeps them on this computer, outside the project.</p>${running}${rows.join('')}`
+			: `<p class="menu-head">ken's earlier replies to you about this project, newest first. ken keeps them on this computer, outside the project.</p>${running}${rows.join('')}`
 	return `${bar}<div class="menu"><div class="menu-views top-narrow">${views}</div>${list}</div>`
 }
 
@@ -443,7 +444,7 @@ function runLine(q, t, ui) {
 
 	if (q.steps.length > 0) {
 		parts.push(
-			`<button class="link" data-act="steps" data-turn="${t}" data-key="steps-${t}" aria-expanded="${open}">${open ? 'Hide the steps' : `Show the ${count(tools, 'step', 'steps')}`}</button>`,
+			`<button class="link" data-act="steps" data-turn="${t}" data-key="steps-${t}" aria-expanded="${open}">${open ? 'Hide the actions' : `Show the ${count(tools, 'action', 'actions')}`}</button>`,
 		)
 	}
 	const tokens = q.usage
@@ -514,7 +515,7 @@ function threadHtml() {
 	if (state.problem && !q)
 		return `<div class="notice" role="alert"><h3>ken did not answer</h3><p>${esc(state.problem)}</p></div>`
 	if (!q) return ''
-	const back = '<button class="link" data-act="home" data-key="back-home">Back to the project</button>'
+	const back = '<button class="link" data-act="home" data-key="back-home">Back to the picture</button>'
 	return `<p class="back-home">${back}</p><p class="legend">${LEGEND}</p>${state.thread.map((each, t) => turnHtml(each, t, state.ui)).join('')}`
 }
 
@@ -536,6 +537,17 @@ function whyNoRun() {
 	return state.running ? "ken's model is busy with another run. Stop it, or wait for it." : null
 }
 
+// What the lens forms show: the person and the span the reader picked, and what there is to pick from.
+function lensPick() {
+	return {
+		...state.pick,
+		authors: state.authors,
+		asked: state.rows.length > 0,
+		running: state.running !== null,
+		changed: (state.followUp?.topics.length ?? 0) > 0,
+	}
+}
+
 function renderHome() {
 	const env = {
 		off: whyNoRun(),
@@ -544,8 +556,10 @@ function renderHome() {
 		model: state.model,
 		rows: state.rows,
 		asked: state.rows.length > 0,
+		lenses: { open: state.lensesOpen, pick: lensPick() },
 	}
 	showHome($('#home'), state.home, env, schedule)
+	home.address()
 }
 
 // What the reader typed stays where they typed it when the box they type in is drawn again.
@@ -570,6 +584,7 @@ function render() {
 	$('#project').innerHTML = state.project ? `<span class="reads">reads </span>${folderHtml(state.project)}` : ''
 	$('#menu').innerHTML = menuHtml()
 	$('#home').hidden = !onHome
+	$('.skip').hidden = !onHome
 	$('#page').hidden = onHome
 	if (onHome) {
 		renderHome()
@@ -604,13 +619,7 @@ function render() {
 	$('#send').disabled = state.running !== null
 	// The area box is drawn again with the rest, so what the reader typed in it is carried over.
 	const typed = [...document.querySelectorAll('.area-form input')].find((input) => input.value !== '')?.value ?? ''
-	const pick = {
-		...state.pick,
-		authors: state.authors,
-		asked: state.rows.length > 0,
-		running: state.running !== null,
-		changed: (state.followUp?.topics.length ?? 0) > 0,
-	}
+	const pick = lensPick()
 	// Under an answer the lenses fold behind one line, so the end of an answer is not a wall of forms.
 	const tucked = `<div class="lens-fold"><button class="link" data-act="lenses" data-key="lenses" aria-expanded="${state.lensesOpen}">Or let ken write the question</button>${state.lensesOpen ? lensHtml('ask', pick) : ''}</div>`
 	$('#after').innerHTML =
@@ -688,7 +697,7 @@ function tick() {
 	const shown = state.view === 'home' ? state.running?.onHome : state.open === state.running?.q
 	if (!clock || !state.running || !shown) return
 	const tools = state.running.q.steps.filter((step) => step.kind === 'tool').length
-	clock.textContent = `${duration((Date.now() - state.running.started) / 1000)} so far, ${count(tools, 'step', 'steps')}`
+	clock.textContent = `${duration((Date.now() - state.running.started) / 1000)} so far, ${count(tools, 'action', 'actions')}`
 }
 
 // ---- What the reader can do ----
@@ -1195,11 +1204,10 @@ document.addEventListener('click', (event) => {
 	else if (state.thread.length > 0) chooseInDrawing(event.target)
 })
 
-// A file's diff is drawn when the reader opens it. The home keeps whether "Another commit" is open across renders.
+// A file's diff is drawn when the reader opens it.
 document.addEventListener(
 	'toggle',
 	(event) => {
-		if (event.target.matches?.('.home-other')) state.home.formOpen = event.target.open
 		const file = event.target.dataset?.file
 		if (file === undefined) return
 		const open = state.ui.openFiles
@@ -1289,6 +1297,8 @@ document.addEventListener('submit', (event) => {
 })
 
 document.addEventListener('input', (event) => home.input(event))
+document.addEventListener('mousedown', (event) => home.press(event))
+window.addEventListener('popstate', () => home.back())
 
 // The lens forms are drawn again with the rest, so the person and the span the reader picked are kept here.
 document.addEventListener('change', (event) => {
@@ -1408,7 +1418,7 @@ try {
 	await home.start()
 } catch (error) {
 	state.home.problem = {
-		message: `ken did not answer at this address (${error.message}). Start it again with ken open.`,
+		message: `ken did not answer at this address (${error.message}). Run \`ken open\` again.`,
 		field: null,
 	}
 }

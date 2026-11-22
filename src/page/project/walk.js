@@ -85,19 +85,12 @@ export function stepParts(step, boxes) {
 	)
 }
 
-// A step's title in the list: on a tour its stop's part, else the first clause of its text, cut at a word near
-// TITLE_LENGTH characters. The full text shows only where the step opens.
-const TITLE_LENGTH = 64
-
-export function stepTitle(step) {
-	if (step.part !== null) return step.part
-	const clause = step.text
-		.replaceAll('`', '')
-		.split(/(?<=[^\s])[.:;?!](?=\s|$)|\s[\u2014-]\s/)[0]
-		.trim()
-	if (clause.length <= TITLE_LENGTH) return clause
-	const cut = clause.slice(0, TITLE_LENGTH)
-	return `${cut.slice(0, cut.lastIndexOf(' ')).replace(/[,\s]+$/, '')}...`
+// A step's words as a title and a body, so nothing is said twice: its first sentence, whole, and the rest. A stop of
+// a tour is titled by its part, and all its words are body.
+export function stepWords(step) {
+	if (step.part !== null) return { title: step.part, body: step.text }
+	const [first = '', ...rest] = step.text.trim().split(/(?<=[.?!])\s+(?=[A-Z`"'(])/)
+	return { title: first.replace(/\.$/, ''), body: rest.join(' ') }
 }
 
 // The steps as a list the reader moves through, one line each: the step's number, its title and, on a tour, whether
@@ -117,10 +110,11 @@ export function walkHtml(steps, t, { at, boxes, cardHtml, under, change, tour = 
 				? ''
 				: `<span class="walk-mark"><span aria-hidden="true">&#10003;</span> ${STOP_SAID[stood]}<span class="visually-hidden">. Done.</span></span>`
 		const cards = `<div class="walk-cards">${step.cards.map(({ card, j }) => cardHtml(card, j)).join('')}</div>`
+		const { title, body } = stepWords(step)
 		const opened =
 			!on || !under
 				? ''
-				: `<div class="walk-open"><p class="walk-text">${prose(step.text)}</p>${
+				: `<div class="walk-open">${body === '' ? '' : `<p class="walk-text">${prose(body)}</p>`}${
 						tour
 							? `${cards}${knowHtml(step, t)}`
 							: `<div class="walk-diff-under">${stepDiffHtml(step, change)}</div>${cards}`
@@ -128,7 +122,7 @@ export function walkHtml(steps, t, { at, boxes, cardHtml, under, change, tour = 
 		return `<li class="walk-step${on ? ' is-on' : ''} is-${stood}" data-parts="${parts.join(' ')}" data-step="${step.number}">
 			<button class="walk-head" data-act="walk-step" data-turn="${t}" data-step="${step.number}" data-key="walk-${t}-${step.number}" aria-expanded="${on}">
 				<span class="walk-n">${k + 1}</span>
-				<span class="walk-name">${esc(stepTitle(step))}</span>
+				<span class="walk-name">${prose(title)}</span>
 				${mark}
 			</button>
 			${opened}

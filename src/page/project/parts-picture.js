@@ -415,10 +415,13 @@ function spotFor(label, curve, { taken, own, others, heads, area }) {
 		const along = bezier(curve, t + 0.01)
 		const length = Math.hypot(along.x - p.x, along.y - p.y) || 1
 		const across = { x: -(along.y - p.y) / length, y: (along.x - p.x) / length }
-		// Far enough across the line that the label's nearest edge clears it.
-		const out = (Math.abs(across.x) * w) / 2 + (Math.abs(across.y) * h) / 2 + 5
+		// Beside the line means straight above or below a line that runs mostly level, and straight left or right of one
+		// that runs mostly down, far enough that the label's nearest edge clears the line.
+		const level = Math.abs(across.y) >= Math.abs(across.x)
+		const out =
+			((Math.abs(across.x) * w) / 2 + (Math.abs(across.y) * h) / 2 + 5) / Math.abs(level ? across.y : across.x)
 		return [out, -out, 0].map((by) => {
-			const box = { x: p.x + across.x * by - w / 2, y: p.y + across.y * by - h / 2, w, h }
+			const box = { x: p.x + (level ? 0 : by) - w / 2, y: p.y + (level ? by : 0) - h / 2, w, h }
 			const under = (points) => points.filter((q) => inside(q, box)).length
 			const hidden = under(own)
 			const fits =

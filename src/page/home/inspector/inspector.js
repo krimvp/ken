@@ -1,33 +1,50 @@
-// The home's inspector: what ken says about the selection at the chosen detail. With nothing selected it is about the
-// whole level or the whole change. Plain text in it is the model's, and a boxed card is what ken read from git. While
-// a run of ken's model started from the home is under way, the inspector shows that run in place of what it will
-// fill, and when a run ends with nothing to show, it says so.
-import { at, count, esc, list, pathList, prose, runButton, short } from '../../views/format.js'
-import { storyHtml } from '../../views/reply.js'
+// The panel beside the picture: what ken says about the selection at the chosen detail. With nothing selected it is
+// about the whole level or the whole change. One line at its top says who wrote what: the explanations are the
+// model's, and a boxed card holds what plain code read from git or lines ken found there. While a run of ken's model
+// started from the home is under way, the panel shows that run in place of what it will fill, and when a run ends
+// with nothing to show, it says so. The code calls the panel the inspector.
+import { stepDiffHtml } from '../../project/walk.js'
+import { count, day, esc, list, pathList, prose, runButton, short } from '../../views/format.js'
+import { LEGEND, storyHtml } from '../../views/reply.js'
 import { noModelHtml, workingHtml } from '../../views/states.js'
-import { changeName, stateLine } from '../canvas/canvas.js'
+import { changeName, mapLine, stateLine } from '../canvas/canvas.js'
 import { besideCanvas, diagramOf, firstUnseen, pathOf, placeOf, shownDetail, stoodOn } from '../state/content.js'
 import { colourOf, DETAILS, levelName } from '../state/home-state.js'
+import { diffKey } from '../state/loads.js'
 import { isThere } from '../state/runs.js'
-import { asksHtml, elementsView, factCard, lookInside, pathView, pickedElementHtml, usesHtml } from './reading-path.js'
+import {
+	asksHtml,
+	elementNoun,
+	elementsView,
+	FROM_GIT,
+	factCard,
+	filesHtml,
+	knownFold,
+	lookInside,
+	outsideHtml,
+	pathView,
+	pickedElementHtml,
+	usesHtml,
+} from './reading-path.js'
 
-const LEGEND = "Plain text is what ken's model says. ken has not checked it. A boxed card is checked against git."
-
-// Paths a line lists before it folds the rest.
+// Paths a line lists before it keeps the rest behind one line, and commits a change lists before it does the same.
 const SHOWN_PATHS = 8
+const SHOWN_COMMITS = 10
 
-// Paths as the end of a sentence: the first few, and the rest behind one line.
-function pathsHtml(paths) {
-	if (paths.length <= SHOWN_PATHS) return `${pathList(paths)}.`
-	return `${pathList(paths.slice(0, SHOWN_PATHS))}<details class="insp-more"><summary>and ${paths.length - SHOWN_PATHS} more</summary>${pathList(paths.slice(SHOWN_PATHS))}.</details>`
+const READING_REPLY = `<p class="muted">Reading what ken's model said.</p>`
+
+// A part's files: how many, and where they are. The first few paths show, and the rest behind one line.
+function filesLine(box) {
+	const said = `${count(box.files, 'file', 'files')}: `
+	if (box.paths.length <= SHOWN_PATHS) return `${said}${pathList(box.paths)}.`
+	return `${said}${pathList(box.paths.slice(0, SHOWN_PATHS))}<details class="insp-more" data-key="more-paths"><summary>and ${box.paths.length - SHOWN_PATHS} more</summary>${pathList(box.paths.slice(SHOWN_PATHS))}.</details>`
 }
 
-// One level, nothing selected: what the level is, the way to be shown around it, and its parts in reading order.
+// One level, nothing selected: the way to be shown around it, and its parts in reading order.
 function levelView(home, off) {
 	const { look, content } = home
 	const here = look.at === look.head
 	const path = pathOf(look, content)
-	const about = content.about ? `<p class="insp-lead">${prose(content.about)}</p>` : ''
 	const changed = look.boxes.filter((box) => box.state !== 'same').map((box) => box.name)
 	const { added } = look.named
 	const stale =
@@ -46,12 +63,10 @@ function levelView(home, off) {
 	let tour = ''
 	if (content.tour) {
 		const start = firstUnseen(look, path)
-		const given = content.tour.q ? ` ${at(content.tour.q.askedAt)}` : ''
-		tour = `<div class="insp-main"><button class="primary" data-act="home-tour" data-key="home-tour">${start === 0 ? 'Start the tour' : `Go on with the tour at stop ${start + 1}`}</button>
-			<p class="small muted">ken's model gave this tour${given}. Opening it runs no model.</p></div>`
+		tour = `<div class="insp-main"><button class="primary" data-act="home-tour" data-key="home-tour">${start === 0 ? 'Start the tour' : `Go on with the tour at stop ${start + 1}`}</button></div>`
 	} else if (path.length > 0 && here) {
 		tour = `<div class="insp-main">${runButton({ act: 'run-tour', key: 'run-tour', text: 'Show me around', primary: true }, off)}
-			<p class="small muted">ken's model shows you the ${path.length} parts in turn, with their code, starting at ${esc(path[0].part)}. Plain code picked the order from the arrows.</p></div>`
+			<p class="small muted">ken's model shows you the ${path.length} parts in turn, with their code, starting at ${esc(path[0].part)}. The order is the one ken's model named the parts in, with tests and upkeep last.</p></div>`
 	}
 	const colour = colourOf(home)
 	const order =
@@ -62,41 +77,33 @@ function levelView(home, off) {
 		const box = look.boxes[i]
 		return `<li><button class="insp-part" data-act="home-box" data-index="${i}" data-key="insp-part-${i}"><span class="part-name ${colour(box.name)}">${esc(box.name)}</span><span class="insp-part-job">${prose(box.job ?? '')}</span></button></li>`
 	})
-	const next = look.next.line === '' ? '' : `<p class="small muted">From your map: ${esc(look.next.line)}</p>`
+	const first =
+		look.next.changed.length === 0
+			? ''
+			: `<p class="small"><strong>Code you understood in ${esc(list(look.next.changed))} has changed since.</strong> Look there first.</p>`
 	return {
-		where: 'Nothing is selected',
 		title: esc(levelName(home)),
-		body: `${about}${stale}${tour}
+		body: `${stale}${tour}${first}
 			<h3 class="insp-sub">${count(parts.length, 'part', 'parts')}. Pick one to read about it.</h3>
 			<ul class="insp-parts">${parts.join('')}</ul>
-			${look.arrows.length > 0 ? usesHtml(home, null) : ''}
-			${next}`,
+			${look.arrows.length > 0 ? `<div class="insp-arrows">${usesHtml(home, null)}</div>` : ''}`,
 	}
 }
 
 // One part of a level at "Big picture": its job, where it is, and what it uses.
 function partView(home, box) {
-	const title = {
-		where: `A part of ${esc(levelName(home).replace(/^The/, 'the'))}`,
-		picked: true,
-		title: esc(box.name),
-	}
-	const titleClass = `part-name ${colourOf(home)(box.name)}`
+	const title = { picked: true, title: esc(box.name), titleClass: `part-name ${colourOf(home)(box.name)}` }
 	if (stoodOn(box, [box.name]) === 'known' && !home.unfolded.has(box.name)) {
-		return {
-			...title,
-			titleClass,
-			body: `<p class="insp-known">You said you know this part. Nothing in it changed since. <button class="link" data-act="home-unfold" data-name="${esc(box.name)}" data-key="home-unfold">Show it anyway</button></p>`,
-		}
+		return { ...title, body: knownFold(box.name) }
 	}
 	const state = stateLine(box, home.look)
+	const map = mapLine(box.map)
 	return {
 		...title,
-		titleClass,
 		body: `<p class="insp-lead">${prose(box.job ?? '')}</p>
-			<div class="small">${count(box.files, 'file', 'files')} in ${pathsHtml(box.paths)}</div>
+			<div class="small">${filesLine(box)}</div>
 			${state === '' ? '' : `<p class="small">${state}.</p>`}
-			${box.map.line === '' ? '' : `<p class="small muted">${esc(box.map.line)}</p>`}
+			${map === '' ? '' : `<p class="small">${map}.</p>`}
 			${usesHtml(home, box.name)}
 			<p class="insp-actions">${lookInside(box)}<button class="quiet-button" data-act="detail" data-detail="how" data-key="to-how">Read how it works</button></p>`,
 	}
@@ -109,7 +116,7 @@ function foldersView(home, off) {
 	const here = look.at === look.head
 	const ask = here
 		? `<div class="insp-main">${runButton({ act: 'run-name', key: 'run-name', text: 'Ask ken to name these parts', primary: true }, off)}
-			<p class="small muted">After the run the folders become parts with names and one-line jobs, and arrows for which part uses which. ken checks each path and arrow against the code. Then the Detail control opens.</p></div>`
+			<p class="small muted">After the run the boxes are parts with names and one-line jobs, and arrows for which part uses which. ken checks each path and arrow against the code. Then the Detail control opens.</p></div>`
 		: `<p class="small muted">ken's model reads the code that is checked out, so it cannot name the parts of this older commit.</p>`
 	const facts = [
 		`${count(look.boxes.length, 'box', 'boxes')} with ${count(files, 'file', 'files')}.`,
@@ -119,64 +126,79 @@ function foldersView(home, off) {
 		`The commit is <code>${short(look.at)}</code>.`,
 	]
 	return {
-		where: 'Nothing is selected',
 		title: esc(levelName(home)),
-		body: `<p class="insp-lead">ken has not explained ${home.trail.length === 1 ? 'this project' : esc(levelName(home))} yet. What you see is the folder list from git.</p>
+		body: `<p class="insp-lead">ken's model has not named the parts of ${home.trail.length === 1 ? 'this project' : esc(levelName(home))} yet. What you see is what git lists.</p>
 			${ask}
-			${factCard('What git shows', 'From git', `<ul class="fact-list">${facts.map((fact) => `<li>${fact}</li>`).join('')}</ul>`)}`,
+			${factCard('What git shows', FROM_GIT, `<ul class="fact-list">${facts.map((fact) => `<li>${fact}</li>`).join('')}</ul>`)}`,
 	}
 }
 
 function folderView(box) {
 	return {
-		where: 'A folder',
 		picked: true,
 		title: esc(box.name),
-		body: `<div class="small">${count(box.files, 'file', 'files')} in ${pathsHtml(box.paths)}</div>
+		body: `<div class="small">${filesLine(box)}</div>
 			<p class="insp-actions">${lookInside(box)}</p>`,
 	}
 }
 
-// The commits of a change, newest first as git lists them. ken's own copy of uncommitted work is not one of them.
-function commitsHtml(commits) {
-	const real = commits.filter((commit) => commit.email !== 'ken@localhost')
-	if (real.length === 0) return ''
-	const rows = real.map(
+// The commits of a change as git lists them, newest first: the day, who wrote it, and its subject. The first few
+// show, and the rest behind one line.
+function commitsHtml(change) {
+	const rows = change.commits.map(
 		(commit) =>
-			`<li><code>${esc(short(commit.hash))}</code> ${esc(commit.subject)} <span class="muted">${esc(commit.author)}</span></li>`,
+			`<li><span class="commit-day">${day(commit.date.slice(0, 10))}</span> <span class="commit-who">${esc(commit.author)}</span> ${esc(commit.subject)}</li>`,
 	)
-	return `<li><details class="insp-more"><summary>${count(real.length, 'commit', 'commits')}</summary><ol class="insp-commits">${rows.join('')}</ol></details></li>`
+	if (rows.length === 0) return ''
+	const rest = rows.slice(SHOWN_COMMITS)
+	const older =
+		change.moreCommits === 0
+			? ''
+			: `<p class="small muted">${count(change.moreCommits, 'older commit is', 'older commits are')} not listed here. <code>git log ${short(change.range.base)}..${short(change.range.head)}</code> lists them all.</p>`
+	const more =
+		rest.length + change.moreCommits === 0
+			? ''
+			: `<details class="insp-more" data-key="more-commits"><summary>and ${rest.length + change.moreCommits} more</summary>${rest.length > 0 ? `<ol class="insp-commits">${rest.join('')}</ol>` : ''}${older}</details>`
+	return `<ol class="insp-commits">${rows.slice(0, SHOWN_COMMITS).join('')}</ol>${more}`
 }
 
-// What git says of a change, as a stored reply about it holds it: its commits, newest first.
-function toldOf(content) {
-	return (content.story?.q ?? content.walk?.q)?.reply.change ?? null
+// What git says of a change, with no model: how much it changed and where, then its commits. byPart adds the changed
+// files of each part, for the details that look closer.
+function gitSaysHtml(home, byPart) {
+	const { look } = home
+	const { change } = look
+	const touched = look.boxes.filter((box) => box.touched)
+	const noun = look.named ? 'part' : 'folder'
+	const commits = change.commits.length + change.moreCommits
+	const facts = [
+		commits > 0 ? `<li>${count(commits, 'commit', 'commits')}.</li>` : '',
+		`<li>${count(change.files, 'file', 'files')} changed, in ${touched.length} of the ${count(look.boxes.length, noun, `${noun}s`)}.</li>`,
+	]
+	const colour = colourOf(home)
+	const files = !byPart
+		? ''
+		: factCard(
+				`Changed files, by ${noun}`,
+				FROM_GIT,
+				`${touched
+					.map(
+						(box) =>
+							`<p><strong class="part-name ${colour(box.name)}">${esc(box.name)}</strong></p>${filesHtml(box.touched.paths, box.touched.morePaths)}`,
+					)
+					.join('')}${outsideHtml(look)}`,
+			)
+	return `${factCard('What git says', FROM_GIT, `<ul class="fact-list">${facts.join('')}</ul>${commitsHtml(change)}${byPart ? '' : outsideHtml(look)}`)}${files}`
 }
 
-// A change, nothing selected: what git says of it, then its story in the model's words, or the run that asks for one.
+// A change, nothing selected, at "Big picture": what git says of it, then its story in the model's words, or the run
+// that asks for one.
 function changeView(home, off) {
 	const { look, content, changes } = home
-	const { change } = look
-	const told = toldOf(content)
-	const picked = changes.find((choice) => choice.change === change.asked)
-	const touched = look.boxes.filter((box) => box.touched).length
-	const noun = look.named ? 'part' : 'folder'
-	const facts = [
-		told
-			? commitsHtml(told.commits)
-			: picked?.commits !== undefined
-				? `<li>${count(picked.commits, 'commit', 'commits')}</li>`
-				: '',
-		`<li>${count(change.files, 'file', 'files')} changed, in ${touched} of the ${count(look.boxes.length, noun, `${noun}s`)}.</li>`,
-		change.outside.length > 0
-			? `<li>${count(change.outside.length, 'changed file is', 'changed files are')} in no ${noun}: ${pathsHtml(change.outside)}</li>`
-			: '',
-	]
 	let story
 	if (content.story?.q) {
 		story = `<h3 class="insp-sub">What it did, in the words of ken's model</h3>${storyHtml(content.story.q, 'story', home.ui)}${asksHtml(off)}`
-	} else if (content.story) story = `<p class="muted">Reading what ken's model said.</p>`
-	else if (change.files === 0) story = ''
+	} else if (content.story) story = READING_REPLY
+	else if (look.change.files === 0) story = ''
 	else {
 		story = `<div class="insp-main">${runButton({ act: 'run-story', key: 'run-story', text: 'Ask ken what this change did', primary: true }, off)}
 			<p class="small muted">ken's model reads the diff and the commit messages, and says what the change did and why.</p></div>`
@@ -189,42 +211,70 @@ function changeView(home, off) {
 		? ''
 		: `<div class="insp-main">${runButton({ act: 'run-name', key: 'run-name', text: 'Ask ken to name these parts' }, off)}</div>`
 	return {
-		where: 'Nothing is selected',
-		title: esc(changeName(look, changes, told)),
-		body: `${factCard('What git says', 'From git', `<ul class="fact-list">${facts.join('')}</ul>`)}
-			${story}${walk}${name}`,
+		title: esc(changeName(look, changes)),
+		body: `${gitSaysHtml(home, false)}${story}${walk}${name}`,
 	}
 }
 
-// One part with a change laid over it: what the change did there.
-function touchedView(home, box) {
-	const did = box.touched
-		? `The change touched ${count(box.touched.files, 'file', 'files')} here: ${count(box.touched.added, 'line', 'lines')} added, ${box.touched.removed} removed.`
-		: 'The change did not touch this part.'
+// A change with no walkthrough stored, at "How it works" and "In the code": what git says, the changed files of each
+// part, and the run that asks for a walkthrough. So a closer detail never shows less than the one before it.
+function unwalkedView(home, off) {
+	const { look, content, changes } = home
+	const code = shownDetail(home) === 'code'
+	const pick = code ? '<p class="insp-pick">Pick a part in the picture to see the diff of its changed files.</p>' : ''
+	const ask = content.walk
+		? READING_REPLY
+		: look.change.files === 0
+			? '<p class="muted">This change touched no file here, so there is nothing to walk through.</p>'
+			: `<div class="insp-main">${runButton({ act: 'run-walk', key: 'run-walk', text: 'Ask ken to walk me through it', primary: true }, off)}
+				<p class="small muted">ken's model orders the change into steps a reviewer can read one at a time, each with its diff.</p></div>`
 	return {
-		where: 'A part, with the change laid over it',
+		title: esc(changeName(look, changes)),
+		body: `${gitSaysHtml(home, true)}${pick}${ask}`,
+	}
+}
+
+// The diff of the files a change touched in one part, read from git when the reader asks for it.
+function partDiffHtml(home, box) {
+	const { change } = home.look
+	const diff = home.diffs.get(diffKey(change, box))
+	if (!diff) return '<p class="muted">Reading the diff from git.</p>'
+	if (diff.problem) return `<p class="home-error" role="alert">ken could not read the diff. ${esc(diff.problem)}</p>`
+	const all = `<code>git diff ${short(change.range.base)} ${short(change.range.head)}</code>`
+	const notes = [
+		...(diff.binary ?? []).map((path) => `<code>${esc(path)}</code> is not text, so it has no lines to show.`),
+		...(diff.cut || diff.tooLarge
+			? [`The diff is long, so only its first lines show here. ${all} shows all of it.`]
+			: []),
+		...(diff.left > 0 ? [`${count(diff.left, 'more file', 'more files')} changed here. ${all} shows them.`] : []),
+	]
+	return `<div class="path-diff">${stepDiffHtml({ hunks: diff.hunks }, change.range)}</div>${notes.map((note) => `<p class="small muted">${note}</p>`).join('')}`
+}
+
+// One part with a change laid over it: the files the change touched there, and at "In the code" their diff.
+function touchedView(home, box) {
+	const code = shownDetail(home) === 'code'
+	const did = !box.touched
+		? '<p>The change did not touch this part.</p>'
+		: `${factCard('What the change touched here', FROM_GIT, filesHtml(box.touched.paths, box.touched.morePaths))}
+			${code ? partDiffHtml(home, box) : '<p class="insp-actions"><button class="quiet-button" data-act="detail" data-detail="code" data-key="to-code">See the diff of these files</button></p>'}`
+	return {
 		picked: true,
 		title: esc(box.name),
 		titleClass: `part-name ${colourOf(home)(box.name)}`,
 		body: `${box.job ? `<p class="insp-lead">${prose(box.job)}</p>` : ''}
-			<p>${did}</p>
+			${did}
 			${home.look.named ? usesHtml(home, box.name) : ''}
 			<p class="insp-actions">${lookInside(box)}</p>`,
 	}
 }
 
 // A drawn picture at "Big picture": what ken's model said when it drew it, and above that the box or arrow the reader
-// picked in the drawing. While the note on the request still shows those words, they are not said twice.
+// picked in the drawing. While the answer to the request still shows those words, they are not said twice.
 function drawnView(home) {
 	const { picture, q } = home.content
 	const diagram = diagramOf(q)
-	if (!diagram) {
-		return {
-			where: 'A picture ken drew',
-			title: prose(picture.title ?? picture.asked),
-			body: `<p class="muted">Reading what ken's model said.</p>`,
-		}
-	}
+	if (!diagram) return { title: prose(picture.title ?? picture.asked), body: READING_REPLY }
 	const title = prose(diagram.title)
 	if (shownDetail(home) !== 'big') return { title, ...elementsView(home, diagram) }
 	const element = diagram.elements[placeOf(diagram.elements, home.selected)]
@@ -235,32 +285,33 @@ function drawnView(home) {
 			: told.reply.items.length === 0
 				? `<p class="muted">ken's model drew this picture and said nothing more.</p>`
 				: `<h3 class="insp-sub">What ken's model said when it drew this</h3>${storyHtml(told, 'drawn', home.ui)}`
+	const noun = element ? elementNoun(diagram, element) : ''
 	return {
-		where: element ? `Number ${element.number} of ${diagram.elements.length}` : 'Nothing is selected',
+		where: element ? `${noun.replace(/^./, (c) => c.toUpperCase())} ${element.number}` : '',
 		picked: Boolean(element),
 		title,
 		body: `${pickedElementHtml(home, diagram)}${words}
-			<p class="insp-actions"><button class="quiet-button" data-act="detail" data-detail="how" data-key="to-how">Read it in order</button><button class="quiet-button" data-act="detail" data-detail="code" data-key="to-all-code">See the lines it quotes</button></p>
+			<p class="insp-actions"><button class="quiet-button" data-act="detail" data-detail="how" data-key="to-how">Read it in order</button><button class="quiet-button" data-act="detail" data-detail="code" data-key="to-all-code">Show its code</button></p>
 			<p><button class="link" data-act="open" data-id="${esc(q.id)}" data-key="drawn-open">Open the full reply</button></p>`,
 	}
 }
 
+// A run by its kind: its title while it runs, and what ken's model is doing.
 const DOING = {
 	name: ['Naming the parts', "ken's model is naming the parts"],
-	tour: ['Preparing the tour', "ken's model is reading each part in turn"],
+	tour: ['Writing the tour', "ken's model is reading each part in turn"],
 	story: ['Reading the change', "ken's model is reading the change"],
 	walk: ['Ordering the change into steps', "ken's model is ordering the change into steps"],
-	redraw: ['Working on your request', "ken's model is working on your request"],
+	redraw: ['Drawing it another way', "ken's model is working on your request"],
 }
 
-// A run of ken's model that the reader started here, while it runs: what ken is doing, for how long, and its steps.
+// A run of ken's model that the reader started here, while it runs: what ken is doing, for how long, and its actions.
 function workingView(home, running, seconds) {
 	const [title, doing] = DOING[running.onHome.kind]
 	const asked = running.onHome.kind === 'redraw' ? `<p class="insp-asked">"${esc(home.redraw.asked)}"</p>` : ''
 	return {
-		where: "A run of ken's model",
 		title,
-		body: `${asked}<p class="small muted">The picture stays as it is until the run ends. ken keeps every run under Your questions.</p>
+		body: `${asked}<p class="small muted">The picture stays as it is until the run ends. ken keeps every run under Earlier replies.</p>
 			${workingHtml(running.q, 0, home.stepsOpen, seconds, doing)}`,
 	}
 }
@@ -270,7 +321,7 @@ const ENDED = {
 	error: "ken's model did not reply.",
 	'no-answer': "ken's model stopped without a reply.",
 	'out-of-turns': "ken's model ran out of turns before it replied.",
-	unasked: 'ken did not ask its model.',
+	unasked: 'ken did not start its model for this request.',
 	answered: "ken's model replied, but with nothing this page can show here.",
 }
 
@@ -285,7 +336,9 @@ const FINISHED = {
 
 // A run of ken's model for another level or change than the one on screen: one quiet line, and the way back to it.
 function awayHtml(said, key) {
-	return `<p class="insp-away" role="status">${esc(said)} <button class="link" data-act="home-run-go" data-key="${key}-go">Go there</button>${key === 'ended' ? ' <button class="link" data-act="home-ended-close" data-key="ended-close">Close</button>' : ''}</p>`
+	const close =
+		key === 'ended' ? ' <button class="link" data-act="home-ended-close" data-key="ended-close">Close</button>' : ''
+	return `<p class="insp-away" role="status">${esc(said)} <button class="link" data-act="home-run-go" data-key="${key}-go">Go there</button>${close}</p>`
 }
 
 // A run that ended and needs a word. One that made nothing to show says so, with the way to its full reply in the
@@ -298,31 +351,9 @@ function endedHtml(ended) {
 		: ''
 	return `<div class="notice insp-ended" role="alert">
 		<h3>${ENDED[ended.outcome] ?? 'This run has no reply.'}</h3>
-		${ended.error ? `<p>${esc(ended.error)}</p>` : ''}
+		${ended.error ? `<p>${prose(ended.error)}</p>` : ''}
 		<p class="insp-actions">${open}<button class="quiet-button" data-act="home-ended-close" data-key="ended-close">Close</button></p>
 	</div>`
-}
-
-// ken's reply to the reader's request to show a level another way: what changed, or why nothing did. A diagram ken
-// drew for it is a picture of its own on the canvas, so the note only says where it is.
-function saidHtml(home) {
-	const { said } = home
-	if (!said) return ''
-	const reply =
-		said.q.reply.items.length === 0 ? "<p>ken's model answered with no words.</p>" : storyHtml(said.q, 'said', home.ui)
-	const drawn = home.pictures.some((picture) => picture.id === said.q.id)
-	const onCanvas = !drawn
-		? ''
-		: home.shown === said.q.id
-			? '<p class="small muted">The picture ken drew for it shows in place of the parts, under its own tab.</p>'
-			: `<p class="small muted">ken drew a picture for it. <button class="link" data-act="home-picture" data-id="${esc(said.q.id)}" data-key="said-picture">Show that picture</button></p>`
-	return `<section class="insp-said" aria-labelledby="insp-said-head">
-		<p class="insp-said-head"><strong id="insp-said-head">ken on your request</strong><button class="link" data-act="home-said-close" data-key="said-close">Close</button></p>
-		<p class="insp-asked">"${esc(said.asked)}"</p>
-		${reply}
-		${onCanvas}
-		<p><button class="link" data-act="open" data-id="${esc(said.q.id)}" data-key="said-open">Open the full reply</button></p>
-	</section>`
 }
 
 // Something the server could not do that leaves the picture as it is, in plain words.
@@ -338,6 +369,28 @@ function troubleHtml(trouble) {
 	</div>`
 }
 
+// ken's answer to the reader's request to show a level another way: what changed, or why nothing did. A diagram ken
+// drew for it is a picture of its own on the canvas, so the answer only says where it is.
+function saidHtml(home) {
+	const { said } = home
+	if (!said) return ''
+	const reply =
+		said.q.reply.items.length === 0 ? "<p>ken's model answered with no words.</p>" : storyHtml(said.q, 'said', home.ui)
+	const drawn = home.pictures.some((picture) => picture.id === said.q.id)
+	const onCanvas = !drawn
+		? ''
+		: home.shown === said.q.id
+			? '<p class="small muted">The picture it drew shows in place of the parts, under its own tab.</p>'
+			: `<p class="small muted">It drew a picture. <button class="link" data-act="home-picture" data-id="${esc(said.q.id)}" data-key="said-picture">Show that picture</button></p>`
+	return `<section class="insp-said" aria-labelledby="insp-said-head">
+		<div class="insp-said-head"><h3 id="insp-said-head">ken's answer to your request</h3><button class="link" data-act="home-said-close" data-key="said-close">Close</button></div>
+		<p class="insp-asked">"${esc(said.asked)}"</p>
+		${reply}
+		${onCanvas}
+		<p><button class="link" data-act="open" data-id="${esc(said.q.id)}" data-key="said-open">Open the full reply</button></p>
+	</section>`
+}
+
 function viewOf(home, off) {
 	const { look, content, selected } = home
 	const big = shownDetail(home) === 'big'
@@ -345,12 +398,17 @@ function viewOf(home, off) {
 	if (content.kind === 'drawn') return drawnView(home)
 	if (content.kind === 'change') {
 		if (box) return touchedView(home, box)
-		return big
-			? changeView(home, off)
-			: { title: esc(changeName(look, home.changes, toldOf(content))), ...pathView(home, off) }
+		if (big) return changeView(home, off)
+		return content.walk?.q
+			? { title: esc(changeName(look, home.changes)), ...pathView(home, off) }
+			: unwalkedView(home, off)
 	}
 	if (content.kind === 'folders') return box ? folderView(box) : foldersView(home, off)
-	if (!big) return { title: esc(levelName(home)), ...pathView(home, off) }
+	if (!big) {
+		const reading = content.tour && !content.tour.q ? READING_REPLY : ''
+		const view = pathView(home, off)
+		return { title: esc(levelName(home)), ...view, body: `${reading}${view.body}` }
+	}
 	return box ? partView(home, box) : levelView(home, off)
 }
 
@@ -358,7 +416,9 @@ function viewOf(home, off) {
 // start now, or null; running is the run under way, if any, with seconds since it started; model is the model's
 // setting, and asked whether the reader has saved questions.
 export function inspectorHtml(home, env) {
-	if (!home.look) return `<div class="insp-scroll"><p class="muted">Reading the project from git.</p></div>`
+	if (!home.look || home.reading === 'level') {
+		return `<div class="insp-scroll" id="insp-scroll">${home.problem ? '' : '<p class="muted" role="status">Reading the project from git.</p>'}</div>`
+	}
 	// A run shows in place of what it will fill only while the reader is where it started.
 	const run = env.running?.onHome ?? null
 	const working = run !== null && isThere(run, home)
@@ -376,12 +436,14 @@ export function inspectorHtml(home, env) {
 		view.picked && !working ? `<button class="link" data-act="home-clear" data-key="home-clear">${whole}</button>` : ''
 	const notices = working ? '' : `${away}${troubleHtml(home.trouble)}${endedHtml(home.ended)}${saidHtml(home)}`
 	const noModel = env.model?.kind === 'unset' ? noModelHtml(env.model, env.asked, true) : ''
+	const nav = working ? '' : (view.nav ?? '')
 	return `<div class="insp-scroll" id="insp-scroll">
-			<p class="insp-head"><span class="insp-detail">${DETAILS[shownDetail(home)]}</span><span class="insp-where">${view.where}</span>${clear}</p>
-			${notices}
+			<p class="insp-legend">${LEGEND}</p>
+			<p class="insp-head"><span class="insp-detail">${DETAILS[shownDetail(home)]}</span>${view.where ? `<span class="insp-where">${view.where}</span>` : ''}${clear}<button class="link insp-up" data-act="home-up" data-key="home-up">Back to the picture</button></p>
 			<h2 class="insp-title ${view.titleClass ?? ''}" id="insp-title" tabindex="-1">${view.title}</h2>
+			${notices}
 			${view.body}
 			${noModel}
 		</div>
-		<div class="insp-foot">${working ? '' : (view.nav ?? '')}<p class="insp-legend">${LEGEND}</p></div>`
+		${nav === '' ? '' : `<div class="insp-foot">${nav}</div>`}`
 }

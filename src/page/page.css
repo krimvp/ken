@@ -432,6 +432,10 @@ html {
 	padding-inline: var(--space-5);
 }
 
+.composer-cost {
+	margin-top: var(--space-1);
+}
+
 /* An earlier question, folded to one row */
 .row {
 	display: block;
@@ -1850,10 +1854,6 @@ ul.left-out {
 	align-items: flex-end;
 }
 
-.lenses-start {
-	margin-top: var(--space-3);
-}
-
 .lenses-ask {
 	padding: var(--space-2) 0 var(--space-6);
 }
@@ -2300,7 +2300,6 @@ button.pv-box:hover {
 	position: absolute;
 	top: -0.8rem;
 	right: var(--space-3);
-	max-width: calc(100% - var(--space-5));
 	padding: 0 0.6em;
 	border-radius: 999px;
 	background: var(--color-accent);
@@ -2308,6 +2307,7 @@ button.pv-box:hover {
 	font-size: var(--text-sm);
 	font-weight: 700;
 	line-height: 1.5;
+	white-space: nowrap;
 }
 
 .pv-badge.is-left {

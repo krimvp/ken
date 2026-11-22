@@ -26,7 +26,9 @@ import {
 } from './format.js'
 import { foldedTopics, knownHtml, mapBarHtml } from './map.js'
 
-export const LEGEND = "Plain text is what ken's model says. A boxed card is what ken checked against git."
+// Who wrote what on the page, said once: at the top of a thread, and at the top of the panel beside the picture.
+export const LEGEND =
+	"ken's model wrote the explanations, and ken did not check them. In a boxed card, ken found each quoted line in git."
 
 // What the chips under a reply about a change ask, in the reader's words. They name the commits, so the question stands
 // on its own in a chat that never saw the change.
@@ -196,8 +198,9 @@ function rowsInPlace(q, ui) {
 }
 
 // The cards that prove a step, for the panel and the home. Their quotes open in place, so the step stays in view.
-export function stepCardsHtml(q, t, step, ui) {
-	const rows = rowsInPlace(q, ui)
+// shown says which quotes the step's diff above the cards already shows.
+export function stepCardsHtml(q, t, step, ui, shown = null) {
+	const rows = { ...rowsInPlace(q, ui), shown }
 	return step.cards.map(({ card, j }) => cardHtml(card, t, j, rows)).join('')
 }
 
@@ -300,7 +303,7 @@ function cardHtml(card, t, j, rows) {
 	const body = render
 		? render(card, key, rows, diagramId(t, j))
 		: '<p class="card-text">ken sent a card this page cannot show.</p>'
-	return `<div class="card card-${esc(card.kind)}" id="item-${key}"><span class="card-check" title="Checked against git" aria-label="Checked against git">✓</span><div class="card-body">${body}</div></div>`
+	return `<div class="card card-${esc(card.kind)}" id="item-${key}"><span class="card-check" title="Quotes found in git" aria-label="Quotes found in git">✓</span><div class="card-body">${body}</div></div>`
 }
 
 // A claim or a risk: its marks on a line of their own, its text, ken's search for what it says is missing, and its quote

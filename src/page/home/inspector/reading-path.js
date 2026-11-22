@@ -1,47 +1,39 @@
-// The inspector at "How it works" and "In the code": the whole reading path in order, numbered as the boxes of the
+// The panel at "How it works" and "In the code": the whole reading path in order, numbered as the boxes of the
 // picture are. For a level it is the stops of its tour, for a change the steps of its walkthrough. The stop or step
 // the reader picked is open, with its cards and what the reader can do next, and the others show their title and, at
 // "How it works", their words. So picking a box in the picture and picking a line here are the same act. A drawn
 // picture has a path too: the boxes and arrows of its diagram, under the numbers the drawing shows.
-import { cardPaths, stepDiffHtml, stepTitle, stopTopics } from '../../project/walk.js'
-import { count, esc, label, pathList, prose, quoteBody, runButton } from '../../views/format.js'
+import { cardPaths, stepDiffHtml, stepWords, stopTopics } from '../../project/walk.js'
+import { count, esc, isSession, label, pathList, prose, quoteBody, RUN_COST, runButton } from '../../views/format.js'
 import { stepCardsHtml, storyHtml, wordsHtml } from '../../views/reply.js'
-import { pathsLine } from '../canvas/canvas.js'
-import { firstUnseen, pathOf, placeOf, shownDetail, stoodOn } from '../state/content.js'
+import { arrowListHtml } from '../canvas/arrow-list.js'
+import { pathsLine, plusMinus } from '../canvas/canvas.js'
+import { firstUnseen, pathOf, placeOf, shownDetail, stepFiles, stoodOn } from '../state/content.js'
 import { colourOf } from '../state/home-state.js'
 
-// A boxed card of facts ken read from git. tag says how ken knows them.
-export function factCard(title, tag, body) {
-	return `<section class="fact-card"><h3 class="fact-head"><span>${title}</span><span class="fact-tag">${tag}</span></h3><div class="fact-body">${body}</div></section>`
+// The two tags a boxed card can carry. Plain code read the facts of the first from git. The second holds words of
+// ken's model, each resting on quoted lines that ken found in git.
+export const FROM_GIT = 'From git'
+export const QUOTES_FOUND = 'Quotes found in git'
+
+// A boxed card. tag says how ken knows what is in it, and level is the level of its heading in the panel.
+export function factCard(title, tag, body, level = 3) {
+	return `<section class="fact-card"><h${level} class="fact-head"><span>${title}</span><span class="fact-tag">${tag}</span></h${level}><div class="fact-body">${body}</div></section>`
 }
 
-// The arrows that start or end at a part, or every arrow of the level when name is null, under the numbers the
-// picture shows on them. A row opens the line of code its arrow rests on, and open shows them all.
-export function usesHtml(home, name, open = false) {
-	const { look } = home
-	const colour = colourOf(home)
-	const part = (each) => `<strong class="part-name ${colour(each)}">${esc(each)}</strong>`
-	const rows = look.arrows.flatMap((arrow, i) => {
-		if (name !== null && arrow.from !== name && arrow.to !== name) return []
-		const shown = open || home.openArrows.has(i)
-		const quotes = shown
-			? arrow.quotes
-					.map((quote) => quoteBody(quote, `<code>${esc(quote.path)}</code>, line ${quote.startLine}. `))
-					.join('')
-			: ''
-		const stale = arrow.stale ? ' <span class="muted">Its part changed since, so it may be out of date.</span>' : ''
-		return [
-			`<li class="uses-item"><button class="uses-row" data-act="home-arrow" data-index="${i}" data-key="home-arrow-${i}" aria-expanded="${shown}"><span class="pv-num" aria-hidden="true">${i + 1}</span><span>${part(arrow.from)} ${esc(arrow.text)} ${part(arrow.to)}${stale}</span></button>${quotes}</li>`,
-		]
-	})
+// The arrows that start or end at a part, or every arrow of the level when name is null, as a card. The verbs are
+// the model's, and each rests on a line of code ken found. open shows every arrow's line.
+export function usesHtml(home, name, { open = false, level = 3 } = {}) {
+	const rows = arrowListHtml(home, name, { open, where: 'insp' })
 	const body =
-		rows.length === 0
+		rows === ''
 			? `<p>No arrow joins ${esc(name)} to another part here.</p>`
-			: `<ul class="uses">${rows.join('')}</ul><p class="small muted">Each arrow rests on a line of code in the part it starts from. Pick one to see its line.</p>`
+			: `${rows}<p class="small muted">Each arrow rests on a line of code in the part it starts from. Pick one to see its line.</p>`
 	return factCard(
 		name === null ? 'How the parts use each other' : 'What it uses, and what uses it',
-		'Checked in git',
+		QUOTES_FOUND,
 		body,
+		level,
 	)
 }
 
@@ -52,39 +44,27 @@ export function lookInside(box) {
 		: ''
 }
 
-// What the reader's map says of a stop's part, and the button that says they know it.
+// "You said you know this part", in place of a part's words until the reader asks for them.
+export function knownFold(name) {
+	return `<p class="insp-known">You said you know this part. Nothing in it changed since. <button class="link" data-act="home-unfold" data-name="${esc(name)}" data-key="home-unfold">Show it anyway</button></p>`
+}
+
+// What the reader's map says of a stop's part, and the button that says they know it. A part ken keeps no topic for
+// has neither: the map cannot hold it.
 function knowHtml(box, names) {
 	const stood = stoodOn(box, names)
-	if (stood === 'none')
-		return '<span class="small muted">ken keeps no topic for this part, so your map cannot hold it.</span>'
+	if (stood === 'none') return ''
 	if (stood === 'known') return `<span class="small">Your map says you know ${esc(box.name)}.</span>`
 	return '<button class="quiet-button" data-act="home-know" data-key="home-know">I know this part</button>'
 }
 
 const SEEN = { none: '', new: '', met: 'Seen', known: 'You know it' }
 
-// The files a step changed, from the changed blocks its quotes fall on, each with its lines added and removed.
-function stepFiles(step) {
-	const files = new Map()
-	for (const { path, hunk } of step.hunks) {
-		const file = files.get(path) ?? { path, added: 0, removed: 0 }
-		file.added += hunk.lines.filter((line) => line.startsWith('+')).length
-		file.removed += hunk.lines.filter((line) => line.startsWith('-')).length
-		files.set(path, file)
-	}
-	return [...files.values()]
-}
-
-function filesHtml(step) {
-	const files = stepFiles(step)
-	if (files.length === 0) {
-		return '<p>No quote of this step falls on a changed line, so git cannot say which files it changed.</p>'
-	}
-	const rows = files.map(
-		(file) =>
-			`<li><code>${esc(file.path)}</code> <span class="home-plus">+${file.added}</span> <span class="home-minus">-${file.removed}</span></li>`,
-	)
-	return `<ul class="fact-list">${rows.join('')}</ul>`
+// Files with the lines a change added to and removed from each.
+export function filesHtml(files, more = 0) {
+	const rows = files.map((file) => `<li><code>${esc(file.path)}</code> ${plusMinus(file)}</li>`)
+	const rest = more > 0 ? `<li>and ${count(more, 'more file', 'more files')}</li>` : ''
+	return `<ul class="fact-list">${rows.join('')}${rest}</ul>`
 }
 
 // The file paths a step is about, for its line at "In the code".
@@ -95,28 +75,37 @@ function stepPaths(step) {
 	return paths.length === 0 ? '<span class="muted">This step quotes no file.</span>' : pathList(paths)
 }
 
+// The line of a stop or a step in the path: its number, its title, and a mark. It is a heading and a button, so a
+// reader who moves with the arrow keys lands on it and hears where they are.
+function headHtml(k, on, number, title, mark = '') {
+	return `<h3 class="path-title"><button class="path-head" data-act="home-step" data-index="${k}" data-key="home-step-${k}" aria-expanded="${on}">
+			<span class="path-n">${number}</span>${title}${mark}
+		</button></h3>`
+}
+
 function stopHtml(step, k, on, ctx) {
 	const { home, detail, q } = ctx
 	const box = home.look.boxes.find((each) => each.name === step.part)
 	const names = stopTopics(step)
 	const stood = stoodOn(box, names)
 	const text = step.text === null ? prose(box.job ?? '') : prose(step.text)
-	const mark = SEEN[stood] === '' ? '' : `<span class="path-mark">${SEEN[stood]}</span>`
-	const head = `<button class="path-head" data-act="home-step" data-index="${k}" data-key="home-step-${k}" aria-expanded="${on}">
-			<span class="path-n">${k + 1}</span><span class="path-name part-name ${colourOf(home)(step.part)}">${esc(step.part)}</span>${mark}
-		</button>`
+	const head = headHtml(
+		k,
+		on,
+		k + 1,
+		`<span class="path-name part-name ${colourOf(home)(step.part)}">${esc(step.part)}</span>`,
+		SEEN[stood] === '' ? '' : `<span class="path-mark">${SEEN[stood]}</span>`,
+	)
 	if (!on) {
 		return `${head}<div class="path-body">${detail === 'how' ? `<p>${text}</p>` : `<p class="small">${pathsLine(box)}</p>`}</div>`
 	}
-	if (stood === 'known' && !home.unfolded.has(step.part)) {
-		return `${head}<div class="path-body"><p class="insp-known">You said you know this part. Nothing in it changed since. <button class="link" data-act="home-unfold" data-name="${esc(step.part)}" data-key="home-unfold">Show it anyway</button></p></div>`
-	}
-	const inside = lookInside(box)
+	if (stood === 'known' && !home.unfolded.has(step.part))
+		return `${head}<div class="path-body">${knownFold(step.part)}</div>`
 	if (detail === 'how') {
 		return `${head}<div class="path-body">
 				<p>${text}</p>
-				${usesHtml(home, step.part)}
-				<p class="insp-actions"><button class="quiet-button" data-act="detail" data-detail="code" data-key="to-code">See its key lines</button>${inside}${knowHtml(box, names)}</p>
+				${usesHtml(home, step.part, { level: 4 })}
+				<p class="insp-actions"><button class="quiet-button" data-act="detail" data-detail="code" data-key="to-code">Show its code</button>${lookInside(box)}${knowHtml(box, names)}</p>
 			</div>`
 	}
 	const cards =
@@ -126,29 +115,50 @@ function stopHtml(step, k, on, ctx) {
 	return `${head}<div class="path-body">
 			<p class="small">${pathsLine(box)}</p>
 			${cards}
-			${usesHtml(home, step.part, true)}
-			<p class="insp-actions">${inside}${knowHtml(box, names)}</p>
+			${usesHtml(home, step.part, { open: true, level: 4 })}
+			<p class="insp-actions">${lookInside(box)}${knowHtml(box, names)}</p>
 		</div>`
+}
+
+// Whether a step's diff shows the lines of a quote: the quote names a file of one of its changed blocks, and its
+// lines fall in the block as it was before the change or as it is after.
+function inDiff(step) {
+	return (quote) =>
+		!isSession(quote) &&
+		step.hunks.some(({ path, oldPath, hunk }) => {
+			const within = (start, length) => quote.startLine < start + length && quote.endLine >= start
+			return (
+				(quote.path === path && within(hunk.newStart, hunk.newLength)) ||
+				(quote.path === oldPath && within(hunk.oldStart, hunk.oldLength))
+			)
+		})
 }
 
 function stepHtml(step, k, on, ctx) {
 	const { home, detail, q } = ctx
-	const head = `<button class="path-head" data-act="home-step" data-index="${k}" data-key="home-step-${k}" aria-expanded="${on}">
-			<span class="path-n">${k + 1}</span><span class="path-name">${esc(stepTitle(step))}</span>
-		</button>`
+	const { title, body } = stepWords(step)
+	const head = headHtml(k, on, k + 1, `<span class="path-name">${prose(title)}</span>`)
+	const words = body === '' ? '' : `<p>${prose(body)}</p>`
 	if (!on) {
-		return `${head}<div class="path-body">${detail === 'how' ? `<p>${prose(step.text)}</p>` : `<p class="small">${stepPaths(step)}</p>`}</div>`
+		return `${head}<div class="path-body">${detail === 'how' ? words : `<p class="small">${stepPaths(step)}</p>`}</div>`
 	}
 	if (detail === 'how') {
+		const files = stepFiles(step)
+		const changed =
+			files.length === 0
+				? '<p>No quote of this step falls on a changed line, so git cannot say which files it changed.</p>'
+				: filesHtml(files)
 		return `${head}<div class="path-body">
-				<p>${prose(step.text)}</p>
-				${factCard('Files in this step', 'From git', filesHtml(step))}
+				${words}
+				${factCard('Files in this step', FROM_GIT, changed, 4)}
 				<p class="insp-actions"><button class="quiet-button" data-act="detail" data-detail="code" data-key="to-code">See the diff for this step</button></p>
 			</div>`
 	}
+	// The diff comes first: it is what the reader came to this detail for. A card under it keeps the lines the diff
+	// already shows behind one button.
 	return `${head}<div class="path-body">
 			<div class="path-diff">${stepDiffHtml(step, q.reply.change)}</div>
-			<div class="path-cards">${stepCardsHtml(q, 'walk', step, home.ui)}</div>
+			<div class="path-cards">${stepCardsHtml(q, 'walk', step, home.ui, inDiff(step))}</div>
 		</div>`
 }
 
@@ -169,30 +179,56 @@ function storyLead(home) {
 	const q = home.content.story?.q
 	if (!q) return ''
 	if (home.storyOpen) {
-		return `<div class="path-story">${storyHtml(q, 'story', home.ui)}<p><button class="link" data-act="home-story" data-key="home-story" aria-expanded="true">Fold the story</button></p></div>`
+		return `<div class="path-story">${storyHtml(q, 'story', home.ui)}<p><button class="link" data-act="home-story" data-key="home-story" aria-expanded="true">Hide the rest of the story</button></p></div>`
 	}
-	const first = q.reply.items
-		.find((item) => item.kind === 'words')
-		?.text.trim()
-		.split(/\n\s*\n/)[0]
+	const text = q.reply.items.find((item) => item.kind === 'words')?.text.trim() ?? ''
+	const [first] = text.split(/\n\s*\n/)
 	if (!first) return ''
-	return `<div class="path-story">${wordsHtml(first)}<p><button class="link" data-act="home-story" data-key="home-story" aria-expanded="false">Read the whole story</button></p></div>`
+	const more = first !== text || q.reply.items.some((item) => item.kind === 'card' && item.step === undefined)
+	return `<div class="path-story">${wordsHtml(first)}${more ? '<p><button class="link" data-act="home-story" data-key="home-story" aria-expanded="false">Read the whole story</button></p>' : ''}</div>`
+}
+
+// What a walkthrough leaves out, from the check ken ran on it: how many of the change's blocks its steps quote, and
+// the files of the ones they do not.
+function leftOutHtml(change) {
+	const total = change.covered.length + change.uncovered.length
+	if (total === 0) return ''
+	const said = `The steps quote ${change.covered.length} of ${count(total, 'changed block', 'changed blocks')}.`
+	if (change.uncovered.length === 0) return `<p class="small">${said}</p>`
+	const files = new Map()
+	for (const { path } of change.uncovered) files.set(path, (files.get(path) ?? 0) + 1)
+	const rows = [...files].map(
+		([path, blocks]) => `<li><code>${esc(path)}</code>, ${count(blocks, 'block', 'blocks')}</li>`,
+	)
+	return `<details class="insp-more" data-key="left-out"><summary>${said} The rest are in ${count(files.size, 'file', 'files')}.</summary><ul class="fact-list">${rows.join('')}</ul></details>`
+}
+
+// The changed files of a change that sit in no part, said under its steps at every detail.
+export function outsideHtml(look) {
+	const { outside } = look.change
+	if (outside.length === 0) return ''
+	const noun = look.named ? 'part' : 'box'
+	return `<p class="small">${count(outside.length, 'changed file is', 'changed files are')} in no ${noun}: ${pathList(outside)}.</p>`
 }
 
 const WAY = { tour: ['stop', 'Stop'], walk: ['step', 'Step'] }
 
-// Back and Next, each with the name of the stop or step it goes to. With nothing picked, one button starts the path,
-// on a tour at the first stop the reader has not seen.
+// Back and Next, each with the name of what it goes to, and one line on the keys that do the same. With nothing
+// picked, one button starts the path, on a tour at the first stop the reader has not seen.
 function navHtml(path, at, titles, start) {
 	if (path.length === 0) return ''
 	const button = (k, kind, way) =>
-		`<button class="${kind} nav-button" data-act="home-step" data-index="${k}" data-key="home-nav-${way}"><span class="nav-way">${way}</span><span class="nav-name">${esc(titles[k])}</span></button>`
+		`<button class="${kind} nav-button" data-act="home-step" data-index="${k}" data-key="home-nav-${way}"><span class="nav-way">${way}</span><span class="nav-name">${titles[k]}</span></button>`
+	const number = (k) => path[k].number ?? k + 1
+	const keys = `<p class="insp-keys small muted">The arrow keys move between ${start.word}s.</p>`
 	if (at < 0) {
-		return `<div class="insp-nav">${button(start.k, 'primary', start.k === 0 ? `Start at ${start.word} 1` : `Go on at ${start.word} ${start.k + 1}`)}</div>`
+		const first = number(start.k) === number(0)
+		return `<div class="insp-nav">${button(start.k, 'primary', first ? `Start at ${start.word} ${number(0)}` : `Go on at ${start.word} ${number(start.k)}`)}</div>${keys}`
 	}
-	const back = at > 0 ? button(at - 1, 'quiet-button', `Back to ${start.word} ${at}`) : '<span></span>'
-	const next = at < path.length - 1 ? button(at + 1, 'primary', `Next, ${start.word} ${at + 2}`) : '<span></span>'
-	return `<div class="insp-nav">${back}${next}</div>`
+	const back = at > 0 ? button(at - 1, 'quiet-button', `Back to ${start.word} ${number(at - 1)}`) : '<span></span>'
+	const next =
+		at < path.length - 1 ? button(at + 1, 'primary', `Next, ${start.word} ${number(at + 1)}`) : '<span></span>'
+	return `<div class="insp-nav">${back}${next}</div>${keys}`
 }
 
 // Where the lines an element of a drawn picture quotes are, and the way to read them.
@@ -202,15 +238,13 @@ function sourcesHtml(element) {
 		(quote) => `<code class="pv-path">${esc(quote.path)}</code>, line ${quote.startLine}`,
 	)
 	return `<p class="small">It rests on ${places.join(', and on ')}.</p>
-		<p class="insp-actions"><button class="quiet-button" data-act="detail" data-detail="code" data-key="to-code">See its lines</button></p>`
+		<p class="insp-actions"><button class="quiet-button" data-act="detail" data-detail="code" data-key="to-code">Show its code</button></p>`
 }
 
 // One box or arrow of a drawn picture. At "In the code" every one shows the lines it quotes, as ken read them.
 function elementHtml(element, k, on, { detail, diagram }) {
 	const own = element.label !== null && element.label !== diagram.label ? label(element.label) : ''
-	const head = `<button class="path-head" data-act="home-step" data-index="${k}" data-key="home-step-${k}" aria-expanded="${on}">
-			<span class="path-n">${element.number}</span><span class="path-name">${own}${prose(element.text)}</span>
-		</button>`
+	const head = headHtml(k, on, element.number, `<span class="path-name">${own}${prose(element.text)}</span>`)
 	if (detail === 'how') return on ? `${head}<div class="path-body">${sourcesHtml(element)}</div>` : head
 	const lines =
 		element.quotes.length === 0
@@ -221,7 +255,7 @@ function elementHtml(element, k, on, { detail, diagram }) {
 	return `${head}<div class="path-body uses-item">${lines}</div>`
 }
 
-// The box or arrow the reader picked in the drawing, as its line of the path at "How it works": the inspector shows it
+// The box or arrow the reader picked in the drawing, as its line of the path at "How it works": the panel shows it
 // over ken's words at "Big picture". With none picked it is empty.
 export function pickedElementHtml(home, diagram) {
 	const k = placeOf(diagram.elements, home.selected)
@@ -229,14 +263,30 @@ export function pickedElementHtml(home, diagram) {
 	return `<ol class="path"><li class="path-step is-on">${elementHtml(diagram.elements[k], k, true, { detail: 'how', diagram })}</li></ol>`
 }
 
-// What the two lists of a drawn picture are called, by the kind of its diagram: its boxes, then its arrows.
+// What the two lists of a drawn picture are called, by the kind of its diagram, and what one of each is called: its
+// boxes, then its arrows.
 const LISTS = {
-	sequence: ['Who takes part', 'What happens, in order'],
-	component: ['The pieces', 'How one uses another'],
-	'entity-relationship': ['The data', 'How it relates'],
+	sequence: [
+		['Who takes part', 'participant'],
+		['What happens, in order', 'message'],
+	],
+	component: [
+		['The pieces', 'piece'],
+		['How one uses another', 'arrow'],
+	],
+	'entity-relationship': [
+		['The data', 'record'],
+		['How it relates', 'relation'],
+	],
 }
 
-// What the inspector shows of a drawn picture at "How it works" and "In the code": its boxes, then its arrows, in the
+// What one numbered element of a drawn picture is called: "message" for an arrow of a sequence.
+export function elementNoun(diagram, element) {
+	const [[, box], [, arrow]] = LISTS[diagram.kind]
+	return element.label === null ? box : arrow
+}
+
+// What the panel shows of a drawn picture at "How it works" and "In the code": its boxes, then its arrows, in the
 // order of their numbers, the one the reader picked open.
 export function elementsView(home, diagram) {
 	const path = diagram.elements
@@ -249,34 +299,41 @@ export function elementsView(home, diagram) {
 	)
 	// ken numbers the boxes first, so the arrows start where the boxes end.
 	const boxes = path.filter((element) => element.label === null).length
-	const [names, arrows] = LISTS[diagram.kind]
+	const [[names], [arrows]] = LISTS[diagram.kind]
 	const listed = (title, rows, kind = '') =>
 		rows.length === 0 ? '' : `<h3 class="insp-sub">${title}</h3><ol class="path${kind}">${rows.join('')}</ol>`
+	// Back and Next name what they go to by its own noun: "Back to message 8".
+	const nav = ['Back', 'Next'].map((way, side) => {
+		const k = at + (side === 0 ? -1 : 1)
+		if (at < 0 || !path[k]) return '<span></span>'
+		const said = `${way}${side === 0 ? ' to' : ','} ${elementNoun(diagram, path[k])} ${path[k].number}`
+		return `<button class="${side === 0 ? 'quiet-button' : 'primary'} nav-button" data-act="home-step" data-index="${k}" data-key="home-nav-${way}"><span class="nav-way">${said}</span><span class="nav-name">${prose(path[k].text)}</span></button>`
+	})
+	const start = `<button class="primary nav-button" data-act="home-step" data-index="0" data-key="home-nav-start"><span class="nav-way">Start at number 1</span><span class="nav-name">${prose(path[0]?.text ?? '')}</span></button>`
 	return {
 		where:
 			at >= 0
-				? `Number ${path[at].number} of ${path.length}`
+				? `${elementNoun(diagram, path[at]).replace(/^./, (c) => c.toUpperCase())} ${path[at].number}`
 				: `${path.length} boxes and arrows, numbered as in the drawing`,
 		picked: at >= 0,
 		body: `${listed(names, items.slice(0, boxes), detail === 'how' ? ' is-names' : '')}${listed(arrows, items.slice(boxes))}`,
-		nav: navHtml(
-			path,
-			at,
-			path.map((element) => element.text.replaceAll('`', '')),
-			{ word: 'number', k: 0 },
-		),
+		nav:
+			path.length === 0
+				? ''
+				: `<div class="insp-nav">${at < 0 ? start : nav.join('')}</div><p class="insp-keys small muted">The arrow keys move between the numbers.</p>`,
 	}
 }
 
-// The two quiet questions under a change's story or walkthrough. Each is a question of its own in the thread.
+// The two quiet questions under a change's story or walkthrough. Each is a question of its own, answered in a thread.
 export function asksHtml(off) {
 	const chip = (kind, text) =>
 		`<button class="chip" data-act="home-chip" data-chip="${kind}" data-key="chip-${kind}"${off ? ' disabled' : ''}>${text}</button>`
-	return `<p class="insp-actions">${chip('decisions', 'Ask what it decided')}${chip('risks', 'Ask what could go wrong')}</p>`
+	return `<p class="insp-actions">${chip('decisions', 'Ask what it decided')}${chip('risks', 'Ask what could go wrong')}<span class="small muted">${off ? esc(off) : `Each is ${RUN_COST.replace(/^One/, 'one')}`}</span></p>`
 }
 
-// What the inspector shows at "How it works" and "In the code": where the reader is on the path, the path, and the
-// buttons at its foot. off is the reason no run of ken's model can start now, or null.
+// The reading path of a named level or of a change with a walkthrough: where the reader is on it, the path, and the
+// buttons at its foot. A level with no tour yet shows each part's job in place of the tour's words. off is the reason
+// no run of ken's model can start now, or null.
 export function pathView(home, off) {
 	const { look, content } = home
 	const detail = shownDetail(home)
@@ -292,37 +349,26 @@ export function pathView(home, off) {
 			`<li class="path-step${k === at ? ' is-on' : ''}" id="path-${k}">${(tour ? stopHtml : stepHtml)(step, k, k === at, ctx)}</li>`,
 	)
 	const around = q ? wordsAround(q.reply) : { before: '', after: '' }
-	const here = look.at === look.head
-	let lead
-	if (stored && !q) lead = `<p class="muted">Reading what ken's model said.</p>`
-	else if (q) lead = around.before
-	else if (tour) {
-		lead = here
-			? `${runButton({ act: 'run-tour', key: 'run-tour', text: 'Ask ken to explain these parts', primary: true }, off)}
-				<p class="small muted">Until then each part shows its job and its paths, as the picture does.</p>`
-			: `<p class="small muted">ken's model reads the code that is checked out, so it cannot explain this older commit.</p>`
-	} else {
+	let lead = around.before
+	if (tour && !stored) {
 		lead =
-			look.change.files === 0
-				? '<p class="muted">This change touched no file, so there is nothing to walk through.</p>'
-				: `${runButton({ act: 'run-walk', key: 'run-walk', text: 'Ask ken to walk me through it', primary: true }, off)}
-				<p class="small muted">ken's model orders the change into steps a reviewer can read one at a time, each with its diff.</p>`
+			look.at === look.head
+				? `${runButton({ act: 'run-tour', key: 'run-tour', text: 'Show me around', primary: true }, off)}
+					<p class="small muted">Until then each part shows its job and its paths, as the picture does.</p>`
+				: `<p class="small muted">ken's model reads the code that is checked out, so it cannot explain this older commit.</p>`
 	}
-	const titles = path.map((step) => (tour ? step.part : stepTitle(step)))
+	const titles = path.map((step) => (tour ? esc(step.part) : prose(stepWords(step).title)))
 	const start = { word, k: tour ? firstUnseen(look, path) : 0 }
 	return {
 		where:
-			at >= 0
-				? `${Word} ${at + 1} of ${path.length}`
-				: path.length > 0
-					? `${count(path.length, word, `${word}s`)}, in reading order`
-					: 'Nothing is selected',
+			at >= 0 ? `${Word} ${at + 1} of ${path.length}` : `${count(path.length, word, `${word}s`)}, in reading order`,
 		picked: at >= 0,
 		body: `${tour ? '' : storyLead(home)}
 			${lead}
-			${items.length > 0 ? `<ol class="path">${items.join('')}</ol>` : ''}
+			<ol class="path">${items.join('')}</ol>
 			${around.after}
-			${!tour && q ? asksHtml(off) : ''}`,
+			${!tour && q ? `${leftOutHtml(q.reply.change)}${outsideHtml(look)}${asksHtml(off)}` : ''}
+			${tour && at < 0 && look.arrows.length > 0 ? `<div class="insp-arrows">${usesHtml(home, null)}</div>` : ''}`,
 		nav: navHtml(path, at, titles, start),
 	}
 }

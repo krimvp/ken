@@ -1,10 +1,18 @@
 // What the home reads from the server: the level on screen, ken's notes about the reader, and the saved replies the
 // level's content names. The server reads the level from git on every move.
 import { learnParts } from '../../project/part-colours.js'
-import { contentOf, picturesOf, repliesOf } from './content.js'
+import { contentOf, picturesOf, repliesOf, shownDetail } from './content.js'
 import { DETAILS, FIRST_DETAIL } from './home-state.js'
 
 const same = (a, b) => a.length === b.length && a.every((each, i) => each === b[i])
+
+// The server gives the diff of this many files at a time.
+const DIFF_PATHS = 10
+
+// The key the home keeps the diff of one part's changed files under.
+export function diffKey(change, box) {
+	return `${change.range.base}..${change.range.head}\n${box.name}`
+}
 
 // app is the page: its state, render, read, which asks the server and gives back { ok, body } for any answer it
 // sends, fromView, which turns a saved question into the page's own shape, and stored, which reads a value this
@@ -20,6 +28,9 @@ export function homeLoads({ state, render, read, fromView, stored }) {
 		const home = state.home
 		if (look.within.length === 0 && look.at === look.head) learnParts(look.boxes)
 		Object.assign(home, { look, changes, problem: null, change: look.change?.asked ?? 'none' })
+		// A field keeps what the reader typed in it only while the level on screen is the one it asked for.
+		if (look.at === look.head) home.typed.at = ''
+		if (!look.change?.asked.startsWith('since:')) home.typed.since = ''
 		if (wayIn) home.suggestion = wayIn
 	}
 
@@ -41,8 +52,38 @@ export function homeLoads({ state, render, read, fromView, stored }) {
 		if (mine !== asked) return false
 		home.reading = null
 		if (answer.ok) showLevel(answer.body)
-		else home.problem = { message: answer.body.message, field: answer.body.field ?? null }
+		else refuse(answer.body)
 		return true
+	}
+
+	// A commit or a change the server refused leaves the level on screen as it was, with the reason under the field the
+	// reader filled: keeps says so. Any other refusal takes the level off the screen.
+	function refuse({ message, field = null }) {
+		const home = state.home
+		const keeps = Boolean(home.look) && (field === 'at' || field === 'change')
+		home.problem = { message, field, keeps }
+		if (keeps) {
+			const { look } = home
+			Object.assign(home, { at: look.at === look.head ? '' : look.at, change: look.change?.asked ?? 'none' })
+		}
+	}
+
+	// The diff of the files a change touched in the part the reader picked, read from git once for each change and
+	// part, when the reader looks at it "In the code".
+	async function loadDiff() {
+		const home = state.home
+		const { look, selected } = home
+		if (!look?.change || home.content.kind !== 'change' || selected?.kind !== 'part') return
+		const box = look.boxes.find((each) => each.name === selected.name)
+		if (!box?.touched || shownDetail(home) !== 'code' || home.diffs.has(diffKey(look.change, box))) return
+		const key = diffKey(look.change, box)
+		home.diffs.set(key, null)
+		const paths = box.touched.paths.slice(0, DIFF_PATHS).map((file) => file.path)
+		const query = new URLSearchParams([['change', look.change.asked], ...paths.map((file) => ['path', file])])
+		const answer = await ask(`/api/change/diff?${query}`)
+		const left = box.touched.files - paths.length
+		home.diffs.set(key, answer.ok ? { ...answer.body, left } : { problem: answer.body.message })
+		render()
 	}
 
 	// ken's notes about the reader. A server that keeps none answers 404, and the home then shows none.
@@ -71,6 +112,7 @@ export function homeLoads({ state, render, read, fromView, stored }) {
 		}
 		if (selected && !held[selected.kind]()) home.selected = null
 		render()
+		void loadDiff()
 		// shortcut: a tab names its picture by the diagram's title, which only the reply holds, so the reply of every
 		// drawn picture of the level is read. Send the title with the row when a level has more than a few dozen.
 		const named = [...repliesOf(home.content), ...home.pictures.slice(1)].map((each) => each.id)
@@ -117,14 +159,17 @@ export function homeLoads({ state, render, read, fromView, stored }) {
 	}
 
 	// The first load reads the level with no change, which also says which way in ken suggests and what there is to
-	// catch up on. Then the way in decides what is laid over it.
-	async function start() {
+	// catch up on. Then the way in decides what is laid over it. placed says the home already holds where the reader
+	// is, from the page's address: then that one level is read, and nothing else decides.
+	async function start(placed) {
 		const home = state.home
 		await Promise.all([loadLayout(), loadNotes()])
-		if (!home.picked && home.suggestion) home.wayIn = home.suggestion.suggested
-		await enter(home.wayIn)
+		if (!placed) {
+			if (!home.picked && home.suggestion) home.wayIn = home.suggestion.suggested
+			await enter(home.wayIn)
+		}
 		await settle()
 	}
 
-	return { loadLayout, loadNotes, showLevel, settle, refresh, enter, start }
+	return { loadLayout, loadNotes, loadDiff, showLevel, settle, refresh, enter, start }
 }

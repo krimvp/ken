@@ -1,12 +1,15 @@
 // What ken has to say about the subject on screen, found by plain code among the reader's saved questions. A level
 // ken's model named may have a tour, and a change may have a story and a walkthrough. Each is the newest answered
-// question about exactly that subject, so the home opens it again with no run of the model. A level also keeps each
+// question that asked for exactly that about exactly that subject, so the home opens it again with no run of the
+// model. The server says what a question asked for, so a later question about the same change is not taken for its
+// story. A level also keeps each
 // diagram ken's model drew because the reader asked to see it another way: a drawn picture, shown in place of the
 // parts when the reader picks it. The reading path is what the home walks through at "How it works" and "In the
 // code": the stops of a tour, the steps of a walkthrough, or the numbered boxes and arrows of a drawn picture.
 import { stopTopics, walkOf } from '../../project/walk.js'
 
 const same = (a, b) => a.length === b.length && a.every((each, i) => each === b[i])
+const sameSet = (a, b) => a.length === b.length && a.every((each) => b.includes(each))
 
 // The diagram a saved question holds, or null: the first one, when its reply has more.
 export function diagramOf(q) {
@@ -42,14 +45,16 @@ export function contentOf(look, rows, replies = new Map(), shown = null) {
 		const about = answered.filter((row) => row.change?.base === base && row.change.head === head)
 		return {
 			kind: 'change',
-			story: found(about.find((row) => row.steps === 0)),
-			walk: found(about.find((row) => row.steps > 0)),
+			story: found(about.find((row) => row.want === 'story')),
+			walk: found(about.find((row) => row.want === 'walk' && row.steps > 0)),
 		}
 	}
 	if (!look.named) return { kind: 'folders' }
 	const stops = (look.tour ?? []).map((stop) => stop.name)
+	// A tour is of this level when its stops are the level's parts. The order the server walks them in may have
+	// changed since: each stop's words are about its part, so they still hold.
 	const tour = answered.find(
-		(row) => row.tour && same(row.tour.within, look.within) && same(row.tour.stops, stops) && stops.length > 0,
+		(row) => row.tour && same(row.tour.within, look.within) && sameSet(row.tour.stops, stops) && stops.length > 0,
 	)
 	return { kind: 'level', about: look.named.about, tour: found(tour) }
 }
@@ -84,16 +89,22 @@ export function pathOf(look, content) {
 	if (content.kind === 'change') return content.walk?.q ? walkOf(content.walk.q.reply) : []
 	if (content.kind !== 'level') return []
 	const told = content.tour?.q ? walkOf(content.tour.q.reply) : []
-	return (look.tour ?? []).map(
-		(stop, k) =>
-			told.find((step) => step.number === k + 1) ?? {
-				number: k + 1,
-				text: null,
-				cards: [],
-				hunks: [],
-				part: stop.name,
-			},
-	)
+	return (look.tour ?? []).map((stop, k) => ({
+		...(told.find((step) => step.part === stop.name) ?? { text: null, cards: [], hunks: [], part: stop.name }),
+		number: k + 1,
+	}))
+}
+
+// The files a step changed, from the changed blocks its quotes fall on, each with its lines added and removed.
+export function stepFiles(step) {
+	const files = new Map()
+	for (const { path, hunk } of step.hunks) {
+		const file = files.get(path) ?? { path, added: 0, removed: 0 }
+		file.added += hunk.lines.filter((line) => line.startsWith('+')).length
+		file.removed += hunk.lines.filter((line) => line.startsWith('-')).length
+		files.set(path, file)
+	}
+	return [...files.values()]
 }
 
 // Where the selection is on the path, or -1: a part is the stop of that part, and a step of a walkthrough or an

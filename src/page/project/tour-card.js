@@ -1,6 +1,5 @@
 // A tour opens on a picture of the level it tours: each part with its stop's number, a mark once the reader reached
-// it, and the stop the reader is on lit. A part opens its stop. Plain code picked the order from the arrows, so the
-// card says once how. The stops sit under the picture, as the steps of a change do, and the picture places the parts as the home does.
+// it, and the stop the reader is on lit. A part opens its stop. The card says once where the order comes from. The stops sit under the picture, as the steps of a change do, and the picture places the parts as the home does.
 import { count, esc } from '../views/format.js'
 import { partClass } from './part-colours.js'
 import { pictureHtml } from './parts-picture.js'
@@ -25,7 +24,7 @@ export function tourCardHtml(tour, look, t, walk) {
 			: `You have seen ${seen} of the ${walk.steps.length} stops.`
 	return `<section class="change-card tour-card has-walk" aria-labelledby="tc-${t}">
 		<h3 class="cc-title" id="tc-${t}">A tour of ${level}</h3>
-		<p class="cc-line">${said} The order follows the arrows: first the part that nothing else uses, then the parts it uses. Tests, build files and vendored code come last.</p>
+		<p class="cc-line">${said} The order is the one ken's model named the parts in, with tests and upkeep last.</p>
 		${pictureOf(look, t, walk, lit)}
 		${walkHtml(walk.steps, t, { ...walk, boxes, change: null, tour: true })}
 	</section>`

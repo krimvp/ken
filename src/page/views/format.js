@@ -67,12 +67,14 @@ export function day(date, now = new Date()) {
 	return `${d} ${MONTHS[month - 1]}${year === now.getFullYear() ? '' : ` ${year}`}`
 }
 
+// What a run of ken's model costs the reader, said the same way beside every button that starts one. Runs measured
+// on a real project took 39 to 92 seconds.
+export const RUN_COST = "One run of ken's model, a minute or two."
+
 // A button that runs ken's model, with what that costs beside it.
-export function withCost(button, cost = 'One model run.') {
+export function withCost(button, cost = RUN_COST) {
 	return `<span class="with-cost">${button}<span class="small muted">${cost}</span></span>`
 }
-
-export const RUN_COST = "One run of ken's model, about a minute."
 
 // A button on the home that starts a run of ken's model, with what the run costs as its second line. A button with no
 // act sends the form it stands in. off is the reason no run can start now: the button then cannot be pressed, and the
@@ -184,8 +186,10 @@ const WHOLE_UP_TO = 6
 
 // A quote is a row that names the file, the lines and the commit when the reply quotes more than one, over the quoted
 // lines as code. A long quote shows its first lines and a button for the rest. Opened, it shows all its lines: in
-// place, or in the panel on a wide screen, where the row whose quote the panel shows says so.
-export function quoteRows(quotes, key, { ui, commits, head = null, copies = NONE, change = null }) {
+// place, or in the panel on a wide screen, where the row whose quote the panel shows says so. shown says whether
+// something above the card already shows a quote's lines, such as a step's diff: such a quote keeps its lines
+// behind one button.
+export function quoteRows(quotes, key, { ui, commits, head = null, copies = NONE, change = null, shown = null }) {
 	const tags = quoteTags(quotes, { head, copies, change })
 	return `<ul class="quotes">${quotes
 		.map((quote, j) => {
@@ -203,7 +207,13 @@ export function quoteRows(quotes, key, { ui, commits, head = null, copies = NONE
 				<button class="q-row" ${act} data-key="${id}" aria-expanded="${ui.wide ? chosen : open}"${ui.wide ? ' aria-controls="panel"' : ''}>
 					<span class="q-path">${quoteSource(quote)}</span><span class="q-lines">${then}<span class="nowrap">${quoteLines(quote)}</span>${at}</span>${chosen ? '<span class="q-there">Shown in the panel on the right</span>' : ''}
 				</button>
-				${open ? quoteBody(quote, '', commits, copies) : firstLinesHtml(quote, `${act} data-key="${id}-all"`)}
+				${
+					open
+						? quoteBody(quote, '', commits, copies)
+						: shown?.(quote)
+							? `<button class="link q-all" ${act} data-key="${id}-all">Show the quoted lines</button>`
+							: firstLinesHtml(quote, `${act} data-key="${id}-all"`)
+				}
 			</li>`
 		})
 		.join('')}</ul>`

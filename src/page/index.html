@@ -10,8 +10,9 @@
 		<script type="module" src="main.js"></script>
 	</head>
 	<body>
+		<button type="button" class="quiet-button skip" data-act="skip" data-key="skip">Skip to the explanation</button>
 		<header class="top">
-			<button type="button" class="brand" data-act="home" data-key="brand" aria-label="ken. Back to the project.">ken</button>
+			<button type="button" class="brand" data-act="home" data-key="brand" aria-label="ken. Back to the picture.">ken</button>
 			<span class="project" id="project"></span>
 			<div class="top-menu" id="menu"></div>
 		</header>
@@ -30,7 +31,8 @@
 					<div class="composer-row">
 						<textarea id="question" rows="1" placeholder="What changed, why was it done that way, how does a part work now?"></textarea>
 						<button type="submit" class="primary" id="send">Ask</button>
-					</div>
+						</div>
+						<p class="composer-cost small muted">One run of ken's model, a minute or two.</p>
 				</form>
 				<div id="after"></div>
 			</main>

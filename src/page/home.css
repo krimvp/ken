@@ -1,11 +1,13 @@
-/* The home: the project as a picture, with what ken says about it beside it. On a wide screen the frame fills the
-   window under the header: the toolbar, the canvas and the "Show it another way" bar on the left, and the inspector
-   on the right, each scrolling by itself. Under 1100 pixels they stand in one column and the page scrolls. Every
-   colour comes from tokens.css and the page's own tokens at the top of page.css. */
+/* The home: the project as a picture, with what ken says about it beside it. From 1200 pixels the frame fills the
+   window under the header: the toolbar, then the canvas over the "Show it another way" bar on the left, and the panel
+   on the right. The canvas and the panel each scroll by themselves, so the bar never lies over the picture. Under
+   1200 pixels they stand in one column and the page scrolls. Every colour comes from tokens.css and the page's own
+   tokens at the top of page.css. */
 .home[hidden],
 .page[hidden],
 .home-inspector[hidden],
-.home-ask[hidden] {
+.home-ask[hidden],
+.skip[hidden] {
 	display: none;
 }
 
@@ -14,6 +16,18 @@
 	grid-template-columns: minmax(0, 1fr) clamp(480px, 44vw, 680px);
 	grid-template-rows: auto minmax(0, 1fr) auto;
 	height: calc(100dvh - var(--top));
+}
+
+/* The first stop of the Tab key, seen only while it has the keyboard. */
+.skip {
+	position: absolute;
+	top: var(--space-2);
+	left: -100rem;
+	z-index: 10;
+}
+
+.skip:focus {
+	left: var(--space-2);
 }
 
 /* The brand is the way home. */
@@ -41,7 +55,7 @@ button.brand {
 	flex-wrap: wrap;
 	align-items: center;
 	gap: var(--space-2) var(--space-5);
-	padding: var(--space-2) var(--space-5);
+	padding: var(--space-2) var(--space-4);
 	border-bottom: 1px solid var(--color-border);
 	background: var(--color-card);
 }
@@ -95,7 +109,7 @@ button.brand {
 }
 
 .seg-fact {
-	max-width: 11.5rem;
+	max-width: 13rem;
 	overflow: hidden;
 	font-size: var(--text-sm);
 	text-overflow: ellipsis;
@@ -119,16 +133,28 @@ button.brand {
 	font-weight: 700;
 }
 
+/* A control that waits is greyed as a whole, and the line beside it says what it waits for. */
+.control.is-waiting .segs {
+	border-style: dashed;
+	background: none;
+}
+
 .seg[disabled] {
-	cursor: default;
+	color: var(--color-muted);
+	cursor: not-allowed;
+}
+
+.seg[disabled] .seg-text {
+	font-weight: 400;
 }
 
 /* The canvas: a dotted sheet the picture lies on. Its width, not the window's, decides how the picture is laid out. */
 .home-canvas {
+	position: relative;
 	grid-column: 1;
 	min-width: 0;
 	overflow: auto;
-	padding: var(--space-4) var(--space-4) var(--space-5);
+	padding: var(--space-3) var(--space-4) var(--space-4);
 	background-color: var(--color-canvas);
 	background-image: radial-gradient(var(--color-dot) 1.2px, transparent 1.4px);
 	background-size: 22px 22px;
@@ -174,10 +200,15 @@ button.brand {
 	background: var(--part-line);
 }
 
-.home-why,
+/* What the level is, in the words of ken's model: always in view over the picture. */
+.home-about {
+	margin-top: var(--space-2);
+	font-size: var(--text-md);
+	line-height: 1.45;
+}
+
 .home-line {
 	margin-top: var(--space-1);
-	max-width: var(--measure);
 	color: var(--color-note);
 	font-size: var(--text-note);
 }
@@ -188,9 +219,40 @@ button.brand {
 	font-weight: 600;
 }
 
-/* The tabs over the canvas, when ken drew the level another way: the parts, and each drawn picture under its title.
-   They stand beside the level's name while they fit there at full length, and go under it when they do not. The row
-   scrolls sideways inside itself before a tab's name gets too short to tell from the next. */
+/* "Reading the project from git." A level read again for another change keeps its picture, dimmed, and the line lies
+   over the corner of the canvas, so nothing moves. It shows only when the server takes more than a moment. */
+.home-reading {
+	animation: home-shows 0.15s 0.3s both;
+}
+
+.home-reading:has(~ .home-picture) {
+	position: absolute;
+	top: var(--space-2);
+	right: var(--space-4);
+	z-index: 3;
+	margin: 0;
+	padding: var(--space-1) var(--space-3);
+	border: 1px solid var(--color-box-border);
+	border-radius: 999px;
+	background: var(--color-card);
+	box-shadow: var(--shadow-sm);
+}
+
+.home-picture.is-reading {
+	opacity: 0.55;
+	pointer-events: none;
+	transition: opacity 0.15s 0.3s;
+}
+
+@keyframes home-shows {
+	from {
+		opacity: 0;
+	}
+}
+
+/* The level's name shares its line with the tabs and the change picker while the canvas has room, so they take no
+   height from the picture, and each goes under the name when it does not fit. The row of tabs scrolls sideways inside
+   itself before a tab's name gets too short to tell from the next. */
 .home-head {
 	display: flex;
 	flex-wrap: wrap;
@@ -198,6 +260,11 @@ button.brand {
 	gap: var(--space-2) var(--space-5);
 }
 
+.home-where {
+	min-width: 0;
+}
+
+/* The tabs over the canvas, when ken drew the level another way: the parts, and each drawn picture under its title. */
 .pic-row {
 	position: relative;
 	display: flex;
@@ -290,10 +357,6 @@ button.brand {
 	margin-top: var(--space-3);
 }
 
-.home-drawn .home-line {
-	max-width: none;
-}
-
 .home-drawn .drawing {
 	padding: var(--space-3) 0;
 	border: 0;
@@ -305,14 +368,20 @@ button.brand {
 	background: linear-gradient(to right, transparent, var(--color-canvas) 85%);
 }
 
-/* The change picker, and behind one line the commit to look at. */
+/* A drawing wider than the canvas says so in a few words, beside the line over it, and only then. */
+.home-drawn .drawing-hint {
+	margin: 0;
+	font-weight: 600;
+}
+
+.home-drawn:has(.drawing-frame.wide) .drawing-hint {
+	display: inline;
+}
+
+/* The change picker: what is laid over the parts, and one field for a span of time or another commit. Each of its
+   fields takes its own place on the line of the level's name, so the first can stand beside the name. */
 .home-picker {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	gap: var(--space-2) var(--space-4);
-	margin-top: var(--space-3);
-	font-size: var(--text-note);
+	display: contents;
 }
 
 .home-field {
@@ -321,6 +390,7 @@ button.brand {
 	align-items: center;
 	gap: var(--space-2);
 	min-width: 0;
+	font-size: var(--text-note);
 }
 
 .home-field label {
@@ -331,7 +401,7 @@ button.brand {
 .home-picker input {
 	min-width: 0;
 	max-width: 100%;
-	min-height: 2.5rem;
+	min-height: 2.25rem;
 	padding: var(--space-1) var(--space-3);
 	border: 1px solid var(--color-box-border);
 	border-radius: var(--radius-sm);
@@ -341,11 +411,11 @@ button.brand {
 }
 
 .home-picker select {
-	max-width: 24rem;
+	max-width: 19rem;
 }
 
 .home-picker input {
-	width: 9rem;
+	width: 11rem;
 	font-family: var(--font-code);
 }
 
@@ -353,8 +423,17 @@ button.brand {
 	border: 2px solid var(--color-warn-border);
 }
 
+.home-head .home-error {
+	flex-basis: 100%;
+}
+
+.home-other {
+	font-size: var(--text-note);
+}
+
 .home-other summary {
 	width: fit-content;
+	padding-block: var(--space-2);
 	color: var(--color-accent);
 	font-weight: 600;
 	cursor: pointer;
@@ -368,38 +447,9 @@ button.brand {
 	margin-top: var(--space-2);
 }
 
-/* What the marks of a change mean, said once over the picture. */
-.home-key {
-	display: flex;
-	flex-wrap: wrap;
-	gap: var(--space-1) var(--space-5);
-	margin-top: var(--space-3);
-	color: var(--color-note);
-	font-size: var(--text-note);
-}
-
-.home-key span {
-	display: inline-flex;
-	align-items: center;
-	gap: var(--space-2);
-}
-
-.home-key span::before {
-	content: "";
-	width: 0.9rem;
-	height: 0.9rem;
-	border: 2px solid var(--color-warn-border);
-	border-radius: 4px;
-	background: var(--color-card);
-}
-
-.home-key .home-key-faded::before {
-	border: 1px dashed var(--color-muted);
-}
-
 .home-banner {
-	margin-top: var(--space-3);
-	padding: var(--space-2) var(--space-4);
+	margin-top: var(--space-2);
+	padding: var(--space-1) var(--space-4);
 	border: 1px solid var(--color-accent);
 	border-radius: var(--radius-md);
 	background: var(--color-label-bg);
@@ -407,11 +457,30 @@ button.brand {
 	font-size: var(--text-note);
 }
 
-.home-loose {
-	margin-top: var(--space-3);
-	max-width: var(--measure);
+/* Under the picture, on one line while it fits: what an arrow and an amber edge mean, and what sits in no part. */
+.home-foot {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 2px var(--space-5);
+	margin-top: var(--space-1);
 	color: var(--color-note);
 	font-size: var(--text-note);
+}
+
+.home-key {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-2);
+}
+
+.home-key::before {
+	content: "";
+	flex: none;
+	width: 0.9rem;
+	height: 0.9rem;
+	border: 2px solid var(--color-warn-border);
+	border-radius: 4px;
+	background: var(--color-card);
 }
 
 .home-loose summary {
@@ -419,16 +488,28 @@ button.brand {
 	cursor: pointer;
 }
 
+.home-loose[open] {
+	flex-basis: 100%;
+}
+
+/* The arrows as sentences, under the picture where the picture and the panel stand in one column: there the picture
+   shows each arrow's number alone. Side by side, the panel lists them. */
+.home-arrows {
+	display: none;
+	margin-top: var(--space-3);
+	font-size: var(--text-note);
+}
+
 /* The picture in the canvas. The boxes stand in one column with the arrows bent out to its right, as on a phone,
    until the canvas is wide enough for the grid: parts-picture.js reads --draw to know which. These rules outweigh
    the ones in page.css that go by the width of the window. */
 .home-picture {
-	margin-top: var(--space-4);
+	margin-top: var(--space-2);
 }
 
 .home .pv-picture {
 	--draw: column;
-	padding: var(--space-2) 5.5rem var(--space-2) 0;
+	padding: var(--space-4) 5rem var(--space-2) 0;
 	border: 0;
 	background: none;
 }
@@ -440,7 +521,7 @@ button.brand {
 
 .home .pv-picture .pv-boxes {
 	grid-template-columns: minmax(0, 1fr);
-	gap: var(--space-4);
+	gap: var(--space-5);
 }
 
 .home .pv-picture .pv-cell {
@@ -452,7 +533,7 @@ button.brand {
 @container canvas (min-width: 680px) {
 	.home .pv-picture {
 		--draw: 1;
-		padding: var(--space-4) var(--space-2) var(--space-5);
+		padding: var(--space-4) var(--space-1) var(--space-2);
 	}
 
 	/* An arrow around the outside of the picture bends over the top row or under the bottom one. */
@@ -460,9 +541,10 @@ button.brand {
 		padding-block: 4rem;
 	}
 
+	/* The gap between two columns holds an arrow's words folded to a narrow column, over the arrow's line. */
 	.home .pv-picture .pv-boxes {
 		grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
-		gap: 5.5rem 7rem;
+		gap: 4.75rem 8rem;
 	}
 
 	.home .home-picture:not(.has-arrows) .pv-boxes {
@@ -475,9 +557,8 @@ button.brand {
 		grid-column: var(--col);
 	}
 
-	/* An arrow's verb folds to a narrow column, so it fits between two boxes, and a long word breaks inside it. */
 	.home .pv-label {
-		max-width: 8.5rem;
+		max-width: 9rem;
 	}
 
 	.home .pv-label.is-narrow {
@@ -494,6 +575,28 @@ button.brand {
 .home .pv-job {
 	font-size: var(--text-note);
 	line-height: 1.45;
+}
+
+/* A part says its job, or at "In the code" its paths. The one it does not say lies under the other, unseen, so the
+   box is as tall at every detail. */
+.pv-says {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+}
+
+.pv-says > * {
+	grid-area: 1 / 1;
+	min-width: 0;
+}
+
+/* A box is narrow, so a path longer than a line of it breaks inside the path, and no shorter one does. */
+.home .pv-box .pv-path {
+	white-space: normal;
+	overflow-wrap: anywhere;
+}
+
+.pv-unseen {
+	visibility: hidden;
 }
 
 /* A part the change left alone: no colour, a dashed border, and its words in the note colour. */
@@ -513,10 +616,24 @@ button.brand {
 	color: var(--color-note);
 }
 
-/* The part or the step's parts the reader picked: a ring in the accent colour, outside the box's own border. */
+/* Three marks that never stand in for each other. The part the reader picked has a ring in the accent colour,
+   outside its own border. A part the change touched has an amber edge and its counts, whatever is picked or pointed
+   at. A part lit because an arrow joins it to the picked one keeps its own colour and gets nothing more. */
 .home .pv-cell.is-chosen .pv-box {
 	outline: 3px solid var(--color-accent);
 	outline-offset: 3px;
+}
+
+.home .pv-picture.is-lit .pv-cell.is-near .pv-box:not(.is-touched) {
+	border-color: color-mix(in srgb, var(--part-line) 40%, var(--color-box-border));
+	box-shadow: var(--shadow-md);
+}
+
+.home .pv-picture .pv-cell .pv-box.is-touched {
+	border-color: var(--color-warn-border);
+	box-shadow:
+		0 0 0 2px var(--color-warn-border),
+		var(--shadow-md);
 }
 
 .home .pv-box:focus-visible {
@@ -584,52 +701,40 @@ button.brand {
 	color: var(--color-text);
 }
 
-/* "Show it another way", docked under the canvas. */
+/* "Show it another way", docked under the canvas: one row, so it takes no room from the picture. The examples and
+   the notes ken keeps open under the row while the reader types in the box, or when they ask for them. */
 .home-redraw {
 	grid-column: 1;
-	max-height: 40vh;
+	max-height: 50vh;
 	overflow-y: auto;
-	padding: var(--space-3) var(--space-5);
+	padding: var(--space-2) var(--space-4);
 	border-top: 1px solid var(--color-border);
 	background: var(--color-card);
 }
 
-/* The label, the box and the button share one row, and the examples and ken's notes run under it at full width. */
 .redraw-form {
 	display: grid;
-	grid-template-columns: auto minmax(0, 1fr);
+	grid-template-columns: auto minmax(0, 1fr) auto;
 	align-items: center;
-	column-gap: var(--space-4);
-}
-
-.redraw-body {
-	display: contents;
-}
-
-.redraw-row,
-.redraw-form .home-error {
-	grid-column: 1 / -1;
+	gap: 0 var(--space-3);
 }
 
 .redraw-label {
 	font-weight: 700;
 }
 
-.redraw-fold {
-	display: none;
-}
-
 .redraw-ask {
 	display: flex;
-	align-items: flex-start;
-	gap: var(--space-3);
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-1) var(--space-3);
 }
 
 .redraw-ask input {
 	flex: 1;
 	min-width: 0;
-	min-height: 2.75rem;
-	padding: var(--space-2) var(--space-4);
+	min-height: 2.5rem;
+	padding: var(--space-1) var(--space-4);
 	border: 1px solid var(--color-box-border);
 	border-radius: var(--radius-md);
 	background: var(--color-bg);
@@ -643,17 +748,41 @@ button.brand {
 	opacity: 1;
 }
 
-/* The reason the button is off runs under the row, so the box keeps its width. */
-.redraw-ask {
-	flex-wrap: wrap;
+.redraw-ask .run-button {
+	padding-block: var(--space-1);
 }
 
+/* The reason the button is off runs under the row, so the box keeps its width. */
 .redraw-ask .run {
 	display: contents;
 }
 
 .redraw-ask .run-off {
 	flex-basis: 100%;
+}
+
+.redraw-toggle {
+	font-size: var(--text-note);
+	white-space: nowrap;
+}
+
+.redraw-how {
+	display: none;
+}
+
+.redraw-form .home-error,
+.redraw-more {
+	grid-column: 1 / -1;
+}
+
+.redraw-more {
+	display: none;
+	padding-bottom: var(--space-1);
+}
+
+.redraw-form.is-open .redraw-more,
+.redraw-form:has(#redraw-text:focus) .redraw-more {
+	display: block;
 }
 
 .redraw-row {
@@ -682,19 +811,6 @@ button.brand {
 	font-weight: 500;
 }
 
-/* A note shows its first line until the reader points at it or moves to it, so the bar leaves room for the picture. */
-.note-text {
-	min-width: 0;
-	display: -webkit-box;
-	-webkit-box-orient: vertical;
-	-webkit-line-clamp: 1;
-	overflow: hidden;
-}
-
-.note-chip:is(:hover, :focus-within) .note-text {
-	display: inline;
-}
-
 .note-chip {
 	display: inline-flex;
 	flex: 1 1 14rem;
@@ -708,7 +824,7 @@ button.brand {
 	background: var(--color-warn-bg);
 }
 
-/* The inspector: its words scroll, and its foot with Back, Next and the legend stays. */
+/* The panel beside the picture: its words scroll, and Back and Next stay at its foot. */
 .home-inspector,
 .home-ask {
 	grid-column: 2;
@@ -726,12 +842,21 @@ button.brand {
 	flex: 1;
 	min-height: 0;
 	overflow-y: auto;
-	padding: var(--space-4) var(--space-5) var(--space-5);
+	padding: var(--space-3) var(--space-5) var(--space-5);
 	overflow-wrap: anywhere;
 }
 
 .insp-scroll > * + * {
 	margin-top: var(--space-3);
+}
+
+/* Who wrote what, said once at the top of the panel. */
+.insp-legend {
+	padding-bottom: var(--space-2);
+	border-bottom: 1px solid var(--color-border);
+	color: var(--color-note);
+	font-size: var(--text-sm);
+	line-height: 1.45;
 }
 
 .insp-head {
@@ -753,6 +878,15 @@ button.brand {
 .insp-head .link {
 	margin-left: auto;
 	font-weight: 400;
+}
+
+.insp-head .link + .link {
+	margin-left: 0;
+}
+
+/* "Back to the picture" is for one column, where the picture is above the panel and out of sight. */
+.insp-up {
+	display: none;
 }
 
 .insp-title {
@@ -785,7 +919,9 @@ button.brand {
 }
 
 .insp-stale,
-.insp-known {
+.insp-known,
+.insp-away,
+.insp-pick {
 	padding: var(--space-2) var(--space-3);
 	border-radius: var(--radius-sm);
 	background: var(--color-label-bg);
@@ -816,12 +952,29 @@ button.brand {
 	cursor: pointer;
 }
 
+/* The commits of a change: the day, who wrote it, and its subject. */
 .insp-commits {
-	margin-top: var(--space-1);
+	margin-top: var(--space-2);
 }
 
 .insp-commits li {
 	padding: 2px 0;
+}
+
+.commit-day,
+.commit-who {
+	color: var(--color-note);
+	white-space: nowrap;
+}
+
+.commit-day {
+	display: inline-block;
+	min-width: 3.75rem;
+	font-variant-numeric: tabular-nums;
+}
+
+.commit-who::after {
+	content: ":";
 }
 
 /* The parts of a level, one line each: a part's name in its colour, then its job. */
@@ -863,6 +1016,7 @@ button.brand {
 
 .fact-head {
 	display: flex;
+	margin: 0;
 	flex-wrap: wrap;
 	align-items: center;
 	justify-content: space-between;
@@ -944,11 +1098,12 @@ button.brand {
 	align-items: start;
 }
 
+/* The stop the reader picked comes to the top of the panel, whole, with a little room over it. */
 .path-step {
 	padding: var(--space-3);
 	border: 1px solid var(--color-border);
 	border-radius: var(--radius-md);
-	scroll-margin: var(--space-3);
+	scroll-margin-top: var(--space-3);
 }
 
 .path-step.is-on {
@@ -956,9 +1111,13 @@ button.brand {
 	box-shadow: 0 0 0 1px var(--color-accent);
 }
 
+.path-title {
+	font-size: inherit;
+}
+
 .path-head {
 	display: flex;
-	align-items: center;
+	align-items: flex-start;
 	gap: var(--space-3);
 	width: 100%;
 	padding: 0;
@@ -967,15 +1126,18 @@ button.brand {
 	text-align: left;
 }
 
+/* The number of a stop or a step: a square in the accent colour, where an arrow's number is a dark circle. */
 .path-n {
 	display: inline-grid;
 	flex: none;
 	place-items: center;
-	width: 1.75rem;
+	min-width: 1.75rem;
 	height: 1.75rem;
-	border-radius: 50%;
-	background: var(--color-text);
-	color: var(--color-card);
+	padding: 0 0.3em;
+	border: 1.5px solid var(--color-accent);
+	border-radius: var(--radius-sm);
+	background: var(--color-label-bg);
+	color: var(--color-label-text);
 	font-size: var(--text-sm);
 	font-weight: 700;
 	font-variant-numeric: tabular-nums;
@@ -983,10 +1145,12 @@ button.brand {
 
 .path-step.is-on .path-n {
 	background: var(--color-accent);
+	color: var(--color-card);
 }
 
 .path-name {
 	min-width: 0;
+	padding-top: 0.1rem;
 	font-weight: 700;
 }
 
@@ -1006,7 +1170,7 @@ button.brand {
 	white-space: nowrap;
 }
 
-.path-body {
+.path-body:not(:empty) {
 	margin-top: var(--space-2);
 }
 
@@ -1034,24 +1198,15 @@ button.brand {
 	margin-top: var(--space-2);
 }
 
-/* A step's diff keeps each line whole and scrolls sideways inside its own box. */
+/* A diff in the panel: a line wider than its box wraps under itself, set in, as a quoted line does, so its end is on
+   screen. */
 .path-diff .walk-hunk:first-child {
 	margin-top: 0;
 }
 
-.path-diff .code.diff > code {
-	grid-template-columns: auto auto max-content;
-}
-
-.path-diff .code .lc {
-	padding-left: 0;
-	text-indent: 0;
-	white-space: pre;
-	overflow-wrap: normal;
-}
-
+/* Back and Next, at the foot of the panel. */
 .insp-foot {
-	padding: var(--space-3) var(--space-5);
+	padding: var(--space-2) var(--space-5);
 	border-top: 1px solid var(--color-border);
 	background: var(--color-bg);
 }
@@ -1060,33 +1215,33 @@ button.brand {
 	display: grid;
 	grid-template-columns: repeat(2, minmax(0, 1fr));
 	gap: var(--space-2);
-	margin-bottom: var(--space-2);
 }
 
 .insp-nav > :only-child {
 	grid-column: 1 / -1;
 }
 
+.insp-keys {
+	margin-top: var(--space-1);
+}
+
 .nav-button {
 	min-width: 0;
 }
 
+/* The name of where a button goes shows whole on two lines, and is cut only past that. */
 .nav-name {
+	display: -webkit-box;
 	max-width: 100%;
 	overflow: hidden;
 	font-size: var(--text-md);
 	font-weight: 700;
-	text-overflow: ellipsis;
-	white-space: nowrap;
+	line-height: 1.3;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 2;
 }
 
-.insp-legend {
-	color: var(--color-note);
-	font-size: var(--text-sm);
-	line-height: 1.45;
-}
-
-/* ken's words on a request to show a level another way, and a run that ended with nothing to show. */
+/* ken's answer to a request to show a level another way, and a run that ended with nothing to show. */
 .insp-said {
 	padding: var(--space-3) var(--space-4);
 	border: 1px solid var(--color-accent);
@@ -1110,6 +1265,11 @@ button.brand {
 	font-size: var(--text-note);
 }
 
+.insp-said-head h3 {
+	font-size: inherit;
+	font-weight: 700;
+}
+
 .insp-asked {
 	font-weight: 650;
 }
@@ -1123,7 +1283,7 @@ button.brand {
 	margin-top: var(--space-3);
 }
 
-/* The "Ask ken" drawer, over the inspector. */
+/* The "Ask ken" drawer, over the panel. */
 .ask-head {
 	display: flex;
 	align-items: center;
@@ -1145,7 +1305,7 @@ button.brand {
 .ask-form {
 	display: grid;
 	gap: var(--space-2);
-	padding: var(--space-3) var(--space-5) var(--space-4);
+	padding: var(--space-3) var(--space-5);
 	border-top: 1px solid var(--color-border);
 	background: var(--color-bg);
 }
@@ -1178,9 +1338,23 @@ button.brand {
 	width: 100%;
 }
 
-/* One column: the toolbar, the picture, "Show it another way" folded to one line, then the inspector. Nothing is
-   pinned, and each control scrolls sideways inside itself before the page ever would. */
-@media (max-width: 1099px) {
+/* The questions ken writes itself, behind one line under the reader's own. */
+.ask-lenses {
+	max-height: 45%;
+	overflow-y: auto;
+	padding: var(--space-2) var(--space-5) var(--space-4);
+	background: var(--color-bg);
+	font-size: var(--text-note);
+}
+
+.ask-lenses .lenses {
+	margin-top: var(--space-3);
+}
+
+/* One column: the toolbar, the picture, "Show it another way" as one line that opens, then the panel. The page
+   scrolls, and each control scrolls sideways inside itself before the page ever would. The top of the panel and its
+   Back and Next stay on screen while the reader is in it. */
+@media (max-width: 1199px) {
 	.home {
 		display: block;
 		height: auto;
@@ -1220,6 +1394,15 @@ button.brand {
 	.home-canvas {
 		overflow: visible;
 		padding: var(--space-3) var(--gutter) var(--space-4);
+		scroll-margin-top: var(--top);
+	}
+
+	.home-arrows {
+		display: block;
+	}
+
+	.insp-arrows {
+		display: none;
 	}
 
 	.home-redraw {
@@ -1227,65 +1410,93 @@ button.brand {
 		padding: var(--space-3) var(--gutter);
 	}
 
-	.redraw-form,
-	.redraw-body {
-		display: block;
+	/* Closed, the bar is its name and the way to open it. Open, the box, the button, the examples and the notes. */
+	.redraw-form {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		justify-content: space-between;
 	}
 
-	.note-text {
+	.redraw-toggle {
+		order: 1;
+	}
+
+	.redraw-ask {
+		display: none;
+		order: 2;
+		flex-basis: 100%;
+		flex-direction: column;
+		align-items: stretch;
+		margin-top: var(--space-2);
+	}
+
+	.redraw-more,
+	.redraw-form .home-error {
+		order: 3;
+		flex-basis: 100%;
+	}
+
+	.redraw-form.is-open .redraw-ask {
+		display: flex;
+	}
+
+	.redraw-form:not(.is-open) .redraw-how {
 		display: inline;
+	}
+
+	.redraw-form:not(.is-open) .redraw-count {
+		display: none;
 	}
 
 	.note-chip {
 		flex-wrap: wrap;
 	}
 
-	.redraw-top {
-		display: flex;
-		align-items: baseline;
-		justify-content: space-between;
-		gap: var(--space-3);
-	}
-
-	.redraw-fold {
-		display: inline;
-	}
-
-	.redraw-body {
-		margin-top: var(--space-2);
-	}
-
-	.redraw-form:not(.is-open) .redraw-body {
-		display: none;
-	}
-
-	.redraw-ask {
-		flex-direction: column;
-	}
-
 	.home-inspector {
+		display: block;
 		border-top: 1px solid var(--color-border);
 		border-left: 0;
+		scroll-margin-top: var(--top);
 	}
 
 	.insp-scroll {
 		overflow: visible;
-		padding: var(--space-4) var(--gutter);
+		padding: var(--space-3) var(--gutter) var(--space-4);
 	}
 
-	.insp-title {
-		scroll-margin-top: calc(var(--top) + var(--space-6));
+	.insp-head {
+		position: sticky;
+		top: var(--top);
+		z-index: 2;
+		margin-inline: calc(-1 * var(--gutter));
+		padding: var(--space-2) var(--gutter);
+		border-bottom: 1px solid var(--color-border);
+		background: var(--color-card);
 	}
 
+	.insp-up {
+		display: inline;
+	}
+
+	/* Under the header and the top of the panel, which both stay on screen. */
 	.path-step {
-		scroll-margin-top: calc(var(--top) + var(--space-2));
+		scroll-margin-top: calc(var(--top) + 3.25rem);
 	}
 
 	.insp-foot {
-		padding: var(--space-3) var(--gutter);
+		position: sticky;
+		bottom: 0;
+		z-index: 2;
+		padding: var(--space-2) var(--gutter);
 	}
 
-	/* The drawer covers the page under the header, so the question box is not lost under the inspector. */
+	/* A phone has no arrow keys. */
+	.insp-keys {
+		display: none;
+	}
+
+	/* The drawer covers the page under the header, so the question box is not lost under the panel. */
 	.home-ask {
 		position: fixed;
 		inset: var(--top) 0 0 0;
@@ -1294,10 +1505,8 @@ button.brand {
 	}
 
 	.ask-head,
-	.ask-form {
-		padding-inline: var(--gutter);
-	}
-
+	.ask-form,
+	.ask-lenses,
 	.ask-scroll {
 		padding-inline: var(--gutter);
 	}
