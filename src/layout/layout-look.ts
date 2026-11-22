@@ -131,8 +131,9 @@ type Level = {
 	loose: string[]
 }
 
-// Among every stored version of the level, the one with the most parts the same at the commit asked, the newest on a
-// tie. So at an old commit the version that fit the code then wins, and at HEAD the newest that fits.
+// Which stored version of the level shows. At the commit checked out it is the newest, so a redraw with fewer parts
+// shows as drawn. At an older commit it is the version with the largest share of its parts the same there, the newest
+// on a tie: the one that fit the code then.
 async function namedLevel(
 	repo: Repository,
 	versions: Stored[],
@@ -149,12 +150,15 @@ async function namedLevel(
 		if (part.places.every((place) => idAt.get(place.path) === null)) return 'gone'
 		return part.places.every((place) => idAt.get(place.path) === place.id) ? 'same' : 'changed'
 	}
-	const same = (version: Stored) => version.parts.filter((part) => stateOf(part) === 'same').length
-	// A merge of two clones' records can put a newer line before an older one, so ties go by when ken wrote each.
-	const chosen = versions.reduce((best, version) => {
-		const [a, b] = [same(version), same(best)]
-		return a > b || (a === b && version.at >= best.at) ? version : best
-	})
+	const share = (version: Stored) =>
+		version.parts.filter((part) => stateOf(part) === 'same').length / version.parts.length
+	const chosen =
+		ask.at === head
+			? newest(versions)
+			: versions.reduce((best, version) => {
+					const [a, b] = [share(version), share(best)]
+					return a > b || (a === b && version.at >= best.at) ? version : best
+				})
 	// At HEAD a part says whether it changed since it was named. At an older commit it says, as a folder does, whether it
 	// was different then from now, which is what the reader looking back wants to know.
 	const headIds = ask.at === head ? null : await repo.objectIds(head, places, signal)
@@ -206,6 +210,12 @@ async function folderLevel(repo: Repository, ask: LayoutAsk, head: CommitHash, s
 // other way round, such as "is used by", would say the opposite, so it reads as "uses".
 function fromStart(verb: string): string {
 	return /^(is|are|gets?)\b|\bby$/i.test(verb.trim()) ? 'uses' : verb
+}
+
+// A merge of two clones' records can put a newer line before an older one, so the newest goes by when ken wrote each,
+// and by the order in the file only between two written in the same moment.
+function newest(versions: Stored[]): Stored {
+	return versions.reduce((best, version) => (version.at >= best.at ? version : best))
 }
 
 function sameScope(layout: Stored, within: Scope): boolean {

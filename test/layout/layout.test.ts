@@ -289,6 +289,34 @@ test('at an old commit the view shows the version of a named level that fit the 
 	assert.deepEqual(box(now, 'Rest')?.job, 'does b and c')
 })
 
+test('a level named again with fewer parts shows the new parts at HEAD, though every part of the older one still fits', async () => {
+	const folders = ['a', 'b', 'c', 'd', 'e', 'f']
+	const { root } = buildRepository([
+		{ message: 'feat: start', files: Object.fromEntries(folders.map((each) => [`src/${each}/x.ts`, `${each}\n`])) },
+	])
+	const sources = await sourcesFor(root)
+	await name(
+		sources,
+		['src'],
+		folders.map((each) => ({ name: `Part ${each}`, job: `does ${each}`, paths: [`src/${each}`] })),
+	)
+	await name(
+		sources,
+		['src'],
+		[
+			{ name: 'Front', job: 'does a and b', paths: ['src/a', 'src/b'] },
+			{ name: 'Middle', job: 'does c and d', paths: ['src/c', 'src/d'] },
+			{ name: 'Back', job: 'does e and f', paths: ['src/e', 'src/f'] },
+		],
+	)
+
+	const now = await look(sources, { within: ['src'] })
+	assert.deepEqual(
+		now.boxes.map((each) => each.name),
+		['Front', 'Middle', 'Back'],
+	)
+})
+
 test('a commit inside one named part marks that part changed and its arrows possibly stale, and a new folder beside the parts says the drawing no longer fits', async () => {
 	const { root } = buildRepository([
 		{
