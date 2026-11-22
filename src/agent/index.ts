@@ -24,5 +24,5 @@ export {
 	type TourStop,
 	type Withdrawn,
 } from './reply/reply.ts'
-export type { Asking } from './reply/show-tool.ts'
+export { type Asking, TOUR_WORDS } from './reply/show-tool.ts'
 export { type Chat, startChat } from './start-chat.ts'

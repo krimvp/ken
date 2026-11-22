@@ -218,7 +218,7 @@ function namesPart(text: string, paths: string[]): boolean {
 // #import are code.
 const COMMENT = /^(\/\/|\/\*|\*|--|;|#(?!\s*(include|import)\b))/
 
-function onlyComments(text: string): boolean {
+export function onlyComments(text: string): boolean {
 	return text
 		.split('\n')
 		.map((line) => line.trim())

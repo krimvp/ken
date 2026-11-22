@@ -251,10 +251,12 @@ function layoutRules(level: PartsLevel): string[] {
 }
 
 // "Show me around" on a named level. Plain code picked the stops and their order, so the model explains each part in
-// that order and does not choose. name is what the reader calls the level, or null for the whole project.
+// that order and does not choose. name is what the reader calls the level, or null for the whole project. words is the
+// most words a step may have.
 export type TourLevel = {
 	name: string | null
 	head: string
+	words: number
 	stops: { name: string; job: string; paths: string[] }[]
 	arrows: { from: string; to: string; text: string }[]
 }
@@ -273,8 +275,9 @@ export function tourQuestion(level: TourLevel): LensQuestion {
 			...(uses.length > 0 ? [`- How the parts use each other: ${uses.join('; ')}.`] : []),
 			'',
 			`I am new to ${where}. Walk me through it as a tour of ${stops.length} stops, one stop per part, in the order above: ken picked it from the arrows, starting at the part the most other parts use. Read the code at HEAD (${level.head}) first.`,
-			"Then send one show call per stop, in order, with step: the stop's number, and in its text two short sentences: what the part does, and how it connects to the stops before and after it.",
-			"With each step send one or two claims that quote the part's own key lines, such as its entry function or its main export, so I can read them beside the stop. Name the file or function in the claim, not in the step.",
+			`Then send one show call per stop, in order, with step: the stop's number and its text. I can read each part's job above, so do not say it again. Tell me the main path through the part, from what comes in to what goes out, and the one choice in its design a maintainer would explain. Use four sentences and ${level.words} words at most.`,
+			'Say how two parts connect in the words of the arrows, such as "Tests runs scenarios through Eval harness". Never use the order of the tour for it, such as "the next stop": I may open a stop on its own.',
+			'With each step send one or two claims that quote code where the work happens: the loop, the dispatch, the table, or the entry function with its body. Not a comment, and not a signature alone. ken sends back a claim that quotes only comments. A claim says only what its quoted lines show. Name the file or function in the claim, not in the step.',
 			'Write nothing before the first stop, and one sentence after the last at most.',
 		].join('\n'),
 		empty: false,

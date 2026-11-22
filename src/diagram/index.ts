@@ -12,6 +12,7 @@ export {
 	type LayoutCheck,
 	type LayoutDraft,
 	layoutDraft,
+	onlyComments,
 	type Part,
 	type PartArrow,
 	type Place,

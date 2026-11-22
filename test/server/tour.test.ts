@@ -13,7 +13,8 @@ import { scriptedModel, type Turn } from '../fixtures/scripted-model.ts'
 // A command that runs the core, a core that saves to a store, and a test of the core.
 const FILES = {
 	'src/cli/main.ts': "import { run } from '../core/run.ts'\nrun()\n",
-	'src/core/run.ts': "import { save } from '../store/db.ts'\nexport function run() {\n\tsave()\n}\n",
+	'src/core/run.ts':
+		"import { save } from '../store/db.ts'\n// Runs the work, then saves it.\nexport function run() {\n\tsave()\n}\n",
 	'src/store/db.ts': 'export function save() {}\n',
 	'test/run.test.ts': "import { run } from '../src/core/run.ts'\nrun()\n",
 }
@@ -183,4 +184,33 @@ test('a tour of a level nobody named is refused before it reaches the model', as
 	const { status, text } = await call(server, '/api/questions', { lens: { kind: 'tour', within: ['src/core'] } })
 	assert.equal(status, 400, text)
 	assert.equal(model.requests.length, 0)
+})
+
+test('a tour step whose only card quotes a comment goes back to the model, and one that quotes code beside the comment is shown', async () => {
+	const comment = '// Runs the work, then saves it.'
+	const model = await scriptedModel([
+		stop(1, 'The core runs the work.', 'src/core/run.ts', comment),
+		stop(1, 'The core runs the work.', 'src/core/run.ts', `${comment}\nexport function run() {`),
+		{ text: '' },
+	])
+	const server = await open(model.baseUrl)
+	const { status, text } = await call(server, '/api/questions', { lens: { kind: 'tour', within: [] } })
+	assert.equal(status, 200, text)
+	const lines = text
+		.trim()
+		.split('\n')
+		.map((line) => JSON.parse(line))
+
+	assert.deepEqual(
+		lines.flatMap((line) => (line.kind === 'step' && line.step.kind === 'sent-back' ? [line.step.what] : [])),
+		['Claim 1'],
+		'the card that quotes only a comment went back',
+	)
+	const items: { kind: string; step?: number; card?: { claim: { quotes: { text: string }[] } } }[] =
+		lines.at(-1).view.entry.reply.items
+	assert.deepEqual(
+		items.flatMap((item) => (item.kind === 'card' ? [[item.step, item.card?.claim.quotes[0]?.text]] : [])),
+		[[1, `${comment}\nexport function run() {`]],
+		'the reader sees the one card that quotes code',
+	)
 })

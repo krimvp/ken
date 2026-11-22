@@ -7,6 +7,7 @@ import {
 	firstWords,
 	type Item,
 	type Reply,
+	TOUR_WORDS,
 } from '../agent/index.ts'
 import { DIAGRAM_BOUNDS, drawn, LAYOUT_BOUNDS } from '../diagram/index.ts'
 import {
@@ -370,6 +371,7 @@ export function questionDesk(
 			const text = tourQuestion({
 				name: typeof name === 'string' ? oneLine(name).slice(0, 80) || null : null,
 				head: look.head,
+				words: TOUR_WORDS,
 				stops,
 				arrows: look.arrows,
 			}).text

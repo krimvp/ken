@@ -12,6 +12,7 @@ import {
 	type DiagramDraft,
 	LAYOUT_BOUNDS,
 	type LayoutDraft,
+	onlyComments,
 } from '../../diagram/index.ts'
 import type { UnderstandingMap } from '../../map/index.ts'
 import { RECORD_LIMITS, type RecordStore, sameName, textProblem, UNDO } from '../../record/index.ts'
@@ -24,8 +25,12 @@ import { allowJsonText, readJsonText } from './json-text.ts'
 import { type Card, type Item, type Risk, type Tour, WEIGHTS } from './reply.ts'
 
 export const MAX_SENT_BACK = 6
-// The most words the step of a walkthrough or a tour asks for. Longer steps pushed the picture off the screen.
+// The most words a step of a change asks for. It sits beside the picture and the diff, and a longer one pushed the
+// picture off the screen.
 export const STEP_WORDS = 40
+// The most words a tour step asks for. It follows the main path through a part and names one choice in its design,
+// which a reviewer found two sentences could not hold: they only said the part's job again.
+export const TOUR_WORDS = 80
 
 // What show checks against and what the end of a reply writes to. map is the reader's understanding map: a reply marks
 // the topics it names as asked there. project reads the project's own git, without ken's snapshots, for the draft rule
@@ -153,6 +158,17 @@ export function showTool(gate: Gate, round: () => Round): Tool {
 				const problems: string[] = []
 				const draft = parse(problems)
 				const topic = 'topic' in draft.draft ? draft.draft.topic : undefined
+				// The reader opens a tour step's cards to read the part's code, and a comment is not code.
+				if (
+					current.tour &&
+					step &&
+					draft.kind === 'claim' &&
+					draft.draft.quotes.every(({ text }) => onlyComments(text))
+				) {
+					problems.push(
+						`${where} quotes only comments. On a tour, quote the code where the work happens, such as a loop, a dispatch, a table or the body of the entry function.`,
+					)
+				}
 				if (topic !== undefined && !known.some((name) => sameName(name, topic))) {
 					problems.push(
 						`${where} names the topic "${topic}", which is neither in the record nor a topic shown in this reply. Use the name the index gives, send the topic, or leave topic out.`,
@@ -853,12 +869,12 @@ const SHOW_SCHEMA = {
 		step: {
 			type: 'object',
 			description:
-				'Only when the reader asks you to walk them through a change, or for a tour of the project: one step, with the claims in this call as its proof. Send one show call per step, numbered from 1: in the order a reviewer should read the change, or in the tour order the question gives. ken links each step of a change to the parts and the changed lines its quotes fall in, so quote the changed lines. To fix a card of a step that came back, send it again with the same step.',
+				'Only when the reader asks you to walk them through a change, or for a tour of the project: one step, with the claims in this call as its proof. Send one show call per step, numbered from 1: in the order a reviewer should read the change, or in the tour order the question gives. ken links each step of a change to the parts and the changed lines its quotes fall in, so quote the changed lines. On a tour, quote code where the work happens: ken sends back a claim that quotes only comments. To fix a card of a step that came back, send it again with the same step.',
 			properties: {
 				number: { type: 'integer', minimum: 1 },
 				text: {
 					type: 'string',
-					description: `At most two short sentences in your own words, ${STEP_WORDS} words in all. The detail goes in the claims.`,
+					description: `In your own words. A step of a change: at most two short sentences, ${STEP_WORDS} words in all. A tour step: at most four sentences, ${TOUR_WORDS} words in all. The detail goes in the claims.`,
 				},
 			},
 			required: ['number', 'text'],
