@@ -81,7 +81,7 @@ const KEY_SHAPES = [
 	[
 		'<span class="k-key-part is-second"></span><span class="k-key-tie"></span>',
 		'The same part again',
-		'Dashed where it runs a second time. Dots tie the two places when one frame holds the other.',
+		'Small and dashed where it runs a second time. Dots tie the two places when one frame holds the other.',
 	],
 	[
 		'<svg viewBox="0 0 40 30"><path d="M3 6v18c0 2.500 7.500 4 17 4s17-1.500 17-4V6"/><ellipse cx="20" cy="6" rx="17" ry="4"/></svg>',
@@ -111,12 +111,7 @@ const KEY_SHAPES = [
 	[
 		'<svg viewBox="0 0 48 16"><path class="k-key-call" d="M2 8H46"/><circle cx="24" cy="8" r="5" class="k-key-ring"/></svg>',
 		'A crossing',
-		"A ring where a line passes a frame's edge.",
-	],
-	[
-		'<span class="k-key-note">?</span>',
-		'Not in the repository',
-		'A dashed note where the repository does not say. ken marks it and does not guess.',
+		"A ring where a line passes a frame's edge. Only these lines say how: a call inside one place does not.",
 	],
 ]
 
@@ -216,9 +211,5 @@ export function viewDrawing({ home, arch, on, view, projectName }) {
 						cls: r.thing.kind === 'part' ? view.colour(r.thing.part) : 'k-mm-out',
 					})),
 				]
-	// The middle of the parts, where the camera looks when the drawing is too big to read whole.
-	const blocks = on === 'world' ? [layout.project] : layout.things.filter((r) => r.thing.kind === 'part')
-	const mid = (key, size) => blocks.reduce((sum, r) => sum + r[key] + r[size] / 2, 0) / Math.max(blocks.length, 1)
-	const focus = { x: Math.round(mid('x', 'w')), y: Math.round(mid('y', 'h')) }
-	return { html, world: { x: 0, y: 0, w: layout.width, h: layout.height }, rects, focus }
+	return { html, world: { x: 0, y: 0, w: layout.width, h: layout.height }, rects }
 }

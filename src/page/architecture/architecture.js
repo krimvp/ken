@@ -201,9 +201,6 @@ function minimapHtml(rects, world) {
 	return `<div class="k-float k-minimap"><svg id="arch-minimap" viewBox="${world.x - pad} ${world.y - pad} ${world.w + 2 * pad} ${world.h + 2 * pad}" aria-hidden="true">${shapes.join('')}<rect class="k-mm-view" id="arch-mm-view" rx="16"/></svg></div>`
 }
 
-// The least zoom a drawing of where the project runs is fitted at: its words are 19.5 units, 12.5 pixels at 65%.
-const LEGIBLE = 0.65
-
 const READING = '<p class="k-canvas-line" role="status">Reading the project from git.</p>'
 
 // view is { home, arch, env, brief, column }: the level and what is laid over it, the canvas's own state, what the
@@ -248,7 +245,6 @@ export function architectureHtml({ home, arch, env, brief, column }) {
 			brief,
 			view: on,
 			world: drawn.world,
-			focus: drawn.focus,
 			inner: drawn.html,
 			top,
 			notes: notesHtml(home, env, arch, stops),
@@ -298,24 +294,9 @@ export function architectureHtml({ home, arch, env, brief, column }) {
 }
 
 // The canvas around a drawing: the world the camera moves, and what floats over it.
-function canvasHtml({
-	home,
-	arch,
-	env,
-	brief,
-	view,
-	world,
-	focus,
-	inner,
-	empty = '',
-	top,
-	notes,
-	processes,
-	minimap,
-	hint,
-}) {
+function canvasHtml({ home, arch, env, brief, view, world, inner, empty = '', top, notes, processes, minimap, hint }) {
 	const shownHint = hint === '' || notes !== '' || env.running?.onHome ? '' : `<p class="k-hint">${hint}</p>`
-	return `<div class="k-canvas view-${view}${arch.layer ? ` layer-${arch.layer}` : ''}${brief ? ' has-brief' : ''}" id="arch-canvas" data-world="${world.x} ${world.y} ${world.w} ${world.h}"${view === 'parts' ? '' : ` data-least="${LEGIBLE}" data-focus="${focus.x} ${focus.y}"`}>
+	return `<div class="k-canvas view-${view}${arch.layer ? ` layer-${arch.layer}` : ''}${brief ? ' has-brief' : ''}" id="arch-canvas" data-world="${world.x} ${world.y} ${world.w} ${world.h}">
 		<div class="k-world" id="arch-world"${home.reading ? ' inert' : ''}>
 			${inner}
 		</div>

@@ -73,16 +73,15 @@ function footOf(box, view) {
 	return `${mark}<span class="k-rt-words">${esc(levelLabel(home, box.knows.level))}</span>`
 }
 
-// The container a part runs in alone, as a tab on the part: its name where it says more than the part's, and its
-// copies.
-function tagHtml(frame, part, view) {
-	const named = frame.name.toLowerCase() === part.toLowerCase() ? '' : frame.name
-	const words = [named, copiesOf(frame)].filter(Boolean).join(', ') || FRAME_NAMES[frame.kind] || 'Frame'
+// The container a part runs in alone, as a chip in the part's corner that opens its brief: its mark and its copies.
+function tagHtml(frame, view) {
+	const words = copiesOf(frame) ? `<span>${esc(copiesOf(frame))}</span>` : ''
 	const id = `frame:${frame.id}`
-	return `<button class="k-rt-tag" data-act="brief-open" data-concept="${esc(id)}" data-key="frame-${esc(frame.id)}" aria-pressed="${view.brief === id}" aria-label="${esc(`${FRAME_NAMES[frame.kind] ?? 'Frame'}: ${frame.name}${frame.copies ? `, ${copiesOf(frame)}` : ''}`)}">${mark(frame.kind)}<span>${esc(words)}</span></button>`
+	return `<button class="k-rt-tag" data-act="brief-open" data-concept="${esc(id)}" data-key="frame-${esc(frame.id)}" aria-pressed="${view.brief === id}" aria-label="${esc(`${FRAME_NAMES[frame.kind] ?? 'Frame'}: ${frame.name}${frame.copies ? `, ${copiesOf(frame)}` : ''}`)}">${mark(frame.kind)}${words}</button>`
 }
 
-// A part as a bold block, in its colour: the second place of a part drawn twice is dashed.
+// A part as a bold block, in its colour. A container that runs it alone names the block, and the part's name goes
+// under it: "payments", then "Event workers". The second place of a part drawn twice is small and dashed.
 function partHtml(placed, view) {
 	const name = placed.thing.part
 	const box = view.boxes.get(name)
@@ -94,6 +93,7 @@ function partHtml(placed, view) {
 		'k-rt-part',
 		view.colour(name),
 		placed.second ? 'is-second' : '',
+		placed.solo ? 'is-solo' : '',
 		view.brief === id ? 'is-picked' : '',
 		quiet ? 'is-quiet' : '',
 		box ? `knows-${box.knows.level}` : '',
@@ -102,16 +102,24 @@ function partHtml(placed, view) {
 		stops.length > 0
 			? `<span class="k-beads">${stops.map((n) => `<span class="k-bead k-num"><span class="visually-hidden">Stop </span>${n}</span>`).join('')}</span>`
 			: ''
-	const solo = placed.solo ? tagHtml(placed.solo, name, view) : ''
-
+	const title = placed.solo && placed.solo.name.toLowerCase() !== name.toLowerCase() ? placed.solo.name : name
+	const under = title === name ? '' : `<span class="k-rt-runs">${esc(name)}</span>`
+	const foot = placed.second ? `<span>Also runs here</span>` : footOf(box, view)
+	const index = box ? view.home.look.boxes.indexOf(box) : -1
+	const inside =
+		box?.opens && !placed.second
+			? `<button class="k-blk-in" data-act="arch-inside" data-index="${index}" data-key="rt-in-${esc(placed.id)}" aria-label="Go inside ${esc(name)}" title="Go inside">${icon('inside')}</button>`
+			: ''
 	const known = box ? KNOWN.indexOf(box.knows.level) / (KNOWN.length - 1) : 0
 	return `<div class="${classes.filter(Boolean).join(' ')}" style="${px(placed)};--known:${known}" data-glide="part:${esc(name)}${placed.second ? ':2' : ''}">
 		<button class="k-rt-face" data-act="arch-view-pick" data-name="${esc(name)}" data-concept="${esc(id)}" data-key="rt-${esc(placed.id)}" aria-pressed="${view.brief === id}">
-			<span class="k-rt-head"><span class="k-blk-icon">${icon(partIcon(name))}</span><span class="k-rt-name">${esc(name)}</span></span>
+			<span class="k-rt-head"><span class="k-blk-icon">${icon(partIcon(name))}</span><span class="k-rt-name">${esc(title)}</span></span>
+			${under}
 			${beads}
-			<span class="k-rt-foot">${placed.second ? `${mark('runs')}<span>Also runs here</span>` : footOf(box, view)}</span>
+			<span class="k-rt-foot">${foot}</span>
 		</button>
-		${solo}
+		${placed.solo ? tagHtml(placed.solo, view) : ''}
+		${inside}
 	</div>`
 }
 
@@ -132,10 +140,10 @@ function busHtml(placed, view, layout) {
 		.filter((lane) => lane.bus === bus.id)
 		.map(
 			(lane) =>
-				`<span class="k-rt-lane" style="top:${lane.y - placed.y - 13}px"></span><span class="k-rt-topic k-mono" style="left:${lane.x - placed.x}px;top:${lane.y - placed.y}px">${esc(lane.topic)}</span>`,
+				`<span class="k-rt-lane" style="top:${lane.y - placed.y - 10}px"></span><span class="k-rt-topic k-mono" style="left:${lane.x - placed.x}px;top:${lane.y - placed.y}px">${esc(lane.topic)}</span>`,
 		)
 	return `<div class="k-rt-bus${view.brief === id ? ' is-picked' : ''}" style="${px(placed)}">
-		<button class="k-rt-bus-head" data-act="brief-open" data-concept="${esc(id)}" data-key="rt-${esc(placed.id)}" aria-pressed="${view.brief === id}">${mark('bus')}<b>${esc(bus.name)}</b><span class="k-rt-bus-kind">${esc(bus.store === 'bus' ? 'event bus' : bus.store)}, ${bus.topics.length} ${bus.topics.length === 1 ? 'topic' : 'topics'}</span></button>
+		<button class="k-rt-bus-head" data-act="brief-open" data-concept="${esc(id)}" data-key="rt-${esc(placed.id)}" aria-pressed="${view.brief === id}">${mark('bus')}<b>${esc(bus.name)}</b><span class="k-rt-bus-kind">${bus.topics.length} ${bus.topics.length === 1 ? 'topic' : 'topics'}</span></button>
 		<span class="k-rt-legend" aria-hidden="true"><i class="k-rt-dot"></i>publishes <i class="k-rt-ring"></i>picks up later</span>
 		${lanes.join('')}
 	</div>`
@@ -205,10 +213,6 @@ export function runtimeHtml(views, layout, view) {
 		if (kind === 'outside') return outsideHtml(placed, outsideOf.get(placed.id), view)
 		return placed.thing.topics?.length > 0 ? busHtml(placed, view, layout) : storeHtml(placed, view)
 	})
-	const notes = layout.notes.map(
-		(note) =>
-			`<p class="k-rt-note" style="${px(note)}"><span class="visually-hidden">Not in the repository: </span>${esc(note.text)}</p>`,
-	)
 	const lines = []
 	const over = []
 	const labels = []
@@ -252,7 +256,7 @@ export function runtimeHtml(views, layout, view) {
 	})
 	const svg = (cls, body) =>
 		`<svg class="k-wires ${cls}" width="${layout.width}" height="${layout.height}" viewBox="0 0 ${layout.width} ${layout.height}" aria-hidden="true">${ARROWS}${body}</svg>`
-	return `${frames.join('')}${svg('k-rt-lines', lines.join(''))}${notes.join('')}${things.join('')}${svg('k-rt-over', over.join(''))}${marks.join('')}${labels.join('')}`
+	return `${frames.join('')}${svg('k-rt-lines', lines.join(''))}${things.join('')}${svg('k-rt-over', over.join(''))}${marks.join('')}${labels.join('')}`
 }
 
 // The project as one block with its parts as tiles, its people and systems around it, and a labelled line for each
