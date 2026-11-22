@@ -163,16 +163,19 @@ export function questionDesk(
 		if (!jobs.background || !chats || closed) return filling
 		filling = filling
 			.then(async () => {
-				for (const job of await plan.missing(new Date())) {
-					const work = {
-						kind: 'ask' as const,
-						body: { lens: job.lens },
-						asked: null,
-						chat: 'ken' as const,
-						layer: job.layer,
-					}
-					queue.want({ ...job, yields: true, work }, 'ken')
-				}
+				const missing = await plan.missing(new Date())
+				queue.wantAll(
+					missing.map((job) => {
+						const work = {
+							kind: 'ask' as const,
+							body: { lens: job.lens },
+							asked: null,
+							chat: 'ken' as const,
+							layer: job.layer,
+						}
+						return { ...job, yields: true, work }
+					}),
+				)
 			})
 			.catch((error: unknown) => {
 				process.stderr.write(

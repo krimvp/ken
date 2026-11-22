@@ -98,7 +98,8 @@ export function layerPlan(layout: LayoutSources, reads: ReturnType<typeof concep
 				jobs.push(job({ kind: 'explain', concept, title: `Explaining ${stop.name}`, order: 100 + at, layer: 1, lens }))
 				continue
 			}
-			const asked = brief.questions.filter((question) => !question.answered).slice(0, QUESTIONS_PER_PART)
+			// The first few the brief lists, so answering or stopping one never brings the next one in.
+			const asked = brief.questions.slice(0, QUESTIONS_PER_PART).filter((question) => !question.answered)
 			for (const [k, question] of asked.entries()) {
 				const lens = { kind: 'answer', concept, text: question.text }
 				const title = `Answering "${question.text}"`

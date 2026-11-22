@@ -185,6 +185,18 @@ export function jobQueue<W, L>(deps: QueueDeps<W, L>) {
 	// Asks for a job. One for the same thing that waits or runs is that job: the reader asking for it moves it to the
 	// front. Returns null when ken already tried the thing by itself in this server's life, or the queue has closed.
 	function want(ask: JobAsk<W>, by: 'reader' | 'ken'): JobView | null {
+		const job = add(ask, by)
+		pump()
+		return job && viewOf(job)
+	}
+
+	// Asks for each job before any starts, so the first to start is the first in line.
+	function wantAll(asks: JobAsk<W>[]) {
+		for (const ask of asks) add(ask, 'ken')
+		pump()
+	}
+
+	function add(ask: JobAsk<W>, by: 'reader' | 'ken'): Job<W, L> | null {
 		if (closed) return null
 		const same = jobs.find((job) => job.key === ask.key && live(job))
 		if (same) {
@@ -193,8 +205,7 @@ export function jobQueue<W, L>(deps: QueueDeps<W, L>) {
 				same.seq = ++seq
 				if (same.state.kind === 'waiting') makeRoom()
 			}
-			pump()
-			return viewOf(same)
+			return same
 		}
 		if (by === 'ken' && tried.has(ask.key)) return null
 		let end = () => {}
@@ -214,8 +225,7 @@ export function jobQueue<W, L>(deps: QueueDeps<W, L>) {
 		}
 		jobs.push(job)
 		if (job.asked) makeRoom()
-		pump()
-		return viewOf(job)
+		return job
 	}
 
 	function viewOf(job: Job<W, L>): JobView | null {
@@ -282,7 +292,7 @@ export function jobQueue<W, L>(deps: QueueDeps<W, L>) {
 		return () => listeners.delete(listener)
 	}
 
-	return { want, follow, stop, settled, refocus, view, subscribe, close }
+	return { want, wantAll, follow, stop, settled, refocus, view, subscribe, close }
 }
 
 export type JobQueue<W, L> = ReturnType<typeof jobQueue<W, L>>

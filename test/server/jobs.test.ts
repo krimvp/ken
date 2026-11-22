@@ -17,7 +17,8 @@ const BACKGROUND = { KEN_BACKGROUND: 'on' }
 // Built here, so each folder goes only after the server that reads it has closed.
 const fresh = buildRepository([{ message: 'feat: start', files: FILES }])
 const namedRepo = buildRepository([{ message: 'feat: start', files: FILES }])
-const homes = [readerHome(), readerHome()]
+const asking = buildRepository([{ message: 'feat: start', files: FILES }])
+const homes = [readerHome(), readerHome(), readerHome()]
 
 type Job = { key: string; title: string; by: string; state: { kind: string; skipped?: boolean }; place: number | null }
 
@@ -49,12 +50,13 @@ async function until<T>(read: () => T | Promise<T>, done: (value: T) => boolean)
 	throw new Error('gave up waiting')
 }
 
-const brief = (line: string, file: keyof typeof FILES, quoted: string): Turn => ({
+const brief = (line: string, file: keyof typeof FILES, quoted: string, questions?: string[]): Turn => ({
 	tool: 'ken__show',
 	args: {
 		brief: {
 			number: 1,
 			line,
+			...(questions ? { questions } : {}),
 			points: [
 				{
 					line,
@@ -169,4 +171,38 @@ test("ken explains each part by itself in tour order; a part the reader presses 
 		'the run that gave way left nothing in the history',
 	)
 	assert.equal((await json(server, '/api/brief?concept=part%3A%3ACore')).line, 'Runs the work and gives back one.')
+})
+
+test('ken answers ahead only the first two questions a brief lists, and answering one does not bring in the third', async () => {
+	const { root } = asking
+	const record = fileRecordStore(root, gitRepository(root))
+	const parts = [
+		{ name: 'Core', job: 'Runs the work', paths: ['src/core'] },
+		{ name: 'Command', job: 'The command a person types', paths: ['src/cli'] },
+	]
+	const named = await record.append([{ kind: 'layout', within: [], at: 'HEAD', parts, arrows: [] }])
+	if (named.kind !== 'appended') assert.fail(named.problems.join(' '))
+	const asked = ['What does run give back?', 'Who calls run?', 'Why does run give back one?']
+	const home = homes[2] ?? ''
+	const first = await scriptedModel([
+		brief('Runs the work and gives back one.', 'src/core/run.ts', '\treturn 1', asked),
+		brief('Starts a run when a person types the command.', 'src/cli/main.ts', 'run()'),
+	])
+	const before = await openKen(root, home, first.baseUrl)
+	for (const part of ['Core', 'Command']) await ask(before, { lens: { kind: 'explain', within: [], part } })
+	const model = await scriptedModel([brief('Run gives back one.', 'src/core/run.ts', '\treturn 1'), { hang: () => {} }])
+	const server = await openKen(root, home, model.baseUrl, BACKGROUND)
+	const answers = async () =>
+		((await json(server, '/api/jobs', { looking: { brief: null, within: null } })).jobs as Job[]).filter((job) =>
+			job.key.startsWith('answer:'),
+		)
+	const after = await until(answers, (jobs) => jobs[0]?.title.includes(asked[1] ?? '') === true)
+	assert.deepEqual(
+		after.map((job) => [job.title, job.state.kind]),
+		[
+			[`Answering "${asked[1]}"`, 'running'],
+			[`Answering "${asked[0]}"`, 'done'],
+		],
+		'with the first answered, the third question never joins the line',
+	)
 })

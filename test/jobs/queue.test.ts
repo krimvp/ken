@@ -61,6 +61,13 @@ test('background jobs run one at a time in their order, and a job the reader loo
 	assert.deepEqual(started, ['first', 'core', 'cli', 'store'])
 })
 
+test('jobs ken wants together start in their order, whatever order it found them in', async () => {
+	const { queue, ask, started, settle } = harness()
+	queue.wantAll([ask('answer', 300), ask('brief', 101)])
+	await settle()
+	assert.deepEqual(started, ['brief'])
+})
+
 test("the reader's request stops the lowest background job, which runs again later from the head of its rank", async () => {
 	const { queue, ask, started, finish, settle, state } = harness({ ranks: { near: 2 } })
 	queue.want(ask('far', 0), 'ken')
