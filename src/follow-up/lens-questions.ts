@@ -264,7 +264,7 @@ export function tourQuestion(level: TourLevel): LensQuestion {
 			...stops.map(stop),
 			...(uses.length > 0 ? [`- How the parts use each other: ${uses.join('; ')}.`] : []),
 			'',
-			`I am new to ${where}. Walk me through it as a tour of ${stops.length} stops, one stop per part, in the order above: ken picked it from the arrows, starting at the parts nothing else uses. Read the code at HEAD (${level.head}) first.`,
+			`I am new to ${where}. Walk me through it as a tour of ${stops.length} stops, one stop per part, in the order above: ken picked it from the arrows, starting at the part the most other parts use. Read the code at HEAD (${level.head}) first.`,
 			"Then send one show call per stop, in order, with step: the stop's number, and in its text two short sentences: what the part does, and how it connects to the stops before and after it.",
 			"With each step send one or two claims that quote the part's own key lines, such as its entry function or its main export, so I can read them beside the stop. Name the file or function in the claim, not in the step.",
 			'Write nothing before the first stop, and one sentence after the last at most.',

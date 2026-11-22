@@ -107,12 +107,12 @@ async function json(server: KenServer, route: string, body?: object) {
 type State = { topic: string; kind: string }
 const kinds = (states: State[]) => Object.fromEntries(states.map((state) => [state.topic, state.kind]))
 
-test('a tour asks for its stops in the order of the arrows, reaches the reader stop by stop with its cards, follows the map, and reopens with no model', async () => {
+test('a tour asks for its stops from the most used part outward, reaches the reader stop by stop with its cards, follows the map, and reopens with no model', async () => {
 	const model = await scriptedModel([
 		{ text: 'Let me read the parts.', tool: 'ken__read_file', args: { path: 'src/cli/main.ts' } },
-		stop(1, 'The command starts everything.', 'src/cli/main.ts', 'run()'),
-		stop(2, 'The core runs the work.', 'src/core/run.ts', 'export function run() {'),
-		stop(3, 'The store saves it.', 'src/store/db.ts', 'export function save() {}'),
+		stop(1, 'The core runs the work.', 'src/core/run.ts', 'export function run() {'),
+		stop(2, 'The store saves it.', 'src/store/db.ts', 'export function save() {}'),
+		stop(3, 'The command starts everything.', 'src/cli/main.ts', 'run()'),
 		stop(4, 'The tests run the core.', 'test/run.test.ts', 'run()'),
 		{ text: 'That is the whole project.' },
 	])
@@ -129,9 +129,9 @@ test('a tour asks for its stops in the order of the arrows, reaches the reader s
 	assert.deepEqual(
 		question.split('\n').flatMap((line) => line.match(/^- Stop \d+, (.+) \((.+)\): (.+)$/)?.slice(1) ?? []),
 		[
-			...['Command', 'src/cli', 'The command a person types'],
 			...['Core', 'src/core', 'Runs the work'],
 			...['Store', 'src/store', 'Saves what the core makes'],
+			...['Command', 'src/cli', 'The command a person types'],
 			...['Tests', 'test', 'Tests the core'],
 		],
 		'the question carries each stop in order with its paths and job',
@@ -148,7 +148,7 @@ test('a tour asks for its stops in the order of the arrows, reaches the reader s
 	)
 	assert.deepEqual(
 		entry.reply.tour.stops.map((each: { name: string }) => each.name),
-		['Command', 'Core', 'Store', 'Tests'],
+		['Core', 'Store', 'Command', 'Tests'],
 	)
 	assert.deepEqual(
 		kinds(topics),
@@ -157,7 +157,7 @@ test('a tour asks for its stops in the order of the arrows, reaches the reader s
 	)
 
 	const rows = (await json(server, '/api/questions')).questions
-	assert.deepEqual(rows.at(-1).tour, { within: [], stops: ['Command', 'Core', 'Store', 'Tests'] })
+	assert.deepEqual(rows.at(-1).tour, { within: [], stops: ['Core', 'Store', 'Command', 'Tests'] })
 	assert.deepEqual([rows.at(-1).steps, rows.at(-1).change], [4, null], 'four steps, about no change')
 
 	const reached = await json(server, '/api/map', { signal: 'toured', topics: ['Command'] })

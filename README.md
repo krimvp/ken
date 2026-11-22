@@ -47,7 +47,7 @@ New to a project, or back after weeks away? ken can show you around it, one part
 1. Install ken and name its model, as above.
 2. In the project, run `ken open`.
 3. Open **Project** and press **Ask ken to name these parts**. ken's model names the main parts and the arrows between them, and ken checks each against git. Commit `.ken/` so the next person gets the same parts.
-4. Press **Show me around**. Plain code picks the order from the arrows: it starts at the part nothing else uses, goes inward, and leaves tests, build and vendored code for last. ken's model then explains each part in turn, in one run, with the lines of its key files. Move with Next or the arrow keys. Each stop you reach goes on your map, and **I know this part** marks it understood.
+4. Press **Show me around**. Plain code picks the order from the arrows: it starts at the part the most other parts use, goes outward, and leaves tests, build and vendored code for last. ken's model then explains each part in turn, in one run, with the lines of its key files. Move with Next or the arrow keys. Each stop you reach goes on your map, and **I know this part** marks it understood.
 
 Press **Show me around** again later and ken opens the same tour, with no model, at the first stop you have not seen. Inside a part whose own parts are named, the same button tours that part.
 
