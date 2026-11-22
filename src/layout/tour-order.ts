@@ -1,6 +1,6 @@
 // The order of a tour of one named level, picked by plain code from the parts and their checked arrows. A tour starts
 // at the part the most other parts use, goes outward along the arrows breadth first, and leaves the parts that support
-// the code (tests, build scripts, vendored code) for the end. The same level always gives the same order.
+// the code (tests, build scripts, vendored code, upkeep) for the end. The same level always gives the same order.
 
 export type TourPart = { name: string; job: string | null; paths: string[] }
 
@@ -27,6 +27,9 @@ const SUPPORT_WORDS = new Set([
 	'third-party',
 	'node_modules',
 	'.github',
+	'upkeep',
+	'tooling',
+	'maintenance',
 ])
 
 export function tourOrder(parts: TourPart[], arrows: { from: string; to: string }[]): TourStop[] {
@@ -36,12 +39,14 @@ export function tourOrder(parts: TourPart[], arrows: { from: string; to: string 
 	// Tests use everything, so only an arrow between two parts of the code says which part the others use.
 	const links = arrows.filter((arrow) => arrow.from !== arrow.to && inCode(arrow.from) && inCode(arrow.to))
 	const used = (name: string) => links.filter((arrow) => arrow.to === name).length
-	const joined = (name: string) => links.filter((arrow) => arrow.from === name || arrow.to === name).length
+	const uses = (name: string) => links.filter((arrow) => arrow.from === name).length
+	const joined = (name: string) => used(name) + uses(name)
 	const stops: TourStop[] = []
 	const seen = new Set<string>()
 	for (let left = code.filter((part) => joined(part.name) > 0); left.length > 0; ) {
-		// A stable sort keeps the level's own order among parts used as much, with as many arrows.
-		const [heart] = [...left].sort((a, b) => used(b.name) - used(a.name) || joined(b.name) - joined(a.name))
+		// Of two parts used as much, the one that uses fewer others is the one the rest stands on. A stable sort keeps
+		// the level's own order after that.
+		const [heart] = [...left].sort((a, b) => used(b.name) - used(a.name) || uses(a.name) - uses(b.name))
 		if (!heart) break
 		const queue = [heart.name]
 		seen.add(heart.name)

@@ -39,7 +39,7 @@ test('a tour starts at the part the most other parts of the code use, goes outwa
 	assert.deepEqual(stops[1]?.paths, ['src/cli.ts', 'src/eval'], 'each stop keeps its paths for the question')
 })
 
-test('of two parts used as much, a tour starts at the one with more arrows in all, takes its neighbours on either side before theirs, and puts parts no arrow joins after the walk', () => {
+test("a tour takes a stop's neighbours on either side before theirs, and puts parts no arrow joins after the walk", () => {
 	const stops = tourOrder(
 		[
 			part('Store', ['src/store']),
@@ -61,7 +61,7 @@ test('of two parts used as much, a tour starts at the one with more arrows in al
 	)
 	assert.deepEqual(
 		stops.map((stop) => stop.name),
-		['Queue', 'Worker', 'Web app', 'Store', 'Mailer', 'Docs site', 'Checks'],
+		['Store', 'Web app', 'Queue', 'Worker', 'Mailer', 'Docs site', 'Checks'],
 	)
 })
 
@@ -84,6 +84,35 @@ test('a group of parts no arrow joins to the first walk still gets a stop each, 
 			['Auth', 'outward'],
 			['Theme', 'heart'],
 			['Site', 'outward'],
+		],
+	)
+})
+
+test('when two parts are used as much, a tour starts at the one that uses the fewest others, and a part named for upkeep comes last', () => {
+	// The parts ken's model named for aigents on 2026-11-22: the eval part and the engine each have two users.
+	const stops = tourOrder(
+		[
+			part('Eval scenarios and checks', ['src/cli.ts', 'src/eval'], 'Runs scenarios and grades the run'),
+			part('Plugin engine', ['src/engine.ts'], 'Runs an agent session and gates every tool call'),
+			part('multeval integration', ['integrations'], 'Lets the multeval runner grade live models'),
+			part('Code sandbox', ['src/sandbox.ts'], 'Runs model code in a worker'),
+			part('Repository upkeep', ['scripts', '.agents'], 'Packs the tarball and pins agent skills'),
+		],
+		[
+			arrow('Eval scenarios and checks', 'Plugin engine'),
+			arrow('multeval integration', 'Eval scenarios and checks'),
+			arrow('Code sandbox', 'Eval scenarios and checks'),
+			arrow('Code sandbox', 'Plugin engine'),
+		],
+	)
+	assert.deepEqual(
+		stops.map((stop) => [stop.name, stop.kind]),
+		[
+			['Plugin engine', 'heart'],
+			['Eval scenarios and checks', 'outward'],
+			['Code sandbox', 'outward'],
+			['multeval integration', 'outward'],
+			['Repository upkeep', 'support'],
 		],
 	)
 })
