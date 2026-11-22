@@ -321,9 +321,9 @@ function cutAt(hunks: ChangedHunk[], most: number): { hunks: ChangedHunk[]; cut:
 			kept.push(each)
 			continue
 		}
-		const count = (sign: string) => lines.filter((line) => !line.startsWith(sign) && !line.startsWith('\\')).length
+		const allBut = (sign: string) => lines.filter((line) => !line.startsWith(sign) && !line.startsWith('\\')).length
 		if (lines.some(changed)) {
-			kept.push({ ...each, hunk: { ...each.hunk, lines, oldLength: count('+'), newLength: count('-') } })
+			kept.push({ ...each, hunk: { ...each.hunk, lines, oldLength: allBut('+'), newLength: allBut('-') } })
 		}
 		return { hunks: kept, cut: true }
 	}
