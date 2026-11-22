@@ -14,6 +14,11 @@ export function isThere(started, home) {
 	return onLevel && (!aboutChange || started.change === home.change)
 }
 
+// The level a run started on, as a sentence names it.
+export function levelOf(started) {
+	return started.trail.length === 1 ? 'the whole project' : started.trail.at(-1).name
+}
+
 // Whether the saved question holds what its run was started for. Plain code on the server marks a tour and what a
 // run about a change was asked for, so this reads the reply and not the screen.
 function made(started, q) {
@@ -55,10 +60,8 @@ export function homeRuns({ state, render, send }, loads, stepTo) {
 		await Promise.all([loads.loadLayout(), loads.loadNotes()])
 		await loads.settle()
 		if (!ok) home.ended = { kind: 'nothing', outcome: q.outcome, error: q.error, id: q.id }
-		else if (!there) {
-			const level = started.trail.length === 1 ? 'the whole project' : started.trail.at(-1).name
-			home.ended = { kind: 'elsewhere', run: started.kind, level, started }
-		} else if (started.kind === 'redraw') home.said = { asked: home.redraw.asked, q: besideCanvas(q, drew) }
+		else if (!there) home.ended = { kind: 'elsewhere', run: started.kind, level: levelOf(started), started }
+		else if (started.kind === 'redraw') home.said = { asked: home.redraw.asked, q: besideCanvas(q, drew) }
 		else if (started.kind === 'tour' && home.detail === 'big') {
 			home.detail = 'how'
 			await stepTo(firstUnseen(home.look, pathOf(home.look, home.content)))

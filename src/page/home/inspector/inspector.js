@@ -11,7 +11,7 @@ import { changeName, mapLine, stateLine } from '../canvas/canvas.js'
 import { besideCanvas, diagramOf, firstUnseen, pathOf, placeOf, shownDetail, stoodOn } from '../state/content.js'
 import { colourOf, DETAILS, levelName } from '../state/home-state.js'
 import { diffKey } from '../state/loads.js'
-import { isThere } from '../state/runs.js'
+import { isThere, levelOf } from '../state/runs.js'
 import {
 	asksHtml,
 	elementNoun,
@@ -326,6 +326,15 @@ const ENDED = {
 	answered: "ken's model replied, but with nothing this page can show here.",
 }
 
+// What a run is doing, said to a reader who has left the level or the change it is for.
+const STILL = {
+	name: (level) => `ken's model is naming the parts of ${level}.`,
+	tour: (level) => `ken's model is writing the tour of ${level}.`,
+	story: () => "ken's model is reading the change you asked about.",
+	walk: () => "ken's model is ordering the change you asked about into steps.",
+	redraw: (level) => `ken's model is working on your request about ${level}.`,
+}
+
 // What a run made, said to a reader who has left the level or the change it was for.
 const FINISHED = {
 	name: (level) => `ken's model named the parts of ${level}.`,
@@ -423,7 +432,7 @@ export function inspectorHtml(home, env) {
 	// A run shows in place of what it will fill only while the reader is where it started.
 	const run = env.running?.onHome ?? null
 	const working = run !== null && isThere(run, home)
-	const away = run !== null && !working ? awayHtml(`${DOING[run.kind][1]}, where you started it.`, 'run') : ''
+	const away = run !== null && !working ? awayHtml(STILL[run.kind](levelOf(run)), 'run') : ''
 	const view = working ? workingView(home, env.running, env.seconds) : viewOf(home, env.off)
 	const whole =
 		home.content.kind === 'drawn'
