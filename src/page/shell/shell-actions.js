@@ -241,9 +241,10 @@ export function shellActions(app) {
 		return true
 	}
 
-	function openFound(id) {
+	async function openFound(id) {
 		Object.assign(shell.search, { text: '', open: false, at: 0 })
 		$('#search-text').value = ''
+		await app.arch.showConcept(id)
 		app.brief.show(id, { opener: 'search-text' })
 	}
 
@@ -303,7 +304,7 @@ export function shellActions(app) {
 			search.open = true
 		} else if (event.key === 'Enter' && !event.isComposing) {
 			if (!found[search.at]) return false
-			openFound(found[search.at].id)
+			void openFound(found[search.at].id)
 		} else if (event.key === 'Escape') {
 			if (!search.open || search.text === '') return false
 			search.open = false
@@ -324,7 +325,7 @@ export function shellActions(app) {
 		if (shell.page === 'you' && app.you.closeFix()) return true
 		if (app.ask.close()) return true
 		if (brief.fixing) return Boolean(app.brief.actions['brief-fix']()) || true
-		if (app.arch.closeDraw()) return true
+		if (app.arch.closeDraw() || app.arch.closeKey()) return true
 		if (app.brief.close()) return true
 		if (!overlaid() && shell.page === 'architecture' && home.trail.length > 1 && !typing) {
 			void app.arch.moveTo(home.trail.slice(0, -1))

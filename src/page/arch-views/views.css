@@ -1,0 +1,1050 @@
+/* The drawings of where a project runs and what it talks to. Frames are quiet: a thin edge, a faint tint that deepens
+   one step per nesting, a label in the corner. Parts are the loud things, in their colours. A call is a solid line and
+   an event a dashed one, so the two differ without colour. Words grow as the reader zooms out, so they never fall
+   under 12.5 pixels on screen: --inv is one over the zoom, set by camera.js. */
+
+.k-arch {
+	--rt-label: 19.5px;
+	--rt-tint-0: color-mix(in srgb, var(--k-ink) 3.5%, var(--k-bg));
+	--rt-tint-1: color-mix(in srgb, var(--k-ink) 7%, var(--k-bg));
+	--rt-tint-2: color-mix(in srgb, var(--k-ink) 10.5%, var(--k-bg));
+	--rt-tint-3: color-mix(in srgb, var(--k-ink) 14%, var(--k-bg));
+	--rt-edge: color-mix(in srgb, var(--k-ink) 30%, var(--k-bg));
+	--rt-grey: color-mix(in srgb, var(--k-ink) 9%, var(--k-surface));
+}
+
+/* The card at the top left: the breadcrumb, then the switch between drawings. */
+.k-vw-card {
+	top: 12px;
+	left: 20px;
+	flex-direction: column;
+	align-items: stretch;
+	gap: 4px;
+	max-width: calc(100% - 40px);
+}
+
+.k-vw-card .k-crumb {
+	position: static;
+	box-shadow: none;
+	padding: 0;
+	max-width: none;
+}
+
+.k-vw-switch {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	padding-top: 4px;
+	border-top: 1px solid var(--k-line);
+}
+
+.k .k-vw-switch button {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 7px 11px;
+	border-radius: 10px;
+	font-size: 14px;
+	font-weight: 600;
+	white-space: nowrap;
+}
+
+.k .k-vw-switch button:hover {
+	background: var(--k-sunk);
+}
+
+.k .k-vw-switch button:is([aria-pressed="true"], [aria-expanded="true"]) {
+	background: var(--k-ink);
+	color: var(--k-surface);
+}
+
+.k .k-vw-switch .k-vw-keybtn {
+	margin-left: 6px;
+	border: 1px solid var(--k-line);
+}
+
+.k-vw-ask,
+.k-vw-run,
+.k-vw-problem {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 4px 10px;
+	margin: 0;
+	padding: 6px 8px 4px;
+	border-top: 1px solid var(--k-line);
+	font-size: 14px;
+}
+
+.k-vw-ask .k-link {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font-weight: 650;
+}
+
+.k-vw-problem {
+	max-width: 520px;
+}
+
+/* The key: every shape and line, and what ken can and cannot draw from a repository. */
+.k-vw-key {
+	top: 66px;
+	right: 20px;
+	z-index: 4;
+	flex-direction: column;
+	align-items: stretch;
+	gap: 8px;
+	width: min(400px, calc(100% - 40px));
+	max-height: calc(100% - 180px);
+	padding: 14px 18px 18px;
+	overflow-y: auto;
+}
+
+.k-vw-key-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+}
+
+.k-vw-key h2 {
+	margin: 0;
+	font-size: 18px;
+}
+
+.k-vw-key h3 {
+	margin: 10px 0 0;
+}
+
+.k-key-shapes,
+.k-key-can {
+	display: grid;
+	gap: 9px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.k-key-shapes li {
+	display: grid;
+	grid-template-columns: 56px 1fr;
+	align-items: center;
+	gap: 12px;
+	font-size: 14px;
+	line-height: 1.35;
+}
+
+.k-key-shapes li > span:last-child,
+.k-key-can li {
+	display: grid;
+	gap: 1px;
+}
+
+.k-key-line {
+	color: var(--k-muted);
+}
+
+.k-key-can li {
+	position: relative;
+	padding-left: 26px;
+	font-size: 14px;
+	line-height: 1.35;
+}
+
+.k-key-can li::before {
+	position: absolute;
+	top: 1px;
+	left: 0;
+	display: grid;
+	place-items: center;
+	width: 18px;
+	height: 18px;
+	border-radius: 50%;
+	font-size: 12px;
+	font-weight: 800;
+}
+
+.k-key-can li.is-can::before {
+	content: "✓";
+	background: var(--k-ink);
+	color: var(--k-surface);
+}
+
+.k-key-can li.is-cannot::before {
+	content: "×";
+	border: 1.5px solid var(--k-ink);
+	color: var(--k-ink);
+}
+
+.k-key-said {
+	margin: 6px 0 0;
+	padding: 10px 12px;
+	border: 1.5px dashed var(--rt-edge);
+	border-radius: 10px;
+	font-size: 14px;
+	line-height: 1.4;
+}
+
+.k-key-shape {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 4px;
+	height: 34px;
+}
+
+.k-key-shape svg {
+	width: 48px;
+	height: 30px;
+	overflow: visible;
+	fill: var(--rt-grey);
+	stroke: var(--k-ink);
+	stroke-width: 1.8;
+}
+
+.k-key-frame {
+	width: 48px;
+	height: 30px;
+	border: 1.5px solid var(--rt-edge);
+	border-radius: 8px;
+	background: var(--rt-tint-1);
+}
+
+.k-key-frame.is-dashed {
+	border-style: dashed;
+}
+
+.k-key-part {
+	width: 38px;
+	height: 26px;
+	border-radius: 8px;
+	background: #ff8562;
+	box-shadow: 0 3px 0 #a5543d;
+}
+
+.k-key-part.is-second {
+	width: 26px;
+	border: 2px dashed #171a23;
+	box-shadow: none;
+}
+
+.k-key-tie {
+	width: 18px;
+	border-top: 2.5px dotted var(--k-ink);
+}
+
+.k-key-bus {
+	display: flex;
+	align-items: center;
+	justify-content: space-around;
+	width: 48px;
+	height: 26px;
+	border: 1.5px solid var(--k-ink);
+	border-radius: 6px;
+}
+
+.k-key-out {
+	width: 48px;
+	height: 28px;
+	border: 1.5px solid var(--rt-edge);
+	border-radius: 7px;
+	background: var(--rt-grey);
+}
+
+.k-key-note {
+	display: grid;
+	place-items: center;
+	width: 48px;
+	height: 26px;
+	border: 1.5px dashed var(--k-ink);
+	border-radius: 6px;
+	font-weight: 700;
+}
+
+.k .k-key-shape .k-key-call,
+.k .k-key-shape .k-key-event {
+	fill: none;
+	stroke-width: 2.5;
+}
+
+.k .k-key-shape .k-key-event {
+	stroke-dasharray: 6 4;
+}
+
+.k .k-key-shape .k-key-head {
+	fill: var(--k-ink);
+	stroke: none;
+}
+
+.k .k-key-shape .k-key-ring {
+	fill: var(--k-surface);
+	stroke-width: 2.5;
+}
+
+/* Frames. */
+.k-rt-frame {
+	position: absolute;
+	border: 1.5px solid var(--rt-edge);
+	border-radius: 18px;
+	background: var(--rt-tint-0);
+}
+
+.k-rt-frame.depth-1 {
+	background: var(--rt-tint-1);
+}
+
+.k-rt-frame.depth-2 {
+	background: var(--rt-tint-2);
+}
+
+.k-rt-frame.depth-3 {
+	background: var(--rt-tint-3);
+}
+
+.k-rt-frame.is-dashed {
+	border: 2px dashed var(--rt-edge);
+}
+
+.k-rt-frame.is-picked {
+	border: 3px solid var(--k-ink);
+}
+
+.k .k-rt-flabel {
+	position: absolute;
+	top: 14px;
+	left: 12px;
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	max-width: calc(100% - 24px);
+	height: 32px;
+	padding: 0 8px;
+	border-radius: 9px;
+	color: var(--k-ink);
+	font-size: 19.5px;
+	font-weight: 700;
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.k .k-rt-flabel:hover,
+.k .k-rt-flabel[aria-pressed="true"] {
+	background: var(--k-surface);
+	box-shadow: var(--k-shadow);
+}
+
+.k-rt-flabel .k-i {
+	width: 17px;
+	height: 17px;
+	color: var(--k-muted);
+}
+
+.k-rt-fname {
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.k-rt-copies {
+	padding: 1px 7px;
+	border: 1.5px solid var(--k-ink);
+	border-radius: 9px;
+	font-size: 0.86em;
+}
+
+/* Lines. */
+.k-rt-lines,
+.k-rt-over {
+	z-index: 1;
+}
+
+.k-rt-over {
+	z-index: 2;
+}
+
+.k-rt-line {
+	fill: none;
+	stroke: var(--k-wire);
+	stroke-width: 2.5;
+	stroke-linejoin: round;
+}
+
+.k-rt-line.is-event,
+.k-rt-line.is-stem {
+	stroke-dasharray: 8 5;
+}
+
+.k-rt-line.is-tie {
+	stroke: var(--k-muted);
+	stroke-width: 2.5;
+	stroke-dasharray: 1 6;
+	stroke-linecap: round;
+}
+
+.k-rt-lines marker path,
+.k-rt-over marker path {
+	fill: var(--k-wire);
+}
+
+.k-rt-line.is-picked {
+	stroke-width: 5;
+}
+
+.k-rt-line.is-lit {
+	stroke: var(--k-brand);
+	stroke-width: 5;
+}
+
+.k-canvas.layer-processes .k-rt-line:not(.is-lit, .is-tie) {
+	opacity: 0.3;
+}
+
+.k-rt-cross {
+	fill: var(--k-surface);
+	stroke: var(--k-wire);
+	stroke-width: 2.5;
+}
+
+.k .k-rt-label {
+	position: absolute;
+	z-index: 3;
+	display: grid;
+	place-items: center;
+	padding: 0 6px;
+	border: 2px solid var(--k-wire);
+	border-radius: 9px;
+	background: var(--k-surface);
+	font-size: var(--rt-label);
+	font-weight: 700;
+	line-height: 25px;
+	text-align: center;
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.k .k-rt-label.is-event {
+	border-style: dashed;
+}
+
+.k .k-rt-label:is(:hover, [aria-pressed="true"]) {
+	background: var(--k-ink);
+	color: var(--k-surface);
+}
+
+.k .k-rt-label.is-lit {
+	border-color: var(--k-brand);
+}
+
+.k-canvas.layer-processes .k-rt-label:not(.is-lit) {
+	opacity: 0.45;
+}
+
+/* Parts: bold blocks in their colour, as on the parts view. */
+.k-rt-part {
+	position: absolute;
+	z-index: 2;
+	border-radius: 18px;
+	color: var(--k-block-ink);
+}
+
+.k .k-rt-face {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	width: 100%;
+	height: 100%;
+	padding: 12px 14px 11px;
+	border-radius: 18px;
+	background: var(--k-pc);
+	box-shadow: 0 6px 0 var(--k-edge);
+	text-align: left;
+	cursor: pointer;
+}
+
+.k-rt-part.is-second .k-rt-face {
+	border: 2.5px dashed var(--k-block-ink);
+	box-shadow: none;
+}
+
+.k-rt-part.is-picked .k-rt-face {
+	outline: calc(3px * var(--inv)) solid var(--k-ink);
+	outline-offset: calc(4px * var(--inv));
+}
+
+.k-rt-part.is-quiet .k-rt-face {
+	background: var(--k-soft);
+	box-shadow: none;
+}
+
+.k-rt-part.is-quiet {
+	color: var(--k-ink);
+}
+
+.k-rt-head {
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+	padding-right: 4px;
+}
+
+.k-rt-part .k-blk-icon {
+	width: 34px;
+	height: 34px;
+	border-radius: 9px;
+}
+
+.k-rt-part .k-blk-icon .k-i {
+	width: 20px;
+	height: 20px;
+}
+
+.k-rt-name {
+	display: -webkit-box;
+	overflow: hidden;
+	font-size: 22px;
+	font-weight: 750;
+	line-height: 1.15;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 2;
+	line-clamp: 2;
+}
+
+.k-rt-foot {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	margin-top: auto;
+	font-size: 19.5px;
+	font-weight: 650;
+}
+
+.k-arch .k-rt-foot .k-i {
+	width: 14px;
+	height: 14px;
+}
+
+.k-rt-part .k-beads {
+	position: absolute;
+	top: -16px;
+	right: -10px;
+	gap: 4px;
+}
+
+.k-rt-part .k-bead {
+	min-width: 32px;
+	height: 32px;
+	border-radius: 16px;
+	font-size: 16px;
+}
+
+.is-tiny .k-rt-words {
+	display: none;
+}
+
+/* The frame a part runs in alone, as a tag on the part: "2 copies". */
+.k .k-rt-tag {
+	position: absolute;
+	top: -17px;
+	right: 14px;
+	max-width: calc(100% - 28px);
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	padding: 2px 8px;
+	border: 1.5px solid var(--k-block-ink);
+	border-radius: 9px;
+	background: color-mix(in srgb, var(--k-pc) 70%, #ffffff);
+	color: var(--k-block-ink);
+	font-size: 19.5px;
+	font-weight: 700;
+	cursor: pointer;
+}
+
+.k .k-rt-tag .k-i {
+	width: 14px;
+	height: 14px;
+}
+
+.k .k-rt-tag:is(:hover, [aria-pressed="true"]) {
+	background: var(--k-block-ink);
+	color: var(--k-pc);
+}
+
+/* Stores: a cylinder, in the colour of the one part that uses it, or grey. */
+.k .k-rt-store {
+	position: absolute;
+	z-index: 2;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 2px;
+	padding-top: 18px;
+	color: var(--k-block-ink);
+	text-align: center;
+	cursor: pointer;
+}
+
+.k-rt-store:not([class*="pc-"]) {
+	--k-pc: var(--rt-grey);
+	color: var(--k-ink);
+}
+
+.k-rt-can {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	overflow: visible;
+	fill: color-mix(in srgb, var(--k-pc) 45%, var(--k-surface));
+	stroke: var(--k-wire);
+	stroke-width: 2;
+	vector-effect: non-scaling-stroke;
+}
+
+.k-rt-store[class*="pc-"] {
+	color: var(--k-ink);
+}
+
+.k-rt-store.is-picked .k-rt-can {
+	stroke-width: 4;
+}
+
+.k-rt-store-name,
+.k-rt-store-kind {
+	position: relative;
+	padding: 0 14px;
+	overflow-wrap: anywhere;
+}
+
+.k-rt-store-name {
+	font-size: 21px;
+	font-weight: 750;
+	line-height: 1.15;
+}
+
+.k-rt-store-kind {
+	font-size: 19.5px;
+	font-weight: 600;
+}
+
+/* A bus: a wide store with a lane per topic. */
+.k-rt-bus {
+	position: absolute;
+	z-index: 2;
+	border: 2px solid var(--k-wire);
+	border-radius: 14px;
+	background: var(--k-surface);
+}
+
+.k-rt-bus.is-picked {
+	border-width: 4px;
+}
+
+.k .k-rt-bus-head {
+	position: absolute;
+	top: 8px;
+	left: 10px;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 2px 8px;
+	border-radius: 8px;
+	font-size: 19.5px;
+	cursor: pointer;
+}
+
+.k .k-rt-bus-head:hover {
+	background: var(--k-sunk);
+}
+
+.k-rt-bus-kind {
+	color: var(--k-muted);
+	font-weight: 550;
+}
+
+.k-rt-legend {
+	position: absolute;
+	top: 13px;
+	right: 14px;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	color: var(--k-muted);
+	font-size: 18px;
+	font-weight: 600;
+}
+
+.k-rt-lane {
+	position: absolute;
+	right: 8px;
+	left: 8px;
+	height: 26px;
+	border-radius: 6px;
+	background: var(--k-sunk);
+}
+
+.k-rt-topic {
+	position: absolute;
+	transform: translate(-50%, -50%);
+	font-size: 19.5px;
+	font-weight: 650;
+	white-space: nowrap;
+}
+
+.k-rt-dot,
+.k-rt-ring {
+	display: inline-block;
+	flex: none;
+	width: 10px;
+	height: 10px;
+	border-radius: 50%;
+}
+
+.k-rt-dot {
+	background: var(--k-ink);
+}
+
+.k-rt-ring {
+	border: 2.5px solid var(--k-ink);
+}
+
+/* A mark on a lane: a full dot publishes, a ring picks up later. */
+.k .k-rt-mark {
+	position: absolute;
+	z-index: 3;
+	width: 24px;
+	height: 24px;
+	padding: 0;
+	transform: translate(-50%, -50%);
+	border-radius: 50%;
+	cursor: pointer;
+}
+
+.k .k-rt-mark::after {
+	position: absolute;
+	inset: 5px;
+	border: 2.5px solid var(--k-wire);
+	border-radius: 50%;
+	background: var(--k-surface);
+	content: "";
+}
+
+.k .k-rt-mark.is-pub::after,
+.k .k-rt-mark.is-both::after {
+	background: var(--k-wire);
+}
+
+.k .k-rt-mark.is-both::before {
+	position: absolute;
+	inset: 1px;
+	border: 2px solid var(--k-wire);
+	border-radius: 50%;
+	content: "";
+}
+
+.k .k-rt-mark:is(:hover, [aria-pressed="true"])::after {
+	inset: 2px;
+}
+
+.k .k-rt-mark.is-lit::after {
+	border-color: var(--k-brand);
+}
+
+/* Outside things: grey, marked "outside". A person is a person. */
+.k .k-rt-out {
+	position: absolute;
+	z-index: 2;
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	gap: 3px;
+	padding: 10px 14px;
+	border: 2px solid var(--rt-edge);
+	border-radius: 12px;
+	background: var(--rt-grey);
+	color: var(--k-ink);
+	text-align: left;
+	cursor: pointer;
+}
+
+.k-rt-eyebrow {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	color: var(--k-muted);
+	font-size: 16px;
+	font-weight: 750;
+	letter-spacing: 0.07em;
+	text-transform: uppercase;
+}
+
+.k-arch .k-rt-eyebrow .k-i {
+	width: 13px;
+	height: 13px;
+}
+
+.k-rt-out-name {
+	font-size: 21px;
+	font-weight: 750;
+	line-height: 1.15;
+}
+
+.k .k-rt-person {
+	position: absolute;
+	z-index: 2;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 2px;
+	color: var(--k-ink);
+	cursor: pointer;
+}
+
+.k-rt-figure {
+	width: 64px;
+	height: 64px;
+	fill: var(--rt-grey);
+	stroke: var(--k-ink);
+	stroke-width: 2.5;
+}
+
+.k-rt-out.is-picked,
+.k-rt-person.is-picked .k-rt-figure {
+	outline: 3px solid var(--k-ink);
+	outline-offset: 3px;
+}
+
+/* A dashed note where the repository says nothing. */
+.k-rt-note {
+	position: absolute;
+	z-index: 2;
+	margin: 0;
+	padding: 6px 9px;
+	border: 1.5px dashed var(--k-ink);
+	border-radius: 9px;
+	background: var(--k-surface);
+	color: var(--k-ink);
+	font-size: 19.5px;
+	font-weight: 600;
+	line-height: 25px;
+	text-align: center;
+}
+
+.k-rt-note.is-brief {
+	position: static;
+	margin: 0 0 8px;
+	font-size: 15px;
+	text-align: left;
+}
+
+/* Many things folded into one block. */
+.k .k-rt-fold {
+	position: absolute;
+	z-index: 2;
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 4px;
+	padding: 12px 14px;
+	border: 2.5px solid var(--k-ink);
+	border-radius: 16px;
+	background: var(--k-surface);
+	box-shadow:
+		6px 6px 0 var(--rt-tint-2),
+		12px 12px 0 var(--rt-tint-1);
+	text-align: left;
+	cursor: zoom-in;
+}
+
+.k-rt-fold-name {
+	font-size: 23px;
+	font-weight: 750;
+}
+
+.k-rt-fold-count {
+	color: var(--k-muted);
+	font-size: 19.5px;
+	font-weight: 600;
+}
+
+.k-rt-fold-sw {
+	display: flex;
+	gap: 5px;
+	margin-top: auto;
+}
+
+.k-rt-fold-sw .k-sw {
+	width: 22px;
+	height: 22px;
+	border-radius: 6px;
+}
+
+/* In its world: the project as one block in the middle, its parts as tiles. */
+.k-wd-project {
+	position: absolute;
+	z-index: 1;
+	border: 3px solid var(--k-ink);
+	border-radius: 24px;
+	background: var(--k-surface);
+}
+
+.k-wd-head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: 4px 10px;
+	padding: 18px 24px 0;
+}
+
+.k-arch .k-wd-head .k-i {
+	align-self: center;
+	width: 22px;
+	height: 22px;
+}
+
+.k-wd-head b {
+	font-size: 30px;
+}
+
+.k-wd-line {
+	display: -webkit-box;
+	flex-basis: 100%;
+	overflow: hidden;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 2;
+	line-clamp: 2;
+	color: var(--k-muted);
+	font-size: 19.5px;
+}
+
+.k-wd-count {
+	position: absolute;
+	top: 22px;
+	right: 24px;
+	margin: 0;
+	color: var(--k-muted);
+	font-size: 19.5px;
+}
+
+.k .k-wd-tile {
+	position: absolute;
+	z-index: 2;
+	display: flex;
+	align-items: center;
+	gap: 9px;
+	padding: 8px 10px;
+	border-radius: 12px;
+	background: var(--k-pc);
+	box-shadow: 0 4px 0 var(--k-edge);
+	color: var(--k-block-ink);
+	font-size: 19.5px;
+	font-weight: 700;
+	line-height: 1.15;
+	text-align: left;
+	cursor: pointer;
+}
+
+.k-wd-tile .k-blk-icon {
+	width: 30px;
+	height: 30px;
+	border-radius: 8px;
+}
+
+.k-wd-tile .k-blk-icon .k-i {
+	width: 18px;
+	height: 18px;
+}
+
+.k .k-wd-tile.is-picked {
+	outline: calc(3px * var(--inv)) solid var(--k-ink);
+	outline-offset: 3px;
+}
+
+.k .k-rt-label.is-world {
+	white-space: normal;
+}
+
+/* The small map of a drawing. */
+.k-mm.k-mm-frame {
+	fill: none;
+	stroke: var(--rt-edge);
+	stroke-width: 2;
+	vector-effect: non-scaling-stroke;
+}
+
+.k-mm.k-mm-out {
+	fill: var(--rt-edge);
+}
+
+/* A frame, a store, an outside thing or a crossing has no part's colour, so its brief shows no swatch. */
+.k-brief-body.is-view .k-brief-name .k-sw {
+	display: none;
+}
+
+/* The topics of a bus in its brief. */
+.k-topics {
+	display: grid;
+	gap: 8px;
+	margin: 0 0 12px;
+	padding: 0;
+	list-style: none;
+}
+
+.k-topics li {
+	display: grid;
+	gap: 2px;
+	padding: 8px 10px;
+	border-radius: 10px;
+	background: var(--k-sunk);
+	font-size: 15px;
+}
+
+.k-topic-who {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+/* On a phone: the switch is a row of three icons with their names under them, and the key is a sheet. */
+@media (max-width: 760px) {
+	.k-vw-card {
+		left: 12px;
+		max-width: calc(100% - 24px);
+	}
+
+	.k .k-vw-switch button {
+		flex: 1;
+		flex-direction: column;
+		gap: 2px;
+		padding: 5px 6px;
+		font-size: 12.5px;
+		white-space: normal;
+		text-align: center;
+	}
+
+	.k .k-vw-switch .k-vw-keybtn {
+		flex: none;
+		margin-left: 2px;
+	}
+
+	.k-vw-card:has(.k-vw-switch) ~ .k-layers {
+		top: 128px;
+	}
+
+	.k-vw-card:has(.k-vw-switch) ~ .k-layer-pick {
+		top: 178px;
+	}
+
+	.k-vw-key {
+		top: auto;
+		right: 0;
+		bottom: 0;
+		left: 0;
+		width: auto;
+		max-height: 70%;
+		border-radius: 18px 18px 0 0;
+	}
+}

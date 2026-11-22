@@ -9,6 +9,9 @@ export const stepId = (process, n) => `step:${process}:${n}`
 export const arrowId = (within, n) => `arrow:${within.join(',')}:${n}`
 export const decisionId = (id) => `decision:${id}`
 
+// What the drawings of where a project runs and what it talks to name, each by the id ken's model gave it.
+const VIEW_KINDS = ['frame', 'store', 'outside', 'crossing']
+
 const paths = (joined) => (joined === '' ? [] : joined.split(','))
 
 // What an id names, or null for text that is no id: { kind, name } for a part, a term, a question and a decision,
@@ -23,6 +26,7 @@ export function readConcept(id) {
 	// A process's id may hold a colon of its own, so a step's number is what follows the last one.
 	const last = rest.lastIndexOf(':')
 	if (kind === 'step' && last >= 0) return { kind, process: rest.slice(0, last), n: Number(rest.slice(last + 1)) }
-	if (['term', 'process', 'question', 'decision'].includes(kind) && rest !== '') return { kind, name: rest }
+	if (['term', 'process', 'question', 'decision', ...VIEW_KINDS].includes(kind) && rest !== '')
+		return { kind, name: rest }
 	return null
 }

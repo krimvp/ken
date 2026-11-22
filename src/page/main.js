@@ -2,6 +2,8 @@
 // (src/page/shell), and a concept pressed on any page opens its brief in a drawer (src/page/brief). A question opens
 // as a thread over the pages: the words on the left, and on the right the panel with what ken checked. Under 1100
 // pixels the panel goes away and the same things open in place. The page talks only to the server that sent it.
+
+import { VIEWS_RUN } from './arch-views/switch.js'
 import { archActions, freshArch } from './architecture/arch-actions.js'
 import { askActions, freshAsk } from './ask/ask-actions.js'
 import { briefActions, freshBrief } from './brief/brief-actions.js'
@@ -11,7 +13,7 @@ import { fillDrawings, markPart, numberAt } from './draw-diagrams.js'
 import { readReply, replyAddress } from './level/address.js'
 import { levelActions } from './level/level-actions.js'
 import { freshHome } from './level/level-state.js'
-import { DOING } from './level/runs.js'
+import { DOING as LEVEL_RUNS } from './level/runs.js'
 import { liveLook, liveViewHtml } from './live/live-view.js'
 import { freshProcesses, processActions } from './processes/process-actions.js'
 import { changeKey } from './project/change-card.js'
@@ -137,6 +139,9 @@ function store(name, value) {
 // The open decisions and quotes of the view on screen.
 const uiNow = () => ({ 'follow-up': state.followUi, live: state.liveUi })[state.view] ?? state.ui
 
+// What each run the page starts is doing, by its kind.
+const DOING = { ...LEVEL_RUNS, views: VIEWS_RUN }
+
 // What the page shows as the question until ken sends the one it wrote for a lens.
 const LENS_TITLES = {
 	'catch-up': 'Catch me up: what differs from what I understood?',
@@ -150,6 +155,7 @@ const LENS_TITLES = {
 	view: 'Show it another way',
 	explain: 'Explain it',
 	answer: 'Answer a question about it',
+	views: 'Draw where it runs and what it talks to',
 }
 
 // The same for the questions about one change, by what the reader wants of it.
@@ -343,6 +349,7 @@ async function send(body, onHome = null) {
 		await shell.reread()
 		if (onHome?.kind === 'explain' || onHome?.kind === 'answer') await brief.ended(onHome, made)
 		else if (onHome?.kind === 'draw') await procs.ended(made)
+		else if (onHome?.kind === 'views') await arch.viewsEnded(made)
 		else if (onHome !== null) await level.ended(onHome, made)
 		else if (state.thread.includes(q) && stopped) await openQuestion(last.id)
 		state.running = null

@@ -79,7 +79,7 @@ export function blockHtml(box, i, at, view) {
 		? `<button class="k-blk-in" data-act="arch-inside" data-index="${i}" data-key="blk-in-${i}" aria-label="Go inside ${esc(box.name)}" title="Go inside">${icon('inside')}</button>`
 		: ''
 	const id = partId(look.within, box.name)
-	return `<div class="${classes.filter(Boolean).join(' ')}" style="left:${at.x}px;top:${at.y}px;width:${at.w}px;height:${at.h}px;--known:${known}">
+	return `<div class="${classes.filter(Boolean).join(' ')}" style="left:${at.x}px;top:${at.y}px;width:${at.w}px;height:${at.h}px;--known:${known}" data-glide="part:${esc(box.name)}">
 		<button class="k-blk-face" data-act="arch-pick" data-index="${i}" data-concept="${esc(id)}" data-key="blk-${i}" aria-pressed="${picked}">
 			<span class="k-blk-head"><span class="k-blk-icon">${icon(iconOf(box, look))}</span><span class="k-blk-name${file ? ' k-mono' : ''}">${esc(box.name)}</span></span>
 			${beads}
