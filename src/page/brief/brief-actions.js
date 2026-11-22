@@ -110,7 +110,7 @@ export function briefActions(app) {
 			if (ui.told !== ui.id && (brief.kind === 'part' || brief.kind === 'file')) {
 				ui.told = ui.id
 				const paths = pathsOf(brief)
-				if (paths.length > 0) void app.home.tell({ did: 'opened', paths })
+				if (paths.length > 0) void app.level.tell({ did: 'opened', paths })
 			}
 		}
 		const scroll = drawer.querySelector('#brief-scroll')?.scrollTop ?? 0
@@ -152,7 +152,7 @@ export function briefActions(app) {
 		} catch (error) {
 			ui.saveProblem = `ken could not save that. ${error.message}`
 		}
-		await app.home.recorded()
+		await app.level.recorded()
 		render()
 	}
 
@@ -169,7 +169,7 @@ export function briefActions(app) {
 	// A run this drawer started is over: the brief is read again, and an answer opens as its own brief.
 	async function ended(started, q) {
 		briefs.forget()
-		await app.home.recorded()
+		await app.level.recorded()
 		const answered = q.outcome === 'answered'
 		const answer = q.brief ?? state.rows.find((row) => row.id === q.id)?.brief ?? null
 		if (ui.id !== started.concept) return render()
@@ -207,7 +207,7 @@ export function briefActions(app) {
 			else ui.openQuotes.delete(i)
 			render()
 			const paths = opening ? (open()?.points[i]?.quotes.map((quote) => quote.path) ?? []) : []
-			if (paths.length > 0) void app.home.tell({ did: 'code', paths: [...new Set(paths)] })
+			if (paths.length > 0) void app.level.tell({ did: 'code', paths: [...new Set(paths)] })
 		},
 		'brief-fix'() {
 			ui.fixing = !ui.fixing

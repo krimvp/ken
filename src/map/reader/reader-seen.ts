@@ -2,7 +2,7 @@
 // map learns only from what the reader says. This file holds what they did: a part they opened, an explanation they
 // read, code they opened, a change they walked through. ken only appends; a person may add or change lines by hand. A
 // line that does not parse is skipped and named, never fatal.
-import { appendFile, mkdir, readFile } from 'node:fs/promises'
+import { appendFile, mkdir, readFile, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { type CommitHash, parsePath, type RepoPath, type Repository } from '../../repo/index.ts'
 
@@ -59,8 +59,26 @@ export async function openSeen(
 	if (first === null) return { kind: 'no-commits' }
 	const file = path.join(home, 'projects', first, 'seen.jsonl')
 
-	async function readAll(): Promise<{ lines: SeenLine[]; undone: Set<string>; problems: string[] }> {
-		const text = await readFile(file, 'utf8').catch(emptyWhenMissing)
+	type All = { lines: SeenLine[]; undone: Set<string>; problems: string[] }
+	// The file is parsed once for each version of it, so the reads of one request, and of the next, share the parse.
+	let parsed: { version: string; all: Promise<All> } | null = null
+	async function readAll(): Promise<All> {
+		const version = await stat(file).then(
+			(info) => `${info.mtimeMs} ${info.size}`,
+			() => 'none',
+		)
+		if (parsed?.version !== version) parsed = { version, all: parseAll() }
+		return await parsed.all
+	}
+
+	async function parseAll(): Promise<All> {
+		// A file ken cannot read leaves what ken thinks the reader knows empty, and says why, rather than failing the page.
+		const text = await readFile(file, 'utf8').catch((error: unknown) =>
+			isMissing(error)
+				? ''
+				: { problem: `ken could not read ${file}: ${error instanceof Error ? error.message : String(error)}` },
+		)
+		if (typeof text !== 'string') return { lines: [], undone: new Set(), problems: [text.problem] }
 		const lines: SeenLine[] = []
 		const undone = new Set<string>()
 		const problems: string[] = []
@@ -182,6 +200,10 @@ function parseSeenLine(line: string): { kind: 'ok'; line: SeenLine | UndoLine } 
 }
 
 function emptyWhenMissing(error: unknown): string {
-	if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return ''
+	if (isMissing(error)) return ''
 	throw error
+}
+
+function isMissing(error: unknown): boolean {
+	return error instanceof Error && 'code' in error && error.code === 'ENOENT'
 }

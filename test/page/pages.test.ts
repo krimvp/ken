@@ -248,10 +248,9 @@ test('Sideways shows a part two arrows join once, with both verbs, and counts it
 	if (found.kind !== 'ok') assert.fail(`the part has no brief: ${JSON.stringify(found)}`)
 	const ctx = { home: freshHome(() => null, { unfolded: new Set() }), prefs: { text: 'pictures' }, env: {}, look: null }
 	const ui = { trail: [{ id: 'part::store', name: 'store' }], openQuotes: new Set(), on: 'sideways' }
-	const html = briefHtml(ui, found, { ...ctx, inner: null })
-	assert.equal(html.match(/data-concept="part::core"/g)?.length, 1, 'core is one row')
-	assert.match(html, /starts it, and waits on it/, 'that says both arrows')
-	assert.match(html, /data-way="sideways"[^>]*>.*?<b class="k-num">1<\/b>/s, 'and Sideways counts one part')
+	const text = textOf(briefHtml(ui, found, { ...ctx, inner: null }))
+	assert.match(text, /Used by core starts it, and waits on it (?!core)/, 'core is one row that says both arrows')
+	assert.match(text, / 1 Sideways /, 'and Sideways counts one part')
 })
 
 test('the canvas draws a level it read from a real server, and the changes layer says what each part changed', async () => {
@@ -271,11 +270,12 @@ test('the canvas draws a level it read from a real server, and the changes layer
 	const draw = () => architectureHtml({ home: state.home, arch, env, brief: null, column: false })
 
 	await loads.refresh()
-	const parts = draw()
-	for (const name of ['core', 'store']) {
-		assert.match(parts, new RegExp(`data-concept="part::${name}"`), `${name} is a block that opens its brief`)
-	}
-	assert.match(parts, /New to you/, 'each says what ken thinks the reader knows of it')
+	const parts = textOf(draw())
+	assert.match(
+		parts,
+		/core New to you .*store New to you/,
+		'each part is a block that says what ken thinks the reader knows of it',
+	)
 
 	const landed = state.home.changes.find((choice) => (choice as { kind: string }).kind === 'since') as {
 		change: string
@@ -283,14 +283,14 @@ test('the canvas draws a level it read from a real server, and the changes layer
 	Object.assign(state.home, { change: landed.change })
 	arch.layer = 'changes'
 	await loads.refresh()
-	const changed = draw()
-	assert.match(changed, /<b class="k-num">1<\/b>.*?file/s, 'the part the commit touched says how many files')
-	assert.match(changed, /No change/, 'and the other says it did not change')
+	const changed = textOf(draw())
+	assert.match(changed, /store .*1 file/, 'the part the commit touched says how many files')
+	assert.match(changed, /core .*No change/, 'and the other says it did not change')
 
 	Object.assign(state.home, { trail: [WHOLE, { name: 'store', within: ['src/store'] }], change: 'none' })
 	arch.layer = null
 	await loads.refresh()
-	assert.match(draw(), /db\.ts/, 'inside a part nobody named, the blocks are what git lists')
+	assert.match(textOf(draw()), /db\.ts/, 'inside a part nobody named, the blocks are what git lists')
 })
 
 // What a reader reads on a page: its text without the markup.

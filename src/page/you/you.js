@@ -145,6 +145,7 @@ function sideHtml({ look, home, you }) {
 	return `<aside class="k-tile k-you-side" aria-label="What ken recorded">
 		<h2 class="k-you-title" id="recorded-title" tabindex="-1">What ken recorded</h2>
 		${you.problem ? `<p class="k-ask-problem" role="alert">${esc(you.problem)}</p>` : ''}
+		${reader?.problems?.length > 0 ? `<p class="k-ask-problem" role="status">${reader.problems.map(esc).join(' ')}</p>` : ''}
 		${you.said ? `<p class="k-knows-said" role="status">${esc(you.said)}</p>` : ''}
 		${lines}
 		<h2 class="k-eyebrow">How you like things shown</h2>

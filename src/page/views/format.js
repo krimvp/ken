@@ -76,16 +76,6 @@ export function withCost(button, cost = RUN_COST) {
 	return `<span class="with-cost">${button}<span class="small muted">${cost}</span></span>`
 }
 
-// A button on the home that starts a run of ken's model, with what the run costs as its second line. A button with no
-// act sends the form it stands in. off is the reason no run can start now: the button then cannot be pressed, and the
-// reason stands beside it.
-export function runButton({ act = null, key, text, primary = false }, off) {
-	const kind = primary ? 'primary' : 'quiet-button'
-	const does = act === null ? 'type="submit"' : `data-act="${act}"`
-	const button = `<button class="${kind} run-button" ${does} data-key="${key}"${off ? ' disabled' : ''}><span class="run-label">${text}</span><span class="run-cost">${RUN_COST}</span></button>`
-	return `<span class="run">${button}${off ? `<span class="run-off small">${esc(off)}</span>` : ''}</span>`
-}
-
 export function lineSpan(start, end) {
 	return start === end ? `line ${start}` : `lines ${start} to ${end}`
 }

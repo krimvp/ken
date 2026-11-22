@@ -93,13 +93,13 @@ export function archActions(app) {
 
 	// The level changed under the reader, so the keyboard goes to the breadcrumb, which names where they are.
 	async function moveTo(trail) {
-		await app.home.moveTo(trail)
+		await app.level.moveTo(trail)
 		render()
 		$('.k-crumb [aria-current]')?.focus({ preventScroll: true })
 		const { look } = state.home
 		// A level of files is as deep as the canvas goes: the reader came to the part's code.
 		if (trail.length > 1 && look?.boxes.length > 0 && look.boxes.every((box) => isFileBlock(box, look))) {
-			void app.home.tell({ did: 'code', paths: trail.at(-1).within })
+			void app.level.tell({ did: 'code', paths: trail.at(-1).within })
 		}
 	}
 
@@ -116,8 +116,8 @@ export function archActions(app) {
 
 	async function layChange(change) {
 		Object.assign(state.home, { change, at: '' })
-		await app.home.loads.loadLayout()
-		await app.home.loads.settle()
+		await app.level.loads.loadLayout()
+		await app.level.loads.settle()
 	}
 
 	// A press on a part in a drawing does what a press on its block does: its brief, then inside it.
@@ -144,7 +144,7 @@ export function archActions(app) {
 
 	// The run that draws where the project runs ended: the level is read again, and "Where it runs" opens.
 	async function viewsEnded(q) {
-		await app.home.loads.refresh()
+		await app.level.loads.refresh()
 		const views = state.home.look?.views
 		const drew = Boolean(views?.runtime || views?.world)
 		arch.viewsProblem = drew
@@ -220,7 +220,7 @@ export function archActions(app) {
 		Object.assign(home, { selected: null, shown: null, opened: false, why: null, wayIn: 'learn', at: '' })
 		if (arch.layer !== 'changes') home.change = 'none'
 		else if (home.change === 'none') home.change = changeChoices(home.changes)[0]?.change ?? 'none'
-		await app.home.loads.refresh()
+		await app.level.loads.refresh()
 		if (arch.layer === 'processes') arch.process ??= processesOf(home)[0]?.id ?? null
 	}
 

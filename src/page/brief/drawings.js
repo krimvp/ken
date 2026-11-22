@@ -87,8 +87,6 @@ const DRAW = {
 	},
 }
 
-export const DRAWINGS = Object.keys(DRAW)
-
 // drawing is { kind, count, lit, label } as a brief's point carries it, or nothing. label is written by the caller.
 export function drawingHtml(drawing) {
 	const draw = Object.hasOwn(DRAW, drawing?.kind ?? '') ? DRAW[drawing.kind] : DRAW.dot

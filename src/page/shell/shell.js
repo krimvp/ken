@@ -15,7 +15,7 @@ export const PAGE_NAMES = {
 }
 
 // The name over a view from before the pages, which opens over whichever page the reader is on.
-const OVER_NAMES = { question: 'A reply', decisions: 'Decisions', live: 'Live', 'follow-up': 'Waiting on you' }
+const OVER_NAMES = { question: 'A reply' }
 
 // on is the page the rail marks, or null while a reply or another view lies over the pages.
 export function railHtml({ on, askOpen, settingsOpen }) {

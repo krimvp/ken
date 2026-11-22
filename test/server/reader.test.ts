@@ -120,3 +120,15 @@ test('a long visit stays one visit, so the last visit is the one before the gap,
 	writeFileSync(file, lines.map((line) => `${JSON.stringify(line)}\n`).join(''))
 	assert.equal((await json(server, '/api/reader')).lastVisit, before)
 })
+
+test('a file of what the reader looked at that ken cannot read leaves the page whole and says what ken could not read', async () => {
+	const { root } = buildRepository([{ message: 'feat: start', files: { 'src/a/x.ts': 'x\n' } }])
+	const server = await openKen(root, readerHome())
+	const { file } = await json(server, '/api/reader')
+	// A folder where the file should be: reading it fails with something other than "missing".
+	mkdirSync(file, { recursive: true })
+	assert.equal(await levelOf(server, 'src'), 'new', 'the layout still opens')
+	const reader = await json(server, '/api/reader')
+	assert.deepEqual(reader.learned, [])
+	assert.match(reader.problems.join(' '), /ken could not read/)
+})

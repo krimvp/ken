@@ -23,7 +23,7 @@ import { tourKey } from './project/tour-card.js'
 import { partOf, stepDiffHtml, stopState, stopTopics, tourStart, walkOf } from './project/walk.js'
 import { readerPrefs } from './shell/prefs.js'
 import { freshShell, shellActions } from './shell/shell-actions.js'
-import { allQuotesHtml, checksHtml, quoteCardHtml } from './views/checks.js'
+import { checksHtml, quoteCardHtml } from './views/checks.js'
 import { decisionsViewHtml } from './views/decisions.js'
 import { elementKey } from './views/diagram.js'
 import { count, duration, esc, projectHtml, prose, short, when } from './views/format.js'
@@ -86,13 +86,10 @@ const state = {
 	menuOpen: false,
 	lensesOpen: false,
 	problem: null,
-	// "home" shows the project as a picture and "question" a thread. "map" shows the reader's understanding map,
-	// "decisions" the record's decisions, "follow-up" what is open, and "live" the notes of live mode. base is the one
-	// of home and question the reader was on last, which the other views close back to.
+	// "home" shows the pages and "question" a thread over them. base is the one the reader was on last.
 	view: 'home',
 	base: 'home',
 	map: null,
-	mapSaid: '',
 	decisions: null,
 	decisionsKey: false,
 	ui: freshUi(),
@@ -137,7 +134,11 @@ function store(name, value) {
 }
 
 // The open decisions and quotes of the view on screen.
-const uiNow = () => ({ 'follow-up': state.followUi, live: state.liveUi })[state.view] ?? state.ui
+// What waits on the reader and live mode are tabs of the Changes page, each with its own open cards.
+const uiNow = () =>
+	state.view === 'home' && state.shell.page === 'changes'
+		? ({ decisions: state.followUi, live: state.liveUi }[state.chg.tab] ?? state.ui)
+		: state.ui
 
 // What each run the page starts is doing, by its kind.
 const DOING = { ...LEVEL_RUNS, views: VIEWS_RUN }
@@ -540,7 +541,6 @@ function panelHtml() {
 	if (!q || !ui.wide || state.view !== 'question') return ''
 	const items = itemsOf(state.thread)
 	if (ui.panel.kind === 'quote') return quoteCardHtml(ui, items)
-	if (ui.panel.kind === 'all') return allQuotesHtml(items)
 	if (ui.panel.kind === 'walk') return walkPanelHtml(ui.panel.t, ui.walkAt.get(ui.panel.t))
 	if (!q.reply || cardsOf(q, 0).length === 0) return noChecksPanelHtml(q.live)
 	return checksHtml(q, ui, state.thread.at(-1) === q ? null : when(q.askedAt))
@@ -842,8 +842,9 @@ function closePanel() {
 		return true
 	}
 	render()
-	const back = shown.kind === 'quote' ? `${shown.key}-q${shown.quote}` : 'all-quotes'
-	document.querySelector(`[data-key="${back}"]`)?.focus({ preventScroll: true })
+	if (shown.kind === 'quote') {
+		document.querySelector(`[data-key="${shown.key}-q${shown.quote}"]`)?.focus({ preventScroll: true })
+	}
 	return true
 }
 
@@ -970,8 +971,8 @@ state.shell = freshShell(app.prefs.prefs)
 app.briefs = briefStore(app)
 app.briefPaths = () => brief.readPaths()
 app.reread = () => shell.reread()
+app.rereadKnows = () => shell.rereadKnows()
 const level = levelActions(app)
-app.home = level
 app.level = level
 const ask = askActions(app)
 app.ask = ask
@@ -1050,8 +1051,6 @@ const actions = {
 	...chg.actions,
 	// What waits on the reader, the record's decisions and live mode are tabs of the Changes page now.
 	'follow-up': () => shell.goTab('decisions'),
-	decisions: () => shell.goTab('decisions'),
-	live: () => shell.goTab('live'),
 	'back-page'() {
 		state.view = state.base = 'home'
 		render()
@@ -1092,10 +1091,6 @@ const actions = {
 			() => post('/api/map', { signal: 'know', topics: [el.dataset.topic] }),
 			`Saved. Your map says you know ${el.dataset.topic}, as the code is now.`,
 		),
-	'map-topic-know': (el) =>
-		mapTopic('know', el.dataset.topic, `Saved. Your map says you know ${el.dataset.topic}, as the code is now.`),
-	'map-topic-forgot': (el) =>
-		mapTopic('forgot', el.dataset.topic, `Saved. Your map says you do not know ${el.dataset.topic} any more.`),
 	'map-know': (el) => postMap('know', Number(el.dataset.turn)),
 	'map-too-much': (el) => postMap('too-much', Number(el.dataset.turn)),
 	'map-deeper'(el) {
@@ -1147,24 +1142,6 @@ const actions = {
 		render()
 		// "Show all" goes away once the lines are open, so the quote's own row takes the focus.
 		if (el.matches('.q-all')) document.querySelector(`[data-key="${key}-q${quote}"]`)?.focus({ preventScroll: true })
-	},
-	'all-quotes'() {
-		const ui = state.ui
-		if (ui.wide) {
-			ui.panel = ui.panel.kind === 'all' ? CHECKS : { kind: 'all' }
-			render()
-			$('#panel').scrollTop = 0
-			return
-		}
-		const items = itemsOf(state.thread)
-		const keys = items.flatMap(({ key, item }) => item.quotes.map((_, j) => `${key}-q${j}`))
-		const allOpen = keys.every((key) => ui.openQuotes.has(key))
-		ui.openQuotes = allOpen ? new Set() : new Set(keys)
-		if (!allOpen) {
-			for (const { key, kind } of items) if (kind === 'decision') ui.openDecisions.add(key)
-			for (const { key, kind } of items) if (kind === 'element') ui.openParts.add(key.match(/^g([\w-]+)n/)[1])
-		}
-		render()
 	},
 	decision(el) {
 		toggle(uiNow().openDecisions, el.dataset.item)

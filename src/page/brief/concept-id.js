@@ -3,11 +3,9 @@
 // them, so nothing else knows the form.
 
 export const partId = (within, name) => `part:${within.join(',')}:${name}`
-export const termId = (name) => `term:${name}`
 export const processId = (id) => `process:${id}`
 export const stepId = (process, n) => `step:${process}:${n}`
 export const arrowId = (within, n) => `arrow:${within.join(',')}:${n}`
-export const decisionId = (id) => `decision:${id}`
 
 // What the drawings of where a project runs and what it talks to name, each by the id ken's model gave it.
 const VIEW_KINDS = ['frame', 'store', 'outside', 'crossing']
