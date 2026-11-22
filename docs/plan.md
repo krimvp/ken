@@ -8,7 +8,7 @@ The companion is a local tool that explains a software project to the one develo
 
 It is built for projects where AI agents write most of the code. The developer comes back after hours or weeks, or works beside someone else, and needs to understand the project again without reading every diff.
 
-The developer talks to it in a chat. The model replies in its own words, as a colleague would, and shows a card with the quoted code for each claim that needs proof. The page keeps the chat as a thread, so it becomes the record of what the developer now understands.
+The developer opens a page that shows the project as a picture of its parts, picks how much detail to read, and says how they want it shown. A chat sits beside the picture for questions it does not answer. The model replies in its own words, as a colleague would, and shows a card with the quoted code for each claim that needs proof. The page keeps the questions as a thread, so it becomes the record of what the developer now understands.
 
 It is a new repository. The only code it reuses is `aigent`, the owner's agent engine, which runs the chat. It has no parser and no code index: an agent explores the code with read, search and git, and three small deterministic checks keep its claims honest.
 
@@ -42,16 +42,16 @@ The recording side is crowded and moving fast. The reader side is open.
 
 These were settled in the design discussion. An agent working on the project should treat them as fixed unless the owner changes them.
 
-| Decision                                   | Reason                                                                                                                                                                                   |
-| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| One developer first, not a team            | It keeps the reader's model to one local file and needs no accounts or sharing. A collaborator's changes must still be handled, because the owner sometimes works beside someone else.   |
-| A new repository                           | Nothing is reused from xpl or own-your-diff. Their ideas carry over; their code and data models do not.                                                                                  |
-| `aigent` is the chat engine                | It is the owner's own engine, and it runs on any model provider, including open-weight models.                                                                                           |
-| No tie to one coding tool                  | The code may be written by Claude Code, Codex, a collaborator or the owner. Git is the only source every case shares.                                                                    |
-| No parser and no code index at the start   | An agent explores with read, search and git. This works for every language and file type from the first day, and a parser per language is a large cost to pay before the idea is proven. |
-| Chat first, with a page beside it          | The developer interacts best by asking. The questions are also the main signal of what the developer knows.                                                                              |
-| No single "since last time" cursor         | It assumes one reader and nobody else changing the code. It fails with a collaborator and after weeks away. Time is one way to scope a question, not the centre of the design.           |
-| High-level answers lean on basic diagrams  | The owner asked on 2026-11-15 for high-level answers that lean on basic diagrams. Detail stays prose with quotes. A diagram is checked data, so it cannot show code that is not there.   |
+| Decision                                  | Reason                                                                                                                                                                                   |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| One developer first, not a team           | It keeps the reader's model to one local file and needs no accounts or sharing. A collaborator's changes must still be handled, because the owner sometimes works beside someone else.   |
+| A new repository                          | Nothing is reused from xpl or own-your-diff. Their ideas carry over; their code and data models do not.                                                                                  |
+| `aigent` is the chat engine               | It is the owner's own engine, and it runs on any model provider, including open-weight models.                                                                                           |
+| No tie to one coding tool                 | The code may be written by Claude Code, Codex, a collaborator or the owner. Git is the only source every case shares.                                                                    |
+| No parser and no code index at the start  | An agent explores with read, search and git. This works for every language and file type from the first day, and a parser per language is a large cost to pay before the idea is proven. |
+| A picture first, with a chat beside it    | The owner asked on 2026-11-22 for a dashboard in place of the chat-first page. The developer still asks questions, and the questions are still the main signal of what they know.        |
+| No single "since last time" cursor        | It assumes one reader and nobody else changing the code. It fails with a collaborator and after weeks away. Time is one way to scope a question, not the centre of the design.           |
+| High-level answers lean on basic diagrams | The owner asked on 2026-11-15 for high-level answers that lean on basic diagrams. Detail stays prose with quotes. A diagram is checked data, so it cannot show code that is not there.   |
 
 ## The model
 
@@ -67,7 +67,7 @@ The project record is about the code and is the same for every reader. It holds 
 | Decision      | The question, the option chosen, the options rejected with a reason each, how easy it is to undo, and whether it needs the owner's opinion |
 | Topic         | A named part of the project, such as "retry logic", with the quoted code it rests on                                                       |
 | Note          | The agent's cached summary of a topic, stored with the hash of the code it describes                                                       |
-| Layout        | One level of the project's parts as ken's model named them: each part's name, job and paths with git's id of each, and the quoted arrows  |
+| Layout        | One level of the project's parts as ken's model named them: each part's name, job and paths with git's id of each, and the quoted arrows   |
 
 "Who did it" is one of: the owner, the owner's agent, a collaborator, or unknown. Git tells the owner from a collaborator. It cannot always tell the owner from the owner's agent, so the record says "unknown" when it has no evidence.
 
@@ -101,7 +101,7 @@ The owner asked on 2026-11-17 for ken to "show me the state of the repo architec
 - **A change laid over it.** A range, a branch from where it left the main branch, or the reader's uncommitted work, through live mode's snapshot. With no change asked, the view shows where the reader is: their uncommitted work if there is any, else the branch HEAD is on against the main branch, else nothing. The other commits and changes sit behind "Look at another commit or change". A change can also be asked as a span of time, `since:14d` or `since:2026-11-01`, and a span with no commit is refused. Each box shows the files it touched and the lines added and removed, and lists up to 20 of them with their own counts. A changed file in no box is named. Inside a part, the change counts only the files under that part. The change lists its commits, newest first and without merges, up to 50. The page can ask for the diff of up to 10 of its files, as hunks with their line numbers, cut after 400 changed lines. All of it comes from git, with no model.
 - **The reader's map on each box.** Each topic in the record sits in the boxes that hold a file it quotes. From its topics each box gets one standing: code the reader understood there changed since, they asked about none of it, they asked and have not said they understand all of it, or they said they understand it. The box's line and the one line over the view are written from that standing, so they never disagree. The line over the view names where to look next: first the boxes whose code changed since the reader understood it, then the boxes they never asked about, then the ones they have not finished.
 
-- **ken's model names the parts.** "Ask ken to name these parts" on a folder level sends a question into the reader's thread with the folder split as the starting point and the layout rules. The model reads the project's own maps first (the README, design docs, a glossary, a table of modules) and sends `show` with a layout: 2 to 6 parts, each a name the owner would use, a one-sentence job and its paths, and at most 8 arrows. The rules ask it to file a file by what it does and not by its folder, to spend the parts on the code a user runs, with one part at most for what only keeps the repository going, and to draw the relation that matters when the code runs, with a verb that says only what its quoted lines show. ken checks it like any card, and a layout that fails goes back alone. Every path must hold a file at the commit and sit inside the level, and no two parts share a file. Every arrow quotes lines from a file of the part it starts at, and those lines name a folder or file of the part it ends at, as an import line does. Lines that are all comments do not count: a line whose trimmed start is //, /*, *, #, -- or ; is a comment, except C's #include and #import. ken checks the quote in git and the name by plain text, with no parser. An arrow the model cannot quote that way is left out: no arrow is a guess.
+- **ken's model names the parts.** "Ask ken to name these parts" on a folder level sends a question into the reader's thread with the folder split as the starting point and the layout rules. The model reads the project's own maps first (the README, design docs, a glossary, a table of modules) and sends `show` with a layout: 2 to 6 parts, each a name the owner would use, a one-sentence job and its paths, and at most 8 arrows. The rules ask it to file a file by what it does and not by its folder, to spend the parts on the code a user runs, with one part at most for what only keeps the repository going, and to draw the relation that matters when the code runs, with a verb that says only what its quoted lines show. ken checks it like any card, and a layout that fails goes back alone. Every path must hold a file at the commit and sit inside the level, and no two parts share a file. Every arrow quotes lines from a file of the part it starts at, and those lines name a folder or file of the part it ends at, as an import line does. Lines that are all comments do not count: a line whose trimmed start is //, /_, _, #, -- or ; is a comment, except C's #include and #import. ken checks the quote in git and the name by plain text, with no parser. An arrow the model cannot quote that way is left out: no arrow is a guess.
 - **Every version is kept.** A named level is a `layout` entry in the record, with git's id of each path at the commit it was named at. A new one replaces the one before and the old one stays. At the commit checked out the view shows the newest version, so a level drawn again with fewer parts shows as drawn. At an older commit it picks the version with the largest share of its parts the same there by those ids, the newest on a tie. With none, it shows the folder split.
 - **Shown another way on request.** The reader can tell ken to show a level another way, in their own words. The question carries those words, the level as it stands and the layout rules. When the words are about the picture, the model sends a new layout, and ken stores it with the reader's words beside it. Plain code sets those words, and the model has no field for them. When the words are about the reader, the model keeps a reader note instead. A picture the model sends must say what the level is, who uses it and the one idea its maintainer would say first, in a sentence or two. A picture stored before that rule may have none.
 - **A drawn picture.** Some requests are not a grouping of parts: follow one request, a data flow, a lifecycle. For those the model sends one checked diagram instead: a sequence, a component or an entity-relationship diagram. ken keeps it in the reader's history with the level and the reader's words, and the home shows it beside the parts.
@@ -213,7 +213,7 @@ The new repository has seven parts. Only the chat agent calls a model; everythin
 
 ```mermaid
 flowchart LR
-  page["Page<br/>Chat on one side, cards with quoted code"]
+  page["Page<br/>The picture of the parts, with a chat beside it"]
   agent["Chat agent<br/>An aigent session with the companion plugin"]
   repo["Project repository<br/>Files and git history. Read only."]
   coders["Coding agents<br/>Any tool. Log a decision with one command."]
@@ -232,15 +232,15 @@ flowchart LR
 
 The chat agent reads the repository and the stores directly. Anything it or a coding agent writes to a store goes through the checks first.
 
-| Part              | Job                                                                                                                                                                                             |
-| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Page              | A local web page. The chat streams on one side. Cards collect on the other: summaries, decisions and quoted code, each with its label.                                                          |
-| Chat agent        | An `aigent` session with one plugin, run by a small local server that also serves the page. It answers questions, picks the depth from the understanding map, and writes entries through tools. |
-| Exploration tools | Tools inside the plugin: read a file at a commit, search the code, read git history, diffs and blame. They never change the project.                                                            |
-| Checks            | The quote checker, the git change facts with hunk coverage, and the validation of every store entry.                                                                                            |
-| Stores            | The project record and the understanding map, as plain append-only files.                                                                                                                       |
-| Decision command  | A small command that any coding agent can call during its work to log a decision. It writes through the same checks.                                                                            |
-| Layout            | The project as a few boxes per level, at any commit, with a change and the reader's map laid over them. A level is the folders, or the parts ken's model named, with checked arrows. |
+| Part              | Job                                                                                                                                                                                                                               |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Page              | A local web page. Its home is the picture of the project's parts, with the explanation of what is picked beside it. A chat opens over it, and its replies carry cards: summaries, decisions and quoted code, each with its label. |
+| Chat agent        | An `aigent` session with one plugin, run by a small local server that also serves the page. It answers questions, picks the depth from the understanding map, and writes entries through tools.                                   |
+| Exploration tools | Tools inside the plugin: read a file at a commit, search the code, read git history, diffs and blame. They never change the project.                                                                                              |
+| Checks            | The quote checker, the git change facts with hunk coverage, and the validation of every store entry.                                                                                                                              |
+| Stores            | The project record and the understanding map, as plain append-only files.                                                                                                                                                         |
+| Decision command  | A small command that any coding agent can call during its work to log a decision. It writes through the same checks.                                                                                                              |
+| Layout            | The project as a few boxes per level, at any commit, with a change and the reader's map laid over them. A level is the folders, or the parts ken's model named, with checked arrows.                                              |
 
 ## Build order
 
@@ -316,21 +316,21 @@ The owner has not answered these questions yet. Work started on 2026-11-15 with 
 
 The owner answered these on 2026-11-16, after the sixth round of the test.
 
-| Question                           | Answer                                                               |
-| ---------------------------------- | -------------------------------------------------------------------- |
-| The second look at risks           | It stays on by default for an answer about a change. Changed on 2026-11-17, below. |
-| Leading indentation in a quote     | The quote check stays strict about it.                               |
-| Reading saved sessions             | On by default. `KEN_SESSIONS=off` turns it off.                      |
-| own-your-diff in ken               | Not set up.                                                          |
-| The public page                    | Not published for now.                                               |
+| Question                       | Answer                                                                             |
+| ------------------------------ | ---------------------------------------------------------------------------------- |
+| The second look at risks       | It stays on by default for an answer about a change. Changed on 2026-11-17, below. |
+| Leading indentation in a quote | The quote check stays strict about it.                                             |
+| Reading saved sessions         | On by default. `KEN_SESSIONS=off` turns it off.                                    |
+| own-your-diff in ken           | Not set up.                                                                        |
+| The public page                | Not published for now.                                                             |
 
 The owner chose these on 2026-11-17, after saying the answers felt scripted and lacked the high level.
 
-| Question                    | Answer                                                                                                     |
-| --------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| How ken replies             | Talk first. The model replies in its own words and shows a checked card only where a claim needs proof.   |
-| Decisions and risks         | Risks on ask. A reply about a change gives the story and a one-line hint; the reader asks for the rest. The second look runs on the risks when they come. |
-| The architecture view       | The project's layout at any commit, with zoom into a part and a change laid over it, and the reader's map on each part. See "The project's layout". |
+| Question              | Answer                                                                                                                                                    |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| How ken replies       | Talk first. The model replies in its own words and shows a checked card only where a claim needs proof.                                                   |
+| Decisions and risks   | Risks on ask. A reply about a change gives the story and a one-line hint; the reader asks for the rest. The second look runs on the risks when they come. |
+| The architecture view | The project's layout at any commit, with zoom into a part and a change laid over it, and the reader's map on each part. See "The project's layout".       |
 
 The owner asked for this on 2026-11-22.
 
@@ -340,8 +340,8 @@ The owner asked for this on 2026-11-22.
 
 Changed on 2026-11-22, for the owner to confirm.
 
-| Question       | Answer                                                                                                                                                                              |
-| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Question       | Answer                                                                                                                                                                                                        |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | The tour order | From "outermost first, by the arrows" to the order ken's model lists the parts in, the heart of the product first, with tests and upkeep last. Two fresh reviewers found the old order put the product third. |
 
 ## Out of scope for the first version
