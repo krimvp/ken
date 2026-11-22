@@ -22,7 +22,7 @@ import { scopeProblem } from '../tools/exploration-tools.ts'
 import { readArgs, refuse, reply, short } from '../tools/tool-edge.ts'
 import { type CardContext, type CardDraft, changedHunks, checkCard } from './check-card.ts'
 import { allowJsonText, readJsonText } from './json-text.ts'
-import { type Card, type Item, type Risk, type Tour, WEIGHTS } from './reply.ts'
+import { type Card, type Item, type Risk, type Tour, type Want, WEIGHTS } from './reply.ts'
 
 export const MAX_SENT_BACK = 6
 // The most words a step of a change asks for. It sits beside the picture and the diff, and a longer one pushed the
@@ -49,6 +49,7 @@ export type Gate = {
 // "risks" while the second look runs, and passRejections counts the revisions it refused. tour is the tour the
 // question asks for, whose stops the reader's map learns from the page as the reader reaches them. view is the level
 // the reader asked to see another way, with their words, which ken keeps with a layout the reply shows for that level.
+// want is what the reader asked of a change through its lens, or null.
 // typed is true when the round starts from the reader's own words, the only round in which ken keeps a note about them,
 // so text in a diff or a saved session cannot make the model keep one.
 export type Round = {
@@ -56,6 +57,7 @@ export type Round = {
 	typed: boolean
 	tour: Tour | null
 	view: { within: string[]; text: string } | null
+	want: Want | null
 	step: 'talk' | 'risks'
 	passRejections: number
 	scope: { range: Range; work: string | null; hunks: Promise<ChangedHunk[]> | null } | null
@@ -70,13 +72,14 @@ export type Round = {
 // How a question is asked, which decides what its round starts with. question: the reader typed it, or a lens wrote
 // it. note: ken writes by itself in live mode, which tells the reader's map nothing. tour: a tour of a named level,
 // which tells the map nothing either, since the page marks each stop as the reader reaches it. change: a question
-// about one change that plain code picked, so the reply is about that range whether or not the model sends a scope.
+// about one change that plain code picked, so the reply is about that range whether or not the model sends a scope,
+// with what the reader wants of it.
 // view: the reader asked, in the words of text, for another way to show the level whose paths are within.
 export type Asking =
 	| { kind: 'question' }
 	| { kind: 'note' }
 	| { kind: 'tour'; tour: Tour }
-	| { kind: 'change'; range: Range }
+	| { kind: 'change'; range: Range; want: Want }
 	| { kind: 'view'; within: string[]; text: string }
 
 export function freshRound(as: Asking, emit: Round['emit']): Round {
@@ -85,6 +88,7 @@ export function freshRound(as: Asking, emit: Round['emit']): Round {
 		typed: as.kind === 'question' || as.kind === 'view',
 		tour: as.kind === 'tour' ? as.tour : null,
 		view: as.kind === 'view' ? { within: as.within, text: as.text } : null,
+		want: as.kind === 'change' ? as.want : null,
 		step: 'talk',
 		passRejections: 0,
 		scope: as.kind === 'change' ? { range: as.range, work: null, hunks: null } : null,

@@ -15,7 +15,9 @@ import type { Decision, Statement } from '../../record/index.ts'
 import type { Commit, CommitHash } from '../../repo/index.ts'
 
 // tour is there only on a tour of the project's parts, and view only when the reader asked to see a level another way:
-// within is that level and asked their own words. Plain code sets both, never the model.
+// within is that level and asked their own words. want is there only when the reader asked for the story of a change
+// or a walk through it, so the page can tell that reply from a later one about the same commits. Plain code sets all
+// three, never the model.
 export type Reply = {
 	items: Item[]
 	change: Change | null
@@ -23,7 +25,12 @@ export type Reply = {
 	topics: string[]
 	tour?: Tour
 	view?: { within: string[]; asked: string }
+	want?: Want
 }
+
+// What the reader wants of a change: its story, or a walk through it in steps.
+export const WANTS = ['story', 'walk'] as const
+export type Want = (typeof WANTS)[number]
 
 // A tour of one named level of the project's parts. Plain code picked the stops and their order, and step n of the
 // reply is stop n, in the model's words. Each stop's part is a topic in the record, so the reader's map can say which

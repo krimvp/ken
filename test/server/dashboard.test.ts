@@ -237,7 +237,37 @@ test('a walk asked through the change lens is about that change though the model
 	assert.deepEqual([replied.reply.change.base, replied.reply.change.head], [base, head])
 
 	const [row] = (await json(server, '/api/questions')).questions
-	assert.deepEqual([row.change, row.steps], [{ base, head }, 2])
+	assert.deepEqual([row.change, row.steps], [{ base, head, snapshot: false }, 2])
+})
+
+test('a row says which lens asked it: the story of a change, a later question about the same commits which is no story, and a walk through uncommitted work, whose change ken marks as its own snapshot', async () => {
+	const { root, hashes } = buildRepository([
+		{ message: 'feat: start', files: { 'src/a.ts': 'a\n' } },
+		{ message: 'feat: more', files: { 'src/a.ts': 'a\nb\n' } },
+	])
+	const [base = '', head = ''] = hashes
+	const model = await scriptedModel([
+		{ text: 'It adds b.' },
+		{ tool: 'ken__show', text: 'A reader of a could miss b.', args: { scope: { base, head } } },
+		{ text: '' },
+		{ text: 'You are adding c.' },
+	])
+	const server = await openKen(root, readerHome(), model.baseUrl)
+	await ask(server, { lens: { kind: 'change', change: `${base}..${head}`, want: 'story' } })
+	await ask(server, { question: 'What could go wrong with the last commit?' })
+	writeFileSync(path.join(root, 'src/a.ts'), 'a\nb\nc\n')
+	await ask(server, { lens: { kind: 'change', change: 'uncommitted', want: 'walk' } })
+
+	const rows: { want: string | null; change: { base: string; head: string; snapshot: boolean } }[] = (
+		await json(server, '/api/questions')
+	).questions
+	assert.deepEqual(
+		rows.map((row) => row.want),
+		['story', null, 'walk'],
+	)
+	const committed = { base, head, snapshot: false }
+	assert.deepEqual([rows[0]?.change, rows[1]?.change], [committed, committed], 'both are about the same commits')
+	assert.deepEqual([rows[2]?.change.base, rows[2]?.change.snapshot], [head, true])
 })
 
 test('a level the reader asks to see another way is stored with their own words when the model draws it again, and the layout then shows the new parts and those words', async () => {

@@ -8,6 +8,8 @@ import {
 	type Item,
 	type Reply,
 	TOUR_WORDS,
+	WANTS,
+	type Want,
 } from '../agent/index.ts'
 import { DIAGRAM_BOUNDS, drawn, LAYOUT_BOUNDS } from '../diagram/index.ts'
 import {
@@ -31,8 +33,6 @@ import { pullRequestOf } from './way-in.ts'
 
 const MAX_QUESTION_CHARS = 4000
 const MAX_TOPICS = 20
-// What the reader wants of a change: its story, or a walk through it in steps.
-const WANTS = ['story', 'walk'] as const
 // How much of a note's words the next question about it quotes back.
 const NOTE_CHARS = 400
 
@@ -40,7 +40,9 @@ const NOTE_CHARS = 400
 // wants the reader to decide, and risks its risks. hunks is null when the reply was not about a range of commits.
 // thread groups the rows the page shows as one thread. tour names the level and the stops of a tour, so the page can
 // open a tour it has already instead of asking again. change is the change the reply is about and steps the number of
-// steps it walks through, so the page can open the stored story or walkthrough of a change the same way. view is there
+// steps it walks through. want says the reader asked for the story of that change or a walk through it, so the page
+// opens the stored one again and never takes a later reply about the same commits for it. snapshot is true when the
+// change ends at a commit of ken's own snapshot store, which is uncommitted work and no range to look at again. view is there
 // when the reader asked to see a level another way, and drew says what the reply drew for it: the parts again, a
 // diagram, since a flow or the data is not a grouping of parts, or nothing.
 export type QuestionRow = {
@@ -54,7 +56,8 @@ export type QuestionRow = {
 	risks: number
 	hunks: { uncovered: number; total: number } | null
 	tour: { within: string[]; stops: string[] } | null
-	change: { base: string; head: string } | null
+	change: { base: string; head: string; snapshot: boolean } | null
+	want: Want | null
 	steps: number
 	view: { within: string[]; asked: string; drew: 'parts' | 'diagram' | 'nothing' } | null
 }
@@ -233,15 +236,28 @@ export function questionDesk(
 
 	async function rows(): Promise<QuestionRow[]> {
 		await settled()
-		return (await history.list())
-			.filter((entry) => entry.about === undefined)
-			.map((entry) => {
+		const asked = (await history.list()).filter((entry) => entry.about === undefined)
+		// repo is the project's own git, which does not hold the commits ken makes of uncommitted work. Rows about the
+		// same change ask git once.
+		const inProject = new Map<string, Promise<boolean>>()
+		const isSnapshot = async (head: string) => {
+			if (!inProject.has(head))
+				inProject.set(
+					head,
+					repo.resolve(head).then((found) => found.kind === 'ok'),
+				)
+			return !(await inProject.get(head))
+		}
+		return await Promise.all(
+			asked.map(async (entry) => {
 				const { id, question, askedAt, thread, outcome } = entry
 				const row = { id, question, askedAt, thread, outcome }
 				if (entry.outcome !== 'answered') {
-					return { ...row, cards: 0, calls: 0, risks: 0, hunks: null, tour: null, change: null, steps: 0, view: null }
+					const none = { hunks: null, tour: null, change: null, want: null, steps: 0, view: null }
+					return { ...row, cards: 0, calls: 0, risks: 0, ...none }
 				}
-				const { items, change, tour, view } = entry.reply
+				const { items, change, tour, view, want } = entry.reply
+				const snapshot = change !== null && (await isSnapshot(change.head))
 				const cards = items.flatMap((item) => (item.kind === 'card' ? [item.card] : []))
 				const has = (kind: CardKind) => cards.some((card) => card.kind === kind)
 				const total = change ? change.covered.length + change.uncovered.length : 0
@@ -252,11 +268,13 @@ export function questionDesk(
 					risks: cards.filter((card) => card.kind === 'risk').length,
 					hunks: change && { uncovered: change.uncovered.length, total },
 					tour: tour ? { within: tour.within, stops: tour.stops.map((each) => each.name) } : null,
-					change: change && { base: change.base, head: change.head },
+					change: change && { base: change.base, head: change.head, snapshot },
+					want: want ?? null,
 					steps: items.filter((item) => item.kind === 'step').length,
 					view: view ? { ...view, drew: has('layout') ? 'parts' : has('diagram') ? 'diagram' : 'nothing' } : null,
 				}
-			})
+			}),
+		)
 	}
 
 	async function view(id: string): Promise<QuestionView | null> {
@@ -393,7 +411,7 @@ export function questionDesk(
 			const title = want === 'walk' ? `Walk me through ${name}` : `What did ${name} do, and why?`
 			if (change.range.base === change.range.head) return { kind: 'empty', text: title }
 			const text = [title, ...changeLines(change, want)].join('\n')
-			return { kind: 'ok', text, as: { kind: 'change', range: change.range } }
+			return { kind: 'ok', text, as: { kind: 'change', range: change.range, want } }
 		}
 		if (kind === 'topic') {
 			const { record: read, states } = await lensFacts()
@@ -459,7 +477,7 @@ async function changeName(repo: Repository, change: Change): Promise<string> {
 
 // What the agent is told under the title of a question about one change: the page shows only the title, as with
 // deeperOnNote. Plain code set the reply's scope to the range, so the model need not.
-function changeLines(change: Change, want: (typeof WANTS)[number]): string[] {
+function changeLines(change: Change, want: Want): string[] {
 	const short = (hash: string) => hash.slice(0, 7)
 	const { base, head } = change.range
 	return [
