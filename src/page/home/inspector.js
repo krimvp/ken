@@ -6,8 +6,8 @@ import { at, count, esc, list, prose, runButton, short } from '../views/format.j
 import { storyHtml } from '../views/reply.js'
 import { noModelHtml, workingHtml } from '../views/states.js'
 import { changeName, colourOf, levelName, stateLine } from './canvas.js'
-import { firstUnseen, pathOf, shownDetail, stoodOn } from './content.js'
-import { asksHtml, factCard, pathView, usesHtml } from './reading-path.js'
+import { besideCanvas, diagramOf, firstUnseen, pathOf, placeOf, shownDetail, stoodOn } from './content.js'
+import { asksHtml, elementsView, factCard, pathView, pickedElementHtml, usesHtml } from './reading-path.js'
 
 export const DETAILS = { big: 'Big picture', how: 'How it works', code: 'In the code' }
 
@@ -220,6 +220,38 @@ function touchedView(home, box) {
 	}
 }
 
+// A drawn picture at "Big picture": what ken's model said when it drew it, and above that the box or arrow the reader
+// picked in the drawing. While the note on the request still shows those words, they are not said twice.
+function drawnView(home) {
+	const { picture, q } = home.content
+	const diagram = diagramOf(q)
+	if (!diagram) {
+		return {
+			where: 'A picture ken drew',
+			title: prose(picture.title ?? picture.asked),
+			body: `<p class="muted">Reading what ken's model said.</p>`,
+		}
+	}
+	const title = prose(diagram.title)
+	if (shownDetail(home) !== 'big') return { title, ...elementsView(home, diagram) }
+	const element = diagram.elements[placeOf(diagram.elements, home.selected)]
+	const told = besideCanvas(q, true)
+	const words =
+		home.said?.q.id === q.id
+			? ''
+			: told.reply.items.length === 0
+				? `<p class="muted">ken's model drew this picture and said nothing more.</p>`
+				: `<h3 class="insp-sub">What ken's model said when it drew this</h3>${storyHtml(told, 'drawn', home.ui)}`
+	return {
+		where: element ? `Number ${element.number} of ${diagram.elements.length}` : 'Nothing is selected',
+		picked: Boolean(element),
+		title,
+		body: `${pickedElementHtml(home, diagram)}${words}
+			<p class="insp-actions"><button class="quiet-button" data-act="detail" data-detail="how" data-key="to-how">Read it in order</button><button class="quiet-button" data-act="detail" data-detail="code" data-key="to-all-code">See the lines it quotes</button></p>
+			<p><button class="link" data-act="open" data-id="${esc(q.id)}" data-key="drawn-open">Open the full reply</button></p>`,
+	}
+}
+
 const DOING = {
 	name: ['Naming the parts', "ken's model is naming the parts"],
 	tour: ['Preparing the tour', "ken's model is reading each part in turn"],
@@ -262,16 +294,24 @@ function endedHtml(ended) {
 	</div>`
 }
 
-// ken's reply to the reader's request to show a level another way: what changed, or why nothing did, and the diagram
-// when the request needed one.
-function saidHtml(said, ui) {
+// ken's reply to the reader's request to show a level another way: what changed, or why nothing did. A diagram ken
+// drew for it is a picture of its own on the canvas, so the note only says where it is.
+function saidHtml(home) {
+	const { said } = home
 	if (!said) return ''
 	const reply =
-		said.q.reply.items.length === 0 ? "<p>ken's model answered with no words.</p>" : storyHtml(said.q, 'said', ui)
+		said.q.reply.items.length === 0 ? "<p>ken's model answered with no words.</p>" : storyHtml(said.q, 'said', home.ui)
+	const drawn = home.pictures.some((picture) => picture.id === said.q.id)
+	const onCanvas = !drawn
+		? ''
+		: home.shown === said.q.id
+			? '<p class="small muted">The picture ken drew for it shows in place of the parts, under its own tab.</p>'
+			: `<p class="small muted">ken drew a picture for it. <button class="link" data-act="home-picture" data-id="${esc(said.q.id)}" data-key="said-picture">Show that picture</button></p>`
 	return `<section class="insp-said" aria-labelledby="insp-said-head">
 		<p class="insp-said-head"><strong id="insp-said-head">ken on your request</strong><button class="link" data-act="home-said-close" data-key="said-close">Close</button></p>
 		<p class="insp-asked">"${esc(said.asked)}"</p>
 		${reply}
+		${onCanvas}
 		<p><button class="link" data-act="open" data-id="${esc(said.q.id)}" data-key="said-open">Open the full reply</button></p>
 	</section>`
 }
@@ -280,6 +320,7 @@ function viewOf(home, off) {
 	const { look, content, selected } = home
 	const big = shownDetail(home) === 'big'
 	const box = selected?.kind === 'part' ? look.boxes.find((each) => each.name === selected.name) : null
+	if (content.kind === 'drawn') return drawnView(home)
 	if (content.kind === 'change') {
 		if (box) return touchedView(home, box)
 		return big
@@ -299,14 +340,16 @@ export function inspectorHtml(home, env) {
 	const working = env.running?.onHome
 	const view = working ? workingView(home, env.running, env.seconds) : viewOf(home, env.off)
 	const whole =
-		home.content.kind === 'change'
-			? 'Show the whole change'
-			: home.trail.length === 1
-				? 'Show the whole project'
-				: `Show all of ${esc(levelName(home))}`
+		home.content.kind === 'drawn'
+			? 'Show the whole picture'
+			: home.content.kind === 'change'
+				? 'Show the whole change'
+				: home.trail.length === 1
+					? 'Show the whole project'
+					: `Show all of ${esc(levelName(home))}`
 	const clear =
 		view.picked && !working ? `<button class="link" data-act="home-clear" data-key="home-clear">${whole}</button>` : ''
-	const notices = working ? '' : `${endedHtml(home.ended)}${saidHtml(home.said, home.ui)}`
+	const notices = working ? '' : `${endedHtml(home.ended)}${saidHtml(home)}`
 	const noModel = env.model?.kind === 'unset' ? noModelHtml(env.model, env.asked, true) : ''
 	return `<div class="insp-scroll" id="insp-scroll">
 			<p class="insp-head"><span class="insp-detail">${DETAILS[shownDetail(home)]}</span><span class="insp-where">${view.where}</span>${clear}</p>

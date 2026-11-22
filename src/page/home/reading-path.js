@@ -1,9 +1,10 @@
 // The inspector at "How it works" and "In the code": the whole reading path in order, numbered as the boxes of the
 // picture are. For a level it is the stops of its tour, for a change the steps of its walkthrough. The stop or step
 // the reader picked is open, with its cards and what the reader can do next, and the others show their title and, at
-// "How it works", their words. So picking a box in the picture and picking a line here are the same act.
+// "How it works", their words. So picking a box in the picture and picking a line here are the same act. A drawn
+// picture has a path too: the boxes and arrows of its diagram, under the numbers the drawing shows.
 import { cardPaths, stepDiffHtml, stepTitle, stopTopics } from '../project/walk.js'
-import { count, esc, prose, quoteBody, runButton } from '../views/format.js'
+import { count, esc, label, prose, quoteBody, runButton } from '../views/format.js'
 import { stepCardsHtml, storyHtml, wordsHtml } from '../views/reply.js'
 import { colourOf, pathsLine } from './canvas.js'
 import { firstUnseen, pathOf, placeOf, shownDetail, stoodOn } from './content.js'
@@ -188,6 +189,79 @@ function navHtml(path, at, titles, start) {
 	const back = at > 0 ? button(at - 1, 'quiet-button', `Back to ${start.word} ${at}`) : '<span></span>'
 	const next = at < path.length - 1 ? button(at + 1, 'primary', `Next, ${start.word} ${at + 2}`) : '<span></span>'
 	return `<div class="insp-nav">${back}${next}</div>`
+}
+
+// Where the lines an element of a drawn picture quotes are, and the way to read them.
+function sourcesHtml(element) {
+	if (element.quotes.length === 0) return `<p class="small muted">ken's model quoted no code for this one.</p>`
+	const places = element.quotes.map(
+		(quote) => `<code class="pv-path">${esc(quote.path)}</code>, line ${quote.startLine}`,
+	)
+	return `<p class="small">It rests on ${places.join(', and on ')}.</p>
+		<p class="insp-actions"><button class="quiet-button" data-act="detail" data-detail="code" data-key="to-code">See its lines</button></p>`
+}
+
+// One box or arrow of a drawn picture. At "In the code" every one shows the lines it quotes, as ken read them.
+function elementHtml(element, k, on, { detail, diagram }) {
+	const own = element.label !== null && element.label !== diagram.label ? label(element.label) : ''
+	const head = `<button class="path-head" data-act="home-step" data-index="${k}" data-key="home-step-${k}" aria-expanded="${on}">
+			<span class="path-n">${element.number}</span><span class="path-name">${own}${prose(element.text)}</span>
+		</button>`
+	if (detail === 'how') return on ? `${head}<div class="path-body">${sourcesHtml(element)}</div>` : head
+	const lines =
+		element.quotes.length === 0
+			? `<p class="small muted">ken's model quoted no code for this one.</p>`
+			: element.quotes
+					.map((quote) => quoteBody(quote, `<code>${esc(quote.path)}</code>, line ${quote.startLine}. `))
+					.join('')
+	return `${head}<div class="path-body uses-item">${lines}</div>`
+}
+
+// The box or arrow the reader picked in the drawing, as its line of the path at "How it works": the inspector shows it
+// over ken's words at "Big picture". With none picked it is empty.
+export function pickedElementHtml(home, diagram) {
+	const k = placeOf(diagram.elements, home.selected)
+	if (k < 0) return ''
+	return `<ol class="path"><li class="path-step is-on">${elementHtml(diagram.elements[k], k, true, { detail: 'how', diagram })}</li></ol>`
+}
+
+// What the two lists of a drawn picture are called, by the kind of its diagram: its boxes, then its arrows.
+const LISTS = {
+	sequence: ['Who takes part', 'What happens, in order'],
+	component: ['The pieces', 'How one uses another'],
+	'entity-relationship': ['The data', 'How it relates'],
+}
+
+// What the inspector shows of a drawn picture at "How it works" and "In the code": its boxes, then its arrows, in the
+// order of their numbers, the one the reader picked open.
+export function elementsView(home, diagram) {
+	const path = diagram.elements
+	const at = placeOf(path, home.selected)
+	const detail = shownDetail(home)
+	const ctx = { detail, diagram }
+	const items = path.map(
+		(element, k) =>
+			`<li class="path-step${k === at ? ' is-on' : ''}" id="path-${k}">${elementHtml(element, k, k === at, ctx)}</li>`,
+	)
+	// ken numbers the boxes first, so the arrows start where the boxes end.
+	const boxes = path.filter((element) => element.label === null).length
+	const [names, arrows] = LISTS[diagram.kind]
+	const listed = (title, rows, kind = '') =>
+		rows.length === 0 ? '' : `<h3 class="insp-sub">${title}</h3><ol class="path${kind}">${rows.join('')}</ol>`
+	return {
+		where:
+			at >= 0
+				? `Number ${path[at].number} of ${path.length}`
+				: `${path.length} boxes and arrows, numbered as in the drawing`,
+		picked: at >= 0,
+		body: `${listed(names, items.slice(0, boxes), detail === 'how' ? ' is-names' : '')}${listed(arrows, items.slice(boxes))}`,
+		nav: navHtml(
+			path,
+			at,
+			path.map((element) => element.text.replaceAll('`', '')),
+			{ word: 'number', k: 0 },
+		),
+	}
 }
 
 // The two quiet questions under a change's story or walkthrough. Each is a question of its own in the thread.

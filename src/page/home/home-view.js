@@ -1,7 +1,7 @@
 // The home's frame: the toolbar with the two controls, the canvas, the "Show it another way" bar, the inspector, and
 // the "Ask ken" drawer over it. Each region is drawn again only when what it shows changed, so a box the reader points
 // at and a text they type stay as they are while another region updates.
-import { fillDrawings } from '../draw-diagrams.js'
+import { fillDrawings, markPart } from '../draw-diagrams.js'
 import { drawPictures } from '../project/parts-picture.js'
 import { esc } from '../views/format.js'
 import { askDrawerHtml } from './ask-drawer.js'
@@ -48,7 +48,17 @@ function fill(region, html) {
 export function showHome(root, home, env, redraw) {
 	const region = (name) => root.querySelector(`#home-${name}`)
 	fill(region('toolbar'), toolbarHtml(home))
-	if (fill(region('canvas'), canvasHtml(home, env.rows))) drawPictures(region('canvas'))
+	const canvas = region('canvas')
+	if (fill(canvas, canvasHtml(home, env.rows))) {
+		drawPictures(canvas)
+		// The tabs scroll sideways inside their row, so the one on screen is brought into it.
+		const tabs = canvas.querySelector('.pic-tabs')
+		const on = tabs?.querySelector('[aria-pressed="true"]')
+		if (on) tabs.scrollLeft = on.offsetLeft + on.offsetWidth - tabs.clientWidth
+	}
+	// A drawn picture is drawn again on every pass, so the mark on what the reader picked in it is set again too.
+	fillDrawings(canvas, redraw)
+	if (home.selected?.kind === 'element') markPart(canvas, home.content.id, home.selected.number)
 	if (fill(region('redraw'), redrawBarHtml(home, env.off))) root.querySelector('#redraw-text').value = home.redraw.text
 	const inspector = region('inspector')
 	const scroll = inspector.querySelector('#insp-scroll')?.scrollTop ?? 0

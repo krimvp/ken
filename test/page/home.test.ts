@@ -11,8 +11,15 @@ import { scriptedModel, type Turn } from '../fixtures/scripted-model.ts'
 const HOME = path.join(import.meta.dirname, '../../src/page/home')
 type Found = { id: string; q: object | null } | null
 type Content = { kind: string; tour?: Found; story?: Found; walk?: Found }
-const { contentOf }: { contentOf: (look: object, rows: object[], replies?: Map<string, object>) => Content } =
-	await import(path.join(HOME, 'content.js'))
+type Picture = { kind: 'parts' } | { kind: 'drawn'; id: string; title: string | null; asked: string }
+type Replies = Map<string, object>
+const {
+	contentOf,
+	picturesOf,
+}: {
+	contentOf: (look: object, rows: object[], replies?: Replies, shown?: string | null) => Content
+	picturesOf: (look: object, rows: object[], replies?: Replies) => Picture[]
+} = await import(path.join(HOME, 'content.js'))
 const { inspectorHtml }: { inspectorHtml: (home: object, env: object) => string } = await import(
 	path.join(HOME, 'inspector.js')
 )
@@ -223,4 +230,118 @@ test('a level ken drew again has no tour until ken gives one for its new parts',
 	await draw([part('Code', 'All the code', 'src'), part('Tests', 'Tests the core', 'test')], [])
 	const redrawn = contentOf((await lookAt('change=none')).look, rows)
 	assert.deepEqual([redrawn.kind, redrawn.tour], ['level', null])
+})
+
+// What the reader asks on "Show it another way", as the home sends it, and a diagram the model answers with.
+const view = (text: string, within: string[]) => ({ lens: { kind: 'view', text, within, name: null } })
+const flow = (title: string) => ({
+	kind: 'sequence',
+	title,
+	label: 'inferred',
+	participants: [{ name: 'Command' }, { name: 'Core' }],
+	messages: [
+		{ from: 'Command', to: 'Core', text: 'runs the work', quotes: [quote('src/cli/main.ts', 'run()')] },
+		{ from: 'Core', to: 'Command', text: 'returns once it saved', quotes: [quote('src/core/run.ts', '\tsave()')] },
+	],
+})
+const drawing = (title: string, text: string): Turn[] => [
+	{ tool: 'ken__show', text, args: { diagrams: [flow(title)] } },
+	{ text: '' },
+]
+
+// Four requests to see a level another way: two diagrams of the whole project, then inside src the parts drawn again
+// and one diagram.
+async function drawnPictures() {
+	const again = {
+		within: ['src'],
+		parts: [part('Front', 'Takes the command and runs it', 'src/cli'), part('Rest', 'Runs and saves', 'src/core')],
+	}
+	const drawer = await scriptedModel([
+		...drawing('One command through the code', 'The command runs the core.'),
+		...drawing('The same command, once more', 'The same flow again.'),
+		{ tool: 'ken__show', text: 'Two parts now.', args: { layout: again } },
+		{ text: '' },
+		...drawing('Inside src', 'Only the code in src.'),
+	])
+	const desk = await openKen(root, readerHome(), drawer.baseUrl)
+	await ask(desk, view('Follow one command', []))
+	await ask(desk, view('Follow it again', []))
+	await ask(desk, view('Fewer parts', ['src']))
+	await ask(desk, view('Follow it inside src', ['src']))
+	const asked: { id: string }[] = (await json(desk, '/api/questions')).questions
+	const replies: Replies = new Map()
+	for (const row of asked) {
+		const read = await json(desk, `/api/questions/${row.id}`)
+		replies.set(row.id, { ...read.entry, topics: read.topics })
+	}
+	const look = async (query: string) => (await json(desk, `/api/layout?${query}`)).look as object
+	return { asked, replies, whole: await look('change=none'), src: await look('change=none&within=src') }
+}
+const drawn = await drawnPictures()
+
+test("a level's pictures are its parts and then, newest first, each diagram ken drew because the reader asked to see that level another way", () => {
+	const { asked, replies, whole, src } = drawn
+	const [first, second, , inside] = asked.map((row) => row.id)
+
+	assert.deepEqual(
+		picturesOf(whole, asked),
+		[
+			{ kind: 'parts' },
+			{ kind: 'drawn', id: second, title: null, asked: 'Follow it again' },
+			{ kind: 'drawn', id: first, title: null, asked: 'Follow one command' },
+		],
+		'until its reply is read a drawn picture has only the words the reader asked with',
+	)
+	assert.deepEqual(
+		picturesOf(whole, asked, replies).map((picture) => (picture.kind === 'drawn' ? picture.title : null)),
+		[null, 'The same command, once more', 'One command through the code'],
+	)
+	assert.deepEqual(
+		picturesOf(src, asked, replies),
+		[{ kind: 'parts' }, { kind: 'drawn', id: inside, title: 'Inside src', asked: 'Follow it inside src' }],
+		'the request that drew the parts of src again is not a picture of its own, and neither is a diagram of the whole project',
+	)
+
+	assert.equal(contentOf(whole, asked, replies, first).kind, 'drawn')
+	assert.equal(
+		contentOf(src, asked, replies, first).kind,
+		'level',
+		'inside src the parts show, not a picture of the whole project',
+	)
+})
+
+test('a drawn picture shows its drawing on the canvas under its own tab, and the inspector tells it by the detail: the words of ken, the picked arrow, then the line that arrow quotes', () => {
+	const { asked, replies, whole } = drawn
+	const first = asked[0]?.id ?? ''
+	const ui = { panel: { kind: 'checks' }, openQuotes: new Set(), openDecisions: new Set(), unfolded: new Set() }
+	const home = (detail: string, selected: object | null) => ({
+		...freshHome(() => null, ui),
+		look: whole,
+		detail,
+		selected,
+		pictures: picturesOf(whole, asked, replies),
+		shown: first,
+		content: contentOf(whole, asked, replies, first),
+	})
+
+	const canvas = canvasHtml(home('big', null), asked)
+	assert.match(canvas, new RegExp(`data-id="${first}"[^>]*aria-pressed="true"`), 'its tab is the pressed one')
+	assert.match(canvas, /data-mermaid="sequenceDiagram/)
+	assert.doesNotMatch(canvas, /class="pv-box/, 'the parts give their place to the drawing')
+
+	const big = inspectorHtml(home('big', null), ENV)
+	assert.match(big, /The command runs the core\./)
+	assert.doesNotMatch(big, /data-mermaid/, 'the drawing is on the canvas, so the inspector does not draw it again')
+
+	// ken numbers the two participants 1 and 2, so the second message is number 4.
+	const picked = { kind: 'element', number: 4 }
+	const how = open(inspectorHtml(home('how', picked), ENV))
+	assert.match(how, /class="path-n">4</)
+	assert.match(how, /From Core to Command: returns once it saved/)
+	assert.match(how, /src\/core\/run\.ts/, 'it says where the line it quotes is')
+	assert.doesNotMatch(how, /class="code"/, 'the line itself waits for "In the code"')
+
+	const code = open(inspectorHtml(home('code', picked), ENV))
+	assert.match(code, /class="code"[\s\S]*save\(\)/)
+	assert.doesNotMatch(code, /runs the work/, "the other arrow's row is not in this one")
 })

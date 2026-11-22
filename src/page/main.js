@@ -1184,6 +1184,7 @@ document.addEventListener('click', (event) => {
 		render()
 	}
 	if (el && !el.disabled) void actions[el.dataset.act](el)
+	else if (state.view === 'home') home.pick(event.target)
 	else if (state.thread.length > 0) chooseInDrawing(event.target)
 })
 

@@ -1,12 +1,13 @@
 // The home's canvas: where the reader is, why ken opened this way in, the change laid over the parts, and the picture
 // of one level. A level is the parts ken's model named, with their jobs and the arrows between them, or the folders
 // when nobody named them. The chosen detail decides what each box says: its job, its stop on the reading path, its
-// paths. A change marks the parts it touched and fades the rest. A box is a button that selects its part.
+// paths. A change marks the parts it touched and fades the rest. A box is a button that selects its part. When ken
+// drew the level another way because the reader asked, a row of tabs offers each drawn picture in place of the parts.
 import { partClass } from '../project/part-colours.js'
 import { pictureHtml } from '../project/parts-picture.js'
 import { stepParts } from '../project/walk.js'
-import { count, esc, list, prose } from '../views/format.js'
-import { pathOf, placeOf, shownDetail } from './content.js'
+import { at, count, esc, label, list, prose } from '../views/format.js'
+import { diagramOf, pathOf, placeOf, shownDetail } from './content.js'
 
 // The changes "Review a change" offers, by kind, in the order of the picker.
 const REVIEW_GROUPS = [
@@ -16,9 +17,11 @@ const REVIEW_GROUPS = [
 	['commit', 'Recent commits'],
 ]
 
-// Paths a box lists before it says how many more it holds, and changes ken explained that the picker offers.
+// Paths a box lists before it says how many more it holds, changes ken explained that the picker offers, and drawn
+// pictures that get a tab before the rest go behind "Older".
 const SHOWN_PATHS = 3
 const SHOWN_EXPLAINED = 8
+const SHOWN_DRAWN = 4
 
 export function levelName(home) {
 	return home.trail.length === 1 ? 'The whole project' : home.trail.at(-1).name
@@ -268,18 +271,67 @@ function looseHtml(look) {
 	return changed + loose
 }
 
+// The tabs over the canvas, for a level with drawn pictures: the parts, then the newest drawn pictures, each under its
+// diagram's title, and the rest behind "Older". The picture on screen always has a tab, in the last place when it is
+// an older one.
+function tabsHtml(home) {
+	const [, ...drawn] = home.pictures
+	if (drawn.length === 0) return ''
+	const on = home.content.kind === 'drawn' ? home.content.id : null
+	const first = drawn.slice(0, SHOWN_DRAWN)
+	const older = drawn.slice(SHOWN_DRAWN)
+	const swap = older.findIndex((picture) => picture.id === on)
+	if (swap >= 0) [first[SHOWN_DRAWN - 1], older[swap]] = [older[swap], first[SHOWN_DRAWN - 1]]
+	const name = (picture) => picture.title ?? picture.asked
+	const tab = (id, text, pressed) =>
+		`<button class="pic-tab" data-act="home-picture" data-id="${esc(id)}" data-key="pic-${esc(id)}" aria-pressed="${pressed}">${text}</button>`
+	const tabs = [
+		tab('', 'The parts', on === null),
+		...first.map((picture) =>
+			tab(picture.id, `<span title="${esc(name(picture))}">${prose(name(picture))}</span>`, picture.id === on),
+		),
+	]
+	const rest =
+		older.length === 0
+			? ''
+			: `<details class="pic-older"><summary data-key="pic-older">Older (${older.length})</summary><ul>${older
+					.map(
+						(picture) =>
+							`<li><button class="link" data-act="home-picture" data-id="${esc(picture.id)}" data-key="pic-${esc(picture.id)}">${prose(name(picture))}</button></li>`,
+					)
+					.join('')}</ul></details>`
+	return `<div class="pic-row"><div class="pic-tabs" role="group" aria-label="Pictures of this level">${tabs.join('')}</div>${rest}</div>`
+}
+
+// A drawn picture in place of the parts: the diagram's title and label, the reader's own words, and the drawing. A
+// drawing wider than the canvas scrolls sideways inside its frame.
+function drawnHtml({ picture, q }) {
+	const diagram = diagramOf(q)
+	if (!diagram) return '<p class="home-line">Reading the picture ken drew.</p>'
+	return `<section class="diagram home-drawn" aria-labelledby="home-drawn-title">
+			<h2 class="diagram-title" id="home-drawn-title">${label(diagram.label)}${prose(diagram.title)}</h2>
+			<p class="home-line">Drawn the way you asked: ${esc(picture.asked)}. ken's model drew it ${at(q.askedAt)}, and ken checked the lines it quotes against the code.</p>
+			<p class="drawing-hint">The drawing is wider than the room it has here. Scroll it sideways to see the rest.</p>
+			<div class="drawing-frame"><div class="drawing" data-diagram="${esc(picture.id)}" data-mermaid="${esc(diagram.mermaid)}" role="img" aria-label="Diagram: ${esc(diagram.title)}. The numbered list at How it works says the same in words."></div></div>
+		</section>`
+}
+
 // home is the home's state, and rows the reader's saved questions, which name the changes ken explained before.
 export function canvasHtml(home, rows) {
 	const { look, suggestion } = home
 	const inside = home.trail.length > 1
-	const heading = `${trailHtml(home.trail)}<h1 class="home-level ${inside ? colourOf(home)('') : ''}" id="home-level" tabindex="-1">${esc(levelName(home))}</h1>`
-	if (!look && !home.problem) return `${heading}<p class="home-line">Reading the project from git.</p>`
+	const name = `${trailHtml(home.trail)}<h1 class="home-level ${inside ? colourOf(home)('') : ''}" id="home-level" tabindex="-1">${esc(levelName(home))}</h1>`
+	if (!look && !home.problem) return `${name}<p class="home-line">Reading the project from git.</p>`
+	// The tabs share the line of the level's name while the canvas has room, so they take no height from the picture.
+	const heading = home.problem ? name : `<div class="home-head"><div>${name}</div>${tabsHtml(home)}</div>`
 	// A level the server refused takes the old one off the screen, so nothing under the problem is out of date.
 	if (home.problem) {
 		return `${heading}
 			<p class="home-line" role="alert">ken could not show this. ${home.problem.field ? 'The reason is under the field below.' : esc(home.problem.message)} <button class="link" data-act="home-reset" data-key="home-reset">Show where you are now</button></p>
 			${pickerHtml(home, rows)}`
 	}
+	// The way in and the change laid over belong to the parts, so a drawn picture shows without them.
+	if (home.content.kind === 'drawn') return `${heading}${drawnHtml(home.content)}`
 	const why =
 		suggestion && home.wayIn === suggestion.suggested
 			? `<p class="home-why">ken opened this way in for you. ${esc(suggestion.why)}</p>`

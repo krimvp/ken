@@ -2,11 +2,22 @@
 // the reader took, the detail they chose, and what they picked in the picture. The server reads the level from git on
 // every move. The runs of ken's model that the home starts stay on the home: the page holds the run, and this module
 // decides what the home shows when it ends.
+import { numberAt } from '../draw-diagrams.js'
 import { learnParts } from '../project/part-colours.js'
 import { stepParts, stopTopics } from '../project/walk.js'
 import { chipQuestion } from '../views/reply.js'
 import { askedQuestion } from './ask-drawer.js'
-import { contentOf, firstUnseen, pathOf, placeOf, repliesOf, shownDetail, stoodOn } from './content.js'
+import {
+	besideCanvas,
+	contentOf,
+	firstUnseen,
+	pathOf,
+	picturesOf,
+	placeOf,
+	repliesOf,
+	shownDetail,
+	stoodOn,
+} from './content.js'
 
 const WHOLE = { name: 'Whole project', within: [] }
 const WAYS = ['learn', 'catch-up', 'review']
@@ -33,6 +44,10 @@ export function freshHome(stored, ui) {
 		suggestion: null,
 		problem: null,
 		notes: [],
+		// The pictures of the level, and the id of the drawn one on screen: null while the parts are.
+		pictures: [{ kind: 'parts' }],
+		shown: null,
+		// What the reader picked: a part, a step of a walkthrough, or a numbered element of a drawn picture.
 		selected: null,
 		content: { kind: 'folders' },
 		// The saved questions the content names, by id, once read.
@@ -102,21 +117,28 @@ export function homeActions({ state, render, getJson, post, send, stored, store,
 		const home = state.home
 		if (!home.look) return
 		const find = () => {
-			home.content = contentOf(home.look, state.rows, home.replies)
+			home.pictures = picturesOf(home.look, state.rows, home.replies)
+			home.content = contentOf(home.look, state.rows, home.replies, home.shown)
 		}
 		find()
-		// A pick the new level does not hold is let go.
+		// A drawn picture this level does not have gives its place to the parts, and a pick the screen does not hold
+		// is let go.
+		if (home.content.kind !== 'drawn') home.shown = null
 		const { selected } = home
-		const held =
-			selected?.kind === 'part'
-				? home.look.boxes.some((box) => box.name === selected.name)
-				: home.content.kind === 'change'
-		if (selected && !held) home.selected = null
+		const held = {
+			part: () => home.content.kind !== 'drawn' && home.look.boxes.some((box) => box.name === selected.name),
+			step: () => home.content.kind === 'change',
+			element: () => home.content.kind === 'drawn',
+		}
+		if (selected && !held[selected.kind]()) home.selected = null
 		render()
-		const unread = repliesOf(home.content).filter((each) => each.q === null)
+		// shortcut: a tab names its picture by the diagram's title, which only the reply holds, so the reply of every
+		// drawn picture of the level is read. Send the title with the row when a level has more than a few dozen.
+		const named = [...repliesOf(home.content), ...home.pictures.slice(1)].map((each) => each.id)
+		const unread = [...new Set(named)].filter((id) => !home.replies.has(id))
 		if (unread.length === 0) return
 		await Promise.all(
-			unread.map(async ({ id }) => {
+			unread.map(async (id) => {
 				try {
 					home.replies.set(id, fromView(await getJson(`/api/questions/${encodeURIComponent(id)}`)))
 				} catch (error) {
@@ -141,6 +163,7 @@ export function homeActions({ state, render, getJson, post, send, stored, store,
 		Object.assign(home, {
 			wayIn,
 			at: '',
+			shown: null,
 			selected: null,
 			detail: DETAILS.find((detail) => detail === kept) ?? FIRST_DETAIL[wayIn],
 			change: wayIn === 'review' ? '' : 'none',
@@ -214,6 +237,8 @@ export function homeActions({ state, render, getJson, post, send, stored, store,
 			if (!state.ui.wide) (open ?? $('#insp-title'))?.scrollIntoView({ block: 'start' })
 			else if (open) open.scrollIntoView({ block: 'nearest' })
 			else if ($('#insp-scroll')) $('#insp-scroll').scrollTop = 0
+			// A drawn picture can be longer and wider than the canvas, so the number picked in the list comes into view.
+			if (state.ui.wide) $('#home-canvas .drawing .is-open')?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
 		}
 		await reach()
 	}
@@ -222,6 +247,7 @@ export function homeActions({ state, render, getJson, post, send, stored, store,
 		const home = state.home
 		const step = pathOf(home.look, home.content)[k]
 		if (!step) return
+		if (home.content.kind === 'drawn') return select({ kind: 'element', number: step.number })
 		return select(step.part === null ? { kind: 'step', number: step.number } : { kind: 'part', name: step.part })
 	}
 
@@ -237,7 +263,7 @@ export function homeActions({ state, render, getJson, post, send, stored, store,
 
 	// The level changes under the reader's focus, so focus goes to the level's heading, which names where they are.
 	async function moveTo(trail) {
-		Object.assign(state.home, { trail, selected: null, openArrows: new Set() })
+		Object.assign(state.home, { trail, shown: null, selected: null, openArrows: new Set() })
 		await refresh()
 		$('#home-level')?.focus({ preventScroll: true })
 		$('#home-canvas').scrollTop = 0
@@ -259,6 +285,12 @@ export function homeActions({ state, render, getJson, post, send, stored, store,
 	// shows in its place, and a run that made nothing the home can show says so, with the way to its full reply.
 	async function ended(kind, q) {
 		const home = state.home
+		// A diagram ken drew for the request opens on the canvas in place of the parts. A request that left only a note,
+		// or failed, changes no picture. Every other run is about the parts.
+		const drew = kind === 'redraw' && picturesOf(home.look, state.rows).some((picture) => picture.id === q.id)
+		const aboutParts = kind !== 'redraw' || state.rows.find((row) => row.id === q.id)?.view?.drew === 'parts'
+		const next = drew ? q.id : aboutParts ? null : home.shown
+		if (home.shown !== next) Object.assign(home, { shown: next, selected: null })
 		await Promise.all([loadLayout(), loadNotes()])
 		await settle()
 		const { content } = home
@@ -273,11 +305,8 @@ export function homeActions({ state, render, getJson, post, send, stored, store,
 				redraw: () => true,
 			}[kind]()
 		if (!made) home.ended = { outcome: q.outcome, error: q.error, id: q.id }
-		else if (kind === 'redraw') {
-			// The picture shows the parts ken drew, so the note leaves that card out. A diagram or a claim stays in it.
-			const items = q.reply.items.filter((item) => item.kind !== 'card' || item.card.kind !== 'layout')
-			home.said = { asked: home.redraw.asked, q: { ...q, reply: { ...q.reply, items } } }
-		} else if (kind === 'tour' && home.detail === 'big') {
+		else if (kind === 'redraw') home.said = { asked: home.redraw.asked, q: besideCanvas(q, drew) }
+		else if (kind === 'tour' && home.detail === 'big') {
 			home.detail = 'how'
 			await stepTo(firstUnseen(home.look, pathOf(home.look, content)))
 		}
@@ -323,6 +352,11 @@ export function homeActions({ state, render, getJson, post, send, stored, store,
 			return stepTo(k)
 		},
 		'home-clear': () => select(null),
+		// A tab over the canvas shows the parts, or one drawn picture in their place.
+		'home-picture'(el) {
+			Object.assign(state.home, { shown: el.dataset.id || null, selected: null })
+			return settle()
+		},
 		'home-tour'() {
 			const home = state.home
 			home.detail = 'how'
@@ -507,11 +541,21 @@ export function homeActions({ state, render, getJson, post, send, stored, store,
 			trail: [WHOLE, { name: box.name, within: box.paths }],
 			at: '',
 			change,
+			shown: null,
 			selected: null,
 		})
 		await show()
 		$('#home-level')?.focus({ preventScroll: true })
 	}
 
-	return { actions, start, ended, submit, input, change, key, openAt }
+	// A box or an arrow picked in the drawing of a drawn picture picks its row in the inspector, and lets go of it when
+	// picked again.
+	function pick(target) {
+		const number = target.closest('#home-canvas') ? numberAt(target) : null
+		if (number === null) return
+		const { selected } = state.home
+		void select(selected?.number === number ? null : { kind: 'element', number })
+	}
+
+	return { actions, start, ended, submit, input, change, key, openAt, pick }
 }
