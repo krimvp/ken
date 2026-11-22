@@ -28,6 +28,7 @@ import { changedLine, changedTopics, lensHtml, mapViewHtml } from './views/map.j
 import { openCount, openViewHtml } from './views/open.js'
 import { cardsOf, isMoved, itemsOf, knowPartHtml, LEGEND, replyHtml, stepCardsHtml } from './views/reply.js'
 import { endedHtml, noChecksPanelHtml, noModelHtml, stepsHtml, workingHtml } from './views/states.js'
+import { freshYou, youActions } from './you/you-actions.js'
 
 const $ = (selector) => document.querySelector(selector)
 const wideQuery = matchMedia('(min-width: 1100px)')
@@ -69,6 +70,7 @@ const state = {
 	arch: freshArch(),
 	brief: freshBrief(),
 	procs: freshProcesses(),
+	you: freshYou(),
 	project: null,
 	model: null,
 	rows: [],
@@ -1090,12 +1092,15 @@ app.briefPaths = () => brief.readPaths()
 app.reread = () => shell.reread()
 const home = homeActions(app)
 app.home = home
+app.level = home
 const brief = briefActions(app)
 app.brief = brief
 const arch = archActions(app)
 app.arch = arch
 const procs = processActions(app)
 app.procs = procs
+const you = youActions(app)
+app.you = you
 const shell = shellActions(app)
 app.shell = shell
 
@@ -1116,6 +1121,7 @@ const actions = {
 	...arch.actions,
 	...brief.actions,
 	...procs.actions,
+	...you.actions,
 	map: () => (state.view === 'map' ? closeMap() : showMap()),
 	decisions: () => (state.view === 'decisions' ? closeDecisions() : showDecisions()),
 	'cc-open': (el) => openChangePart(Number(el.dataset.turn), Number(el.dataset.index)),

@@ -12,7 +12,7 @@ import { fill } from './fill.js'
 import { readPlace, writePlace } from './place.js'
 import { barTitle, findConcepts, foundHtml, railHtml, settingsHtml } from './shell.js'
 
-const OLDER = ['changes', 'you']
+const OLDER = ['changes']
 const narrow = matchMedia('(max-width: 760px)')
 
 // What the frame holds: the page, the top level of the project for the Home page, what search can find, what the
@@ -85,7 +85,7 @@ export function shellActions(app) {
 		if (page === 'home') return loadTop()
 		if (page === 'architecture') return app.arch.enter()
 		if (page === 'processes') return app.procs.enter()
-		if (page === 'you') return app.showMap()
+		if (page === 'you') return app.you.enter()
 		Object.assign(home, { selected: null, opened: true, why: null })
 		const kept = Object.keys(WAYS).find((way) => way === app.stored('ken-way-in'))
 		const way = [home.wayIn, kept, home.suggestion?.suggested].find((each) => each && each !== 'learn')
@@ -98,7 +98,7 @@ export function shellActions(app) {
 		Object.assign(shell, { page, settingsOpen: false })
 		shell.search.open = false
 		state.menuOpen = false
-		state.view = state.base = page === 'you' ? 'map' : 'home'
+		state.view = state.base = 'home'
 		render()
 		await enter(page)
 		render()
@@ -110,7 +110,7 @@ export function shellActions(app) {
 		const { home, arch, brief } = state
 		Object.assign(shell, { page: place.page, settingsOpen: false })
 		Object.assign(arch, { layer: place.layer, process: place.process, drawOpen: false })
-		state.view = state.base = place.page === 'you' ? 'map' : 'home'
+		state.view = state.base = 'home'
 		if (place.older)
 			Object.assign(home, place.older, { askOpen: false, openArrows: new Set(), opened: false, fixing: null })
 		else Object.assign(home, { trail: place.trail, change: place.change, selected: null, shown: null, at: '' })
@@ -129,8 +129,7 @@ export function shellActions(app) {
 		addressed = coarse(placeNow())
 		render()
 		if (first) await Promise.all([loadTop(), loads.loadNotes(), loads.loadReader(), app.prefs.load()])
-		if (place.page === 'you') await app.showMap()
-		else if (place.page === 'architecture') await app.arch.enter()
+		if (place.page === 'architecture') await app.arch.enter()
 		else if (place.older) await loads.refresh()
 		else if (place.page !== 'home') await enter(place.page)
 		else if (!first) await loadTop()
@@ -179,6 +178,10 @@ export function shellActions(app) {
 		procs.hidden = older || shell.page !== 'processes'
 		if (procs.hidden) fill(procs, '')
 		else app.procs.draw(env)
+		const you = $('#pg-you')
+		you.hidden = older || shell.page !== 'you'
+		if (you.hidden) fill(you, '')
+		else app.you.draw()
 		$('#pg-old').hidden = !older
 		if (start.hidden) fill(start, '')
 		else {
@@ -316,6 +319,7 @@ export function shellActions(app) {
 		const typing = event.target.matches?.('input, textarea, select')
 		const { brief, home } = state
 		if (closeSettings()) return true
+		if (shell.page === 'you' && app.you.closeFix()) return true
 		if (home.askOpen) return Boolean(app.home.actions['ask-close']()) || true
 		if (brief.fixing) return Boolean(app.brief.actions['brief-fix']()) || true
 		if (app.arch.closeDraw()) return true
