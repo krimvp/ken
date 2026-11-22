@@ -9,6 +9,7 @@ export {
 	type LayoutSources,
 	type LookBox,
 	lookAtLayout,
+	pictureBefore,
 	type Scope,
 	type Touched,
 } from './layout-look.ts'

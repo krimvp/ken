@@ -1,7 +1,8 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { MODEL_EXAMPLE, type ModelFlags } from '../agent/index.ts'
+import { layoutDraft } from '../diagram/index.ts'
 import { authorsOf, decide, openItems, timeRange } from '../follow-up/index.ts'
-import { changeChoices, lookAtLayout, readLayoutAsk } from '../layout/index.ts'
+import { changeChoices, type LayoutAsk, lookAtLayout, pictureBefore, readLayoutAsk } from '../layout/index.ts'
 import type { MapSignal } from '../map/index.ts'
 import { MERMAID_FILE, PAGE_FOLDER } from '../page/index.ts'
 import { OUTCOMES } from '../record/index.ts'
@@ -52,6 +53,11 @@ export async function openServer(options: {
 	const openNow = async () => openItems(repo, await record.read(), (await map.read(new Date())).states)
 	const files = await readPageFiles(PAGE_FOLDER, { '/mermaid.min.js': MERMAID_FILE })
 	let port = 0
+
+	async function layoutView(ask: LayoutAsk) {
+		const [look, changes] = await Promise.all([lookAtLayout(layout, ask, new Date()), changeChoices(layout)])
+		return { look, changes }
+	}
 
 	async function route(request: IncomingMessage, response: ServerResponse) {
 		const problem = refusal(request, port)
@@ -108,8 +114,29 @@ export async function openServer(options: {
 			}
 			const ask = await readLayoutAsk(layout, raw)
 			if (ask.kind !== 'ok') return sendJson(response, 400, { message: ask.message, field: ask.field })
-			const [look, changes] = await Promise.all([lookAtLayout(layout, ask.ask, new Date()), changeChoices(layout)])
-			return sendJson(response, 200, { look, changes })
+			return sendJson(response, 200, await layoutView(ask.ask))
+		}
+		if (where === 'POST /api/layout/back') {
+			const body = await readJson(request)
+			if (body.kind !== 'ok') return sendJson(response, 400, { message: body.problem })
+			const within = fieldOf(body.value, 'within')
+			if (!Array.isArray(within) || !within.every((each) => typeof each === 'string')) {
+				return sendJson(response, 400, { message: 'Send within: the paths of the level, as a list.' })
+			}
+			const ask = await readLayoutAsk(layout, { within })
+			if (ask.kind !== 'ok') return sendJson(response, 400, { message: ask.message, field: ask.field })
+			const pictures = pictureBefore((await record.read()).entries, ask.ask.within)
+			if (!pictures) {
+				return sendJson(response, 409, { message: 'ken has no earlier picture of this level to go back to.' })
+			}
+			// A copy of the earlier picture, written as the newest: the record only grows, and the newest picture shows.
+			const copy = { kind: 'layout' as const, ...layoutDraft(pictures.before), replaces: pictures.shown.id }
+			const appended = await record.append([copy])
+			if (appended.kind === 'refused') {
+				const message = `ken could not bring the earlier picture back: ${appended.problems.join(' ')}`
+				return sendJson(response, 409, { message })
+			}
+			return sendJson(response, 200, await layoutView(ask.ask))
 		}
 		if (where === 'GET /api/authors') {
 			const recent = await timeRange(repo, { kind: 'days', days: RECENT_DAYS }, new Date())

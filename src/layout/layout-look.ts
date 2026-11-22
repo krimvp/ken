@@ -93,9 +93,7 @@ export async function lookAtLayout(
 	const head = await repo.resolve('HEAD', signal)
 	if (head.kind !== 'ok') throw new Error(`${sources.root} has no HEAD commit to lay out`)
 	const read = await sources.record.read()
-	const versions = read.entries.flatMap((entry) =>
-		entry.kind === 'layout' && sameScope(entry, ask.within) ? [entry] : [],
-	)
+	const versions = versionsOf(read.entries, ask.within)
 	const level =
 		versions.length > 0
 			? await namedLevel(repo, versions, ask, head.commit, signal)
@@ -226,6 +224,21 @@ async function folderLevel(repo: Repository, ask: LayoutAsk, head: CommitHash, s
 // other way round, such as "is used by", would say the opposite, so it reads as "uses".
 function fromStart(verb: string): string {
 	return /^(is|are|gets?)\b|\bby$/i.test(verb.trim()) ? 'uses' : verb
+}
+
+// The picture of a level that shows at the commit checked out, and the newest one before it whose parts or arrows
+// differ: the one "back to the picture before" brings back. null when the level has no such earlier picture.
+export function pictureBefore(entries: RecordEntry[], within: Scope): { shown: Stored; before: Stored } | null {
+	const versions = versionsOf(entries, within)
+	if (versions.length === 0) return null
+	const shown = newest(versions)
+	const drawn = (version: Stored) => JSON.stringify([version.parts, version.arrows])
+	const earlier = versions.filter((version) => version !== shown && drawn(version) !== drawn(shown))
+	return earlier.length === 0 ? null : { shown, before: newest(earlier) }
+}
+
+function versionsOf(entries: RecordEntry[], within: Scope): Stored[] {
+	return entries.flatMap((entry) => (entry.kind === 'layout' && sameScope(entry, within) ? [entry] : []))
 }
 
 // A merge of two clones' records can put a newer line before an older one, so the newest goes by when ken wrote each,
