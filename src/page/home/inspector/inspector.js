@@ -303,7 +303,7 @@ function workingView(home, running, seconds) {
 	const asked = running.onHome.kind === 'redraw' ? `<p class="insp-asked">"${esc(home.redraw.asked)}"</p>` : ''
 	return {
 		title,
-		body: `${asked}<p class="small muted">The picture stays as it is until the run ends. ken keeps every run under Earlier replies.</p>
+		body: `${asked}<p class="small muted">The picture stays as it is until the run ends. The run stops if you close or reload this tab. ken keeps every run under Earlier replies.</p>
 			${workingHtml(running.q, 0, home.stepsOpen, seconds, doing)}`,
 	}
 }

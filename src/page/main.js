@@ -574,11 +574,23 @@ function caretOf(box) {
 	return box?.matches?.('input:not([type]), textarea') ? [box.selectionStart, box.selectionEnd] : null
 }
 
+// What a run of ken's model is doing, for a screen reader: what the run is for, and its newest action. The line is in
+// index.html, outside everything render draws again, and is written only when it changes, so the clock is never read out.
+function announce() {
+	const status = $('#run-status')
+	const run = state.running
+	const doing = run?.onHome ? DOING[run.onHome.kind][1] : "ken's model is reading the project"
+	const newest = run?.q.steps.findLast((step) => step.kind === 'tool')?.text ?? ''
+	const said = run ? `${doing}. ${newest}`.trim() : status.textContent === '' ? '' : 'The run ended.'
+	if (status.textContent !== said) status.textContent = said
+}
+
 // The key of what had the keyboard when its region closed for a read, so it gets the keyboard back when it opens.
 let focusLost = null
 
 function render() {
 	hideTip()
+	announce()
 	const ui = state.ui
 	ui.wide = wideQuery.matches
 	const active = document.activeElement

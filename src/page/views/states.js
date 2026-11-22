@@ -34,7 +34,7 @@ export function workingHtml(q, t, open, seconds, doing = "ken's model is reading
 			? ''
 			: `<p class="small"><button class="link" data-act="steps" data-turn="${t}" data-key="steps-${t}">Show ${count(hidden, 'earlier action', 'earlier actions')}</button></p>`
 	const steps = [...q.steps.slice(hidden), ...(q.typing ? [{ kind: 'text', text: q.typing }] : [])]
-	return `<div class="working"><p class="working-head" aria-live="polite"><span>${doing}</span><span class="small muted" id="working-clock">${duration(seconds)} so far, ${count(tools, 'action', 'actions')}</span></p>
+	return `<div class="working"><p class="working-head"><span>${doing}</span><span class="small muted" id="working-clock">${duration(seconds)} so far, ${count(tools, 'action', 'actions')}</span></p>
 		${earlier}
 		${steps.length === 0 ? '<p class="small muted">Starting.</p>' : stepsHtml(steps, Boolean(q.typing))}
 		<p class="actions"><button class="quiet-button" data-act="stop" data-key="stop">Stop</button></p></div>`
