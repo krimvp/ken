@@ -680,6 +680,16 @@ html {
 	outline: 2px solid var(--color-focus);
 }
 
+/* A marked box also glows, so the reader finds it among boxes whose lines are as heavy. */
+:is(#thread, #home) .drawing svg g.is-open:not(.edgeLabel, .relationshipLabel) {
+	filter: drop-shadow(0 0 5px var(--color-focus));
+}
+
+/* A cell of an entity is as wide as its words at their usual weight, so bold words would be cut off in it. */
+:is(#thread, #home) .drawing svg[aria-roledescription="er"] .node.is-open :is(span, p) {
+	font-weight: inherit;
+}
+
 :is(#thread, #home) .drawing svg .label-back {
 	fill: var(--color-canvas);
 }
