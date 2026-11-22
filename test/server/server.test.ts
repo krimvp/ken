@@ -651,6 +651,14 @@ test('the layout comes from git with no model: the query picks the commit, a com
 	)
 })
 
+test('the page calls the project what its package.json calls it, and by its folder when it has none', async () => {
+	const { root: named } = buildRepository([
+		{ message: 'feat: start', files: { 'package.json': '{ "name": "shop" }\n', 'src/pay.ts': 'export {}\n' } },
+	])
+	assert.equal((await json(await open(tempFolder('ken-home-'), null, named), '/api/state')).name, 'shop')
+	assert.equal((await json(await open(tempFolder('ken-home-'), null), '/api/state')).name, path.basename(root))
+})
+
 test('"Ask ken to name these parts" sends the folder split to the model, and the parts it names and what it says the level is then show in the layout with no model', async () => {
 	const { root: repo } = buildRepository([
 		{

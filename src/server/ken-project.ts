@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import path from 'node:path'
 import { type Chat, type ModelFlags, type ModelUnset, readModelConfig, startChat } from '../agent/index.ts'
@@ -13,10 +14,12 @@ import { questionDesk } from './question-desk.ts'
 
 // What "ken open" and "ken live" share for one project: its git, the reader's history, map and notes, the lines on what
 // they looked at, the record, what the layout reads, the chat when a model is set, the desk that runs one model call at a time, and live mode, which writes
-// its notes in a chat of its own. live is null without a model.
+// its notes in a chat of its own. live is null without a model. shown is the folder as the reader would type it, and
+// name what the page calls the project.
 export type KenProject = {
 	root: string
 	shown: string
+	name: string
 	repo: Repository
 	history: History
 	record: RecordStore
@@ -87,6 +90,35 @@ export async function openProject(options: {
 
 	return {
 		kind: 'ok',
-		project: { root, shown, repo, history, record, map, readerNotes, seen, layout, model, desk, live, close },
+		project: {
+			root,
+			shown,
+			name: await nameOf(root),
+			repo,
+			history,
+			record,
+			map,
+			readerNotes,
+			seen,
+			layout,
+			model,
+			desk,
+			live,
+			close,
+		},
 	}
+}
+
+// The project's own name: the one its package.json gives it, else the name of its folder. ken's model reads the same
+// file, so the sentence it writes on the project and the page call the project the same thing.
+async function nameOf(root: string): Promise<string> {
+	try {
+		const manifest: unknown = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'))
+		if (typeof manifest === 'object' && manifest !== null && 'name' in manifest) {
+			if (typeof manifest.name === 'string' && manifest.name !== '') return manifest.name
+		}
+	} catch {
+		// No package.json, or one that does not parse: the folder names the project.
+	}
+	return path.basename(root)
 }

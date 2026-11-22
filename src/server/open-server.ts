@@ -107,7 +107,8 @@ export async function openServer(options: {
 			const look = top.kind === 'ok' ? await lookAtLayout(layout, top.ask, new Date()) : null
 			const parts = look?.boxes.map(({ name, paths }) => ({ name, paths })) ?? []
 			const named = Boolean(look?.named)
-			return sendJson(response, 200, { project: shown, model: state, live: live?.on() ?? false, parts, named })
+			const on = live?.on() ?? false
+			return sendJson(response, 200, { project: shown, name: project.name, model: state, live: on, parts, named })
 		}
 		if (where === 'GET /api/questions') return sendJson(response, 200, { questions: await desk.rows() })
 		if (where === 'GET /api/live') {
