@@ -488,11 +488,11 @@ function changeLines(change: Change, want: Want): string[] {
 		...(want === 'walk'
 			? [
 					'Walk me through the change in steps, in the order a reviewer should read them. A step holds one thing: if a step needs "and" to join two things, make it two steps.',
-					'After the last step, write one line that names what the steps leave out and a reviewer should still open, such as a changed rule or boundary table, a test of new behaviour, or docs. If the steps leave nothing out, say so.',
+					'After the last step, and only there, write one line that names what the steps leave out and a reviewer should still open, such as a changed rule or boundary table, a test of new behaviour, or docs. If the steps leave nothing out, say so.',
 				]
 			: [
-					'Tell its story in two to five sentences of plain prose: what was wrong or missing before, what the change does now, and why. No list and no heading. No file names and no numbers unless one is the point.',
-					"If most of the change is tests or upkeep, name the one change it makes to the product's own code.",
+					'Tell its story in plain prose: what was wrong or missing before, what the change does now, and why. Five sentences is the most, so tell the main thing the change does and leave the smaller things out. I will ask for them. No list and no heading. No file names and no numbers unless one is the point.',
+					"If most of the change is tests or upkeep, one of those sentences names the one change it makes to the product's own code.",
 				]),
 		`Before you say how something was before the change, read the code at ${short(base)}. A commit message can describe a state the code never had.`,
 	]
