@@ -197,7 +197,7 @@ export function canvasCamera(page, arch, drawer, zoomed = () => {}) {
 	)
 	page.addEventListener('focusin', (event) => {
 		const el = event.target.closest?.(
-			'.k-blk, .k-verb, .k-rt-part, .k-rt-store, .k-rt-bus-head, .k-rt-out, .k-rt-person, .k-rt-fold, .k-rt-flabel, .k-rt-label, .k-rt-mark, .k-wd-tile',
+			'.k-blk, .k-verb, .k-rt-part, .k-rt-store, .k-rt-bus-head, .k-rt-out, .k-rt-person, .k-rt-fold, .k-rt-flabel, .k-rt-label, .k-rt-knob, .k-rt-mark, .k-wd-tile',
 		)
 		if (el && !drag) reveal(el)
 	})

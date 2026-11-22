@@ -263,19 +263,19 @@ const {
 	viewsOffered,
 	viewOn,
 }: {
-	viewsOffered: (home: object) => string[]
+	viewsOffered: (home: object, top?: object | null) => string[]
 	viewOn: (arch: { view: string | null }, offered: string[]) => string
 } = await import(path.join(PAGE, 'arch-views/switch.js'))
 
-test('the switch offers only the drawings the level has, and opens on "Where it runs"', () => {
+test('the switch offers only the drawings the project has, still offers them inside a part, and opens on "Where it runs"', () => {
 	const top = (views: object | null) => ({ trail: [{ within: [] }], look: { views } })
 	assert.deepEqual(viewsOffered(top(null)), [])
 	assert.deepEqual(viewsOffered(top({ world: null, runtime: null })), [])
 	assert.deepEqual(viewsOffered(top({ world: DEMO.world, runtime: null })), ['world', 'parts'])
 	const both = viewsOffered(top(DEMO))
 	assert.deepEqual(both, ['world', 'runtime', 'parts'])
-	const inside = { trail: [{ within: [] }, { within: ['src'] }], look: { views: DEMO } }
-	assert.deepEqual(viewsOffered(inside), [], 'below the top level only the parts are drawn')
+	const inside = { trail: [{ within: [] }, { within: ['src'] }], look: { views: null } }
+	assert.deepEqual(viewsOffered(inside, DEMO), both, "inside a part the switch still offers the top's drawings")
 	assert.equal(viewOn({ view: null }, both), 'runtime')
 	assert.equal(viewOn({ view: 'world' }, both), 'world', "the reader's last choice is kept")
 	assert.equal(viewOn({ view: 'runtime' }, ['world', 'parts']), 'world', 'a choice the level lacks falls back')

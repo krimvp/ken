@@ -44,7 +44,7 @@ export function archActions(app) {
 	// A brief open beside the canvas takes its right side on a wide window, and lies over all of it on a narrow one.
 	const drawer = () => (state.brief.id !== null && wide.matches ? $('#brief').offsetWidth : 0)
 	arch.view = app.stored('ken-arch-view')
-	const onShow = () => viewOn(arch, viewsOffered(state.home))
+	const onShow = () => (state.home.trail.length > 1 ? 'parts' : viewOn(arch, viewsOffered(state.home)))
 	// Zooming in past 100% opens a folded drawing, and zooming well out folds it again, about the same point.
 	const camera = canvasCamera(page, arch, drawer, (z) => {
 		if (onShow() !== 'runtime') return
@@ -78,7 +78,8 @@ export function archActions(app) {
 		const switched = arch.shown !== null && arch.shown !== view && page.querySelector('#arch-world')
 		const before = switched ? gliders(page) : new Map()
 		arch.shown = view
-		const drawn = fill(page, architectureHtml({ home, arch, env, brief: state.brief.id, column }))
+		const topViews = state.shell.top?.look?.views ?? null
+		const drawn = fill(page, architectureHtml({ home, arch, env, brief: state.brief.id, column, topViews }))
 		if (drawn && arch.drawOpen) {
 			const box = page.querySelector('#redraw-text')
 			if (box && box.value !== home.redraw.text) box.value = home.redraw.text
@@ -134,9 +135,11 @@ export function archActions(app) {
 		return box?.opens ? inside(box) : app.brief.close()
 	}
 
+	// Inside a part the switch takes the reader back up to the drawing they pressed.
 	function showView(view) {
 		arch.view = view
 		app.store('ken-arch-view', view)
+		if (state.home.trail.length > 1 && view !== 'parts') return moveTo([WHOLE])
 		render()
 	}
 

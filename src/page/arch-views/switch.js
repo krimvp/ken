@@ -13,10 +13,11 @@ export const VIEWS_RUN = ['Drawing where it runs', "ken's model is drawing where
 export const VIEW_NAMES = { world: 'In its world', runtime: 'Where it runs', parts: 'How the code is split' }
 const VIEW_ICONS = { world: 'world', runtime: 'runs', parts: null }
 
-// The views the level on the canvas has, in the switch's order. Below the top level only the parts are drawn.
-export function viewsOffered(home) {
-	const views = home.look?.views
-	if (home.trail.length > 1 || !views) return []
+// The views the switch offers, in its order: the top level's drawings, given as top. Below the top level only the
+// parts are drawn, and the others take the reader back up.
+export function viewsOffered(home, top = null) {
+	const views = home.trail.length > 1 ? top : home.look?.views
+	if (!views) return []
 	const offered = [views.world ? 'world' : null, views.runtime ? 'runtime' : null].filter(Boolean)
 	return offered.length === 0 ? [] : [...offered, 'parts']
 }

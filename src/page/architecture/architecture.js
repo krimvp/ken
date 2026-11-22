@@ -203,12 +203,13 @@ function minimapHtml(rects, world) {
 
 const READING = '<p class="k-canvas-line" role="status">Reading the project from git.</p>'
 
-// view is { home, arch, env, brief, column }: the level and what is laid over it, the canvas's own state, what the
-// page around it is doing, the id of the open brief, and whether the window is narrow.
-export function architectureHtml({ home, arch, env, brief, column }) {
+// view is { home, arch, env, brief, column, topViews }: the level and what is laid over it, the canvas's own state,
+// what the page around it is doing, the id of the open brief, whether the window is narrow, and the top level's
+// drawings, which the switch offers at any depth.
+export function architectureHtml({ home, arch, env, brief, column, topViews }) {
 	const { look, problem } = home
-	const offered = viewsOffered(home)
-	const on = viewOn(arch, offered)
+	const offered = viewsOffered(home, topViews)
+	const on = home.trail.length > 1 ? 'parts' : viewOn(arch, offered)
 	const top = switchCardHtml({ home, arch, env, crumb: crumbHtml(home), offered, on })
 	if (!look || home.reading === 'level') return `<div class="k-canvas">${top}${problem ? '' : READING}</div>`
 	if (problem && !problem.keeps) {

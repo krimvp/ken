@@ -232,16 +232,19 @@ export function runtimeHtml(views, layout, view) {
 		if (line.inside) {
 			over.push(`<path class="${cls}" d="M${line.inside.x} ${line.inside.y1}V${line.inside.y2}"/>`)
 		}
-		if (line.label) {
-			const c = line.crossing
-			const from = view.nameOf(c.from)
-			const to = view.nameOf(c.to)
-			const said =
-				c.kind === 'call' ? `${from} calls ${to}: ${c.text}, ${howLabel(c)}` : `${from} sends ${c.topic} to ${to}`
-			labels.push(
-				`<button class="k-rt-label is-${line.kind}${picked ? ' is-picked' : ''}${on ? ' is-lit' : ''}" style="${px(line.label)}" data-act="brief-open" data-concept="crossing:${esc(c.id)}" data-ends="${esc(`${c.from} ${c.to}`)}" data-key="line-${esc(c.id)}" aria-pressed="${picked}" aria-label="${esc(said)}">${line.words.map(esc).join('<br>')}</button>`,
-			)
-		}
+		if (line.kind !== 'call' && line.kind !== 'event') continue
+		const c = line.crossing
+		const from = view.nameOf(c.from)
+		const to = view.nameOf(c.to)
+		const said =
+			c.kind === 'call' ? `${from} calls ${to}: ${c.text}, ${howLabel(c)}` : `${from} sends ${c.topic} to ${to}`
+		// A line inside one place has no label: a round handle in its middle, seen on a hover or a focus, opens it.
+		const mid = line.label ? null : middleOf(line.points)
+		const shape = mid ? 'k-rt-knob' : 'k-rt-label'
+		const place = mid ? px({ x: mid.x - 13, y: mid.y - 13, w: 26, h: 26 }) : px(line.label)
+		labels.push(
+			`<button class="${shape} is-${line.kind}${picked ? ' is-picked' : ''}${on ? ' is-lit' : ''}" style="${place}" data-act="brief-open" data-concept="crossing:${esc(c.id)}" data-ends="${esc(`${c.from} ${c.to}`)}" data-key="line-${esc(c.id)}" aria-pressed="${picked}" aria-label="${esc(said)}">${line.words.map(esc).join('<br>')}</button>`,
+		)
 	}
 	const marks = layout.marks.map((m) => {
 		const picked = view.brief === `crossing:${m.crossing}`
@@ -257,6 +260,23 @@ export function runtimeHtml(views, layout, view) {
 	const svg = (cls, body) =>
 		`<svg class="k-wires ${cls}" width="${layout.width}" height="${layout.height}" viewBox="0 0 ${layout.width} ${layout.height}" aria-hidden="true">${ARROWS}${body}</svg>`
 	return `${frames.join('')}${svg('k-rt-lines', lines.join(''))}${things.join('')}${svg('k-rt-over', over.join(''))}${marks.join('')}${labels.join('')}`
+}
+
+// The point halfway along a line.
+function middleOf(points) {
+	const pieces = points.slice(1).map((p, k) => Math.abs(p.x - points[k].x) + Math.abs(p.y - points[k].y))
+	let left = pieces.reduce((sum, n) => sum + n, 0) / 2
+	for (const [k, n] of pieces.entries()) {
+		if (left <= n) {
+			const t = n === 0 ? 0 : left / n
+			return {
+				x: points[k].x + (points[k + 1].x - points[k].x) * t,
+				y: points[k].y + (points[k + 1].y - points[k].y) * t,
+			}
+		}
+		left -= n
+	}
+	return points[0]
 }
 
 // "Where it runs" in small, for a brief: the frames as outlines, the things as blocks in their colours, the lines,
