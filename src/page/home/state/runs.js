@@ -1,12 +1,12 @@
 // The runs of ken's model that the home starts. Each stays on the home: the page holds the run, and this module decides
 // what the home shows when it ends. A run remembers where it started, as { kind, trail, change, wayIn }, and is judged
 // against that, since the reader may have moved on while it ran.
-import { besideCanvas, firstUnseen, pathOf, picturesOf, sameList } from './content.js'
+import { besideCanvas, picturesOf, sameList } from './content.js'
 
 // A run by its kind: its title while it runs, and what ken's model is doing.
 export const DOING = {
 	name: ['Naming the parts', "ken's model is naming the parts"],
-	tour: ['Writing the tour', "ken's model is reading each part in turn"],
+	explainAll: ['Explaining the parts', "ken's model is explaining each part in turn"],
 	story: ['Reading the change', "ken's model is reading the change"],
 	walk: ['Ordering the change into steps', "ken's model is ordering the change into steps"],
 	redraw: ['Drawing it another way', "ken's model is working on your request"],
@@ -34,16 +34,15 @@ function made(started, q) {
 	const has = (kind) => q.reply.items.some((item) => item.kind === kind)
 	return {
 		name: () => q.reply.items.some((item) => item.kind === 'card' && item.card.kind === 'layout'),
-		tour: () => Boolean(q.reply.tour),
+		explainAll: () => Boolean(q.reply.tour),
 		story: () => q.reply.want === 'story',
 		walk: () => q.reply.want === 'walk' && has('step'),
 		redraw: () => true,
 	}[started.kind]()
 }
 
-// app is the page: its state, render, and send, which asks ken's model a question. loads reads the home again, and
-// stepTo opens a stop of the reading path.
-export function homeRuns({ state, render, send }, loads, stepTo) {
+// app is the page: its state, render, and send, which asks ken's model a question. loads reads the home again.
+export function homeRuns({ state, render, send }, loads) {
 	function run(kind, lens) {
 		const home = state.home
 		Object.assign(home, { ended: null, stepsOpen: false })
@@ -73,10 +72,6 @@ export function homeRuns({ state, render, send }, loads, stepTo) {
 			if (started.kind === 'redraw' && home.redraw.text === '') home.redraw.text = home.redraw.asked
 		} else if (!there) home.ended = { kind: 'elsewhere', run: started.kind, level: levelOf(started), started }
 		else if (started.kind === 'redraw') home.said = { asked: home.redraw.asked, q: besideCanvas(q, drew) }
-		else if (started.kind === 'tour' && home.detail === 'big') {
-			home.detail = 'how'
-			await stepTo(firstUnseen(home.look, pathOf(home.look, home.content)))
-		}
 		render()
 	}
 

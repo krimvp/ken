@@ -136,7 +136,7 @@ export function homeActions(app) {
 		toPicture()
 	}
 
-	const { run, ended } = homeRuns(app, loads, stepTo)
+	const { run, ended } = homeRuns(app, loads)
 	const board = boardActions(app, loads, select)
 
 	// The detail in use changes. One the reader pinned for every part moves with it, so the control says what shows.
@@ -287,7 +287,7 @@ export function homeActions(app) {
 		'home-chip': (el) =>
 			send({ lens: { kind: 'change', change: state.home.look.change.asked, want: el.dataset.chip } }),
 		'run-name': () => run('name', levelLens('parts')),
-		'run-tour': () => run('tour', levelLens('tour')),
+		'run-explain': () => run('explainAll', { ...levelLens('explain'), part: null }),
 		'run-story': () => run('story', { kind: 'change', change: state.home.look.change.asked, want: 'story' }),
 		'run-walk': () => run('walk', { kind: 'change', change: state.home.look.change.asked, want: 'walk' }),
 		'home-back': loads.back,

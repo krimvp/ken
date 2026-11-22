@@ -1,16 +1,14 @@
-// The briefs the page has read, by the id of their concept. A brief comes from GET /api/brief. While the server has
-// no such address, the page builds the same shape from what the server sends today (from-today.js). A brief is read
-// once and kept until ken's model has run or ken wrote a line about the reader: then a brief is read again when it
-// is next shown, and the one the page has stays on screen until the new one is here.
-import { fromToday } from './from-today.js'
+// The briefs the page has read from GET /api/brief, by the id of their concept. A brief is read once and kept until
+// ken's model has run or ken wrote a line about the reader: then a brief is read again when it is next shown, and the
+// one the page has stays on screen until the new one is here.
 
-// app gives read, which asks the server and answers { ok, body, status } whatever it says, the reader's saved
-// questions, and the name of a level by its paths.
+// app gives read, which asks the server and answers { ok, body, status } whatever it says.
 export function briefStore(app) {
-	const today = fromToday(app)
 	// By id: { kind: 'reading' }, { kind: 'ok', brief }, or { kind: 'none', message } for a concept ken has nothing on.
 	// old marks one to read again.
 	const kept = new Map()
+	// The newest read asked for each id: an older read that answers late is dropped.
+	const newest = new Map()
 	let listed = null
 
 	const ask = (url) => app.read(url).catch((error) => ({ ok: false, status: 0, body: { message: error.message } }))
@@ -18,11 +16,10 @@ export function briefStore(app) {
 	async function read(id) {
 		const answer = await ask(`/api/brief?concept=${encodeURIComponent(id)}`)
 		if (answer.ok) return { kind: 'ok', brief: answer.body }
-		if (answer.status !== 404) return { kind: 'none', message: answer.body.message ?? 'ken did not answer.' }
-		const built = await today.briefOf(id).catch(() => null)
-		return built
-			? { kind: 'ok', brief: built }
-			: { kind: 'none', message: 'ken has nothing on this yet. It may have been renamed or removed since.' }
+		if (answer.status === 404) {
+			return { kind: 'none', message: 'ken has nothing on this yet. It may have been renamed or removed since.' }
+		}
+		return { kind: 'none', message: answer.body.message ?? 'ken did not answer.' }
 	}
 
 	// The brief as far as the page has it. A brief not read yet is asked for, and then is called once it is here.
@@ -30,7 +27,10 @@ export function briefStore(app) {
 		const have = kept.get(id)
 		if (!have || have.old) {
 			kept.set(id, have ? { ...have, old: false } : { kind: 'reading' })
-			void read(id).then((found) => {
+			const reading = read(id)
+			newest.set(id, reading)
+			void reading.then((found) => {
+				if (newest.get(id) !== reading) return
 				kept.set(id, found)
 				then()
 			})
@@ -40,18 +40,20 @@ export function briefStore(app) {
 
 	// Everything search can find: [{ id, kind, name, line, level }].
 	function concepts() {
-		listed ??= ask('/api/concepts').then(async (answer) => {
-			if (answer.ok) return answer.body
-			return answer.status === 404 ? today.concepts().catch(() => []) : []
-		})
+		listed ??= ask('/api/concepts').then((answer) => (answer.ok ? answer.body : []))
 		return listed
+	}
+
+	// The level inside a part, for Deeper, or null when ken cannot read it.
+	async function lookAt(within) {
+		const answer = await ask(`/api/layout?${new URLSearchParams(within.map((path) => ['within', path]))}`)
+		return answer.ok ? answer.body.look : null
 	}
 
 	function forget() {
 		for (const [id, have] of kept) kept.set(id, { ...have, old: have.kind !== 'reading' })
 		listed = null
-		today.forget()
 	}
 
-	return { get, concepts, forget, lookAt: today.lookAt }
+	return { get, concepts, forget, lookAt }
 }

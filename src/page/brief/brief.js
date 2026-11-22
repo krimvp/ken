@@ -54,7 +54,7 @@ export function colourOf(brief) {
 }
 
 const waysCount = (brief) => ({
-	sideways: brief.sideways.uses.length + brief.sideways.usedBy.length + brief.sideways.processes.length,
+	sideways: byPart(brief.sideways.uses).length + byPart(brief.sideways.usedBy).length + brief.sideways.processes.length,
 	questions: brief.questions.length + brief.decisions.length,
 	deeper: brief.deeper ? (brief.deeper.parts ?? brief.deeper.files) : 0,
 })
@@ -233,8 +233,22 @@ function mainHtml(brief, { ui, env, prefs, look }) {
 
 const backHtml = '<button class="k-back" data-act="brief-way" data-way="" data-key="brief-back">'
 
+// Two arrows can join the same two parts: the part is one row, with both verbs.
+function byPart(rows) {
+	const parts = new Map()
+	for (const row of rows) {
+		const have = parts.get(row.id)
+		const verbs = row.verb ? [row.verb] : []
+		if (have) have.verbs.push(...verbs)
+		else parts.set(row.id, { ...row, verbs })
+	}
+	return [...parts.values()]
+}
+
 function sidewaysHtml(brief) {
-	const { uses, usedBy, processes } = brief.sideways
+	const uses = byPart(brief.sideways.uses)
+	const usedBy = byPart(brief.sideways.usedBy)
+	const { processes } = brief.sideways
 	const group = (title, rows, key, note) =>
 		rows.length === 0
 			? ''
@@ -245,8 +259,8 @@ function sidewaysHtml(brief) {
 			: ''
 	return `${backHtml}${icon('left')}The brief</button>
 		<h2 class="k-way-name" id="brief-name" tabindex="-1">Next to ${prose(brief.name)}</h2>
-		${group('Used by', usedBy, 'by', (row) => (row.verb ? `${row.verb} it` : ''))}
-		${group('It uses', uses, 'uses', (row) => row.verb ?? '')}
+		${group('Used by', usedBy, 'by', (row) => row.verbs.map((verb) => `${verb} it`).join(', and '))}
+		${group('It uses', uses, 'uses', (row) => row.verbs.join(', and '))}
 		${group('Processes that pass through', processes, 'through', (row) => count(row.steps, 'step', 'steps'))}
 		${none}`
 }

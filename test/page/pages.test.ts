@@ -25,17 +25,7 @@ const { readPlace, writePlace }: { readPlace: (hash: string) => Place; writePlac
 const { findConcepts }: { findConcepts: (list: object[], text: string) => { name: string }[] } = await import(
 	path.join(PAGE, 'shell/shell.js')
 )
-type Brief = {
-	kind: string
-	name: string
-	line: string
-	explained: boolean
-	explain: { lens: object } | null
-	deeper: { within: string; files: number } | null
-	knows: { level: string } | null
-	builtToday?: boolean
-}
-type Found = { kind: 'reading' } | { kind: 'ok'; brief: Brief } | { kind: 'none'; message: string }
+type Found = { kind: 'reading' } | { kind: 'ok'; brief: object } | { kind: 'none'; message: string }
 type Answer = { ok: boolean; status: number; body: object }
 const { briefStore }: { briefStore: (app: object) => { get: (id: string, then: () => void) => Found } } = await import(
 	path.join(PAGE, 'brief/briefs.js')
@@ -48,6 +38,9 @@ const { freshHome }: { freshHome: (stored: () => null, ui: object) => Home } = a
 )
 const { homeLoads }: { homeLoads: (app: object) => { refresh: () => Promise<void> } } = await import(
 	path.join(PAGE, 'home/state/loads.js')
+)
+const { briefHtml }: { briefHtml: (ui: object, found: Found, ctx: object) => string } = await import(
+	path.join(PAGE, 'brief/brief.js')
 )
 const { architectureHtml }: { architectureHtml: (view: object) => string } = await import(
 	path.join(PAGE, 'architecture/architecture.js')
@@ -160,7 +153,11 @@ async function namedProject() {
 	const { root } = buildRepository([
 		{
 			message: 'feat: start',
-			files: { 'src/core/run.ts': 'run()\n', 'src/core/wait.ts': 'wait()\n', 'src/store/db.ts': 'save()\n' },
+			files: {
+				'src/core/run.ts': "import { save } from '../store/db.ts'\nrun()\n",
+				'src/core/wait.ts': "import { keep } from '../store/db.ts'\nwait()\n",
+				'src/store/db.ts': 'save()\n',
+			},
 		},
 		{
 			message: 'feat: the store keeps',
@@ -174,7 +171,21 @@ async function namedProject() {
 			kind: 'layout',
 			within: [],
 			at: 'HEAD',
-			arrows: [],
+			// Two arrows join the same two parts.
+			arrows: [
+				{
+					from: 'core',
+					to: 'store',
+					text: 'starts',
+					quotes: [{ path: 'src/core/run.ts', commit: 'HEAD', text: "import { save } from '../store/db.ts'" }],
+				},
+				{
+					from: 'core',
+					to: 'store',
+					text: 'waits on',
+					quotes: [{ path: 'src/core/wait.ts', commit: 'HEAD', text: "import { keep } from '../store/db.ts'" }],
+				},
+			],
 			parts: ['core', 'store'].map((name) => ({ name, job: `Does the work of ${name}`, paths: [`src/${name}`] })),
 		},
 	])
@@ -194,20 +205,16 @@ function briefOf(store: { get: (id: string, then: () => void) => Found }, id: st
 	})
 }
 
-test('a brief the server sends is shown as sent: the page builds its own only on a 404', async () => {
-	const sent = { id: 'part::store', kind: 'part', name: 'store', line: 'From the server' }
-	const asked: string[] = []
-	const read = async (url: string): Promise<Answer> => {
-		asked.push(url)
-		return { ok: true, status: 200, body: sent }
-	}
-	const found = await briefOf(briefStore({ read, rows: () => [], levelName: () => null }), 'part::store')
-	assert.deepEqual(found, { kind: 'ok', brief: sent })
-	assert.deepEqual(asked, ['/api/brief?concept=part%3A%3Astore'], 'and nothing else is read for it')
-
-	const down = async (): Promise<Answer> => ({ ok: false, status: 500, body: { message: 'git is locked' } })
-	const failed = await briefOf(briefStore({ read: down, rows: () => [], levelName: () => null }), 'part::store')
-	assert.deepEqual(failed, { kind: 'none', message: 'git is locked' }, 'a server that fails says why')
+test('Sideways shows a part two arrows join once, with both verbs, and counts it once', async () => {
+	const { read } = await namedProject()
+	const found = await briefOf(briefStore({ read }), 'part::store')
+	if (found.kind !== 'ok') assert.fail(`the part has no brief: ${JSON.stringify(found)}`)
+	const ctx = { home: freshHome(() => null, { unfolded: new Set() }), prefs: { text: 'pictures' }, env: {}, look: null }
+	const ui = { trail: [{ id: 'part::store', name: 'store' }], openQuotes: new Set(), on: 'sideways' }
+	const html = briefHtml(ui, found, { ...ctx, inner: null })
+	assert.equal(html.match(/data-concept="part::core"/g)?.length, 1, 'core is one row')
+	assert.match(html, /starts it, and waits on it/, 'that says both arrows')
+	assert.match(html, /data-way="sideways"[^>]*>.*?<b class="k-num">1<\/b>/s, 'and Sideways counts one part')
 })
 
 test('the canvas draws a level it read from a real server, and the changes layer says what each part changed', async () => {

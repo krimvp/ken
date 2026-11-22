@@ -7,7 +7,7 @@ const THEMES = ['light', 'dark']
 export function readerPrefs({ read, post, stored, store }) {
 	const system = () => (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
 	const prefs = {
-		text: TEXTS.find((each) => each === stored('ken-text')) ?? 'pictures',
+		text: 'pictures',
 		theme: THEMES.find((each) => each === stored('ken-theme')) ?? system(),
 	}
 	const paint = () => {
@@ -15,8 +15,6 @@ export function readerPrefs({ read, post, stored, store }) {
 	}
 	paint()
 
-	// shortcut: while GET /api/prefs answers 404 the setting for text lives in this browser alone, so ken's model is
-	// not told of it. The browser's copy goes when the server's prefs (branch dash2-server) are merged.
 	async function load() {
 		const answer = await read('/api/prefs').catch(() => null)
 		const text = answer?.ok ? TEXTS.find((each) => each === answer.body.text) : undefined
@@ -26,7 +24,6 @@ export function readerPrefs({ read, post, stored, store }) {
 	function setText(text) {
 		if (!TEXTS.includes(text)) return
 		prefs.text = text
-		store('ken-text', text)
 		void post('/api/prefs', { text }).catch(() => {})
 	}
 

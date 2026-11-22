@@ -75,8 +75,8 @@ function levelView(home, off) {
 				? `<div class="insp-main">${button(0, 'Start the tour', 'primary')}</div>`
 				: `<div class="insp-main insp-actions">${button(start, `<span class="nav-name">Go on with the tour</span><span class="nav-way">Stop ${start + 1} of ${path.length}: ${esc(path[start].part)}</span>`)}${button(0, 'Start again at stop 1', 'link')}</div>`
 	} else if (path.length > 0 && here) {
-		tour = `<div class="insp-main">${runButton({ act: 'run-tour', key: 'run-tour', text: 'Show me around', primary: true }, off)}
-			<p class="small muted">ken's model shows you the ${path.length} parts in turn, with their code, starting at ${esc(path[0].part)}. The order is the one ken's model named the parts in, with tests and upkeep last.</p></div>`
+		tour = `<div class="insp-main">${runButton({ act: 'run-explain', key: 'run-explain', text: 'Ask ken to explain these parts', primary: true }, off)}
+			<p class="small muted">ken's model explains the ${path.length} parts in turn, each as a brief resting on its code, starting at ${esc(path[0].part)}.</p></div>`
 	}
 	const colour = colourOf(home)
 	const order =
@@ -326,7 +326,7 @@ const ENDED = {
 // What a run is doing, said to a reader who has left the level or the change it is for.
 const STILL = {
 	name: (level) => `ken's model is naming the parts of ${level}.`,
-	tour: (level) => `ken's model is writing the tour of ${level}.`,
+	explainAll: (level) => `ken's model is explaining the parts of ${level}.`,
 	story: () => "ken's model is reading the change you asked about.",
 	walk: () => "ken's model is ordering the change you asked about into steps.",
 	redraw: (level) => `ken's model is working on your request about ${level}.`,
@@ -335,7 +335,7 @@ const STILL = {
 // What a run made, said to a reader who has left the level or the change it was for.
 const FINISHED = {
 	name: (level) => `ken's model named the parts of ${level}.`,
-	tour: (level) => `ken finished the tour of ${level}.`,
+	explainAll: (level) => `ken's model explained the parts of ${level}.`,
 	story: () => "ken's model said what the change did.",
 	walk: () => "ken's model walked through the change.",
 	redraw: (level) => `ken answered your request about ${level}.`,

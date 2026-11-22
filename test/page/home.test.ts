@@ -148,7 +148,7 @@ const model = await scriptedModel([
 ])
 const server = await openKen(root, readerHome(), model.baseUrl)
 // The three runs as the home sends them.
-await ask(server, { lens: { kind: 'tour', within: [], name: null } })
+await ask(server, { lens: { kind: 'explain', within: [], name: null, part: null } })
 await ask(server, { lens: { kind: 'change', change: REVIEWED, want: 'story' } })
 await ask(server, { lens: { kind: 'change', change: REVIEWED, want: 'walk' } })
 const rows: { id: string }[] = (await json(server, '/api/questions')).questions
@@ -229,7 +229,7 @@ test('the home shows the stored tour of the level on screen and the stored story
 test('for a toured level the panel offers the stored tour at the big picture, opens the picked stop with its words and arrows at "How it works", and shows that stop\'s quoted lines at "In the code"', async () => {
 	const big = await panel('change=none', 'big', null)
 	assert.match(big, /Start the tour/, 'the stored tour starts with no run')
-	assert.doesNotMatch(big, /Show me around/, 'so no run is offered')
+	assert.doesNotMatch(big, /Ask ken to explain these parts/, 'so no run is offered')
 
 	const picked = { kind: 'part', name: 'Core' }
 	const how = await panel('change=none', 'how', picked)
@@ -396,7 +396,7 @@ test('a level read again behind the screen stays as it is when the server cannot
 
 test('a run is judged against the level it started on: a reader who looked inside a part meanwhile is told it finished there, and one who stayed sees what it made', async () => {
 	const whole = { name: 'Whole project', within: [] }
-	const started = { kind: 'tour', trail: [whole], change: 'none' }
+	const started = { kind: 'explainAll', trail: [whole], change: 'none' }
 	const tour = await saved(tourRow?.id ?? '')
 
 	const moved = pageOn(fromServer)
@@ -405,7 +405,7 @@ test('a run is judged against the level it started on: a reader who looked insid
 	const running = { ...ENV, off: 'busy', running: { onHome: started, q: { steps: [], typing: '' }, started: 0 } }
 	assert.match(
 		said(inspectorHtml(moved.home, running)),
-		/ken's model is writing the tour of the whole project\. Go there .*Core/,
+		/ken's model is explaining the parts of the whole project\. Go there .*Core/,
 		'while the run goes on elsewhere, one line says so and the panel still shows where the reader is',
 	)
 	await moved.runs.ended(started, tour)

@@ -118,7 +118,7 @@ const server = await openKen(root, readerHome(), model.baseUrl)
 const briefOf = async (concept: string) => await json(server, `/api/brief?concept=${encodeURIComponent(concept)}`)
 
 const unexplained = await briefOf('part::Core')
-await ask(server, { lens: { kind: 'tour', within: [] } })
+await ask(server, { lens: { kind: 'explain', within: [], part: null } })
 await ask(server, { lens: { kind: 'view', within: [], text: 'Follow one run' } })
 
 test('a part ken has not explained opens from what ken holds: its job, the decision in its files, what is inside it, and the lens that asks for the rest', () => {
@@ -138,6 +138,11 @@ test('a part ken has not explained opens from what ken holds: its job, the decis
 	)
 	assert.deepEqual(unexplained.deeper, { within: 'src/core', parts: 2, files: 2 }, 'two files, each a box inside')
 	assert.equal(unexplained.knows.level, 'new')
+})
+
+test('inside a part nobody split, a block of one file opens as that file', async () => {
+	const file = await briefOf('part:src/core:run.ts')
+	assert.deepEqual([file.kind, file.name, file.line], ['file', 'run.ts', 'The file src/core/run.ts.'])
 })
 
 test('Sideways lists the parts a part uses and the parts that use it, each with its verb, and the drawn process that passes through it', async () => {

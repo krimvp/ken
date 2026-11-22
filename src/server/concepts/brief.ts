@@ -49,7 +49,8 @@ type Neighbour = Named & { verb: string }
 // about for a question and a step, usedIn for a term, and why for a decision.
 export type Brief = {
 	id: string
-	kind: ConceptKind
+	// A part is a file where nobody named the parts and git lists one file.
+	kind: ConceptKind | 'file'
 	name: string
 	line: string
 	minutes: number
@@ -133,8 +134,11 @@ export function conceptReads(layout: LayoutSources, history: History) {
 		)
 		// A box of one file has no level inside, only the file.
 		const inside = box.opens ? (box.inside ?? (await levelAt(box.paths, all.now))?.boxes.length ?? 0) : 0
+		const [only] = box.paths
+		const file = !look.named && box.files === 1 && box.paths.length === 1 && only?.split('/').at(-1) === box.name
+		const line = told?.line ?? box.job ?? (file ? `The file ${only}.` : folderLine(box))
 		return {
-			...blank(id, 'part', box.name, told?.line ?? box.job ?? folderLine(box)),
+			...blank(id, file ? 'file' : 'part', box.name, line),
 			...toldFields(told, all.read),
 			explain: { lens: { kind: 'explain', within: look.within, part: box.name } },
 			questions: questionsAbout(id, told?.questions ?? [], all.answers),
@@ -339,7 +343,7 @@ export function conceptReads(layout: LayoutSources, history: History) {
 }
 
 // A brief with nothing in it but what every kind has.
-function blank(id: string, kind: ConceptKind, name: string, line: string): Brief {
+function blank(id: string, kind: Brief['kind'], name: string, line: string): Brief {
 	return {
 		id,
 		kind,

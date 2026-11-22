@@ -140,7 +140,6 @@ const LENS_TITLES = {
 	topic: 'What changed since I understood it?',
 	note: 'Go deeper on this note',
 	parts: 'Name the main parts',
-	tour: 'Show me around',
 	view: 'Show it another way',
 	explain: 'Explain it',
 	answer: 'Answer a question about it',
@@ -613,8 +612,10 @@ function render() {
 	if (active !== document.body) focusLost = null
 	const focused = active?.dataset?.key ?? focusLost
 	const caret = caretOf(active)
+	// Only a focus the draw dropped is put back: one the draw moved on purpose, as into an opened brief, stays.
 	const refocus = () => {
-		if (!focused || document.activeElement?.dataset?.key === focused) return
+		const moved = document.activeElement !== active && document.activeElement !== document.body
+		if (!focused || moved || document.activeElement?.dataset?.key === focused) return
 		const now = document.querySelector(`[data-key="${CSS.escape(focused)}"]`)
 		now?.focus({ preventScroll: true })
 		if (caret && caretOf(now)) now.setSelectionRange(...caret)
@@ -1081,8 +1082,6 @@ async function followUpSaved(save, said) {
 const app = { state, render, read, post, send, stored, store, fromView, showMap }
 app.prefs = readerPrefs(app)
 state.shell = freshShell(app.prefs.prefs)
-app.rows = () => state.rows
-app.levelName = (within) => state.home.trail.find((step) => step.within.join(',') === within.join(','))?.name ?? null
 app.briefs = briefStore(app)
 app.briefPaths = () => brief.readPaths()
 app.reread = () => shell.reread()

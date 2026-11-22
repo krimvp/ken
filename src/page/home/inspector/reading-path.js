@@ -380,7 +380,7 @@ export function pathView(home, off) {
 	if (tour && !stored) {
 		lead =
 			look.at === look.head
-				? `${runButton({ act: 'run-tour', key: 'run-tour', text: 'Show me around', primary: true }, off)}
+				? `${runButton({ act: 'run-explain', key: 'run-explain', text: 'Ask ken to explain these parts', primary: true }, off)}
 					<p class="small muted">Until then each part shows its job and its paths, as the picture does.</p>`
 				: `<p class="small muted">ken's model reads the code that is checked out, so it cannot explain this older commit.</p>`
 	}

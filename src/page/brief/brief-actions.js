@@ -22,6 +22,8 @@ export const freshBrief = () => ({
 	opener: null,
 	// The id of the brief ken was last told the reader opened.
 	told: null,
+	// The keyboard goes to the brief's name once the brief is here: it may still be on its way from the server.
+	focusName: false,
 	// The level inside the open part, for "Deeper": undefined before it is asked for, null while the page reads it.
 	inner: undefined,
 })
@@ -54,9 +56,9 @@ export function briefActions(app) {
 			problem: null,
 			saveProblem: null,
 			inner: undefined,
+			focusName: true,
 		})
 		render()
-		$('#brief-name')?.focus({ preventScroll: true })
 	}
 
 	// The drawer closes, and the keyboard goes back to what opened it.
@@ -95,19 +97,22 @@ export function briefActions(app) {
 		}
 		const scroll = drawer.querySelector('#brief-scroll')?.scrollTop ?? 0
 		const typed = drawer.querySelector('#brief-ask-text')?.value ?? ''
-		if (
-			!fill(
-				drawer,
-				briefHtml(ui, now, {
-					home: state.home,
-					prefs: state.shell.prefs,
-					env,
-					look: lookOf(ui.id),
-					inner: ui.inner ?? null,
-				}),
-			)
+		const changed = fill(
+			drawer,
+			briefHtml(ui, now, {
+				home: state.home,
+				prefs: state.shell.prefs,
+				env,
+				look: lookOf(ui.id),
+				inner: ui.inner ?? null,
+			}),
 		)
-			return
+		const name = drawer.querySelector('#brief-name')
+		if (ui.focusName && name) {
+			ui.focusName = false
+			name.focus({ preventScroll: true })
+		}
+		if (!changed) return
 		const body = drawer.querySelector('#brief-scroll')
 		if (body && drawer.dataset.shown === `${ui.id} ${ui.on}`) body.scrollTop = scroll
 		drawer.dataset.shown = `${ui.id} ${ui.on}`
@@ -132,19 +137,13 @@ export function briefActions(app) {
 		render()
 	}
 
-	// Asks ken's model a question about the open concept. A brief the page built from what the server sends today has
-	// no stored answers: its question opens as a thread, as every question did before the brief.
+	// Asks ken's model a question about the open concept. Its answer comes back as a brief of its own.
 	function ask(text) {
 		const brief = open()
 		const said = text.trim()
 		if (!brief || said === '') return
 		ui.problem = null
 		const started = { trail: state.home.trail, change: state.home.change, wayIn: state.home.wayIn, concept: ui.id }
-		if (brief.builtToday) {
-			const paths = pathsOf(brief)
-			const where = paths.length > 0 ? ` (${paths.slice(0, 12).join(', ')})` : ''
-			return send({ question: `About ${brief.name}${where}: ${said}` })
-		}
 		return send({ lens: { kind: 'answer', concept: ui.id, text: said } }, { ...started, kind: 'answer', text: said })
 	}
 
@@ -210,6 +209,10 @@ export function briefActions(app) {
 			const { level } = el.dataset
 			ui.fixing = false
 			if (paths.length === 0) return render()
+			// The reader said it, so the brief and its block show it now. The reads after the save bring ken's own words.
+			const box = lookOf(ui.id)?.boxes.find((each) => each.name === brief.name)
+			for (const has of [brief, box]) if (has?.knows) has.knows = { ...has.knows, level }
+			render()
 			await saved(() => post('/api/seen', level === 'said' ? { did: 'said', paths } : { did: 'set', level, paths }))
 			$('[data-key="brief-fix"]')?.focus()
 		},

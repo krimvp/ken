@@ -388,9 +388,7 @@ export function questionDesk(
 				as: { kind: 'view', within: level.within, text },
 			}
 		}
-		// shortcut: "tour" is the old name for explaining every part of a level, which the home still sends. Drop it
-		// when the home asks for "explain".
-		if (kind === 'explain' || kind === 'tour') {
+		if (kind === 'explain') {
 			const read = await levelOf(lens)
 			if (read.kind !== 'ok') return read
 			const { level } = read
