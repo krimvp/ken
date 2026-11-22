@@ -136,9 +136,13 @@ function crosses(p, q, r, s) {
 // the list of arrows; open holds the arrows open there. lit holds the boxes that stay lit when nothing is pointed at,
 // such as the parts of the walkthrough step the reader is on, and hot the arrows that stay lit with them, when those
 // are not the arrows between two lit boxes. still keeps the lit boxes lit while the reader points, as beside a
-// walkthrough, where the lit part is always the step the reader is on; it shows only the arrows that touch a lit box,
-// and none while no box is lit.
-export function pictureHtml(cells, links, { numbered, open, lit = new Set(), hot = null, still = false }) {
+// walkthrough, where the lit part is always the step the reader is on. marked says the boxes carry marks of their own,
+// such as what a change touched: pointing then lights only arrows, and no box loses its colour.
+export function pictureHtml(
+	cells,
+	links,
+	{ numbered, open, lit = new Set(), hot = null, still = false, marked = false },
+) {
 	const pairs = links.map((link) => [link.from, link.to])
 	const place = placeParts(cells.length, pairs)
 	const column = placeColumn(cells.length, pairs)
@@ -150,8 +154,9 @@ export function pictureHtml(cells, links, { numbered, open, lit = new Set(), hot
 	const data = JSON.stringify(
 		links.map((link, i) => ({ from: link.from, to: link.to, text: link.text, open: open.has(i) })),
 	)
-	// An arrow that goes around the outside of the picture needs room over the top row or under the bottom one.
-	const far = pairs.some(
+	// An arrow that goes around the outside of the picture needs room there: over the top row, or under the bottom
+	// row when its boxes are in that one.
+	const around = pairs.filter(
 		([a, b]) =>
 			place.cells[a].row === place.cells[b].row &&
 			place.cells.some(
@@ -162,9 +167,12 @@ export function pictureHtml(cells, links, { numbered, open, lit = new Set(), hot
 					between(cell.col, place.cells[a].col, place.cells[b].col),
 			),
 	)
+	const under = around.some(([a]) => place.rows > 1 && place.cells[a].row === place.rows - 1)
+	const over = around.some(([a]) => place.rows === 1 || place.cells[a].row < place.rows - 1)
+	const far = `${over ? ' has-far-over' : ''}${under ? ' has-far-under' : ''}`
 	const rest = [...lit].join(' ')
 	const hotAtRest = hot === null ? '' : ` data-hot="${[...hot].join(' ')}"`
-	return `<div class="pv-picture${lit.size > 0 ? ' is-lit' : ''}${far ? ' has-far' : ''}" style="--rows:${place.rows};--cols:${place.cols}" data-links="${escAttr(data)}" data-numbered="${numbered}" data-lit="${rest}"${hotAtRest} data-still="${still}">
+	return `<div class="pv-picture${lit.size > 0 ? ' is-lit' : ''}${far}" style="--rows:${place.rows};--cols:${place.cols}" data-links="${escAttr(data)}" data-numbered="${numbered}" data-lit="${rest}"${hotAtRest} data-still="${still}" data-marked="${marked}">
 		<ul class="pv-boxes">${items.join('')}</ul>
 	</div>`
 }
@@ -391,7 +399,7 @@ function placeLabels(picture, links, curves, rects, frame, compact) {
 		label.lastChild.textContent = link.text ?? ''
 		label.title = link.text ?? ''
 		layer.append(label)
-		const others = lines.flatMap((line, k) => (k === i ? [] : line))
+		const others = lines.filter((_, k) => k !== i)
 		let spot = null
 		for (const form of compact ? [' is-compact'] : ['', ' is-narrow', ' is-compact']) {
 			label.className = `pv-label${link.open ? ' is-open' : ''}${form}`
@@ -405,8 +413,9 @@ function placeLabels(picture, links, curves, rects, frame, compact) {
 }
 
 // The best place for a label along its arrow: beside the line on either side, or on it. A place fits when the label
-// there is inside the picture, covers no head and at most half of its own line, and touches no box and no other label.
-// Among places that fit, one that hides none of its own line and no other line wins, then one near the middle.
+// there is inside the picture, covers no head, at most half of its own line and a quarter of any other, and touches
+// no box and no other label. Among places that fit, one that hides none of its own line and no other line wins, then
+// one near the middle.
 function spotFor(label, curve, { taken, own, others, heads, area }) {
 	const w = label.offsetWidth
 	const h = label.offsetHeight
@@ -431,9 +440,11 @@ function spotFor(label, curve, { taken, own, others, heads, area }) {
 				box.y + h <= area.h &&
 				under(heads) === 0 &&
 				hidden <= own.length / 2 &&
+				others.every((line) => under(line) <= line.length / 4) &&
 				taken.every((r) => overlap(box, r) === 0)
 			const cover = taken.reduce((sum, r) => sum + overlap(box, r), 0)
-			return { box, fits, cost: cover + 400 * under(others) + 100 * hidden + 40 * Math.abs(t - 0.5) }
+			const crossed = others.reduce((sum, line) => sum + under(line), 0)
+			return { box, fits, cost: cover + 400 * crossed + 100 * hidden + 40 * Math.abs(t - 0.5) }
 		})
 	})
 	const fitting = spots.filter((spot) => spot.fits)
@@ -490,6 +501,7 @@ export function lightPicture(picture, boxes, hot = null) {
 function wire(picture, links) {
 	if (picture.dataset.wired) return
 	picture.dataset.wired = 'true'
+	const marked = picture.dataset.marked === 'true'
 	const light = (event) => {
 		const label = event.target.closest?.('.pv-label')
 		const cell = event.target.closest?.('.pv-boxes > li')
@@ -497,10 +509,11 @@ function wire(picture, links) {
 		const box = cell ? cells.indexOf(cell) : -1
 		if (label) {
 			const i = Number(label.dataset.index)
-			lightPicture(picture, new Set([links[i].from, links[i].to]), new Set([i]))
+			lightPicture(picture, new Set(marked ? [] : [links[i].from, links[i].to]), new Set([i]))
 		} else if (box >= 0) {
 			const hot = new Set(links.flatMap((link, i) => (link.from === box || link.to === box ? [i] : [])))
-			lightPicture(picture, new Set([box, ...[...hot].flatMap((i) => [links[i].from, links[i].to])]), hot)
+			const near = marked ? [] : [box, ...[...hot].flatMap((i) => [links[i].from, links[i].to])]
+			lightPicture(picture, new Set(near), hot)
 		} else atRest(picture)
 	}
 	picture.addEventListener('pointerover', light)

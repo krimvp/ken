@@ -242,13 +242,14 @@ function partDiffHtml(home, box) {
 	if (diff.problem) return `<p class="home-error" role="alert">ken could not read the diff. ${esc(diff.problem)}</p>`
 	const all = `<code>git diff ${short(change.range.base)} ${short(change.range.head)}</code>`
 	const notes = [
+		...(diff.tooLarge ? [`This change is too large for ken to read its diff here. ${all} shows it.`] : []),
 		...(diff.binary ?? []).map((path) => `<code>${esc(path)}</code> is not text, so it has no lines to show.`),
-		...(diff.cut || diff.tooLarge
-			? [`The diff is long, so only its first lines show here. ${all} shows all of it.`]
-			: []),
+		...(diff.cut ? [`The diff is long, so only its first lines show here. ${all} shows all of it.`] : []),
 		...(diff.left > 0 ? [`${count(diff.left, 'more file', 'more files')} changed here. ${all} shows them.`] : []),
 	]
-	return `<div class="path-diff">${stepDiffHtml({ hunks: diff.hunks }, change.range)}</div>${notes.map((note) => `<p class="small muted">${note}</p>`).join('')}`
+	const lines =
+		diff.hunks.length === 0 ? '' : `<div class="path-diff">${stepDiffHtml({ hunks: diff.hunks }, change.range)}</div>`
+	return `${lines}${notes.map((note) => `<p class="small muted">${note}</p>`).join('')}`
 }
 
 // One part with a change laid over it: the files the change touched there, and at "In the code" their diff.

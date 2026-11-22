@@ -175,7 +175,13 @@ function pictureOf(home) {
 			chosen: chosen.has(i),
 		}),
 	)
-	return pictureHtml(cells, links, { numbered: true, open: home.openArrows, lit, hot: chosen.size > 0 ? hot : null })
+	return pictureHtml(cells, links, {
+		numbered: true,
+		open: home.openArrows,
+		lit,
+		hot: chosen.size > 0 ? hot : null,
+		marked: Boolean(look.change),
+	})
 }
 
 function trailHtml(trail) {
@@ -205,8 +211,9 @@ function explainedChoices(rows) {
 }
 
 // The change picker of "Catch up" and "Review a change". Catching up offers what landed since a point in time, and
-// takes a day or a number of days of the reader's own. Reviewing offers the reader's own work, branches, merges and
-// commits, and behind one line another commit to look at. What the server refused shows its reason under its field.
+// behind one line takes a day or a number of days of the reader's own. Reviewing offers the reader's own work,
+// branches, merges and commits, and behind one line another commit to look at. What the server refused shows its
+// reason under its field.
 function pickerHtml(home, rows) {
 	const { look, changes, wayIn, problem, typed } = home
 	if (wayIn === 'learn') return ''
@@ -241,7 +248,10 @@ function pickerHtml(home, rows) {
 				<summary data-key="home-other-summary">Another commit</summary>
 				<span class="home-field"><label for="home-at">At commit</label><input id="home-at" name="at" data-key="home-at" value="${esc(typed.at)}" placeholder="HEAD" spellcheck="false"${invalid('at')} /><button class="quiet-button" type="submit" data-key="home-show">Show</button></span>${error('at')}
 			</details>`
-		: `<span class="home-field"><label for="home-since">Since a day or a number of days</label><input id="home-since" name="since" data-key="home-since" value="${esc(typed.since)}" placeholder="2026-11-01 or 14d" spellcheck="false"${invalid('since')} /><button class="quiet-button" type="submit" data-key="home-show">Show</button></span>${error('since')}`
+		: `<details class="home-other" data-key="home-other"${refused === 'since' ? ' open' : ''}>
+				<summary data-key="home-other-summary">Another span</summary>
+				<span class="home-field"><label for="home-since">Since a day or a number of days</label><input id="home-since" name="since" data-key="home-since" value="${esc(typed.since)}" placeholder="2026-11-01 or 14d" spellcheck="false"${invalid('since')} /><button class="quiet-button" type="submit" data-key="home-show">Show</button></span>${error('since')}
+			</details>`
 	const nothing =
 		!review && since.length === 0
 			? '<p class="home-line">No commit landed in the last 90 days. Name a day further back to catch up from.</p>'
@@ -266,7 +276,7 @@ function notesHtml(home) {
 	}
 	if (!look.named && look.boxes.length > 0) {
 		said.push(
-			look.boxes.every(isFile)
+			look.boxes.every((box) => isFile(box) || /^\d+ more files$/.test(box.name))
 				? '<p class="home-line">These boxes are files.</p>'
 				: `<p class="home-line">These boxes are folders. ken's model has not named the parts ${home.trail.length === 1 ? 'of this project' : 'in here'} yet.</p>`,
 		)

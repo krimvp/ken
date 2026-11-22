@@ -54,8 +54,8 @@ button.brand {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
-	gap: var(--space-2) var(--space-5);
-	padding: var(--space-2) var(--space-4);
+	gap: var(--space-1) var(--space-5);
+	padding: var(--space-1) var(--space-4);
 	border-bottom: 1px solid var(--color-border);
 	background: var(--color-card);
 }
@@ -154,7 +154,7 @@ button.brand {
 	grid-column: 1;
 	min-width: 0;
 	overflow: auto;
-	padding: var(--space-3) var(--space-4) var(--space-4);
+	padding: var(--space-3) var(--space-4) var(--space-2);
 	background-color: var(--color-canvas);
 	background-image: radial-gradient(var(--color-dot) 1.2px, transparent 1.4px);
 	background-size: 22px 22px;
@@ -439,12 +439,17 @@ button.brand {
 	cursor: pointer;
 }
 
+/* Open, the field stands on the line of its own name, so it takes one line from the picture and no more. */
 .home-other[open] {
+	display: flex;
 	flex-basis: 100%;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0 var(--space-4);
 }
 
-.home-other .home-field {
-	margin-top: var(--space-2);
+.home-other[open]::details-content {
+	display: contents;
 }
 
 .home-banner {
@@ -537,14 +542,18 @@ button.brand {
 	}
 
 	/* An arrow around the outside of the picture bends over the top row or under the bottom one. */
-	.home .pv-picture.has-far {
-		padding-block: 4rem;
+	.home .pv-picture.has-far-over {
+		padding-top: 4rem;
+	}
+
+	.home .pv-picture.has-far-under {
+		padding-bottom: 4rem;
 	}
 
 	/* The gap between two columns holds an arrow's words folded to a narrow column, over the arrow's line. */
 	.home .pv-picture .pv-boxes {
 		grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
-		gap: 4.75rem 8rem;
+		gap: 4.25rem 8rem;
 	}
 
 	.home .home-picture:not(.has-arrows) .pv-boxes {
@@ -837,8 +846,11 @@ button.brand {
 	background: var(--color-card);
 }
 
+/* Each is the frame of what it scrolls, so words kept for a screen reader alone stay inside it and never make the
+   page itself longer than the window. */
 .insp-scroll,
 .ask-scroll {
+	position: relative;
 	flex: 1;
 	min-height: 0;
 	overflow-y: auto;
@@ -1394,7 +1406,6 @@ button.brand {
 	.home-canvas {
 		overflow: visible;
 		padding: var(--space-3) var(--gutter) var(--space-4);
-		scroll-margin-top: var(--top);
 	}
 
 	.home-arrows {
@@ -1457,7 +1468,6 @@ button.brand {
 		display: block;
 		border-top: 1px solid var(--color-border);
 		border-left: 0;
-		scroll-margin-top: var(--top);
 	}
 
 	.insp-scroll {
@@ -1479,9 +1489,9 @@ button.brand {
 		display: inline;
 	}
 
-	/* Under the header and the top of the panel, which both stay on screen. */
+	/* Under the top of the panel, which stays on screen under the header. */
 	.path-step {
-		scroll-margin-top: calc(var(--top) + 3.25rem);
+		scroll-margin-top: 4.5rem;
 	}
 
 	.insp-foot {

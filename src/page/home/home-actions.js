@@ -103,8 +103,10 @@ export function homeActions(app) {
 			const open = document.getElementById(`path-${placeOf(path, selected)}`)
 			if (!sideBySide.matches) (open ?? $('#home-inspector')).scrollIntoView({ block: 'start' })
 			else {
-				if (open) open.scrollIntoView({ block: 'start' })
-				else if ($('#insp-scroll')) $('#insp-scroll').scrollTop = 0
+				// Side by side, only the panel and the canvas move: the page itself stays where it is.
+				const panel = $('#insp-scroll')
+				if (panel)
+					panel.scrollTop = open ? open.offsetTop - Number.parseFloat(getComputedStyle(open).scrollMarginTop) : 0
 				$('#home-canvas :is(.is-chosen, .drawing .is-open)')?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
 			}
 			if (focus) open?.querySelector('.path-head')?.focus({ preventScroll: true })
