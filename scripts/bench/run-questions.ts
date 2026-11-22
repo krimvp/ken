@@ -74,8 +74,8 @@ const proxyPort = port + 10
 const upstream = new URL(values.upstream)
 
 // What the proxy saw during one run.
-type Seen = { requests: number; busy: number; failed: number; input: number; output: number }
-let seen: Seen = { requests: 0, busy: 0, failed: 0, input: 0, output: 0 }
+type Seen = { requests: number; busy: number; waited: number; failed: number; input: number; output: number }
+let seen: Seen = { requests: 0, busy: 0, waited: 0, failed: 0, input: 0, output: 0 }
 
 const proxy = createServer(async (req, res) => {
 	let body = ''
@@ -84,6 +84,7 @@ const proxy = createServer(async (req, res) => {
 		const answer = await forward(req.method ?? 'POST', req.url ?? '/', req.headers, body)
 		if (answer.status === 429) {
 			seen.busy += 1
+			seen.waited += 5
 			await sleep(5000)
 			continue
 		}
@@ -154,7 +155,7 @@ async function runOnce(name: string, question: (typeof QUESTIONS)[string]) {
 	await cp(repo as string, copy, { recursive: true })
 	await cp(home as string, kenHome, { recursive: true })
 	if (question.dropLayouts) await rm(path.join(copy, '.ken', 'record', 'layouts.jsonl'), { force: true })
-	seen = { requests: 0, busy: 0, failed: 0, input: 0, output: 0 }
+	seen = { requests: 0, busy: 0, waited: 0, failed: 0, input: 0, output: 0 }
 	const server = spawn(
 		process.execPath,
 		[path.join(ken as string, 'src/cli/main.ts'), 'open', '--port', String(port)],
@@ -197,6 +198,8 @@ async function runOnce(name: string, question: (typeof QUESTIONS)[string]) {
 			sentBack: lines.filter((each) => each.kind === 'step' && each.step?.kind === 'sent-back').length,
 			replyId: saved?.view?.entry?.id ?? null,
 			outcome: end?.kind === 'done' ? end.outcome : `error: ${end?.message ?? lines.at(-1)?.message ?? 'no end'}`,
+			// Seconds the endpoint was busy with another caller's request, which ken's seconds include.
+			waited: seen.waited,
 			proxy: { input: seen.input, output: seen.output, busy: seen.busy, failed: seen.failed },
 		}
 	} catch (error) {
