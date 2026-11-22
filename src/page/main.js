@@ -6,6 +6,7 @@ import { fillDrawings, markPart, numberAt } from './draw-diagrams.js'
 import { homeActions } from './home/home-actions.js'
 import { showHome } from './home/home-view.js'
 import { freshHome } from './home/state/home-state.js'
+import { DOING } from './home/state/runs.js'
 import { liveLook, liveViewHtml } from './live/live-view.js'
 import { changeKey } from './project/change-card.js'
 import { learnParts } from './project/part-colours.js'
@@ -533,10 +534,14 @@ function panelHtml() {
 	return checksHtml(q, ui, state.thread.at(-1) === q ? null : when(q.askedAt))
 }
 
-// Why no run of ken's model can start now, or null when one can.
+// Why no run of ken's model can start now, or null when one can. A run the home started is named for what it does.
 function whyNoRun() {
 	if (state.model?.kind !== 'ok') return 'ken has no model to ask.'
-	return state.running ? "ken's model is busy with another run. Stop it, or wait for it." : null
+	if (!state.running) return null
+	const kind = state.running.onHome?.kind
+	return kind
+		? `${DOING[kind][1]}. You can ask again when it ends.`
+		: "ken's model is busy with another run. Stop it, or wait for it."
 }
 
 // What the lens forms show: the person and the span the reader picked, and what there is to pick from.

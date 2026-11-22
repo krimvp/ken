@@ -5,6 +5,15 @@ import { besideCanvas, firstUnseen, pathOf, picturesOf } from './content.js'
 
 const same = (a, b) => a.length === b.length && a.every((each, i) => each === b[i])
 
+// A run by its kind: its title while it runs, and what ken's model is doing.
+export const DOING = {
+	name: ['Naming the parts', "ken's model is naming the parts"],
+	tour: ['Writing the tour', "ken's model is reading each part in turn"],
+	story: ['Reading the change', "ken's model is reading the change"],
+	walk: ['Ordering the change into steps', "ken's model is ordering the change into steps"],
+	redraw: ['Drawing it another way', "ken's model is working on your request"],
+}
+
 // Whether the reader is where a run started: on its level, and for a run about a change, with that change laid over.
 export function isThere(started, home) {
 	const onLevel =
@@ -59,8 +68,11 @@ export function homeRuns({ state, render, send }, loads, stepTo) {
 		}
 		await Promise.all([loads.loadLayout(), loads.loadNotes()])
 		await loads.settle()
-		if (!ok) home.ended = { kind: 'nothing', outcome: q.outcome, error: q.error, id: q.id }
-		else if (!there) home.ended = { kind: 'elsewhere', run: started.kind, level: levelOf(started), started }
+		if (!ok) {
+			home.ended = { kind: 'nothing', outcome: q.outcome, error: q.error, id: q.id }
+			// A request that made nothing goes back into its box, unless the reader has typed the next one.
+			if (started.kind === 'redraw' && home.redraw.text === '') home.redraw.text = home.redraw.asked
+		} else if (!there) home.ended = { kind: 'elsewhere', run: started.kind, level: levelOf(started), started }
 		else if (started.kind === 'redraw') home.said = { asked: home.redraw.asked, q: besideCanvas(q, drew) }
 		else if (started.kind === 'tour' && home.detail === 'big') {
 			home.detail = 'how'

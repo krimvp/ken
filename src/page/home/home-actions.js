@@ -251,10 +251,12 @@ export function homeActions(app) {
 		'run-walk': () => run('walk', { kind: 'change', change: state.home.look.change.asked, want: 'walk' }),
 		'home-back': loads.back,
 		async 'note-remove'(el) {
+			const home = state.home
+			home.noteProblem = null
 			try {
-				state.home.notes = (await post('/api/notes', { remove: el.dataset.id })).notes
+				home.notes = (await post('/api/notes', { remove: el.dataset.id })).notes
 			} catch (error) {
-				state.home.redraw.problem = error.message
+				home.noteProblem = error.message
 			}
 			render()
 		},
@@ -265,7 +267,7 @@ export function homeActions(app) {
 			box.focus()
 		},
 		'redraw-open'() {
-			state.home.redrawOpen = !state.home.redrawOpen
+			Object.assign(state.home, { redrawOpen: !state.home.redrawOpen, noteProblem: null })
 			render()
 			if (state.home.redrawOpen) $('#redraw-text')?.focus()
 		},
@@ -339,9 +341,12 @@ export function homeActions(app) {
 				return true
 			}
 			home.redraw = { text: '', asked: text, problem: null }
-			home.said = null
+			// The examples and the notes close, so the picture has its room while the run goes on, and the keyboard goes to
+			// the panel, which shows the run.
+			Object.assign(home, { said: null, redrawOpen: false, noteProblem: null })
 			$('#redraw-text').value = ''
 			void run('redraw', { ...levelLens('view'), text })
+			$('#insp-title')?.focus({ preventScroll: true })
 		} else if (form.id === 'ask-form') sendAsk()
 		else {
 			// The picker sends the one field it shows: a span of time to catch up on, or a commit to look at.

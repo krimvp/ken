@@ -11,7 +11,7 @@ import { changeName, mapLine, stateLine } from '../canvas/canvas.js'
 import { besideCanvas, diagramOf, firstUnseen, pathOf, placeOf, shownDetail, stoodOn } from '../state/content.js'
 import { colourOf, DETAILS, levelName } from '../state/home-state.js'
 import { diffKey } from '../state/loads.js'
-import { isThere, levelOf } from '../state/runs.js'
+import { DOING, isThere, levelOf } from '../state/runs.js'
 import {
 	asksHtml,
 	elementNoun,
@@ -295,15 +295,6 @@ function drawnView(home) {
 			<p class="insp-actions"><button class="quiet-button" data-act="detail" data-detail="how" data-key="to-how">Read it in order</button><button class="quiet-button" data-act="detail" data-detail="code" data-key="to-all-code">Show its code</button></p>
 			<p><button class="link" data-act="open" data-id="${esc(q.id)}" data-key="drawn-open">Open the full reply</button></p>`,
 	}
-}
-
-// A run by its kind: its title while it runs, and what ken's model is doing.
-const DOING = {
-	name: ['Naming the parts', "ken's model is naming the parts"],
-	tour: ['Writing the tour', "ken's model is reading each part in turn"],
-	story: ['Reading the change', "ken's model is reading the change"],
-	walk: ['Ordering the change into steps', "ken's model is ordering the change into steps"],
-	redraw: ['Drawing it another way', "ken's model is working on your request"],
 }
 
 // A run of ken's model that the reader started here, while it runs: what ken is doing, for how long, and its actions.

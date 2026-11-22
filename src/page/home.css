@@ -712,8 +712,9 @@ button.brand {
 	color: var(--color-text);
 }
 
-/* "Show it another way", docked under the canvas: one row, so it takes no room from the picture. The examples and
-   the notes ken keeps open under the row while the reader types in the box, or when they ask for them. */
+/* "Show it another way", docked under the canvas: the box and the button in one row, and under the box what a run
+   costs. The examples and the notes ken keeps open under that while the reader types in the box, or when they ask
+   for them. */
 .home-redraw {
 	grid-column: 1;
 	max-height: 50vh;
@@ -725,7 +726,7 @@ button.brand {
 
 .redraw-form {
 	display: grid;
-	grid-template-columns: auto minmax(0, 1fr) auto;
+	grid-template-columns: minmax(0, 1fr) auto;
 	align-items: center;
 	gap: 0 var(--space-3);
 }
@@ -734,11 +735,23 @@ button.brand {
 	font-weight: 700;
 }
 
+/* Side by side the button names the bar, so the label is for a screen reader alone and the box has the row. */
+@media (min-width: 1200px) {
+	.redraw-label {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip-path: inset(50%);
+		white-space: nowrap;
+	}
+}
+
 .redraw-ask {
 	display: flex;
-	flex-wrap: wrap;
+	grid-column: 1 / -1;
 	align-items: center;
-	gap: var(--space-1) var(--space-3);
+	gap: var(--space-3);
 }
 
 .redraw-ask input {
@@ -759,20 +772,18 @@ button.brand {
 	opacity: 1;
 }
 
-.redraw-ask .run-button {
-	padding-block: var(--space-1);
+.redraw-ask button {
+	flex: none;
+	min-height: 2.5rem;
 }
 
-/* The reason the button is off runs under the row, so the box keeps its width. */
-.redraw-ask .run {
-	display: contents;
-}
-
-.redraw-ask .run-off {
-	flex-basis: 100%;
+/* Under the box: what a run costs, or why none can start now. */
+.redraw-under {
+	margin: var(--space-1) 0 0;
 }
 
 .redraw-toggle {
+	margin-top: var(--space-1);
 	font-size: var(--text-note);
 	white-space: nowrap;
 }
@@ -812,6 +823,10 @@ button.brand {
 
 .note-chip .link {
 	flex: none;
+}
+
+.redraw-row .home-error {
+	flex-basis: 100%;
 }
 
 .redraw-chip {
@@ -1444,14 +1459,24 @@ button.brand {
 		margin-top: var(--space-2);
 	}
 
+	.redraw-under {
+		display: none;
+		order: 3;
+		flex-basis: 100%;
+	}
+
 	.redraw-more,
 	.redraw-form .home-error {
-		order: 3;
+		order: 4;
 		flex-basis: 100%;
 	}
 
 	.redraw-form.is-open .redraw-ask {
 		display: flex;
+	}
+
+	.redraw-form.is-open .redraw-under {
+		display: block;
 	}
 
 	.redraw-form:not(.is-open) .redraw-how {

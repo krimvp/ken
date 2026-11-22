@@ -45,6 +45,8 @@ export function freshHome(stored, ui) {
 		// text is the box of "Show it another way", asked the request the model is working on, problem why it was not sent.
 		redraw: { text: '', asked: '', problem: null },
 		redrawOpen: false,
+		// Why ken could not remove a note, until the reader's next act on the notes.
+		noteProblem: null,
 		backProblem: null,
 		// ken's reply to the last request to show a level another way.
 		said: null,

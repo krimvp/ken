@@ -71,7 +71,10 @@ export function showHome(root, home, env, redraw) {
 	// A drawn picture is drawn again on every pass, so the mark on what the reader picked in it is set again too.
 	fillDrawings(canvas, redraw)
 	if (home.selected?.kind === 'element') markPart(canvas, home.content.id, home.selected.number)
-	if (fill(region('redraw'), redrawBarHtml(home, env.off))) root.querySelector('#redraw-text').value = home.redraw.text
+	fill(region('redraw'), redrawBarHtml(home, env.off))
+	// The box holds the reader's words whenever the home does: as typed, and put back after a run that made nothing.
+	const box = root.querySelector('#redraw-text')
+	if (box.value !== home.redraw.text) box.value = home.redraw.text
 	// The panel keeps its place when it is drawn again. With a stop open, that stop stays where it is on screen, also
 	// when words arrive over it, as a tour's do a moment after its level. Side by side the panel scrolls, and in one
 	// column the page does.
