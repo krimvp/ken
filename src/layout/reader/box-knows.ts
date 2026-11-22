@@ -38,9 +38,10 @@ type Kind = Exclude<Did, 'set'> | 'topics' | 'toured' | 'answered' | 'unlearned'
 // the level the reader picked.
 type Evidence = { at: string } & ({ kind: Kind } | { kind: 'set'; level: Level })
 
-// What a box's belief is worked out from. lookedAt holds the commits the reader may have last looked at, the first
-// that HEAD reaches counts: for a change they read it is the change's last commit, then the commit they read it at.
-export type Looks = { evidence: Evidence[]; lookedAt: string[] }
+// What a box's belief is worked out from. lookedAt holds, for each line that says the reader looked at the box as it
+// was at a commit, newest line first, that commit: for a change they read the change's last commit, then the commit
+// they read it at, and the first that HEAD reaches counts.
+export type Looks = { evidence: Evidence[]; lookedAt: string[][] }
 
 // What a belief is about, as its sentence names it: a box is a part, and a term and a drawn process have briefs too.
 export type Thing = 'part' | 'term' | 'process'
@@ -101,8 +102,11 @@ export function looksAt(paths: string[], lines: SeenLine[], states: TopicState[]
 	// is the one correction that says they know the part as it is now.
 	const moves = (line: SeenLine) =>
 		line.did === 'set' ? line.level === 'said' : line.did !== 'opened' && line.did !== 'forgot'
-	const newest = counted.filter(moves).toSorted(oldestFirst).at(-1)
-	const lookedAt = newest ? [...(newest.did === 'change' ? [newest.change.head] : []), newest.head] : []
+	const lookedAt = counted
+		.filter(moves)
+		.toSorted(oldestFirst)
+		.reverse()
+		.map((line) => [...(line.did === 'change' ? [line.change.head] : []), line.head])
 	return { evidence: evidence.toSorted(oldestFirst), lookedAt }
 }
 

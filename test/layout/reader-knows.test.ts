@@ -164,3 +164,16 @@ test('a correction sets the level the reader picks in place of what came before,
 	const fresh = await a()
 	assert.deepEqual([fresh?.level, fresh?.stale, fresh?.go], ['new', false, { way: 'learn', detail: 'big' }])
 })
+
+test('a change the reader walks through after reading the part at HEAD does not count again the commits they already read', async () => {
+	const { root, hashes } = buildRepository([{ message: 'feat: start', files: START }])
+	const [start = ''] = hashes
+	const sources = await sourcesFor(root)
+	const merged = commit(root, { 'src/a/x.ts': 'x2\n' })
+	const head = commit(root, { 'src/a/x.ts': 'x3\n' })
+	await did(sources, 1, head, { did: 'code', paths: ['src/a'] })
+	// Later the reader walks through the older change, which ended one commit before HEAD.
+	await did(sources, 5, head, { did: 'change', paths: ['src/a/x.ts'], change: { base: start, head: merged } })
+	const { a } = knows(await look(sources))
+	assert.deepEqual([a?.since, a?.stale], [0, false])
+})

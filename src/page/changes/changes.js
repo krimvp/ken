@@ -17,12 +17,23 @@ const SHOWN_OFFERS = 4
 const today = () => new Date().toISOString().slice(0, 10)
 const pullOf = (name) => name.match(/Merge pull request #(\d+)/)?.[1] ?? null
 
-// The span a change covers on the timeline: from its oldest commit to its newest, and to today for a span of time.
-// toToday says the change is a span of time.
-export function spanOf(change, toToday) {
-	const days = (change?.commits ?? []).map((commit) => commit.date.slice(0, 10)).sort()
-	if (days.length === 0) return null
-	return { from: days[0], to: toToday ? today() : days.at(-1) }
+const DAY = 86_400_000
+const dayOf = (time) => new Date(time).toISOString().slice(0, 10)
+
+// The span the change on show covers on the timeline, { from, to } as days. A span of time runs from the day it
+// begins to today; any other change from its oldest commit to its newest.
+export function spanOf(home) {
+	const change = home.look?.change
+	if (!change) return null
+	const choice = home.changes.find((each) => each.kind === 'since' && each.change === home.change)
+	const asked = home.change.match(/^since:(?:(\d{4}-\d{2}-\d{2})|(\d+)d?)$/)
+	const start = choice?.start ?? asked?.[1] ?? (asked?.[2] ? dayOf(Date.now() - Number(asked[2]) * DAY) : null)
+	if (start) return { from: start, to: today() }
+	const days = [...change.commits.map((commit) => commit.date), change.oldest ?? []]
+		.flat()
+		.map((date) => date.slice(0, 10))
+		.sort()
+	return days.length === 0 ? null : { from: days[0], to: days.at(-1) }
 }
 
 // Whether the change on show is a span of time, which runs to today.
@@ -30,17 +41,17 @@ export const isSpan = (home) =>
 	home.change.startsWith('since:') ||
 	home.changes.some((choice) => choice.kind === 'since' && choice.change === home.change)
 
-// The spans the page offers over the timeline: since the reader last looked, when anything landed since, the last 7
-// and 30 days, and the newest merge.
-export function spanChoices(changes, timeline) {
-	const looked = timeline?.lastVisit?.slice(0, 10)
-	const landed = looked && timeline.days.some((each) => each.day >= looked && each.commits > 0)
+// The spans the page offers over the timeline: the spans of time the server offers but the 90 days the whole
+// timeline shows, named by their days or by the moment they start, and the newest merge.
+export function spanChoices(changes) {
 	const since = changes
-		.filter((choice) => choice.kind === 'since' && !/90 days/.test(choice.name))
-		.map((choice) => ({ change: choice.change, name: choice.name.replace(/^The last (\d+ days).*$/, '$1') }))
+		.filter((choice) => choice.kind === 'since' && choice.days !== 90)
+		.map((choice) => ({
+			change: choice.change,
+			name: choice.days === null ? choice.name.slice(0, choice.name.lastIndexOf(': ')) : `${choice.days} days`,
+		}))
 	const merge = changes.find((choice) => choice.kind === 'merge')
 	return [
-		...(landed ? [{ change: `since:${looked}`, name: 'Since you looked' }] : []),
 		...since,
 		...(merge
 			? [
@@ -76,7 +87,8 @@ function numbersHtml(look, span, toToday) {
 				? dayText(span.from)
 				: `${dayText(span.from)} to ${dayText(span.to)}`
 	const big = (n, one, many) => `<p class="k-big"><b class="k-num">${n}</b> ${n === 1 ? one : many}</p>`
-	return `<div class="k-chg-numbers">${big(change.commits?.length ?? 0, 'commit', 'commits')}${big(parts, 'part', 'parts')}${big(change.files, 'file', 'files')}<span class="k-chg-when">${esc(when)}</span></div>`
+	const commits = change.commits.length + change.moreCommits
+	return `<div class="k-chg-numbers">${big(commits, 'commit', 'commits')}${big(parts, 'part', 'parts')}${big(change.files, 'file', 'files')}<span class="k-chg-when">${esc(when)}</span></div>`
 }
 
 function blocksHtml(look) {
@@ -134,15 +146,16 @@ function storyHtml(home, env) {
 function commitsHtml(change, open) {
 	const commits = change.commits ?? []
 	if (commits.length === 0) return ''
+	const total = commits.length + change.moreCommits
 	const rows = commits
 		.slice(0, SHOWN_COMMITS)
 		.map(
 			(commit) =>
 				`<li><span class="k-chg-day">${esc(dayText(commit.date.slice(0, 10)))}</span><span class="k-chg-subject">${prose(commit.subject)}</span><code class="k-chg-hash">${esc(short(commit.hash))}</code></li>`,
 		)
-	const more =
-		commits.length > SHOWN_COMMITS ? `<li class="k-muted">and ${commits.length - SHOWN_COMMITS} more</li>` : ''
-	return `<details class="k-chg-commits" data-key="chg-commits"${open ? ' open' : ''}><summary><span class="k-eyebrow">${count(commits.length, 'commit', 'commits')}</span></summary><ul>${rows.join('')}${more}</ul></details>`
+	const shown = Math.min(commits.length, SHOWN_COMMITS)
+	const more = total > shown ? `<li class="k-muted">and ${total - shown} more</li>` : ''
+	return `<details class="k-chg-commits" data-key="chg-commits"${open ? ' open' : ''}><summary><span class="k-eyebrow">${count(total, 'commit', 'commits')}</span></summary><ul>${rows.join('')}${more}</ul></details>`
 }
 
 function sideHtml(home, chg, env) {
@@ -197,8 +210,8 @@ export function changesPageHtml({ home, chg, env, timeline, waiting, live, older
 		const said = home.problem ? esc(home.problem.message) : 'Reading what landed, from git.'
 		return `<div class="k-chg-page">${tabs}<p class="k-home-line" role="status">${said}</p></div>`
 	}
-	const span = chg.drag ?? (look.change ? spanOf(look.change, isSpan(home)) : null)
-	const presets = spanChoices(home.changes, timeline).map(
+	const span = chg.drag ?? spanOf(home)
+	const presets = spanChoices(home.changes).map(
 		(choice, i) =>
 			`<button data-act="chg-pick" data-change="${esc(choice.change)}" data-key="chg-span-${i}" aria-pressed="${home.change === choice.change}">${choice.merge ? icon('merge') : ''}${esc(choice.name)}</button>`,
 	)

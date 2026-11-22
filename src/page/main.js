@@ -28,7 +28,7 @@ import { decisionsViewHtml } from './views/decisions.js'
 import { elementKey } from './views/diagram.js'
 import { count, duration, esc, projectHtml, prose, short, when } from './views/format.js'
 import { changedLine, changedTopics, lensHtml } from './views/map.js'
-import { openCount, openViewHtml } from './views/open.js'
+import { changedParts, openCount, openViewHtml } from './views/open.js'
 import { cardsOf, isMoved, itemsOf, knowPartHtml, LEGEND, replyHtml, stepCardsHtml } from './views/reply.js'
 import { endedHtml, noChecksPanelHtml, noModelHtml, stepsHtml, workingHtml } from './views/states.js'
 import { freshYou, youActions } from './you/you-actions.js'
@@ -986,7 +986,8 @@ app.older = {
 			const seen = { seen: state.liveSeen, hideAsk: state.hideAsk }
 			return liveViewHtml(state.live, state.liveUi, state.unfolded, canAsk, state.liveProblem, seen)
 		}
-		const open = openViewHtml(state.followUp, state.followUi, canAsk, state.followSaid, state.followDecided)
+		const parts = changedParts(state.shell.top?.look)
+		const open = openViewHtml(state.followUp, state.followUi, canAsk, state.followSaid, state.followDecided, parts)
 		return `${open}${decisionsViewHtml(state.decisions, state.decisionsKey)}`
 	},
 	async load(tab) {
@@ -1012,7 +1013,7 @@ app.older = {
 			state.decisions = []
 		}
 	},
-	waiting: () => openCount(state.followUp),
+	waiting: () => openCount(state.followUp, changedParts(state.shell.top?.look)),
 	live: () => liveLook(state.liveStatus),
 }
 const shell = shellActions(app)

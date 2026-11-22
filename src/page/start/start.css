@@ -364,6 +364,14 @@
 	stroke-width: 1;
 }
 
+.k-bars-key {
+	display: flex;
+	justify-content: space-between;
+	margin-top: 4px;
+	color: var(--k-muted);
+	font-size: 14px;
+}
+
 .k-you {
 	display: block;
 	width: 100%;

@@ -7,7 +7,7 @@ import { WHOLE } from '../level/level-state.js'
 import { stepDiffHtml, stepParts, stepWords, walkOf } from '../project/walk.js'
 import { fill } from '../shell/fill.js'
 import { wordsHtml } from '../views/reply.js'
-import { changesPageHtml, isSpan, spanChoices, spanOf } from './changes.js'
+import { changesPageHtml, spanChoices, spanOf } from './changes.js'
 import { dayAt, daysShown } from './timeline.js'
 
 const DAY = 86_400_000
@@ -70,7 +70,7 @@ export function changeActions(app) {
 		if (change) return show(change)
 		const kept = home.trail.length === 1 && home.change !== 'none' && home.look?.change
 		if (kept) return show(home.change)
-		const first = spanChoices(state.shell.top?.changes ?? home.changes, state.shell.timeline)[0]
+		const first = spanChoices(state.shell.top?.changes ?? home.changes)[0]
 		await show(first?.change ?? 'since:7d')
 	}
 
@@ -126,7 +126,7 @@ export function changeActions(app) {
 
 	// The span starts a day earlier or later, and runs to today.
 	function shift(by) {
-		const span = spanOf(lookNow()?.change, isSpan(state.home))
+		const span = spanOf(state.home)
 		const days = daysShown(state.shell.timeline)
 		const from = span ? Date.parse(span.from) + by * DAY : Date.parse(days.at(-8))
 		const day = new Date(Math.min(Math.max(from, Date.parse(days[0])), Date.parse(days.at(-1)))).toISOString()

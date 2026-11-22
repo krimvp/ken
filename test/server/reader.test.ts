@@ -102,3 +102,21 @@ test('a reader who comes back after a commit landed is offered what landed since
 	assert.equal(back.changes[0].change, `${hashes[0]}..${hashes[1]}`)
 	assert.equal((await json(server, '/api/reader')).lastVisit, at)
 })
+
+test('a long visit stays one visit, so the last visit is the one before the gap, not an hour ago in this one', async () => {
+	const { root, hashes } = buildRepository([{ message: 'feat: start', files: { 'src/a/x.ts': 'x\n' } }])
+	const server = await openKen(root, readerHome())
+	const { file } = await json(server, '/api/reader')
+	const ago = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString()
+	const before = ago(300)
+	// This visit began 75 minutes ago, with a line at most 25 minutes after the one before.
+	const lines = [before, ago(75), ago(50), ago(25), ago(1)].map((at) => ({
+		at,
+		did: 'opened',
+		paths: ['src'],
+		head: hashes[0],
+	}))
+	mkdirSync(path.dirname(file), { recursive: true })
+	writeFileSync(file, lines.map((line) => `${JSON.stringify(line)}\n`).join(''))
+	assert.equal((await json(server, '/api/reader')).lastVisit, before)
+})

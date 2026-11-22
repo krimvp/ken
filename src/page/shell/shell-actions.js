@@ -251,6 +251,8 @@ export function shellActions(app) {
 	const actions = {
 		'go-page': (el) => goPage(el.dataset.page),
 		'start-go': (el) => follow(shell.top.look.next.items[Number(el.dataset.index)], el.dataset.key),
+		'part-changed': (el) =>
+			follow(shell.top.look.boxes.find((box) => box.name === el.dataset.name).knows, el.dataset.key),
 		settings() {
 			shell.settingsOpen = !shell.settingsOpen
 			render()
