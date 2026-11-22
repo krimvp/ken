@@ -8,7 +8,7 @@ import { count, esc, isSession, label, pathList, prose, quoteBody, RUN_COST, run
 import { stepCardsHtml, storyHtml, wordsHtml } from '../../views/reply.js'
 import { arrowListHtml } from '../canvas/arrow-list.js'
 import { pathsLine, plusMinus } from '../canvas/canvas.js'
-import { firstUnseen, pathOf, placeOf, shownDetail, stepFiles, stoodOn } from '../state/content.js'
+import { diagramPath, firstUnseen, pathOf, placeOf, shownDetail, stepFiles, stoodOn } from '../state/content.js'
 import { colourOf } from '../state/home-state.js'
 
 // The two tags a boxed card can carry. Plain code read the facts of the first from git. The second holds words of
@@ -258,9 +258,10 @@ function elementHtml(element, k, on, { detail, diagram }) {
 // The box or arrow the reader picked in the drawing, as its line of the path at "How it works": the panel shows it
 // over ken's words at "Big picture". With none picked it is empty.
 export function pickedElementHtml(home, diagram) {
-	const k = placeOf(diagram.elements, home.selected)
+	const path = diagramPath(diagram)
+	const k = placeOf(path, home.selected)
 	if (k < 0) return ''
-	return `<ol class="path"><li class="path-step is-on">${elementHtml(diagram.elements[k], k, true, { detail: 'how', diagram })}</li></ol>`
+	return `<ol class="path"><li class="path-step is-on">${elementHtml(path[k], k, true, { detail: 'how', diagram })}</li></ol>`
 }
 
 // What the two lists of a drawn picture are called, by the kind of its diagram, and what one of each is called: its
@@ -287,9 +288,11 @@ export function elementNoun(diagram, element) {
 }
 
 // What the panel shows of a drawn picture at "How it works" and "In the code": its boxes, then its arrows, in the
-// order of their numbers, the one the reader picked open.
+// order of their numbers, the one the reader picked open. The participants of a sequence carry no number, so they are
+// one line of names over its messages.
 export function elementsView(home, diagram) {
-	const path = diagram.elements
+	const path = diagramPath(diagram)
+	const named = diagram.elements.filter((element) => !element.numbered)
 	const at = placeOf(path, home.selected)
 	const detail = shownDetail(home)
 	const ctx = { detail, diagram }
@@ -299,9 +302,13 @@ export function elementsView(home, diagram) {
 	)
 	// ken numbers the boxes first, so the arrows start where the boxes end.
 	const boxes = path.filter((element) => element.label === null).length
-	const [[names], [arrows]] = LISTS[diagram.kind]
+	const [[names], [arrows, arrow]] = LISTS[diagram.kind]
 	const listed = (title, rows, kind = '') =>
 		rows.length === 0 ? '' : `<h3 class="insp-sub">${title}</h3><ol class="path${kind}">${rows.join('')}</ol>`
+	const who =
+		named.length === 0
+			? ''
+			: `<h3 class="insp-sub">${names}</h3><p>${named.map((element) => prose(element.text)).join(', ')}.</p>`
 	// Back and Next name what they go to by its own noun: "Back to message 8".
 	const nav = ['Back', 'Next'].map((way, side) => {
 		const k = at + (side === 0 ? -1 : 1)
@@ -310,13 +317,14 @@ export function elementsView(home, diagram) {
 		return `<button class="${side === 0 ? 'quiet-button' : 'primary'} nav-button" data-act="home-step" data-index="${k}" data-key="home-nav-${way}"><span class="nav-way">${said}</span><span class="nav-name">${prose(path[k].text)}</span></button>`
 	})
 	const start = `<button class="primary nav-button" data-act="home-step" data-index="0" data-key="home-nav-start"><span class="nav-way">Start at number 1</span><span class="nav-name">${prose(path[0]?.text ?? '')}</span></button>`
+	const counted = named.length > 0 ? count(path.length, arrow, `${arrow}s`) : `${path.length} boxes and arrows`
 	return {
 		where:
 			at >= 0
 				? `${elementNoun(diagram, path[at]).replace(/^./, (c) => c.toUpperCase())} ${path[at].number}`
-				: `${path.length} boxes and arrows, numbered as in the drawing`,
+				: `${counted}, numbered as in the drawing`,
 		picked: at >= 0,
-		body: `${listed(names, items.slice(0, boxes), detail === 'how' ? ' is-names' : '')}${listed(arrows, items.slice(boxes))}`,
+		body: `${who}${listed(names, items.slice(0, boxes), detail === 'how' ? ' is-names' : '')}${listed(arrows, items.slice(boxes))}`,
 		nav:
 			path.length === 0
 				? ''

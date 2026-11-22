@@ -95,7 +95,11 @@ function config(actor) {
 }
 
 // A drawing wider than its box shrinks until its smallest text is this many pixels, and scrolls sideways from there.
+// One that is at most a quarter too wide shrinks to fit all the same, on a screen wider than a phone's: the whole of
+// it in view reads better than a cut edge, and its text stays above 11 pixels.
 const SMALLEST_TEXT = 14
+const FITS_FROM = 0.8
+const phone = matchMedia('(max-width: 759px)')
 
 // A drawing is at most this much shorter than the window, so the caption above it and the head of the next part of the
 // answer fit on one screen with it.
@@ -127,7 +131,10 @@ function fit(box, drawing) {
 	const room = box.clientWidth - Number.parseFloat(style.paddingLeft) - Number.parseFloat(style.paddingRight)
 	// A drawing taller than tallest() shrinks too, as far as the same floor allows.
 	const tall = tallest() / svg.viewBox.baseVal.height
-	const scale = Math.min(1, Math.max(SMALLEST_TEXT / drawing.smallest, Math.min(room / natural, tall)))
+	const across = room / natural
+	const least = SMALLEST_TEXT / drawing.smallest
+	const floor = across >= FITS_FROM && !phone.matches ? Math.min(least, across) : least
+	const scale = Math.min(1, Math.max(floor, Math.min(across, tall)))
 	svg.style.width = `${natural * scale}px`
 	const wide = natural * scale > room + 1
 	frame.classList.toggle('wide', wide)

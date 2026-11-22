@@ -80,12 +80,18 @@ export function shownDetail(home) {
 	return home.look?.named ? home.detail : 'big'
 }
 
+// The elements of a diagram a reader steps through: those the drawing numbers. The participants of a sequence have
+// no number, so its path is its messages.
+export function diagramPath(diagram) {
+	return (diagram?.elements ?? []).filter((element) => element.numbered)
+}
+
 // The reading path of what is on screen, in order. For a named level it is one stop per part, in the order plain code
 // picked from the arrows, each with the words and cards of the stored tour when there is one. For a change it is the
 // steps of its stored walkthrough, and for a drawn picture the boxes and arrows of its diagram, under the numbers the
 // drawing shows. A stop the tour has no words for has text null.
 export function pathOf(look, content) {
-	if (content.kind === 'drawn') return diagramOf(content.q)?.elements ?? []
+	if (content.kind === 'drawn') return diagramPath(diagramOf(content.q))
 	if (content.kind === 'change') return content.walk?.q ? walkOf(content.walk.q.reply) : []
 	if (content.kind !== 'level') return []
 	const told = content.tour?.q ? walkOf(content.tour.q.reply) : []

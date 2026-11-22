@@ -5,8 +5,8 @@ import type { Paint } from './print-reply.ts'
 
 type Quote = Claim['quotes'][number]
 
-// A diagram in the terminal: its title and label, then each element by number with the lines it rests on. The drawing
-// itself is for the page; ken ask --json carries its Mermaid text.
+// A diagram in the terminal: its title and label, then each element with the lines it rests on, under its number
+// when it has one to show. The drawing itself is for the page; ken ask --json carries its Mermaid text.
 export function formatDiagram(diagram: Diagram, paint: Paint): string[] {
 	const kind = diagram.kind.replaceAll('-', ' ')
 	const lines = [
@@ -15,7 +15,7 @@ export function formatDiagram(diagram: Diagram, paint: Paint): string[] {
 	]
 	for (const element of diagramElements(diagram)) {
 		const label = element.label === null ? '' : ` ${paint('cyan', `[${element.label}]`)}`
-		lines.push(`${element.number}. ${element.text}${label}`)
+		lines.push(`${element.numbered ? `${element.number}.` : '-'} ${element.text}${label}`)
 		for (const quote of element.quotes) lines.push(...formatQuote(quote, paint))
 	}
 	return lines

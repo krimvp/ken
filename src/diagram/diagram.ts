@@ -11,7 +11,8 @@ export const CARDINALITIES = ['one-to-one', 'one-to-many', 'many-to-one', 'many-
 export type Cardinality = (typeof CARDINALITIES)[number]
 
 // ken numbers the elements of a diagram in one run: its boxes, participants or entities first, then its arrows,
-// messages or relations, each in the order the model sent them. The terminal and the page list them by number.
+// messages or relations, each in the order the model sent them. The terminal and the page list them by number, and
+// count the messages of a sequence from 1: see diagramElements.
 // A node may carry quotes that show where it is defined. An edge is a claim and carries at least one.
 type Node = { number: number; name: string; quotes: VerifiedGitQuote[] }
 type Edge = { number: number; from: string; to: string; text: string; label: Label; quotes: VerifiedGitQuote[] }

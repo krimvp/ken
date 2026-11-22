@@ -190,16 +190,22 @@ test('a drawn picture shows its drawing on the canvas in place of the parts, and
 	assert.match(said(big), /The command runs the core\./)
 	assert.doesNotMatch(big, /sequenceDiagram/, 'the drawing is on the canvas, so the panel does not draw it again')
 
-	// ken numbers the two participants 1 and 2, so the second message is number 4.
-	const picked = { kind: 'element', number: 4 }
+	// The messages count from 1, and the two participants are names with no number.
+	const picked = { kind: 'element', number: 2 }
 	const how = said(inspectorHtml(home('how', picked), env))
-	assert.match(how, /Message 4/)
-	assert.match(how, /4 From Core to Command: returns once it saved It rests on src\/core\/run\.ts ?, line 2/)
-	assert.match(how, /Back to message 3 From Command to Core: runs the work/, 'Back says what it goes to')
+	assert.match(how, /Message 2/)
+	assert.match(
+		how,
+		/Command, Core\. .*1 From Command to Core/,
+		'the participants are named in one line over the messages',
+	)
+	assert.match(how, /2 From Core to Command: returns once it saved It rests on src\/core\/run\.ts ?, line 2/)
+	assert.match(how, /Back to message 1 From Command to Core: runs the work/, 'Back says what it goes to')
 	assert.doesNotMatch(how, /save\(\)/, 'the line itself waits for "In the code"')
 
 	const code = said(inspectorHtml(home('code', picked), env))
-	assert.match(code, /4 From Core to Command: returns once it saved .*save\(\)/)
+	assert.match(code, /2 From Core to Command: returns once it saved .*save\(\)/)
+	assert.doesNotMatch(code, /quoted no code/, 'a participant is a name, so nothing says it quotes no code')
 })
 
 test('a level ken drew again has no tour until ken gives one for its new parts', async () => {
