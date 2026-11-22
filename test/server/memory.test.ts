@@ -137,3 +137,75 @@ test('memory_quoted_in and memory_search find the brief that quotes those lines,
 	assert.match(many, /^40 that quote src\/cli:/)
 	assert.match(many, /more lines left out\.$/)
 })
+
+test('a run whose output goes into the project record reads none of what the reader typed or keeps for themselves', async () => {
+	const MARK = 'quokka'
+	const { root } = buildRepository([
+		{
+			message: 'feat: start',
+			files: {
+				...FILES,
+				'src/core/save.ts': 'export function save() {\n\treturn true\n}\n',
+			},
+		},
+	])
+	const named = await fileRecordStore(root, gitRepository(root)).append([
+		{
+			kind: 'layout',
+			within: [],
+			at: 'HEAD',
+			parts: [
+				{ name: 'Core', job: 'Runs the work', paths: ['src/core'] },
+				{ name: 'Command', job: 'The command a person types', paths: ['src/cli'] },
+			],
+			arrows: [],
+		},
+	])
+	if (named.kind !== 'appended') assert.fail(named.problems.join(' '))
+	const said = `The ${MARK} gives back one.`
+	const model = await scriptedModel([
+		{ tool: 'ken__remember', args: { note: `You call the core the ${MARK}.` } },
+		{
+			tool: 'ken__show',
+			args: {
+				brief: {
+					number: 1,
+					line: said,
+					points: [
+						{
+							line: said,
+							more: said,
+							long: said,
+							drawing: { kind: 'dot' },
+							quotes: [{ path: 'src/core/run.ts', text: '\treturn 1' }],
+						},
+					],
+				},
+			},
+		},
+		{
+			calls: [
+				{ tool: 'ken__memory_known', args: { about: 'part::Core' } },
+				{ tool: 'ken__memory_quoted_in', args: { path: 'src/core' } },
+			],
+		},
+		{ hang: () => {} },
+	])
+	const server = await openKen(root, readerHome(), model.baseUrl)
+	const typed = { kind: 'answer', concept: 'part::Core', text: `What is the ${MARK} for?`, typed: true }
+	assert.equal((await ask(server, { lens: typed })).at(-1).kind, 'saved')
+	const stop = new AbortController()
+	void fetch(new URL('/api/questions', server.url), {
+		method: 'POST',
+		headers: { origin: new URL(server.url).origin, 'content-type': 'application/json' },
+		body: JSON.stringify({ lens: { kind: 'parts', within: ['src/core'], name: 'Core' } }),
+		signal: stop.signal,
+	}).catch(() => {})
+	while (model.requests.length < 4) await new Promise((resolve) => setTimeout(resolve, 20))
+	stop.abort()
+	const [known = ''] = toolResults(model.requests[3])
+	assert.match(known, /part part::Core \(Core\): Runs the work/, 'memory answered the run')
+	for (const request of model.requests.slice(2)) {
+		assert.doesNotMatch(JSON.stringify(request.messages), new RegExp(MARK), 'the naming run never saw the marked word')
+	}
+})

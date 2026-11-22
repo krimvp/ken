@@ -77,14 +77,24 @@ const CAPS = {
 }
 const CHANGED = 'changed since: read the file again'
 
+// asked is what the reader asked and was told: their map of the topics and the earlier answers. A run whose output
+// goes into the project record gets null, so memory gives it the record and the briefs ken wrote from the code alone.
 export function memoryTools(deps: {
 	store: RecordStore
 	repo: Repository
-	map?: UnderstandingMap | undefined
 	memory?: Memory | undefined
-	chat: ChatRecall
+	asked: { map?: UnderstandingMap | undefined; chat: ChatRecall } | null
 }): Tool[] {
-	const { store, repo, map, memory, chat } = deps
+	const { store, repo, memory, asked } = deps
+	const map = asked?.map
+	const chat: ChatRecall = asked?.chat ?? { find: async () => [] }
+	// A question's brief is the answer to what the reader asked.
+	const held = async (about: string) => {
+		const found = await memory?.known(about)
+		if (!found || asked) return found
+		return found.kind === 'question' ? null : { ...found, questions: [] }
+	}
+	const facts = async () => ((await memory?.facts()) ?? []).filter((fact) => asked || fact.kind !== 'answer')
 
 	// Each quote as path:lines, with whether its lines still read the same at HEAD.
 	async function anchors(quotes: MemoryQuote[], signal?: AbortSignal): Promise<string[]> {
@@ -124,19 +134,19 @@ export function memoryTools(deps: {
 				const state = read.states[0]
 				return reply(state ? `${full}\nReader: ${stateLine(state)}` : full)
 			}
-			const held = await memory?.known(about)
-			const [saved] = held ? [] : await chat.find(undefined, about)
+			const known = await held(about)
+			const [saved] = known ? [] : await chat.find(undefined, about)
 			if (saved) return reply(saved.text)
-			if (!held) return refuse(`ken holds nothing on "${about}". Search memory with memory_search, or read the code.`)
+			if (!known) return refuse(`ken holds nothing on "${about}". Search memory with memory_search, or read the code.`)
 			const points = await Promise.all(
-				held.points.map(async (point) => `- ${point.line} [${(await anchors(point.quotes, ctx.signal)).join(', ')}]`),
+				known.points.map(async (point) => `- ${point.line} [${(await anchors(point.quotes, ctx.signal)).join(', ')}]`),
 			)
-			const asked = held.questions.map((question) => `- ${question.text}${question.answered ? ' (answered)' : ''}`)
+			const questions = known.questions.map((each) => `- ${each.text}${each.answered ? ' (answered)' : ''}`)
 			const text = [
-				`${held.kind} ${held.id} (${held.name}): ${held.line}`,
+				`${known.kind} ${known.id} (${known.name}): ${known.line}`,
 				...(points.length ? ['Things to know:', ...points] : ["ken's model has not explained it yet."]),
-				...(held.terms.length ? [`Terms: ${held.terms.join(', ')}`] : []),
-				...(asked.length ? ['Questions:', ...asked] : []),
+				...(known.terms.length ? [`Terms: ${known.terms.join(', ')}`] : []),
+				...(questions.length ? ['Questions:', ...questions] : []),
 			]
 			return reply(capped(text, CAPS.known))
 		},
@@ -196,7 +206,7 @@ export function memoryTools(deps: {
 						quote.startLine <= end &&
 						quote.endLine >= start,
 				)
-			const found = ((await memory?.facts()) ?? [])
+			const found = (await facts())
 				.map((fact) => ({ ...fact, quotes: quotes(fact) }))
 				.filter((fact) => fact.quotes.length > 0)
 				.slice(0, CAPS.quotedIn.entries)
@@ -237,12 +247,12 @@ export function memoryTools(deps: {
 				.filter((entry) => (kind === undefined || entry.kind === kind) && has(JSON.stringify(entry)))
 				.reverse()
 				.sort((a, b) => b.at.localeCompare(a.at))
-			const asked = kind === undefined && words.length > 0
-			const answers = asked ? await chat.find(words.join(' ')) : []
-			const facts = asked ? ((await memory?.facts()) ?? []).filter((fact) => has(`${fact.name} ${fact.text}`)) : []
+			const byWords = kind === undefined && words.length > 0
+			const answers = byWords ? await chat.find(words.join(' ')) : []
+			const found = byWords ? (await facts()).filter((fact) => has(`${fact.name} ${fact.text}`)) : []
 			const hits: (() => Promise<string>)[] = [
 				...answers.map((each) => async () => `answer ${each.id}: ${each.text}`),
-				...facts.map((fact) => () => factLine(fact, ctx.signal)),
+				...found.map((fact) => () => factLine(fact, ctx.signal)),
 				...entries.map((entry) => async () => entryLine(entry)),
 			]
 			const shown = await Promise.all(

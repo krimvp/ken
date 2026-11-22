@@ -8,10 +8,10 @@ import { findRoot, gitRepository } from '../repo/index.ts'
 import { projectSessions } from '../transcripts/index.ts'
 import { SHORTEN_PROMPT, type Shorten, shortened, shortenQuestion } from './brief/shorten-lines.ts'
 import type { ChatEvent, Cost } from './chat-event.ts'
-import { briefParts, lensOf, readLimit } from './lens/lens.ts'
+import { briefParts, forRecord, lensOf, readLimit } from './lens/lens.ts'
 import { plainFacts } from './lens/plain-facts.ts'
 import type { ModelConfig } from './model-config.ts'
-import { readerIndex, readerNotes } from './reader-index.ts'
+import { readerIndex } from './reader-index.ts'
 import { quotesOf } from './reply/check-card.ts'
 import { fileTurn } from './reply/file-turn.ts'
 import { endReply } from './reply/record-reply.ts'
@@ -124,7 +124,9 @@ export async function startChat(options: {
 		const round = () => run.round
 		const shorten = shortenIn(run)
 		const reads = explorationTools(repo, elsewhere, () => run.round.read)
-		const memory = memoryTools({ store, repo, map: reader?.map, memory: reader?.memory, chat: thread })
+		const shared = forRecord(as)
+		const asked = shared ? null : { map: reader?.map, chat: thread }
+		const memory = memoryTools({ store, repo, memory: reader?.memory, asked })
 		const remember = reader ? [rememberTool(reader.notes, round)] : []
 		const tools = lens
 			? [
@@ -135,7 +137,8 @@ export async function startChat(options: {
 					...reads,
 					diffTool(repo, elsewhere),
 					...memory,
-					...sessionTools(sessions),
+					// The saved sessions are what the reader typed to their coding tool.
+					...(shared ? [] : sessionTools(sessions)),
 					...remember,
 					showTool(gate, round, { shorten }),
 					reviseTool(gate, round),
@@ -308,8 +311,10 @@ export async function startChat(options: {
 		const talk = async () => {
 			if (as.kind === 'change') events.push(await changeNamed(repo, as.range, signal))
 			const lens = lensOf(as)
-			const followUp = lens ? lens.followUp : as.kind !== 'note'
-			const opening = lens && !lens.followUp ? await lensOpening() : await chatOpening(question, as, signal)
+			const shared = forRecord(as)
+			const followUp = !shared && (lens ? lens.followUp : as.kind !== 'note')
+			// A lens ken wrote for the record holds what ken knows of the level in its question.
+			const opening = lens && shared ? '' : await chatOpening(question, as, shared, signal)
 			const earlier = followUp ? thread.recent() : ''
 			const facts = lens ? await briefFacts(as, signal) : ''
 			const ran = await prompt(`${opening}${earlier}The question: ${question}${facts}`, stops.talk)
@@ -374,11 +379,12 @@ export async function startChat(options: {
 		}
 	}
 
-	// A question in the reader's words starts with the records that match it and the reader's map of their topics.
-	async function chatOpening(question: string, as: Asking, signal?: AbortSignal): Promise<string> {
+	// A question in the reader's words starts with the records that match it and the reader's map of their topics. A
+	// run for the record starts with the record alone.
+	async function chatOpening(question: string, as: Asking, shared: boolean, signal?: AbortSignal): Promise<string> {
 		const record = await store.read()
 		const index = await recordIndex(record, question, as, repo, signal)
-		if (!reader) return `${index.text}\n\n`
+		if (!reader || shared) return `${index.text}\n\n`
 		const [map, notes, prefs] = await Promise.all([
 			reader.map.read(new Date(), signal, { record, names: index.topics }),
 			reader.notes.read(),
@@ -399,12 +405,6 @@ export async function startChat(options: {
 				? ''
 				: `\n\nRead at most ${most} lines of files in all for this question: read_file stops there. Read the ranges where the work happens, not whole files.`
 		return `\n\n${facts}${limit}`
-	}
-
-	// A lens's question holds what ken knows of the level, so it starts from the reader's notes alone.
-	async function lensOpening(): Promise<string> {
-		const notes = reader ? readerNotes(await reader.notes.read()) : ''
-		return notes === '' ? '' : `${notes}\n\n`
 	}
 
 	async function close() {
