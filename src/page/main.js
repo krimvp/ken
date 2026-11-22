@@ -1423,6 +1423,9 @@ try {
 	state.home.project = server.name
 	learnParts(server.parts)
 	state.model = server.model
+	// shortcut: on the reader's first open ken's model names the parts by itself, once, as the history then holds the
+	// run. Stage 2's queue of jobs replaces this.
+	if (state.model.kind === 'ok' && !server.named && state.rows.length === 0) void level.nameTop(true)
 	if (server.live === true) await loadLive()
 	state.authors = recent.authors
 	render()

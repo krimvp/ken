@@ -1,0 +1,198 @@
+/* The folder tree of a level ken's model has not named: a page of rows that scrolls, not a canvas. */
+.k-tree-page {
+	position: absolute;
+	inset: 0;
+	overflow-y: auto;
+	padding: 14px 24px 32px;
+}
+
+.k-tree-page .k-crumb {
+	position: static;
+	display: inline-flex;
+	box-shadow: none;
+	background: transparent;
+	padding: 0;
+}
+
+.k-tree-page .k-run {
+	position: static;
+	max-width: 760px;
+	margin-top: 10px;
+}
+
+.k-tree-head {
+	max-width: 980px;
+	margin-bottom: 14px;
+}
+
+.k-tree-head h2 {
+	margin: 8px 0 4px;
+	font-size: 24px;
+	font-weight: 740;
+}
+
+.k-tree-why {
+	max-width: 70ch;
+	margin: 0;
+	color: var(--k-muted);
+}
+
+.k-tree-ask {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px 14px;
+	margin: 12px 0 0;
+}
+
+.k-tree {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.k-tree.is-top {
+	max-width: 980px;
+	padding: 8px;
+	border-radius: 20px;
+	background: var(--k-surface);
+	box-shadow: var(--k-shadow);
+}
+
+.k-tree-row {
+	display: grid;
+	grid-template-columns: 30px minmax(9em, 1.4fr) minmax(60px, 1.6fr) 10em 9em 9.5em;
+	align-items: center;
+	gap: 12px;
+	padding: 4px 10px 4px calc(10px + var(--depth) * 26px);
+	border-radius: 12px;
+}
+
+.k-tree-row:hover {
+	background: var(--k-sunk);
+}
+
+.k .k-tree-twist {
+	display: grid;
+	place-items: center;
+	width: 30px;
+	height: 30px;
+	border-radius: 8px;
+}
+
+.k .k-tree-twist:hover {
+	box-shadow: inset 0 0 0 2px var(--k-ink);
+}
+
+.k-tree-name > svg {
+	flex: none;
+	width: 18px;
+	height: 18px;
+}
+
+.k-tree-twist > svg {
+	width: 16px;
+	height: 16px;
+	transition: transform 0.15s;
+}
+
+.k-tree-twist[aria-expanded="true"] > svg {
+	transform: rotate(90deg);
+}
+
+.k .k-tree-name {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+	padding: 6px 8px;
+	border-radius: 8px;
+	font-weight: 650;
+	text-align: left;
+}
+
+.k-tree-label {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.k .k-tree-name:is(:hover, [aria-pressed="true"]) .k-tree-label {
+	text-decoration: underline;
+	text-underline-offset: 3px;
+}
+
+.k-tree-size,
+.k-tree-recent,
+.k-tree-knows {
+	color: var(--k-muted);
+	font-size: 14px;
+}
+
+.k-tree-size {
+	text-align: right;
+}
+
+.k-tree-knows {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	color: var(--k-ink);
+}
+
+.k-tree-note {
+	margin: 4px 0;
+	padding-left: calc(56px + var(--depth) * 26px);
+	color: var(--k-muted);
+	font-size: 14px;
+}
+
+@media (min-width: 1000px) {
+	.k-tree-page.has-brief {
+		padding-right: calc(var(--k-drawer) + 24px);
+	}
+}
+
+@media (max-width: 760px) {
+	.k-tree-page {
+		padding: 12px 16px 28px;
+	}
+
+	.k-tree-row {
+		grid-template-columns: 30px minmax(0, 1fr) auto;
+		gap: 2px 8px;
+		padding-left: calc(4px + var(--depth) * 16px);
+	}
+
+	.k-tree-row .k-size-bar {
+		grid-column: 2;
+	}
+
+	.k-tree-row .k-tree-size {
+		grid-column: 3;
+	}
+
+	.k-tree-row .k-tree-recent {
+		display: none;
+	}
+
+	.k-tree-row .k-tree-knows {
+		grid-row: 1;
+		grid-column: 3;
+		justify-self: end;
+	}
+
+	/* The words stay for a screen reader; the mark says it on screen. */
+	.k-tree-level {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip-path: inset(50%);
+		white-space: nowrap;
+	}
+
+	.k-tree-note {
+		padding-left: calc(40px + var(--depth) * 16px);
+	}
+}

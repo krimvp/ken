@@ -265,7 +265,7 @@ test('the canvas draws a level it read from a real server, and the changes layer
 		stored: () => null,
 	}
 	const loads = homeLoads(app)
-	const arch = { layer: null as string | null, process: null, drawOpen: false }
+	const arch = { layer: null as string | null, process: null, drawOpen: false, tree: new Map() }
 	const env = { off: null, running: null, seconds: 0 }
 	const draw = () => architectureHtml({ home: state.home, arch, env, brief: null, column: false })
 
@@ -290,7 +290,7 @@ test('the canvas draws a level it read from a real server, and the changes layer
 	Object.assign(state.home, { trail: [WHOLE, { name: 'store', within: ['src/store'] }], change: 'none' })
 	arch.layer = null
 	await loads.refresh()
-	assert.match(textOf(draw()), /db\.ts/, 'inside a part nobody named, the blocks are what git lists')
+	assert.match(textOf(draw()), /db\.ts/, 'inside a part nobody named, the tree lists what git lists')
 })
 
 // What a reader reads on a page: its text without the markup.
@@ -351,6 +351,8 @@ async function pagesOf(root: string, home: string, pick: (changes: { kind: strin
 		timeline,
 		project: 'p',
 		briefOf: () => null,
+		first: null,
+		env,
 	}
 	const waiting = openViewHtml(followUp, {}, false, '', [], changedParts(top.look))
 	return { changes: textOf(changes), home: textOf(startPageHtml(view)), waiting: textOf(waiting) }
