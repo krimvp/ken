@@ -15,6 +15,24 @@ const BRIEF: Lens = { tools: READS, show: ['brief'], systemPrompt: BRIEF_PROMPT 
 const PARTS: Lens = { tools: READS, show: ['layout', 'views'], systemPrompt: LAYOUT_PROMPT }
 const VIEWS: Lens = { tools: READS, show: ['views'], systemPrompt: LAYOUT_PROMPT }
 
+// The most lines of files a brief may read in all, said in its question and kept by read_file. A brief of one part read
+// 1,493 lines to quote 36; with the outline of its files, a part's brief needs the few ranges where the work happens.
+const READ_PER_PART = 800
+const READ_FOR_ANSWER = 600
+
+export function readLimit(as: Asking): number | null {
+	if (as.kind === 'explain') return READ_PER_PART * as.tour.stops.length
+	if (as.kind === 'answer') return READ_FOR_ANSWER
+	return null
+}
+
+// The paths a brief is about, whose files plain code outlines for it.
+export function briefPaths(as: Asking): string[] {
+	if (as.kind === 'explain') return as.tour.stops.flatMap((stop) => stop.paths)
+	if (as.kind === 'answer') return as.paths
+	return []
+}
+
 // null: the chat's own session.
 export function lensOf(as: Asking): Lens | null {
 	switch (as.kind) {

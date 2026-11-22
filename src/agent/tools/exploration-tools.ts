@@ -37,7 +37,12 @@ const RANGE = {
 	head: { type: 'string', description: 'The last commit of the change, such as HEAD or a branch' },
 }
 
-export function explorationTools(repo: Repository, elsewhere: Elsewhere): Tool[] {
+// reading is how many lines of files the question may still read, or null when it has no limit.
+export function explorationTools(
+	repo: Repository,
+	elsewhere: Elsewhere,
+	reading: () => { used: number; most: number } | null = () => null,
+): Tool[] {
 	return [
 		{
 			name: 'resolve_ref',
@@ -82,13 +87,24 @@ export function explorationTools(repo: Repository, elsewhere: Elsewhere): Tool[]
 				if (lines.length === 0) return reply(`${where} is empty.`)
 				const start = read.optionalLine('start') ?? 1
 				if (start > lines.length) return refuse(`${where} has only ${lines.length} lines.`)
-				const end = Math.min(read.optionalLine('end') ?? lines.length, lines.length, start + MAX_READ_LINES - 1)
+				const budget = reading()
+				const left = budget ? budget.most - budget.used : MAX_READ_LINES
+				if (budget && left <= 0) {
+					return refuse(`This question has read its ${budget.most} lines of files. Send it with what you have read.`)
+				}
+				const most = Math.min(MAX_READ_LINES, left)
+				const end = Math.min(read.optionalLine('end') ?? lines.length, lines.length, start + most - 1)
 				if (end < start) return refuse(`end ${end} comes before start ${start}.`)
+				if (budget) budget.used += end - start + 1
 				const numbered = lines
 					.slice(start - 1, end)
 					.map((line, index) => `${String(start + index).padStart(6)}\t${line}`)
 				const more =
-					end < lines.length ? `\nThe file goes on to line ${lines.length}. Read on with start ${end + 1}.` : ''
+					budget && budget.used >= budget.most
+						? `\nThat was the last of the ${budget.most} lines this question may read.`
+						: end < lines.length
+							? `\nThe file goes on to line ${lines.length}. Read on with start ${end + 1}.`
+							: ''
 				return reply(`${where}, lines ${start}-${end} of ${lines.length}:\n${numbered.join('\n')}${more}`)
 			},
 		},

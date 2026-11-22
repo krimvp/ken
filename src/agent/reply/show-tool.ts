@@ -56,7 +56,8 @@ export type Gate = {
 // question about one concept that the reply answers as a brief, or null.
 // views is what ken took of "In its world" and "Where it runs" in this reply, kept with the top level when it ends.
 // typed is true when the round starts from the reader's own words, the only round in which ken keeps a note about them,
-// so text in a diff or a saved session cannot make the model keep one.
+// so text in a diff or a saved session cannot make the model keep one. read counts the lines of files the model read
+// against the most a brief may read, or is null when the question has no such limit.
 export type Round = {
 	asked: boolean
 	typed: boolean
@@ -73,6 +74,7 @@ export type Round = {
 	held: Risk[]
 	sentBack: number
 	shown: Set<string>
+	read: { used: number; most: number } | null
 	emit: (event: ChatEvent) => void
 }
 
@@ -81,7 +83,8 @@ export type Round = {
 // of a level, or of one of them, which tells the map nothing either, since the page marks each part as the reader
 // reaches it. change: a question about one change that plain code picked, so the reply is about that range whether or
 // not the model sends a scope, with what the reader wants of it. answer: a question about one concept, which the
-// reader pressed or typed in its brief, answered as a brief.
+// reader pressed or typed in its brief, answered as a brief; paths are the files and folders of the part it is about,
+// empty for a concept that is no part.
 // view: the reader asked, in the words of text, for another way to show the level whose paths are within. parts: the
 // main parts of a level, named from what ken wrote of it. views: the drawings of where the project runs.
 export type Asking =
@@ -90,7 +93,7 @@ export type Asking =
 	| { kind: 'views' }
 	| { kind: 'note' }
 	| { kind: 'explain'; tour: Tour }
-	| { kind: 'answer'; concept: string; text: string }
+	| { kind: 'answer'; concept: string; text: string; paths: string[] }
 	| { kind: 'change'; range: Range; want: Want }
 	| { kind: 'view'; within: string[]; text: string }
 
@@ -111,6 +114,7 @@ export function freshRound(as: Asking, emit: Round['emit']): Round {
 		held: [],
 		sentBack: 0,
 		shown: new Set(),
+		read: null,
 		emit,
 	}
 }

@@ -4,7 +4,7 @@ import { fileRecordStore } from '../../src/record/index.ts'
 import { gitRepository } from '../../src/repo/index.ts'
 import { buildRepository } from '../fixtures/build-repository.ts'
 import { ask, call, json, openKen, readerHome } from '../fixtures/ken-server.ts'
-import { scriptedModel, type Turn } from '../fixtures/scripted-model.ts'
+import { scriptedModel, type Turn, toolResults } from '../fixtures/scripted-model.ts'
 
 // A command that runs the core, a core that saves to a store, and a test of the core.
 const FILES = {
@@ -320,4 +320,40 @@ test('asked to explain the whole level once one part is explained, the model is 
 		[...question.matchAll(/^- Part \d+, (.+?) \(/gm)].map((match) => match[1]),
 		['Store', 'Command', 'Tests'],
 	)
+})
+
+test("a brief's question carries each file's lines and outline and the most it may read, and read_file stops there", async () => {
+	const long = Array.from({ length: 1000 }, (_, at) => `const line${at + 1} = ${at + 1}`).join('\n')
+	const files = {
+		'src/core/run.ts': 'export function run() {\n\treturn 1\n}\n',
+		'src/core/long.ts': `${long}\n`,
+		'test/run.test.ts': 'run()\n',
+	}
+	const { root: own } = buildRepository([{ message: 'feat: start', files }])
+	const named = await fileRecordStore(own, gitRepository(own)).append([
+		{
+			kind: 'layout',
+			within: [],
+			at: 'HEAD',
+			parts: [
+				{ name: 'Core', job: 'Runs the work', paths: ['src'] },
+				{ name: 'Tests', job: 'Tests the core', paths: ['test'] },
+			],
+			arrows: [],
+		},
+	])
+	if (named.kind !== 'appended') assert.fail(named.problems.join(' '))
+	const read = (start: number) => ({ tool: 'ken__read_file', args: { path: 'src/core/long.ts', start } })
+	const scripted = await scriptedModel([read(1), read(401), read(801), { text: 'I read what I could.' }])
+	const server = await openKen(own, readerHome(), scripted.baseUrl)
+	await ask(server, { lens: { kind: 'explain', within: [], part: 'Core' } })
+
+	const asked = JSON.stringify(scripted.requests[0]?.messages.at(-1)?.content)
+	assert.match(asked, /- src\/core\/long\.ts, 1000 lines/, 'the question gives each file its lines')
+	assert.match(asked, /- src\/core\/run\.ts, 3 lines: run 1/, 'and what it declares at which line')
+	assert.match(asked, /Read at most 800 lines of files in all/)
+	const results = toolResults(scripted.requests.at(-1))
+	assert.match(results[0] ?? '', /lines 1-400 of 1000/)
+	assert.match(results[1] ?? '', /lines 401-800 of 1000[\s\S]*That was the last of the 800 lines/)
+	assert.match(results[2] ?? '', /This question has read its 800 lines of files/, 'a read past the limit is refused')
 })

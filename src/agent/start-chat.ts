@@ -8,7 +8,8 @@ import { findRoot, gitRepository } from '../repo/index.ts'
 import { projectSessions } from '../transcripts/index.ts'
 import { SHORTEN_PROMPT, type Shorten, shortened, shortenQuestion } from './brief/shorten-lines.ts'
 import type { ChatEvent, Cost } from './chat-event.ts'
-import { type Lens, lensOf } from './lens/lens.ts'
+import { briefPaths, type Lens, lensOf, readLimit } from './lens/lens.ts'
+import { plainFacts } from './lens/plain-facts.ts'
 import type { ModelConfig } from './model-config.ts'
 import { readerIndex, readerNotes } from './reader-index.ts'
 import { quotesOf } from './reply/check-card.ts'
@@ -164,7 +165,7 @@ export async function startChat(options: {
 	const lensSession = async (lens: Lens) =>
 		await sessionOf(
 			[
-				...explorationTools(repo, elsewhere).filter((tool) => lens.tools.includes(tool.name)),
+				...explorationTools(repo, elsewhere, () => round.read).filter((tool) => lens.tools.includes(tool.name)),
 				showTool(gate, () => round, { fields: lens.show, shorten }),
 			],
 			lens.systemPrompt,
@@ -179,6 +180,8 @@ export async function startChat(options: {
 		const runner = lens ? await lensSession(lens) : session
 		const events = eventQueue()
 		const current = freshRound(as, events.push)
+		const most = readLimit(as)
+		current.read = most === null ? null : { used: 0, most }
 		round = current
 		turnsEnded = 0
 		shown.clear()
@@ -251,13 +254,14 @@ export async function startChat(options: {
 		})
 		const started = performance.now()
 		const opening = lens ? await lensOpening() : await chatOpening(signal)
+		const facts = lens ? await briefFacts(as, signal) : ''
 		const prompt = async (text: string, own: AbortController): Promise<RunResult> =>
 			await runner
 				.prompt(text, { signal: signal ? AbortSignal.any([signal, own.signal]) : own.signal })
 				.catch((error: unknown): RunResult => ({ stop: 'error', message: String(error), turns: 0 }))
 		const talk = async () => {
 			if (as.kind === 'change') events.push(await changeNamed(repo, as.range, signal))
-			const ran = await prompt(`${opening}The question: ${question}`, stops.talk)
+			const ran = await prompt(`${opening}The question: ${question}${facts}`, stops.talk)
 			const result: RunResult =
 				endedOnShow && ran.stop === 'aborted' ? { stop: 'done', text: '', turns: ran.turns } : ran
 			settleRetry('reply')
@@ -323,6 +327,20 @@ export async function startChat(options: {
 		if (!reader) return `${index}\n\n`
 		const map = await reader.map.read(new Date(), signal)
 		return `${index}\n\n${readerIndex(map, await reader.notes.read(), await reader.prefs.read())}\n\n`
+	}
+
+	// A brief's question ends with what plain code knows of its files and the most it may read.
+	async function briefFacts(as: Asking, signal?: AbortSignal): Promise<string> {
+		const paths = briefPaths(as)
+		const most = readLimit(as)
+		const head = await repo.resolve('HEAD', signal)
+		if (paths.length === 0 || head.kind !== 'ok') return ''
+		const facts = await plainFacts(repo, head.commit, paths, signal)
+		const limit =
+			most === null
+				? ''
+				: `\n\nRead at most ${most} lines of files in all for this question: read_file stops there. Read the ranges where the work happens, not whole files.`
+		return `\n\n${facts}${limit}`
 	}
 
 	// A lens's question holds what ken knows of the level, so it starts from the reader's notes alone.

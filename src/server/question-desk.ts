@@ -454,6 +454,7 @@ export function questionDesk(
 			const about = typeof concept === 'string' ? await concepts.brief(concept, new Date()) : null
 			const head = await headNow()
 			if (!about || head === null) return { kind: 'refused', problem: 'ken has no such concept here to ask about.' }
+			const paths = about.kind === 'part' ? (about.deeper?.within.split(',') ?? []) : []
 			const asked = answerQuestion({
 				asked: text,
 				head,
@@ -461,13 +462,13 @@ export function questionDesk(
 					kind: about.kind,
 					name: about.name,
 					line: about.line,
-					paths: about.kind === 'part' ? (about.deeper?.within.split(',') ?? []) : [],
+					paths,
 					told: about.points.map((point) => point.line),
 				},
 				bounds: BRIEF_BOUNDS,
 				drawings: DRAWINGS,
 			})
-			return { kind: 'ok', text: asked.text, as: { kind: 'answer', concept: about.id, text } }
+			return { kind: 'ok', text: asked.text, as: { kind: 'answer', concept: about.id, text, paths } }
 		}
 		if (kind === 'change') {
 			const asked = fieldOf(lens, 'change')
