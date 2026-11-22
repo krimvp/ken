@@ -7,8 +7,9 @@ import { fileRecordStore } from '../record/index.ts'
 import { findRoot, gitRepository } from '../repo/index.ts'
 import { projectSessions } from '../transcripts/index.ts'
 import type { ChatEvent, Cost } from './chat-event.ts'
+import { type Lens, lensOf } from './lens/lens.ts'
 import type { ModelConfig } from './model-config.ts'
-import { readerIndex } from './reader-index.ts'
+import { readerIndex, readerNotes } from './reader-index.ts'
 import { quotesOf } from './reply/check-card.ts'
 import { fileTurn } from './reply/file-turn.ts'
 import { endReply } from './reply/record-reply.ts'
@@ -103,35 +104,51 @@ export async function startChat(options: {
 	const { reader } = options
 	const gate = { sources: { repo, sessions }, store, project, map: reader?.map ?? null }
 	const { model, baseUrl, apiKeyEnv } = options.model
-	const session = await createSession({
-		model: { kind: 'openai-compatible', baseUrl, id: model, apiKeyEnv },
-		plugins: [
-			{
-				name: PLUGIN,
-				description: "Reads the project's files, git history and saved sessions, and checks cards against them.",
-				tools: [
-					...explorationTools(repo, elsewhere),
-					diffTool(repo, elsewhere),
-					recordTool(store, repo),
-					...sessionTools(sessions),
-					...(reader ? [rememberTool(reader.notes, () => round)] : []),
-					showTool(gate, () => round),
-					reviseTool(gate, () => round),
-				].map(withTurnsLeft),
-			},
+	const sessionOf = async (tools: Tool[], systemPrompt: string) =>
+		await createSession({
+			model: { kind: 'openai-compatible', baseUrl, id: model, apiKeyEnv },
+			plugins: [
+				{
+					name: PLUGIN,
+					description: "Reads the project's files, git history and saved sessions, and checks cards against them.",
+					tools: tools.map(withTurnsLeft),
+				},
+			],
+			enabled: [PLUGIN],
+			toolMode: 'native',
+			maxTurns: STEPS.talk.turns,
+			maxToolResultChars: MAX_TOOL_RESULT_CHARS,
+			systemPrompt,
+		})
+	const session = await sessionOf(
+		[
+			...explorationTools(repo, elsewhere),
+			diffTool(repo, elsewhere),
+			recordTool(store, repo),
+			...sessionTools(sessions),
+			...(reader ? [rememberTool(reader.notes, () => round)] : []),
+			showTool(gate, () => round),
+			reviseTool(gate, () => round),
 		],
-		enabled: [PLUGIN],
-		toolMode: 'native',
-		maxTurns: STEPS.talk.turns,
-		maxToolResultChars: MAX_TOOL_RESULT_CHARS,
-		systemPrompt: SYSTEM_PROMPT,
-	})
+		SYSTEM_PROMPT,
+	)
+	// A lens's own session, for one question.
+	const lensSession = async (lens: Lens) =>
+		await sessionOf(
+			[
+				...explorationTools(repo, elsewhere).filter((tool) => lens.tools.includes(tool.name)),
+				showTool(gate, () => round, lens.show),
+			],
+			lens.systemPrompt,
+		)
 
 	async function* ask(
 		question: string,
 		signal?: AbortSignal,
 		as: Asking = { kind: 'question' },
 	): AsyncGenerator<ChatEvent> {
+		const lens = lensOf(as)
+		const runner = lens ? await lensSession(lens) : session
 		const events = eventQueue()
 		const current = freshRound(as, events.push)
 		round = current
@@ -160,7 +177,7 @@ export async function startChat(options: {
 			current.items.splice(at, 0, words)
 			events.push({ kind: 'item', item: words })
 		}
-		const unsubscribe = session.subscribe((event) => {
+		const unsubscribe = runner.subscribe((event) => {
 			if (event.type === 'text') events.push({ kind: 'text', delta: event.delta })
 			if (event.type === 'tool_start') {
 				const name = event.call.name.replace(`${PLUGIN}__`, '')
@@ -201,17 +218,14 @@ export async function startChat(options: {
 			}
 		})
 		const started = performance.now()
-		const index = recordIndex(await store.read())
-		const known = reader
-			? `\n\n${readerIndex(await reader.map.read(new Date(), signal), await reader.notes.read(), await reader.prefs.read())}`
-			: ''
+		const opening = lens ? await lensOpening() : await chatOpening(signal)
 		const prompt = async (text: string, own: AbortController): Promise<RunResult> =>
-			await session
+			await runner
 				.prompt(text, { signal: signal ? AbortSignal.any([signal, own.signal]) : own.signal })
 				.catch((error: unknown): RunResult => ({ stop: 'error', message: String(error), turns: 0 }))
 		const talk = async () => {
 			if (as.kind === 'change') events.push(await changeNamed(repo, as.range, signal))
-			const ran = await prompt(`${index}${known}\n\nThe question: ${question}`, stops.talk)
+			const ran = await prompt(`${opening}The question: ${question}`, stops.talk)
 			const result: RunResult =
 				endedOnShow && ran.stop === 'aborted' ? { stop: 'done', text: '', turns: ran.turns } : ran
 			settleRetry('reply')
@@ -267,7 +281,22 @@ export async function startChat(options: {
 			unsubscribe()
 			for (const each of Object.values(stops)) each.abort()
 			await run
+			if (runner !== session) await runner.close()
 		}
+	}
+
+	// A question in the reader's words starts with the project record's index and the reader's map.
+	async function chatOpening(signal?: AbortSignal): Promise<string> {
+		const index = recordIndex(await store.read())
+		if (!reader) return `${index}\n\n`
+		const map = await reader.map.read(new Date(), signal)
+		return `${index}\n\n${readerIndex(map, await reader.notes.read(), await reader.prefs.read())}\n\n`
+	}
+
+	// A lens's question holds what ken knows of the level, so it starts from the reader's notes alone.
+	async function lensOpening(): Promise<string> {
+		const notes = reader ? readerNotes(await reader.notes.read()) : ''
+		return notes === '' ? '' : `${notes}\n\n`
 	}
 
 	return { kind: 'ok', chat: { root: found.root, thread: randomUUID(), ask, close: () => session.close() } }

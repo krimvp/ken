@@ -240,6 +240,15 @@ test('a thing to know that quotes only a comment goes back to the model, and one
 		'the reader sees the one point that quotes code',
 	)
 	assert.equal(scripted.requests.length, 2, 'a brief with a point sent back is asked for again, then the run ends')
+	const [first] = scripted.requests as { tools?: { function: { name: string; parameters: object } }[] }[]
+	const declared = first?.tools ?? []
+	assert.deepEqual(
+		declared.map((tool) => tool.function.name).filter((name) => name.startsWith('ken__')),
+		['ken__read_file', 'ken__list_files', 'ken__search', 'ken__show'],
+		'a brief is asked with the tools that read files and show alone',
+	)
+	const show = declared.find((tool) => tool.function.name === 'ken__show')?.function.parameters
+	assert.deepEqual(Object.keys((show as { properties: object }).properties), ['brief'], 'show offers only the brief')
 })
 
 test('briefs the model sends in one turn reach the reader in the order of the parts, each followed by its own things to know and terms', async () => {

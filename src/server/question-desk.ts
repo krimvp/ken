@@ -381,7 +381,7 @@ export function questionDesk(
 			const read = await levelOf(lens)
 			if (read.kind !== 'ok') return read
 			const top = read.level.within.length === 0 ? { drawings: await viewsAsk(read.level.head) } : {}
-			return { kind: 'ok', text: partsQuestion({ ...read.level, ...top }).text }
+			return { kind: 'ok', text: partsQuestion({ ...read.level, ...top }).text, as: { kind: 'parts' } }
 		}
 		if (kind === 'views') {
 			const read = await levelOf(lens)
@@ -398,7 +398,8 @@ export function questionDesk(
 					"ken's model has not named the parts of this project yet. Ask ken to name them: that run draws these too."
 				return { kind: 'refused', problem }
 			}
-			return { kind: 'ok', text: viewsQuestion({ ...level, drawings: await viewsAsk(level.head) }).text }
+			const text = viewsQuestion({ ...level, drawings: await viewsAsk(level.head) }).text
+			return { kind: 'ok', text, as: { kind: 'views' } }
 		}
 		if (kind === 'view') {
 			const said = fieldOf(lens, 'text')

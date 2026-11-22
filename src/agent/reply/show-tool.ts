@@ -81,9 +81,12 @@ export type Round = {
 // reaches it. change: a question about one change that plain code picked, so the reply is about that range whether or
 // not the model sends a scope, with what the reader wants of it. answer: a question about one concept, which the
 // reader pressed or typed in its brief, answered as a brief.
-// view: the reader asked, in the words of text, for another way to show the level whose paths are within.
+// view: the reader asked, in the words of text, for another way to show the level whose paths are within. parts: the
+// main parts of a level, named from what ken wrote of it. views: the drawings of where the project runs.
 export type Asking =
 	| { kind: 'question' }
+	| { kind: 'parts' }
+	| { kind: 'views' }
 	| { kind: 'note' }
 	| { kind: 'explain'; tour: Tour }
 	| { kind: 'answer'; concept: string; text: string }
@@ -121,12 +124,17 @@ function spent(round: Round): string {
 	return `ken has sent back ${sentBackLimit(round)} cards in this reply and checks no more. Say the rest in words, and say which points you could not quote.`
 }
 
-export function showTool(gate: Gate, round: () => Round): Tool {
+// The fields of show a lens offers (see lens/lens.ts). Every request sends the schema again, so a lens that sends only
+// a brief sees only the brief. show still reads every field it takes, so a reply in a shape ken asked for before, such
+// as the steps of a tour, is checked as it always was.
+export type ShowField = keyof typeof SHOW_SCHEMA.properties
+
+export function showTool(gate: Gate, round: () => Round, fields?: readonly ShowField[]): Tool {
 	return {
 		name: 'show',
 		description:
 			'Show the reader cards that prove what you say: claims, decisions, risks, diagrams, topics, the parts of the project and the brief of a part, each with the exact lines it rests on. ken checks each card alone against git and shows it after the words you write in this turn. A card that fails comes back with its problems, and the reader sees nothing of it. Every field is optional.',
-		parameters: PARAMETERS,
+		parameters: allowJsonText(fields ? offered(fields) : SHOW_SCHEMA),
 		async execute(args, ctx) {
 			const current = round()
 			if (current.sentBack >= sentBackLimit(current)) return refuse(spent(current))
@@ -1061,4 +1069,7 @@ const SHOW_SCHEMA = {
 	additionalProperties: false,
 } as const
 
-const PARAMETERS = allowJsonText(SHOW_SCHEMA)
+function offered(fields: readonly ShowField[]) {
+	const properties = Object.fromEntries(fields.map((field) => [field, SHOW_SCHEMA.properties[field]]))
+	return { type: 'object', properties } as const
+}
