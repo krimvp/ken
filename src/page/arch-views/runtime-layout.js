@@ -168,28 +168,48 @@ function drawnOf(runtime, folds) {
 // views is the two drawings as the server sends them: "Where it runs" is laid out, and "In its world" says which
 // outside things are people. folded says whether a crowded frame folds. The answer is in the canvas's own units, from
 // (0, 0): { width, height, frames, things, lines, lanes, marks, folds }.
-export function runtimeLayout(views, { folded = false } = {}) {
-	const fits = (one) => Math.min(SCREEN.w / one.width, SCREEN.h / one.height)
+export function runtimeLayout(views, { folded = false, narrow = false } = {}) {
+	const room = narrow ? PHONE : SCREEN
+	const fits = (one) => Math.min(room.w / one.width, room.h / one.height)
 	const ways = [false, true].flatMap((framesShareRows) =>
-		WRAPS.map((wrap) => placedOf(views, folded, { framesShareRows, wrap })),
+		(narrow ? [0] : WRAPS).map((wrap) => placedOf(views, folded, { framesShareRows, wrap, narrow })),
 	)
 	const best = Math.max(...ways.map(fits))
 	// Of the ways that fit about as well as the best, the shortest: it reads more as a flow from left to right.
 	const chosen = ways.filter((one) => fits(one) >= best * 0.97).sort((p, q) => p.height - q.height)[0]
 	const { lines, lanes, marks } = linesOf(chosen.drawn, chosen.placed, chosen.busOf)
-	const { width, height, placed, folds } = chosen
+	const { placed, folds } = chosen
+	// A line that goes around the outside runs beyond the blocks: the drawing grows to hold it.
+	const spots = lines.flatMap((line) => [...line.points, ...(line.label ? [line.label, corner(line.label)] : [])])
+	const [left, top] = ['x', 'y'].map((at) => Math.min(0, ...spots.map((p) => p[at] - MARGIN)))
+	const width = Math.max(chosen.width, ...spots.map((p) => p.x + MARGIN)) - left
+	const height = Math.max(chosen.height, ...spots.map((p) => p.y + MARGIN)) - top
+	const move = (p) => {
+		p.x -= left
+		p.y -= top
+	}
+	for (const r of [...placed.frames, ...placed.things, ...lanes, ...marks]) move(r)
+	for (const line of lines) {
+		for (const p of [...line.points, ...line.rings, ...(line.label ? [line.label] : [])]) move(p)
+		if (line.inside) line.inside = { x: line.inside.x - left, y1: line.inside.y1 - top, y2: line.inside.y2 - top }
+	}
 	return { width, height, frames: placed.frames, things: placed.things, lines, lanes, marks, folds }
 }
+
+const corner = (r) => ({ x: r.x + r.w, y: r.y + r.h })
 
 // The room a drawing has on a laptop's screen between the bars that float over the canvas, in its own units at 100%:
 // what decides between ways to lay it out.
 const SCREEN = { w: 1288, h: 590 }
-// How wide a row may grow before it wraps, against the side of a square that would hold all a frame holds.
+// A phone's: the reader pans down, so only its width counts.
+const PHONE = { w: 362, h: Number.POSITIVE_INFINITY }
+// How wide a row may grow before it wraps, against the side of a square that would hold all a frame holds. On a
+// phone each thing has a row of its own.
 const WRAPS = [1.6, 2.4]
 
 // The places of the frames and things, one way. framesShareRows says whether frames may stand side by side in a
-// chain of calls, and wrap how wide a row may grow.
-function placedOf(views, folded, { framesShareRows, wrap }) {
+// chain of calls, wrap how wide a row may grow, and narrow whether the drawing stands in one column, for a phone.
+function placedOf(views, folded, { framesShareRows, wrap, narrow }) {
 	const people = new Set((views.world?.outside ?? []).filter((each) => each.kind === 'person').map((each) => each.id))
 	const folds = foldsOf(views.runtime, folded)
 	const drawn = drawnOf(views.runtime, folds)
@@ -342,6 +362,8 @@ function placedOf(views, folded, { framesShareRows, wrap }) {
 		}
 		const sides = { top: [], right: [], bottom: [], left: [] }
 		const busSide = new Set()
+		// Where a column of things may start beyond the bus on its side, on a phone.
+		const busAt = new Map()
 		const sats = []
 		// A bus first, then frames, then things: a frame takes the place level with what it meets before a store does.
 		const first = (piece) => (hasLanes(piece.thing) ? 0 : piece.item ? 1 : 2)
@@ -356,9 +378,10 @@ function placedOf(views, folded, { framesShareRows, wrap }) {
 				const centres = users.map((u) => u.x + u.w / 2).sort((p, q) => p - q)
 				const topic = Math.max(...piece.thing.topics.map((t) => t.length)) * TOPIC_CHAR + 2 * CLEAR_TOPIC
 				const left = Math.min(0, (centres[0] ?? 0) - topic)
-				const w = Math.max(size.w, box.w - left)
+				const w = Math.max(narrow ? 0 : size.w, box.w - left)
 				const y = side === 'bottom' ? box.h + SAT.bus : -SAT.bus - size.h
 				sats.push({ thing: piece.thing, x: left, y, w, h: size.h })
+				busAt.set(side, side === 'bottom' ? y + size.h + SAT.stack : y - SAT.stack)
 				continue
 			}
 			const u = users[0] ?? { x: box.w / 2, y: box.h / 2, w: 0, h: 0 }
@@ -366,7 +389,13 @@ function placedOf(views, folded, { framesShareRows, wrap }) {
 				const way = reach[side](u)
 				const open = !blocks.some((b) => b !== u && !holdsRect(b, u) && meets(way, b))
 				const far = side === 'top' || side === 'bottom' ? way.h : way.w
-				return far + (open ? 0 : 300) + (busSide.has(side) ? 6000 : 0) + PREFER[piece.kind][side]
+				const taken = busSide.has(side) ? 6000 : 0
+				// On a phone nothing stands beside a frame: what calls it stands above, the rest below.
+				if (narrow) {
+					const beside = side === 'left' || side === 'right' ? 6000 : 0
+					return beside + ((side === 'top') === (piece.kind === 'caller') ? 0 : 500)
+				}
+				return far + (open ? 0 : 300) + taken + PREFER[piece.kind][side]
 			}
 			const side = Object.keys(sides).reduce((best, s) => (cost(s) < cost(best) ? s : best))
 			const along = side === 'top' || side === 'bottom' ? u.x + u.w / 2 : u.y + u.h / 2
@@ -375,13 +404,22 @@ function placedOf(views, folded, { framesShareRows, wrap }) {
 		for (const [side, list] of Object.entries(sides)) {
 			const across = side === 'top' || side === 'bottom'
 			let floor = Number.NEGATIVE_INFINITY
+			// On a phone the things above or below a frame stand one under the other, the nearest to the frame first.
+			let out = busAt.get(side) ?? (side === 'top' ? -SAT.y : box.h + SAT.y)
 			for (const each of list.toSorted((p, q) => p.along - q.along || first(p.piece) - first(q.piece))) {
-				const extent = across ? each.size.w : each.size.h
-				const start = Math.max(each.along - extent / 2, floor)
-				floor = start + extent + SAT.stack
-				const x = across ? start : side === 'left' ? -SAT.x - each.size.w : box.w + SAT.x
-				const y = across ? (side === 'top' ? -SAT.y - each.size.h : box.h + SAT.y) : start
-				sats.push({ thing: each.piece.thing, item: each.piece.item, x, y, w: each.size.w, h: each.size.h })
+				const { w, h } = each.size
+				let [x, y] = [0, 0]
+				if (narrow && across) {
+					x = each.along - w / 2
+					y = side === 'top' ? out - h : out
+					out = side === 'top' ? y - SAT.stack : y + h + SAT.stack
+				} else {
+					const start = Math.max(each.along - (across ? w : h) / 2, floor)
+					floor = start + (across ? w : h) + SAT.stack
+					x = across ? start : side === 'left' ? -SAT.x - w : box.w + SAT.x
+					y = across ? (side === 'top' ? -SAT.y - h : box.h + SAT.y) : start
+				}
+				sats.push({ thing: each.piece.thing, item: each.piece.item, x, y, w, h })
 			}
 		}
 		const all = [box, ...sats]
@@ -432,7 +470,7 @@ function placedOf(views, folded, { framesShareRows, wrap }) {
 		items.forEach((item, i) => {
 			if (item.thing?.kind !== 'store' || hasLanes(item.thing)) return
 			const [only, more] = [...users.get(i)]
-			if (only === undefined || more !== undefined || items[only].thing?.kind === 'store') return
+			if (narrow || only === undefined || more !== undefined || items[only].thing?.kind === 'store') return
 			besideOf.set(i, only)
 		})
 		const edges = [...calls]

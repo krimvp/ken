@@ -3,7 +3,7 @@
 // the card offers one run of ken's model to draw them. This module also lays out the drawing on show, once per
 // drawing and fold, and says which lines a process lights.
 import { esc } from '../views/format.js'
-import { mark, runtimeHtml, worldHtml } from './drawing.js'
+import { mark, runtimeHtml, runtimePictureHtml, worldHtml } from './drawing.js'
 import { runtimeLayout } from './runtime-layout.js'
 import { worldLayout } from './world-layout.js'
 
@@ -155,17 +155,21 @@ const runtimes = new WeakMap()
 const worlds = new WeakMap()
 
 // The layout of a drawing, made once for each drawing and fold.
-function laidOut(views, on, folded, parts) {
+function laidOut(views, on, folded, parts, narrow = false) {
 	if (on === 'world') {
 		if (!worlds.has(views)) worlds.set(views, worldLayout(views.world, parts))
 		return worlds.get(views)
 	}
 	const kept = runtimes.get(views) ?? {}
-	const key = folded ? 'folded' : 'open'
-	kept[key] ??= runtimeLayout(views, { folded })
+	const key = `${folded ? 'folded' : 'open'}${narrow ? ', narrow' : ''}`
+	kept[key] ??= runtimeLayout(views, { folded, narrow })
 	runtimes.set(views, kept)
 	return kept[key]
 }
+
+// "Where it runs" in small with id lit, for the brief of id.
+export const runtimePicture = (views, id, colour) =>
+	views?.runtime ? runtimePictureHtml(laidOut(views, 'runtime', false, []), id, colour) : ''
 
 // The crossings a process lights on "Where it runs": those between the parts of two steps in a row.
 function litOf(runtime, stopsByName) {
@@ -186,10 +190,10 @@ function litOf(runtime, stopsByName) {
 
 // view is what drawing.js needs, with stops by part name. The answer is the drawing's HTML, the box it fills, and
 // the rects of its small map.
-export function viewDrawing({ home, arch, on, view, projectName }) {
+export function viewDrawing({ home, arch, on, view, projectName, column }) {
 	const views = home.look.views
 	const parts = home.look.boxes.map((box) => box.name)
-	const layout = laidOut(views, on, arch.folded, parts)
+	const layout = laidOut(views, on, arch.folded, parts, column)
 	const thingOf = new Map((views.runtime?.things ?? []).map((t) => [t.id, t]))
 	const outsideOf = new Map((views.world?.outside ?? []).map((o) => [o.id, o]))
 	view.outsideName = (id) => outsideOf.get(id)?.name ?? id

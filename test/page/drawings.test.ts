@@ -37,7 +37,7 @@ const {
 	runtimeLayout,
 	foldedAt,
 }: {
-	runtimeLayout: (views: object, options?: { folded: boolean }) => Layout
+	runtimeLayout: (views: object, options?: { folded?: boolean; narrow?: boolean }) => Layout
 	foldedAt: (zoom: number, folded: boolean) => boolean
 } = await import(path.join(PAGE, 'arch-views/runtime-layout.js'))
 const {
@@ -170,6 +170,24 @@ for (const [name, views] of [
 	})
 }
 
+// The canvas of a 390 by 844 phone, and its band between the bars, as the page measures them.
+const PHONE = { room: { w: 390, h: 718 }, clear: { top: 186, h: 329 } }
+
+for (const [name, views] of [
+	['the aigent repository', AIGENT],
+	['the shop', SHOP_NAMED],
+] as const) {
+	test(`on ${name} "Where it runs" on a phone is one column that fits the width at 55% or closer`, () => {
+		const drawn = runtimeLayout(views, { narrow: true })
+		const cam = fitted({ x: 0, y: 0, w: drawn.width, h: drawn.height }, PHONE.room, PHONE.clear)
+		assert.ok(cam.z >= 0.55, `fitted at ${Math.round(cam.z * 100)}%`)
+		for (const r of [...drawn.frames, ...drawn.things]) {
+			const x = cam.x + r.x * cam.z
+			assert.ok(x >= 0 && x + r.w * cam.z <= PHONE.room.w, `${r.id} is inside the phone across`)
+		}
+	})
+}
+
 test('a frame with nothing in it is not drawn, and a line inside one place carries no label', () => {
 	const drawn = runtimeLayout(AIGENT)
 	assert.deepEqual(drawn.frames.map((f) => f.id).sort(), ['node-process', 'sandbox-worker'])
@@ -294,4 +312,29 @@ test("a bus's brief lists each topic with who publishes it and who picks it up",
 	assert.match(topic('payments.dead-letter'), /Publishes: payments<\/span>/)
 	assert.match(topic('payments.dead-letter'), /Picks up: <em>none drawn<\/em>/)
 	assert.match(html, /no reader of payments\.dead-letter in the repository/)
+})
+
+test("a crossing's brief has its two ends beside it, from the drawing, when the server sends none", () => {
+	const brief = {
+		id: 'crossing:c-model',
+		kind: 'crossing',
+		name: 'Host entry and pi adapter to OpenAI-compatible model API',
+		line: 'Model requests.',
+		minutes: 1,
+		points: [],
+		terms: [],
+		quotes: [],
+		questions: [],
+		decisions: [],
+		explained: true,
+		trust: '',
+		sideways: { uses: [], usedBy: [], processes: [] },
+	}
+	const ui = { id: brief.id, on: 'sideways', trail: [{ id: brief.id, name: brief.name }], openQuotes: new Set() }
+	const ctx = { home: {}, prefs: { text: 'pictures' }, env: {}, look: null, inner: null, views: AIGENT }
+	const html = briefHtml(ui, { kind: 'ok', brief }, ctx)
+	const after = (title: string) => html.slice(html.indexOf(title)).split('</ul>')[0] ?? ''
+	assert.match(after('Comes in from'), /Host entry and pi adapter/)
+	assert.match(after('Goes out to'), /OpenAI-compatible model API/)
+	assert.match(html, /data-way="sideways"[^>]*>.*?<b class="k-num">2<\/b>/s)
 })

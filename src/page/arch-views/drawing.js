@@ -3,7 +3,7 @@
 // as solid lines and events as dashed ones, a ring where a line crosses a frame, and a dashed note where the
 // repository says nothing) and "In its world" (the project as one block, with the people and systems around it). A
 // part keeps its colour and its icon in every view. Every block, frame label, line label and lane mark opens a brief.
-import { partId } from '../brief/concept-id.js'
+import { partId, readConcept } from '../brief/concept-id.js'
 import { KNOWN, levelLabel } from '../level/level-state.js'
 import { icon, levelMark, partIcon } from '../shell/icons.js'
 import { esc } from '../views/format.js'
@@ -239,7 +239,7 @@ export function runtimeHtml(views, layout, view) {
 			const said =
 				c.kind === 'call' ? `${from} calls ${to}: ${c.text}, ${howLabel(c)}` : `${from} sends ${c.topic} to ${to}`
 			labels.push(
-				`<button class="k-rt-label is-${line.kind}${picked ? ' is-picked' : ''}${on ? ' is-lit' : ''}" style="${px(line.label)}" data-act="brief-open" data-concept="crossing:${esc(c.id)}" data-key="line-${esc(c.id)}" aria-pressed="${picked}" aria-label="${esc(said)}">${line.words.map(esc).join('<br>')}</button>`,
+				`<button class="k-rt-label is-${line.kind}${picked ? ' is-picked' : ''}${on ? ' is-lit' : ''}" style="${px(line.label)}" data-act="brief-open" data-concept="crossing:${esc(c.id)}" data-ends="${esc(`${c.from} ${c.to}`)}" data-key="line-${esc(c.id)}" aria-pressed="${picked}" aria-label="${esc(said)}">${line.words.map(esc).join('<br>')}</button>`,
 			)
 		}
 	}
@@ -257,6 +257,45 @@ export function runtimeHtml(views, layout, view) {
 	const svg = (cls, body) =>
 		`<svg class="k-wires ${cls}" width="${layout.width}" height="${layout.height}" viewBox="0 0 ${layout.width} ${layout.height}" aria-hidden="true">${ARROWS}${body}</svg>`
 	return `${frames.join('')}${svg('k-rt-lines', lines.join(''))}${things.join('')}${svg('k-rt-over', over.join(''))}${marks.join('')}${labels.join('')}`
+}
+
+// "Where it runs" in small, for a brief: the frames as outlines, the things as blocks in their colours, the lines,
+// and what the brief is about lit, as the reader saw it on the canvas. Nothing when the drawing does not hold it.
+export function runtimePictureHtml(layout, id, colour) {
+	const concept = readConcept(id)
+	if (!concept) return ''
+	const ends = (line) =>
+		line.kind === 'stem' ? [line.thing, line.bus] : line.kind === 'tie' ? [] : [line.crossing.from, line.crossing.to]
+	const lines = new Set(
+		concept.kind === 'crossing' ? layout.lines.filter((line) => line.crossings?.includes(concept.name)) : [],
+	)
+	const things = new Set(
+		layout.things
+			.filter((placed) =>
+				concept.kind === 'part'
+					? concept.within.length === 0 && placed.thing.part === concept.name
+					: concept.kind === 'frame'
+						? placed.solo?.id === concept.name
+						: placed.id === concept.name || [...lines].some((line) => ends(line).includes(placed.id)),
+			)
+			.map((placed) => placed.id),
+	)
+	const frame = concept.kind === 'frame' ? layout.frames.find((f) => f.id === concept.name) : null
+	if (!frame && things.size === 0) return ''
+	const frames = layout.frames
+		.toSorted((a, b) => a.depth - b.depth)
+		.map(
+			(f) =>
+				`<rect class="k-rtp-frame${DASHED.includes(f.frame.kind) ? ' is-dashed' : ''}${f === frame ? ' is-lit' : ''}" x="${f.x}" y="${f.y}" width="${f.w}" height="${f.h}" rx="18"/>`,
+		)
+	const paths = layout.lines.map(
+		(line) => `<path class="k-rtp-line${lines.has(line) ? ' is-lit' : ''}" d="${pathOf(line.points)}"/>`,
+	)
+	const blocks = layout.things.map((placed) => {
+		const part = placed.thing.kind === 'part' ? colour(placed.thing.part) : 'is-other'
+		return `<rect class="k-rtp-thing ${part}${things.has(placed.id) ? ' is-lit' : ''}" x="${placed.x}" y="${placed.y}" width="${placed.w}" height="${placed.h}" rx="16"/>`
+	})
+	return `<div class="k-pic k-rt-pic" aria-hidden="true"><svg viewBox="0 0 ${layout.width} ${layout.height}">${frames.join('')}${paths.join('')}${blocks.join('')}</svg></div>`
 }
 
 // The project as one block with its parts as tiles, its people and systems around it, and a labelled line for each

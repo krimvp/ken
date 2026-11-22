@@ -226,6 +226,7 @@ export function architectureHtml({ home, arch, env, brief, column }) {
 		const drawn = viewDrawing({
 			home,
 			arch,
+			column,
 			on,
 			projectName: projectName(home),
 			view: {

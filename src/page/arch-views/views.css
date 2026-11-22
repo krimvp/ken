@@ -3,7 +3,8 @@
    an event a dashed one, so the two differ without colour. Words grow as the reader zooms out, so they never fall
    under 12.5 pixels on screen: --inv is one over the zoom, set by camera.js. */
 
-.k-arch {
+.k-arch,
+.k-rt-pic {
 	--rt-label: 19.5px;
 	--rt-tint-0: color-mix(in srgb, var(--k-ink) 3.5%, var(--k-bg));
 	--rt-tint-1: color-mix(in srgb, var(--k-ink) 7%, var(--k-bg));
@@ -1088,4 +1089,55 @@
 		max-height: 70%;
 		border-radius: 18px 18px 0 0;
 	}
+}
+
+/* "Where it runs" in small, in a brief, with what the brief is about lit. */
+.k-rt-pic svg {
+	display: block;
+	width: 100%;
+	height: auto;
+	max-height: 240px;
+}
+
+.k-rtp-frame {
+	fill: var(--rt-tint-1);
+	stroke: var(--rt-edge);
+	stroke-width: 1.5;
+	vector-effect: non-scaling-stroke;
+}
+
+.k-rtp-frame.is-dashed {
+	stroke-dasharray: 5 4;
+}
+
+.k-rtp-line {
+	fill: none;
+	stroke: var(--rt-edge);
+	stroke-width: 1.5;
+	vector-effect: non-scaling-stroke;
+}
+
+.k-rtp-thing {
+	fill: var(--k-pc);
+	opacity: 0.5;
+}
+
+.k-rtp-thing.is-other {
+	fill: var(--rt-grey);
+	stroke: var(--rt-edge);
+	stroke-width: 1.5;
+	vector-effect: non-scaling-stroke;
+}
+
+.k-rtp-thing.is-lit {
+	opacity: 1;
+	stroke: var(--k-ink);
+	stroke-width: 3;
+	vector-effect: non-scaling-stroke;
+}
+
+.k-rtp-frame.is-lit,
+.k-rtp-line.is-lit {
+	stroke: var(--k-ink);
+	stroke-width: 3;
 }

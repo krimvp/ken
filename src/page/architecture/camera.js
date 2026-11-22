@@ -88,6 +88,41 @@ export function canvasCamera(page, arch, drawer, zoomed = () => {}) {
 		apply()
 	}
 
+	// What the brief open beside the canvas is about stays in sight at the reader's zoom: the camera pans just enough
+	// to show it, and steps back only when it cannot fit. A line shows with both its ends.
+	function show(concept) {
+		const el = canvas()
+		const world = el?.querySelector('#arch-world')
+		if (!world || !concept) return apply()
+		const picked = [...world.querySelectorAll(`[data-concept="${CSS.escape(concept)}"]`)]
+		const ends = picked.flatMap((each) => (each.dataset.ends ?? '').split(' ').filter(Boolean))
+		const els = [
+			...picked.map((each) => each.closest('.k-rt-frame, .k-rt-part, .k-blk') ?? each),
+			...ends.map((id) => world.querySelector(`[data-key="rt-${CSS.escape(id)}"]`)).filter(Boolean),
+		]
+		if (els.length === 0) return apply()
+		const frame = el.getBoundingClientRect()
+		const { x, y, z } = arch.cam
+		const boxes = els.map((each) => each.getBoundingClientRect())
+		const [left, top] = [
+			Math.min(...boxes.map((b) => b.left)) - frame.left,
+			Math.min(...boxes.map((b) => b.top)) - frame.top,
+		]
+		const [right, bottom] = [
+			Math.max(...boxes.map((b) => b.right)) - frame.left,
+			Math.max(...boxes.map((b) => b.bottom)) - frame.top,
+		]
+		const [room, clear] = [view(), band()]
+		const k = Math.min(1, (room.w - 2 * ROOM.side) / (right - left), clear.h / (bottom - top))
+		const [cx, cy] = [(left + right) / 2, (top + bottom) / 2]
+		const at = (v, c) => c + (v - c) * k
+		const over = (lo, hi, least, most) => (lo < least ? least - lo : hi > most ? most - hi : 0)
+		const dx = over(at(left, cx), at(right, cx), ROOM.side, room.w - ROOM.side)
+		const dy = over(at(top, cy), at(bottom, cy), clear.top, clear.top + clear.h)
+		arch.cam = { z: z * k, x: cx - (cx - x) * k + dx, y: cy - (cy - y) * k + dy }
+		apply()
+	}
+
 	// Zooms about a point of the canvas's frame, so what is under the pointer stays under it.
 	function zoomAt(factor, px, py) {
 		const { x, y, z } = arch.cam
@@ -179,5 +214,5 @@ export function canvasCamera(page, arch, drawer, zoomed = () => {}) {
 		apply()
 	}
 
-	return { apply, fit, zoomBy, panBy }
+	return { apply, fit, show, zoomBy, panBy }
 }

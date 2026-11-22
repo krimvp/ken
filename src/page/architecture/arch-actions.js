@@ -20,6 +20,8 @@ export const freshArch = () => ({
 	cam: { x: 0, y: 0, z: 1 },
 	drawOpen: false,
 	fitted: null,
+	// The brief the camera last brought into sight beside the canvas.
+	shownBrief: null,
 	// The drawing the reader chose last ("world", "runtime" or "parts"), whether the key is open, whether a crowded
 	// frame of "Where it runs" is folded, and what the last run to draw them left to say.
 	view: null,
@@ -83,11 +85,16 @@ export function archActions(app) {
 		}
 		if (!page.querySelector('#arch-world')) return
 		if (drawn) fitJobs(page)
-		const key = [home.look?.within.join(','), view, column, drawer(), page.clientWidth, page.clientHeight].join('|')
-		if (arch.fitted !== key) {
-			arch.fitted = key
-			camera.fit()
-		} else if (drawn) camera.apply()
+		const level = [home.look?.within.join(','), view, column, page.clientWidth, page.clientHeight].join('|')
+		const key = `${level}|${drawer()}`
+		const brief = state.brief.id
+		// A brief opened beside the canvas keeps the reader's zoom and brings its own thing into sight.
+		const beside = drawer() > 0 && arch.fitted?.startsWith(`${level}|`)
+		if (arch.fitted !== key && !beside) camera.fit()
+		else if (beside && (arch.fitted !== key || arch.shownBrief !== brief)) camera.show(brief)
+		else if (drawn) camera.apply()
+		arch.fitted = key
+		arch.shownBrief = brief
 		if (switched) glide(page, before, arch.cam.z)
 	}
 
