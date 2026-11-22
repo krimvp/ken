@@ -7,6 +7,7 @@ type Said = {
 	text(name: string): string | undefined
 	line(name: string): number | undefined
 	count(name: string): number
+	has(name: string): boolean
 }
 
 const SENTENCES: Record<string, (args: Said) => string> = {
@@ -44,9 +45,16 @@ const SENTENCES: Record<string, (args: Said) => string> = {
 	remember: () => 'Kept a note on how you want things shown',
 	show: (args) => {
 		const cards = ['claims', 'decisions', 'risks', 'diagrams', 'topics'].reduce((n, list) => n + args.count(list), 0)
-		return cards === 0
-			? 'Named the change the reply is about'
-			: `Sent ${cards === 1 ? 'a card' : `${cards} cards`} for ken to check`
+		const sent = [
+			...(args.has('brief') ? ['a brief'] : []),
+			...(args.has('step') ? ['a step'] : []),
+			...(args.has('layout') ? ['the parts'] : []),
+			...(args.has('views') ? ['drawings of where it runs'] : []),
+			...(cards > 0 ? [cards === 1 ? 'a card' : `${cards} cards`] : []),
+		]
+		if (sent.length === 0) return args.has('scope') ? 'Named the change the reply is about' : 'Sent nothing to show'
+		const listed = sent.length === 1 ? sent[0] : `${sent.slice(0, -1).join(', ')} and ${sent.at(-1)}`
+		return `Sent ${listed} for ken to check`
 	},
 	revise_risks: (args) => {
 		const changes = [
@@ -72,6 +80,9 @@ export function describeCall(name: string, args: JsonObject): string {
 		count(key) {
 			const value: JsonValue | undefined = args[key]
 			return Array.isArray(value) ? value.length : 0
+		},
+		has(key) {
+			return args[key] !== undefined && args[key] !== null
 		},
 	}
 	return SENTENCES[name]?.(said) ?? `Used the tool ${code(name)}`

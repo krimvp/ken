@@ -128,6 +128,11 @@ test('explaining a level asks for a brief of each part in the order the level li
 		],
 		'the question carries each part in order with its paths and job',
 	)
+	assert.deepEqual(
+		lines.filter((line) => line.kind === 'tool' && line.name === 'show').map((line) => line.step),
+		Array(4).fill('Sent a brief for ken to check'),
+		'the steps say each show call sent a brief, not that it named a change',
+	)
 	const rows = (await json(server, '/api/questions')).questions
 	assert.deepEqual(rows[0].tour, { within: [], stops: ['Core', 'Store', 'Command', 'Tests'] })
 	const topics: { topic: string; kind: string }[] = lines.at(-1).view.topics
