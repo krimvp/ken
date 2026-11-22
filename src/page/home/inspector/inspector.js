@@ -176,8 +176,10 @@ function gitSaysHtml(home, byPart) {
 	const touched = look.boxes.filter((box) => box.touched)
 	const noun = look.named ? 'part' : 'folder'
 	const commits = change.commits.length + change.moreCommits
+	// The merges are counted apart, as git log counts them in: the commits a merge brought are listed themselves.
+	const merges = change.merges > 0 ? ` and ${count(change.merges, 'merge', 'merges')}` : ''
 	const facts = [
-		commits > 0 ? `<li>${count(commits, 'commit', 'commits')}.</li>` : '',
+		commits + change.merges > 0 ? `<li>${count(commits, 'commit', 'commits')}${merges}.</li>` : '',
 		`<li>${count(change.files, 'file', 'files')} changed, in ${touched.length} of the ${count(look.boxes.length, noun, `${noun}s`)}.</li>`,
 	]
 	const colour = colourOf(home)

@@ -1,7 +1,7 @@
 // Where the reader is on the home, as the part of the page's address after "#". The browser's Back then goes to the
 // level before, and a reload keeps the place. A place is { wayIn, detail, trail, change, at, shown, selected }, the
 // same fields the home's state holds. One function reads a place from an address and one writes it, and nothing else
-// knows the form.
+// knows the form. A reply open as a thread has an address too, so a reload opens it again.
 import { DETAILS, WAYS, WHOLE } from './home-state.js'
 
 const PICKS = ['part', 'step', 'element']
@@ -15,6 +15,15 @@ export function writeAddress({ wayIn, detail, trail, change, at, shown, selected
 	if (shown !== null) query.set('picture', shown)
 	if (selected) query.set('pick', `${selected.kind}:${selected.kind === 'part' ? selected.name : selected.number}`)
 	return `#${query}`
+}
+
+export function replyAddress(id) {
+	return `#${new URLSearchParams({ reply: id })}`
+}
+
+// The id of the reply an address names, or null.
+export function readReply(hash) {
+	return new URLSearchParams(hash.replace(/^#/, '')).get('reply')
 }
 
 // The place an address names, or null when it names none, as on a first visit.

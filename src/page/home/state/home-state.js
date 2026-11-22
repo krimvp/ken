@@ -19,11 +19,11 @@ export function freshHome(stored, ui) {
 		// The level on screen is the last of the boxes the reader opened to get here.
 		trail: [WHOLE],
 		// The text that asks the server for the change laid over the parts: "none" for no change, and "" for the
-		// reader's own work. at is another commit to look at. typed holds what the reader wrote in the picker's two
+		// reader's own work. at is another commit to look at. typed holds what the reader wrote in the picker's
 		// fields and has not sent yet, or sent and had refused.
 		change: 'none',
 		at: '',
-		typed: { at: '', since: '' },
+		typed: { at: '', since: '', another: '' },
 		look: null,
 		// While the server reads a level: "level" when the one on screen is another, "overlay" when it is the same one
 		// with another change or commit to come.

@@ -5,6 +5,7 @@
 import { fillDrawings, markPart, numberAt } from './draw-diagrams.js'
 import { homeActions } from './home/home-actions.js'
 import { showHome } from './home/home-view.js'
+import { readReply, replyAddress } from './home/state/address.js'
 import { freshHome } from './home/state/home-state.js'
 import { DOING } from './home/state/runs.js'
 import { liveLook, liveViewHtml } from './live/live-view.js'
@@ -19,16 +20,7 @@ import { elementKey } from './views/diagram.js'
 import { count, duration, esc, folderHtml, prose, short, when } from './views/format.js'
 import { changedLine, changedTopics, lensHtml, mapViewHtml } from './views/map.js'
 import { openCount, openViewHtml } from './views/open.js'
-import {
-	cardsOf,
-	chipQuestion,
-	isMoved,
-	itemsOf,
-	knowPartHtml,
-	LEGEND,
-	replyHtml,
-	stepCardsHtml,
-} from './views/reply.js'
+import { cardsOf, isMoved, itemsOf, knowPartHtml, LEGEND, replyHtml, stepCardsHtml } from './views/reply.js'
 import { endedHtml, noChecksPanelHtml, noModelHtml, stepsHtml, workingHtml } from './views/states.js'
 
 const $ = (selector) => document.querySelector(selector)
@@ -141,8 +133,15 @@ const LENS_TITLES = {
 	note: 'Go deeper on this note',
 	parts: 'Name the main parts',
 	tour: 'Show me around',
-	change: 'What did this change do, and why?',
 	view: 'Show it another way',
+}
+
+// The same for the questions about one change, by what the reader wants of it.
+const CHANGE_TITLES = {
+	story: 'What did this change do, and why?',
+	walk: 'Walk me through this change',
+	decisions: 'What did this change decide, and why?',
+	risks: 'What could go wrong with this change?',
 }
 
 // A saved question as the page shows it: the history entry, and the project's HEAD now, to compare with the HEAD it
@@ -230,7 +229,12 @@ async function* linesOf(body) {
 // body is a question, {question}, or a lens for ken to write the question from, {lens}. A question opens its thread.
 // onHome is where a run the home started began: the reader stays on the home, which shows the run and what it made.
 async function send(body, onHome = null) {
-	const question = body.lens ? LENS_TITLES[body.lens.kind] : body.question.trim()
+	const { lens } = body
+	const question = !lens
+		? body.question.trim()
+		: lens.kind === 'change'
+			? CHANGE_TITLES[lens.want]
+			: LENS_TITLES[lens.kind]
 	if (question === '' || state.running || state.model?.kind !== 'ok') return
 	const { thread } = state.model
 	const q = {
@@ -1052,6 +1056,17 @@ async function followUpSaved(save, said) {
 
 const home = homeActions({ state, render, read, post, send, stored, store, fromView })
 
+async function showReply(id) {
+	await openQuestion(id)
+	state.menuOpen = false
+	state.view = state.base = 'question'
+	picked = state.open
+	render()
+	const turn = `#turn-${state.thread.indexOf(state.open)}`
+	$(turn)?.scrollIntoView({ block: 'start' })
+	$(`${turn} .q-row, ${turn} button`)?.focus({ preventScroll: true })
+}
+
 const actions = {
 	...home.actions,
 	map: () => (state.view === 'map' ? closeMap() : showMap()),
@@ -1103,7 +1118,11 @@ const actions = {
 		const q = state.thread[Number(el.dataset.turn)]
 		void send({ lens: { kind: 'deeper', topics: q.reply.topics, question: firstLine(q.question) } })
 	},
-	chip: (el) => send({ question: chipQuestion(el.dataset.chip, state.thread[Number(el.dataset.turn)].reply.change) }),
+	// ken's server writes the question, so it names the change as every question about it does.
+	chip(el) {
+		const change = changeKey(state.thread[Number(el.dataset.turn)].reply.change)
+		return send({ lens: { kind: 'change', change, want: el.dataset.chip } })
+	},
 	unfold(el) {
 		toggle(state.ui.unfolded, el.dataset.topic)
 		render()
@@ -1117,15 +1136,12 @@ const actions = {
 		state.menuOpen = !state.menuOpen
 		render()
 	},
+	// An opened reply is a new entry in the browser's history, so Back goes to where the reader was and a reload
+	// opens the reply again.
 	async open(el) {
-		state.menuOpen = false
-		state.view = state.base = 'question'
-		await openQuestion(el.dataset.id)
-		picked = state.open
-		render()
-		const turn = `#turn-${state.thread.indexOf(state.open)}`
-		$(turn)?.scrollIntoView({ block: 'start' })
-		$(`${turn} .q-row, ${turn} button`)?.focus({ preventScroll: true })
+		await showReply(el.dataset.id)
+		const address = replyAddress(el.dataset.id)
+		if (location.hash !== address) history.pushState(null, '', address)
 	},
 	async 'open-running'() {
 		state.menuOpen = false
@@ -1324,7 +1340,10 @@ document.addEventListener('submit', (event) => {
 
 document.addEventListener('input', (event) => home.input(event))
 document.addEventListener('mousedown', (event) => home.press(event))
-window.addEventListener('popstate', () => home.back())
+window.addEventListener('popstate', () => {
+	const reply = readReply(location.hash)
+	return reply ? showReply(reply) : home.back()
+})
 
 // The lens forms are drawn again with the rest, so the person and the span the reader picked are kept here.
 document.addEventListener('change', (event) => {
@@ -1443,7 +1462,10 @@ try {
 	if (server.live === true) await loadLive()
 	state.authors = recent.authors
 	render()
+	// An address that names a reply opens it over the home. A reply ken no longer has leaves the home.
+	const reply = readReply(location.hash)
 	await home.start()
+	if (reply) await actions.open({ dataset: { id: reply } }).catch(() => {})
 } catch (error) {
 	state.home.problem = {
 		message: `ken did not answer at this address (${error.message}). Run \`ken open\` again.`,

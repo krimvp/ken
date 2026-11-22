@@ -1426,8 +1426,11 @@ button.brand {
 		white-space: normal;
 	}
 
+	/* A way in's fact wraps to a second line on a narrow tab, so none of it is cut off. */
 	.seg-fact {
 		max-width: 100%;
+		overflow: visible;
+		white-space: normal;
 	}
 
 	.home-canvas {

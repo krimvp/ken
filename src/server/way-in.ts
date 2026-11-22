@@ -1,7 +1,7 @@
 // The way in ken suggests when the reader opens the project: review their own work, catch up on what landed since
 // they last looked, or learn the project. Plain code picks it from git, the reader's history and their map, says why in
 // one sentence, and gives one short fact for each way in, which the page shows under each choice.
-import type { Landed } from '../follow-up/index.ts'
+import { at as atMoment, type Landed } from '../follow-up/index.ts'
 import type { Asked, History } from '../history/index.ts'
 import { type Change, type LayoutSources, lookAtLayout, readLayoutAsk } from '../layout/index.ts'
 import type { Repository } from '../repo/index.ts'
@@ -23,7 +23,7 @@ const SUBJECT_CHARS = 40
 // last question or their own last commit. A span of days alone does not say they looked.
 export async function suggestWayIn(
 	layout: LayoutSources,
-	reader: { history: History; questions: Pick<Asked, 'head'>[]; spans: Landed[] },
+	reader: { history: History; questions: Pick<Asked, 'head' | 'askedAt'>[]; spans: Landed[] },
 	now: Date,
 ): Promise<Suggested> {
 	const { repo, root } = layout
@@ -44,8 +44,11 @@ export async function suggestWayIn(
 		review: work?.short ?? (await newestOnMainLine(repo, at)),
 	}
 	if (work) return { suggested: 'review', why: work.why, facts }
-	if (reader.questions.findLast((each) => each.head !== null)?.head === at) {
-		return { suggested: 'learn', why: 'Nothing landed since your last question to ken.', facts }
+	// When that question was says why ken thinks so, to a reader who is back after weeks.
+	const last = reader.questions.findLast((each) => each.head !== null)
+	if (last?.head === at) {
+		const why = `Nothing landed since your last question to ken, ${atMoment(last.askedAt, now)}.`
+		return { suggested: 'learn', why, facts }
 	}
 	if (first && first.anchor !== 'days') return { suggested: 'catch-up', why: first.landed, facts }
 	// A span of days is no sign of when the reader looked, so with a history and no other span ken says it cannot tell.

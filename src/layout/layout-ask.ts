@@ -1,6 +1,6 @@
 // What a reader asks of the layout comes as text, from the terminal's flags or the page's query, so it is parsed here
-// into commits and paths before anything reads git with it. A change is a range, a branch, a span of time up to HEAD,
-// or the reader's uncommitted work, which live mode's snapshot turns into a commit ken can diff. With no change asked,
+// into commits and paths before anything reads git with it. A change is a range, a branch, one commit, a span of time
+// up to HEAD, or the reader's uncommitted work, which live mode's snapshot turns into a commit ken can diff. With no change asked,
 // the view shows where the reader is: their uncommitted work if there is any, else the branch HEAD is on against the
 // main branch, else none.
 import { sinceOf, sinceWords, timeRange } from '../follow-up/index.ts'
@@ -77,8 +77,15 @@ async function changeOf(
 			change: uncommitted(snapshot.head, snapshot.kind === 'taken' ? snapshot.commit : snapshot.head),
 		}
 	}
-	const kind = text.includes('..') ? 'range' : 'branch'
-	const [base, head, ...rest] = kind === 'range' ? text.split('..') : [await mainBranch(repo, signal), text]
+	// With no "..", a branch is what it has that the main branch lacks, and any other commit is the change that one
+	// commit made: for a merge, what it brought to the line it merged into.
+	const alone = !text.includes('..') && !(await repo.branches(signal)).includes(text)
+	const kind = text.includes('..') || alone ? 'range' : 'branch'
+	const [base, head, ...rest] = alone
+		? [`${text}^`, text]
+		: kind === 'range'
+			? text.split('..')
+			: [await mainBranch(repo, signal), text]
 	if (base === null) {
 		return {
 			kind: 'refused',
@@ -92,9 +99,13 @@ async function changeOf(
 	const name = text.replace(/\b[0-9a-f]{40}\b/g, (hash) => hash.slice(0, 7))
 	if (range.kind === 'ok') return { kind: 'ok', change: { kind, name, asked: text, range: range.range } }
 	if (range.kind === 'unrelated') return { kind: 'refused', message: `${base} and ${head} share no history.` }
+	// The first commit of a project has no commit before it to compare with.
+	if (alone && range.kind === 'no-commit' && range.ref === base && (await repo.resolve(text, signal)).kind === 'ok') {
+		return { kind: 'refused', message: `"${text}" is the first commit of this project, so it has no change to show.` }
+	}
 	return {
 		kind: 'refused',
-		message: `"${range.kind === 'no-commit' ? range.ref : text}" is not a commit of this project.`,
+		message: `"${range.kind === 'no-commit' && !alone ? range.ref : text}" is not a commit of this project.`,
 	}
 }
 

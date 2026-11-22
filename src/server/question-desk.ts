@@ -389,19 +389,25 @@ export function questionDesk(
 		}
 		if (kind === 'change') {
 			const asked = fieldOf(lens, 'change')
-			const want = WANTS.find((each) => each === fieldOf(lens, 'want'))
+			const want = [...WANTS, ...SIDE_WANTS].find((each) => each === fieldOf(lens, 'want'))
 			if (typeof asked !== 'string' || want === undefined) {
-				return { kind: 'refused', problem: `Send the change, and what you want of it: ${WANTS.join(' or ')}.` }
+				const wants = [...WANTS, ...SIDE_WANTS].join(', ')
+				return { kind: 'refused', problem: `Send the change, and what you want of it: one of ${wants}.` }
 			}
 			// The layout reads the change, so the question is about the same commits the page lays over the picture.
 			const ask = await readLayoutAsk(layout, { change: asked }, new Date())
 			if (ask.kind !== 'ok') return { kind: 'refused', problem: ask.message }
 			const { change } = ask.ask
 			if (change === null) return { kind: 'refused', problem: 'Name the change to ask about.' }
-			const name = await changeName(layout.repo, change)
-			const title = want === 'walk' ? `Walk me through ${name}` : `What did ${name} do, and why?`
+			const own = change.kind === 'uncommitted' || (await holdsSnapshot(layout.snapshots, change.range.head))
+			const landed = own ? null : await landedIn(layout.repo, change)
+			const name = own ? 'your uncommitted work' : await changeName(layout.repo, change, landed?.commits ?? 0)
+			const title = TITLES[want](name)
 			if (change.range.base === change.range.head) return { kind: 'empty', text: title }
-			const text = [title, ...changeLines(change, want)].join('\n')
+			const where = whereLine(change, own, landed)
+			// A question beside a story is a question of its own: ken sets no scope for it and stores it as none of them.
+			if (want === 'decisions' || want === 'risks') return { kind: 'ok', text: [title, where].join('\n') }
+			const text = [title, where, ...changeLines(change, want)].join('\n')
 			return { kind: 'ok', text, as: { kind: 'change', range: change.range, want } }
 		}
 		if (kind === 'topic') {
@@ -448,10 +454,30 @@ function deeperOnNote(about: About, at: string, summary: string, commits: number
 	return `Go deeper on the ${time} note about uncommitted work\nken copied that work into commit ${short(about.snapshot)} in its own store, on top of HEAD ${short(about.head)}. Read it with diff from ${short(about.base)} to ${short(about.snapshot)} and with read_file at ${short(about.snapshot)}, as you would a commit.\n${explain}`
 }
 
-// The change as the layout names it to the reader, inside a sentence: their uncommitted work, a branch, the pull
-// request a merge brought in, the subject of another merge or of one commit, or a count of commits.
-async function changeName(repo: Repository, change: Change): Promise<string> {
-	if (change.kind === 'uncommitted') return 'your uncommitted work'
+// The questions the page asks beside a change's story. Each is answered in a thread of its own.
+const SIDE_WANTS = ['decisions', 'risks'] as const
+
+// What the reader asks of a change, as the title of the question. name is the change inside a sentence, so every
+// question ken writes about one change calls it the same.
+const TITLES: Record<Want | (typeof SIDE_WANTS)[number], (name: string) => string> = {
+	story: (name) => `What did ${name} do, and why?`,
+	walk: (name) => `Walk me through ${name}`,
+	decisions: (name) => `What did ${name} decide, and why?`,
+	risks: (name) => `What could go wrong with ${name}? Show me the risks.`,
+}
+
+type LandedIn = { commits: number; merges: number }
+
+// The commits of a change, counted as the layout counts them for the page: the commits themselves, and the merges
+// apart. Null when git cannot list the range.
+async function landedIn(repo: Repository, change: Change): Promise<LandedIn | null> {
+	const listed = await repo.commitsIn(change.range, 0)
+	return listed.kind === 'ok' ? { commits: listed.more, merges: listed.merges } : null
+}
+
+// The change as the layout names it to the reader, inside a sentence: a branch, the pull request a merge brought in,
+// the subject of another merge or of one commit, or a count of commits.
+async function changeName(repo: Repository, change: Change, commits: number): Promise<string> {
 	if (change.kind === 'branch') return `the branch ${change.name}`
 	const { base, head } = change.range
 	const line = await repo.mainLine(head, 1)
@@ -460,21 +486,30 @@ async function changeName(repo: Repository, change: Change): Promise<string> {
 		const pull = pullRequestOf(newest.subject)
 		return pull ? `the merge of pull request ${pull}` : `"${newest.subject}"`
 	}
-	const logged = await repo.log(change.range)
-	const commits = logged.kind === 'ok' ? logged.commits.length : 0
 	const count = commits === 1 ? 'the commit' : commits > 1 ? `the ${commits} commits` : 'the commits'
 	return `${count} from ${base.slice(0, 7)} to ${head.slice(0, 7)}`
 }
 
-// What the agent is told under the title of a question about one change: the page shows only the title, as with
+// Where the agent reads a change, under the title of every question about it. own says it is the reader's
+// uncommitted work, which ends at ken's own copy of it.
+function whereLine(change: Change, own: boolean, landed: LandedIn | null): string {
+	const short = (hash: string) => hash.slice(0, 7)
+	const { base, head } = change.range
+	if (own) {
+		return `ken copied that work into commit ${short(head)} in its own store, on top of HEAD ${short(base)}. Read it with diff from ${short(base)} to ${short(head)} and with read_file at ${short(head)}, as you would a commit.`
+	}
+	const count = (n: number, one: string) => (n === 1 ? `1 ${one}` : `${n} ${one}s`)
+	const merges = landed && landed.merges > 0 ? ` and ${count(landed.merges, 'merge')}` : ''
+	const counted = landed && landed.commits + landed.merges > 0 ? `: ${count(landed.commits, 'commit')}${merges}` : ''
+	return `The change is the commits from ${short(base)} to ${short(head)}${counted}. Read them with log and diff over that range.`
+}
+
+// What the agent is told under that line for a story or a walkthrough: the page shows only the title, as with
 // deeperOnNote. Plain code set the reply's scope to the range, so the model need not.
 function changeLines(change: Change, want: Want): string[] {
 	const short = (hash: string) => hash.slice(0, 7)
-	const { base, head } = change.range
+	const { base } = change.range
 	return [
-		change.kind === 'uncommitted'
-			? `ken copied that work into commit ${short(head)} in its own store, on top of HEAD ${short(base)}. Read it with diff from ${short(base)} to ${short(head)} and with read_file at ${short(head)}, as you would a commit.`
-			: `The change is the commits from ${short(base)} to ${short(head)}. Read them with log and diff over that range.`,
 		'ken has set the scope of this reply to that range, so leave scope out of show.',
 		...(want === 'walk'
 			? [

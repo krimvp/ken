@@ -101,16 +101,22 @@ export function gitRepository(root: string, options: { alternate?: string } = {}
 		},
 
 		async commitsIn({ base, head }, limit, signal) {
-			const shared = ['--no-merges', '--full-history', `${base}..${head}`, ...OUTSIDE_RECORD]
+			const range = ['--full-history', `${base}..${head}`, ...OUTSIDE_RECORD]
+			const shared = ['--no-merges', ...range]
 			const run = await git(['log', '-z', '--no-color', `--max-count=${limit + 1}`, LOG_FORMAT, ...shared], signal)
 			if (run.kind === 'too-large') return tooLarge
 			if (run.kind === 'failed') throw new Error(`git log failed on resolved commits: ${run.stderr}`)
+			// rev-list counts without printing a commit.
+			const count = async (args: string[]) => {
+				const counted = await git(['rev-list', '--count', ...args], signal)
+				if (counted.kind !== 'ok') throw new Error(`git rev-list failed on resolved commits: ${counted.kind}`)
+				return Number(counted.stdout.trim())
+			}
+			const merges = await count(['--merges', ...range])
 			const commits = parseLog(run.stdout).map(({ paths: _, ...commit }) => commit)
-			if (commits.length <= limit) return { kind: 'ok', commits, more: 0 }
-			// Only a range longer than the limit is counted, and rev-list counts without printing a commit.
-			const counted = await git(['rev-list', '--count', ...shared], signal)
-			if (counted.kind !== 'ok') throw new Error(`git rev-list failed on resolved commits: ${counted.kind}`)
-			return { kind: 'ok', commits: commits.slice(0, limit), more: Number(counted.stdout.trim()) - limit }
+			if (commits.length <= limit) return { kind: 'ok', commits, more: 0, merges }
+			// Only a range longer than the limit is counted.
+			return { kind: 'ok', commits: commits.slice(0, limit), more: (await count(shared)) - limit, merges }
 		},
 
 		async lastCommitBy(head, email, signal) {

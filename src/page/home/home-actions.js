@@ -2,7 +2,6 @@
 // also reads the level from the server and holds the runs of ken's model the home starts.
 import { numberAt } from '../draw-diagrams.js'
 import { stepParts, stopTopics } from '../project/walk.js'
-import { chipQuestion } from '../views/reply.js'
 import { askedQuestion } from './inspector/ask-drawer.js'
 import { readAddress, writeAddress } from './state/address.js'
 import { firstUnseen, pathOf, placeOf, shownDetail, stoodOn } from './state/content.js'
@@ -246,7 +245,7 @@ export function homeActions(app) {
 			render()
 		},
 		async 'home-reset'() {
-			Object.assign(state.home, { trail: [WHOLE], at: '', typed: { at: '', since: '' } })
+			Object.assign(state.home, { trail: [WHOLE], at: '', typed: { at: '', since: '', another: '' } })
 			await enter(state.home.wayIn)
 			await settle()
 		},
@@ -255,7 +254,8 @@ export function homeActions(app) {
 		skip() {
 			$('#insp-title')?.focus()
 		},
-		'home-chip': (el) => send({ question: chipQuestion(el.dataset.chip, state.home.look.change.range) }),
+		'home-chip': (el) =>
+			send({ lens: { kind: 'change', change: state.home.look.change.asked, want: el.dataset.chip } }),
 		'run-name': () => run('name', levelLens('parts')),
 		'run-tour': () => run('tour', levelLens('tour')),
 		'run-story': () => run('story', { kind: 'change', change: state.home.look.change.asked, want: 'story' }),
@@ -337,10 +337,10 @@ export function homeActions(app) {
 		void send({ question })
 	}
 
-	// The forms of the home: the box of "Show it another way", the question of the drawer, and the commit of the picker.
+	// The forms of the home: the box of "Show it another way", the question of the drawer, and the fields of the picker.
 	function submit(event) {
 		const home = state.home
-		const form = event.target.closest('#redraw-form, #ask-form, #home-picker')
+		const form = event.target.closest('#redraw-form, #ask-form, .home-typed')
 		if (!form) return false
 		event.preventDefault()
 		if (form.id === 'redraw-form') {
@@ -360,10 +360,12 @@ export function homeActions(app) {
 			$('#insp-title')?.focus({ preventScroll: true })
 		} else if (form.id === 'ask-form') sendAsk()
 		else {
-			// The picker sends the one field it shows: a span of time to catch up on, or a commit to look at.
-			const since = home.typed.since.trim()
-			if (home.wayIn === 'catch-up' && since !== '') home.change = `since:${since}`
-			else home.at = home.typed.at.trim()
+			// A field of the picker: a span of time to catch up on, another change to review, or an older commit to look at.
+			const { field } = form.dataset
+			const text = home.typed[field].trim()
+			if (field === 'at') home.at = text
+			else if (text === '') return true
+			else home.change = field === 'since' ? `since:${text}` : text
 			home.selected = null
 			void refresh()
 		}
@@ -378,6 +380,7 @@ export function homeActions(app) {
 		else if (id === 'ask-text') home.askText = value
 		else if (id === 'home-at') home.typed.at = value
 		else if (id === 'home-since') home.typed.since = value
+		else if (id === 'home-another') home.typed.another = value
 		else return false
 		return true
 	}
@@ -385,7 +388,7 @@ export function homeActions(app) {
 	function change(event) {
 		if (event.target.id !== 'home-change') return false
 		Object.assign(state.home, { change: event.target.value, selected: null, storyOpen: false })
-		state.home.typed.since = ''
+		Object.assign(state.home.typed, { since: '', another: '' })
 		void refresh()
 		return true
 	}

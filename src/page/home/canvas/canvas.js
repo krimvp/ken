@@ -212,8 +212,9 @@ function explainedChoices(rows) {
 
 // The change picker of "Catch up" and "Review a change". Catching up offers what landed since a point in time, and
 // behind one line takes a day or a number of days of the reader's own. Reviewing offers the reader's own work,
-// branches, merges and commits, and behind one line another commit to look at. What the server refused shows its
-// reason under its field.
+// branches, merges and commits, and behind one line takes another change: a range, a branch or one commit. A second
+// line there shows the project as it was at an older commit, which is no change to review. What the server refused
+// shows its reason under its field.
 function pickerHtml(home, rows) {
 	const { look, changes, wayIn, problem, typed } = home
 	if (wayIn === 'learn') return ''
@@ -238,20 +239,21 @@ function pickerHtml(home, rows) {
 		home.change === 'none' || [...(review ? changes : since), ...explained].some((c) => c.change === home.change)
 	const current = !listed && look?.change ? option(home.change, look.change.name) : ''
 	const none = home.change === 'none' ? option('none', review ? 'No change picked' : 'Nothing picked') : ''
-	// The field a refusal belongs to: a span of time the reader typed is refused as a change.
-	const refused = problem?.field === 'change' && typed.since.trim() !== '' && !review ? 'since' : problem?.field
+	// The field a refusal belongs to: a change the reader typed is refused under the field they typed it in.
+	const own = review ? 'another' : 'since'
+	const refused = problem?.field === 'change' && typed[own].trim() !== '' ? own : problem?.field
 	const error = (field) =>
 		refused === field ? `<span class="home-error" id="home-${field}-error">${esc(problem.message)}</span>` : ''
 	const invalid = (field) => (refused === field ? ` aria-invalid="true" aria-describedby="home-${field}-error"` : '')
+	// A field the reader types in, behind one line. Each is a form of its own, so Enter sends the field it is pressed in.
+	const typedIn = (field, summary, label, placeholder) =>
+		`<details class="home-other" data-key="home-other-${field}"${refused === field ? ' open' : ''}>
+				<summary data-key="home-other-${field}-summary">${summary}</summary>
+				<form class="home-field home-typed" data-field="${field}" autocomplete="off"><label for="home-${field}">${label}</label><input id="home-${field}" name="${field}" data-key="home-${field}" value="${esc(typed[field])}" placeholder="${placeholder}" spellcheck="false"${invalid(field)} /><button class="quiet-button" type="submit" data-key="home-show-${field}">Show</button></form>${error(field)}
+			</details>`
 	const more = review
-		? `<details class="home-other" data-key="home-other"${refused === 'at' ? ' open' : ''}>
-				<summary data-key="home-other-summary">Another commit</summary>
-				<span class="home-field"><label for="home-at">At commit</label><input id="home-at" name="at" data-key="home-at" value="${esc(typed.at)}" placeholder="HEAD" spellcheck="false"${invalid('at')} /><button class="quiet-button" type="submit" data-key="home-show">Show</button></span>${error('at')}
-			</details>`
-		: `<details class="home-other" data-key="home-other"${refused === 'since' ? ' open' : ''}>
-				<summary data-key="home-other-summary">Another span</summary>
-				<span class="home-field"><label for="home-since">Since a day or a number of days</label><input id="home-since" name="since" data-key="home-since" value="${esc(typed.since)}" placeholder="2026-11-01 or 14d" spellcheck="false"${invalid('since')} /><button class="quiet-button" type="submit" data-key="home-show">Show</button></span>${error('since')}
-			</details>`
+		? `${typedIn('another', 'Another change', 'A range, a branch or one commit', 'main..feature')}${typedIn('at', 'See the project at an older commit', 'At commit', 'HEAD~10')}`
+		: typedIn('since', 'Another span', 'Since a day or a number of days', '2026-11-01 or 14')
 	const nothing =
 		!review && since.length === 0
 			? '<p class="home-line">No commit landed in the last 90 days. Name a day further back to catch up from.</p>'
@@ -260,7 +262,7 @@ function pickerHtml(home, rows) {
 		!review && since.length === 0
 			? ''
 			: `<span class="home-field"><label for="home-change">${review ? 'The change' : 'Show what landed'}</label><select id="home-change" name="change" data-key="home-change"${invalid('change')}>${none}${current}${groups}</select></span>${error('change')}`
-	return `<form class="home-picker" id="home-picker" autocomplete="off">${nothing}${select}${more}</form>`
+	return `<div class="home-picker">${nothing}${select}${more}</div>`
 }
 
 // What the canvas says over the picture: an older commit, a level nobody named, and the reader's own words when

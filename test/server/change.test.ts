@@ -19,7 +19,8 @@ test('a change laid over the picture lists its commits newest first without the 
 		{ message: 'feat: main', files: { 'src/b/z.ts': 'zed\n', 'docs/d.md': 'd\nmore\n' }, parent: 0 },
 		{ message: 'Merge pull request #5 from someone/side', files: {}, merge: 1 },
 	])
-	const server = await openKen(root, readerHome())
+	const model = await scriptedModel([{ text: 'It adds a side and changes main.' }, { text: 'Nothing I can see.' }])
+	const server = await openKen(root, readerHome(), model.baseUrl)
 	const change = `${hashes[0]}..${hashes[3]}`
 
 	const top = (await json(server, layoutOf(change))).look
@@ -32,6 +33,25 @@ test('a change laid over the picture lists its commits newest first without the 
 	)
 	assert.deepEqual(Object.keys(top.change.commits[0]).sort(), ['author', 'date', 'hash', 'subject'])
 	assert.equal(top.change.moreCommits, 0)
+	assert.equal(top.change.merges, 1, 'the merge is counted apart')
+	const [asked] = await ask(server, { lens: { kind: 'change', change, want: 'story' } })
+	assert.match(asked.question, /2 commits and 1 merge/, 'and the question ken writes about the change counts the same')
+	const name = asked.question.match(/^What did (.+) do, and why\?$/m)?.[1]
+	assert.ok(name, asked.question)
+	const [risks] = await ask(server, { lens: { kind: 'change', change, want: 'risks' } })
+	assert.ok(
+		risks.question.split('\n')[0].includes(name),
+		`a second question about the change calls it what the first did: ${risks.question.split('\n')[0]}`,
+	)
+
+	const one = (await json(server, layoutOf(hashes[2] ?? ''))).look
+	assert.deepEqual(one.change.range, { base: hashes[0], head: hashes[2] }, 'one commit is the change that commit made')
+	const merge = (await json(server, layoutOf((hashes[3] ?? '').slice(0, 10)))).look
+	assert.deepEqual(
+		merge.change.range,
+		{ base: hashes[2], head: hashes[3] },
+		'and one merge, by a short hash too, is what it brought to the line it merged into',
+	)
 	const src = top.boxes.find((box: { name: string }) => box.name === 'src')
 	assert.deepEqual(src.touched, {
 		files: 2,
@@ -146,6 +166,11 @@ test('a change asked as a span of time is the commits since then, a span with no
 	assert.equal(quiet.status, 400, 'the fixture has no commit in the last day')
 	assert.equal(JSON.parse(quiet.text).field, 'change')
 	assert.equal((await call(server, layoutOf('since:soon'))).status, 400)
+	// The fixture's commits are months old, so a bare number of days that reaches them reads as that many days.
+	const days = await json(server, layoutOf('since:3000'))
+	assert.equal(days.look.change.range.head, third, 'a bare number is a number of days')
+	const noDay = await call(server, layoutOf('since:2026-02-30'))
+	assert.equal(noDay.status, 400, 'a date that is no day of the calendar is refused')
 
 	const lens = (change: string) => ({ lens: { kind: 'change', change, want: 'story' } })
 	assert.equal((await call(server, '/api/questions', lens('since:1d'))).status, 400)

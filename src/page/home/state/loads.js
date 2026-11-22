@@ -44,6 +44,7 @@ export function homeLoads({ state, render, read, post, fromView, stored }) {
 		// A field keeps what the reader typed in it only while the level on screen is the one it asked for.
 		if (look.at === look.head) home.typed.at = ''
 		if (!look.change?.asked.startsWith('since:')) home.typed.since = ''
+		if (look.change?.asked !== home.typed.another.trim()) home.typed.another = ''
 		if (wayIn) home.suggestion = wayIn
 	}
 

@@ -30,16 +30,6 @@ import { foldedTopics, knownHtml, mapBarHtml } from './map.js'
 export const LEGEND =
 	"ken's model wrote the explanations, and ken did not check them. In a boxed card, ken found each quoted line in git."
 
-// What the chips under a reply about a change ask, in the reader's words. They name the commits, so the question stands
-// on its own in a chat that never saw the change.
-export function chipQuestion(kind, change) {
-	const range = `the change from ${short(change.base)} to ${short(change.head)}`
-	if (kind === 'walk') return `Walk me through ${range}, step by step, in the order a reviewer should read it.`
-	return kind === 'risks'
-		? `What could go wrong with ${range}? Show me the risks.`
-		: `What did ${range} decide, and why?`
-}
-
 // The reply was asked at a HEAD the project has moved on from.
 export function isMoved(q) {
 	return Boolean(q.head && q.headNow && q.head !== q.headNow)
