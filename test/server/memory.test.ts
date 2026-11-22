@@ -6,7 +6,7 @@ import { test } from 'node:test'
 import { fileRecordStore } from '../../src/record/index.ts'
 import { gitRepository } from '../../src/repo/index.ts'
 import { buildRepository } from '../fixtures/build-repository.ts'
-import { ask, openKen, readerHome } from '../fixtures/ken-server.ts'
+import { ask, json, openKen, readerHome } from '../fixtures/ken-server.ts'
 import { scriptedModel, toolResults } from '../fixtures/scripted-model.ts'
 
 const FILES = {
@@ -85,6 +85,7 @@ await ask(server, { lens: { kind: 'answer', concept: 'part::Core', text: 'What d
 const answerAsked = model.requests[1]
 assert.ok(answerAsked)
 
+await json(server, '/api/seen', { did: 'said', paths: ['src/core'] })
 writeFileSync(path.join(root, 'src/core/run.ts'), 'export function run() {\n\treturn 2\n}\n')
 // The command's lines move down by one, and the terms that quote them still read the same.
 writeFileSync(path.join(root, 'src/cli/main.ts'), `// The command.\n${FILES['src/cli/main.ts']}`)
@@ -112,6 +113,7 @@ test('an answer about a part starts from its brief with the lines each point quo
 test('memory_known gives a part with its line and points, and marks a quote whose lines changed since', () => {
 	assert.match(known, /part part::Core \(Core\): Runs the work\./)
 	assert.match(known, /- A run gives back one\. \[src\/core\/run\.ts:2 \(changed since: read the file again\)\]/)
+	assert.match(known, /You said you know this part.*code has changed since you looked/is)
 	assert.ok(known.length <= 2000)
 })
 
@@ -130,13 +132,18 @@ test('memory_quoted_in and memory_search find the brief that quotes those lines,
 		)
 	}
 	assert.ok(many.length <= 2000, `${many.length} characters`)
-	assert.match(many, /^40 that quote src\/cli:/)
-	assert.match(many, /more lines left out\.$/)
+	assert.match(many, /^Quotes of src\/cli:/)
+	assert.match(many, /Continue with from \d+\.$/)
 	assert.match(many, /\[src\/cli\/main\.ts:3\]/, 'a quote whose lines moved points at where they are now')
 	assert.doesNotMatch(many, /main\.ts:2/)
 })
 
-test('a run whose output goes into the project record reads none of what the reader typed or keeps for themselves', async () => {
+for (const concept of ['part::Core', 'term:retry']) {
+	test(`a shared run omits the private answer about ${concept} from concept and file recall`, () =>
+		sharedRecall(concept))
+}
+
+async function sharedRecall(concept: string) {
 	const MARK = 'quokka'
 	const { root } = buildRepository([
 		{
@@ -148,6 +155,7 @@ test('a run whose output goes into the project record reads none of what the rea
 		},
 	])
 	const named = await fileRecordStore(root, gitRepository(root)).append([
+		{ kind: 'topic', name: 'retry', quotes: [{ path: 'src/core/run.ts', commit: 'HEAD', text: '\treturn 1' }] },
 		{
 			kind: 'layout',
 			within: [],
@@ -184,33 +192,58 @@ test('a run whose output goes into the project record reads none of what the rea
 		{
 			calls: [
 				{ tool: 'ken__memory_known', args: { about: 'part::Core' } },
+				{ tool: 'ken__memory_known', args: { about: 'term:retry' } },
 				{ tool: 'ken__memory_quoted_in', args: { path: 'src/core' } },
 			],
 		},
-		{ hang: () => {} },
+		{ text: 'Done.' },
 	])
 	const server = await openKen(root, readerHome(), model.baseUrl)
-	const typed = { kind: 'answer', concept: 'part::Core', text: `What is the ${MARK} for?`, typed: true }
+	const typed = {
+		kind: 'answer',
+		concept,
+		text: concept === 'term:retry' ? 'What does "retry" mean in this project?' : `What is the ${MARK} for?`,
+		typed: true,
+	}
 	assert.equal((await ask(server, { lens: typed })).at(-1).kind, 'saved')
-	const stop = new AbortController()
-	void fetch(new URL('/api/questions', server.url), {
-		method: 'POST',
-		headers: { origin: new URL(server.url).origin, 'content-type': 'application/json' },
-		body: JSON.stringify({ lens: { kind: 'parts', within: ['src/core'], name: 'Core' } }),
-		signal: stop.signal,
-	}).catch(() => {})
-	while (model.requests.length < 4) await new Promise((resolve) => setTimeout(resolve, 20))
-	stop.abort()
-	const [known = ''] = toolResults(model.requests[3])
+	const result = await ask(server, { lens: { kind: 'parts', within: ['src/core'], name: 'Core' } })
+	assert.equal(result.at(-1).kind, 'saved')
+	const [known = '', term = ''] = toolResults(model.requests[3])
+	assert.match(term, /retry/)
+	assert.match(term, /src\/core\/run\.ts/)
 	assert.match(known, /part part::Core \(Core\): Runs the work/, 'memory answered the run')
 	for (const request of model.requests.slice(2)) {
 		assert.doesNotMatch(JSON.stringify(request.messages), new RegExp(MARK), 'the naming run never saw the marked word')
 	}
-})
+}
 
 test('a memory search lists every id on a page even when the names are long', () => {
 	assert.match(page, /^100 hits:/)
 	assert.equal(new Set([...page.matchAll(/^term of term:workshop (\d+)/gm)].map((match) => match[1])).size, 20)
 	assert.match(page, /Ask for page 2/)
 	assert.ok(page.length <= 3000)
+})
+
+test('a free question that names one part starts with what the reader last said about it', async () => {
+	const questions = [
+		'What does Core do?',
+		'Please explain the following part.\nCore.',
+		'Compare Core and Command.',
+		'What is Coreless?',
+	]
+	const provider = await scriptedModel(questions.map(() => ({ text: 'Done.' })))
+	const open = await openKen(root, readerHome(), provider.baseUrl)
+	await json(open, '/api/seen', { did: 'said', paths: ['src/core'] })
+	await ask(open, { question: questions[0] })
+	await json(open, '/api/seen', { did: 'set', level: 'new', paths: ['src/core'] })
+	for (const question of questions.slice(1)) await ask(open, { question })
+
+	const maps = provider.requests.map((request) => {
+		const message = request.messages.find((each) => each.role === 'user')
+		return String(message?.content).match(/^Reader's map for (.+)$/m)?.[1]
+	})
+	assert.equal(maps.length, 4)
+	assert.match(maps[0] ?? '', /^Core: You said you know this part/)
+	assert.match(maps[1] ?? '', /^Core: You said .* that this part is new to you/)
+	assert.deepEqual(maps.slice(2), [undefined, undefined])
 })

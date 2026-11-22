@@ -35,11 +35,37 @@ export async function toReview(
 	}
 	const line = await repo.mainLine(head, MAIN_LINE, signal)
 	const merge = line.kind === 'ok' ? line.commits.find((commit) => commit.parents.length > 1) : undefined
-	if (!merge || lines.some((each) => each.did === 'change' && each.change.head === merge.hash)) return null
+	if (!merge || merge.paths.length === 0) return null
+	// A step or a part shows only its own paths. Reading a span with a different base can also show a different diff.
+	const seen = new Set(
+		lines.flatMap((each) =>
+			each.did === 'change' && each.change.base === merge.parents[0] && each.change.head === merge.hash
+				? each.paths
+				: [],
+		),
+	)
+	const remaining = merge.paths.filter((file) => !covered(file, seen))
+	if (remaining.length === 0) return null
 	const pull = pullRequestOf(merge.subject)
+	const what = pull ? `pull request ${pull}` : 'the newest merge'
+	if (remaining.length < merge.paths.length) {
+		const parts = touched(remaining)
+		const last = parts.length === 1 ? boxes.find((box) => box.name === parts[0]) : undefined
+		const part =
+			last && remaining.every((file) => last.paths.some((place) => under(file, place))) ? last.name : undefined
+		return {
+			title: `Continue reviewing ${what}`,
+			what,
+			why: part ? `You still have changes in ${part} to review.` : 'These changes are still to review.',
+			change: `${merge.hash}^1..${merge.hash}`,
+			files: remaining.length,
+			parts,
+			...(part ? { part } : {}),
+		}
+	}
 	return {
 		title: pull ? `Review the merge of pull request ${pull}` : 'Review the newest merge',
-		what: pull ? `pull request ${pull}` : 'the newest merge',
+		what,
 		why: pull
 			? 'It is the newest merge and you have not walked through it.'
 			: `It is "${merge.subject}", and you have not walked through it.`,
@@ -47,6 +73,16 @@ export async function toReview(
 		files: merge.paths.length,
 		parts: touched(merge.paths),
 	}
+}
+
+// Each recorded path is a file or directory. Check its ancestors without scanning all the reader's past steps.
+function covered(file: string, seen: Set<string>): boolean {
+	while (!seen.has(file)) {
+		const slash = file.lastIndexOf('/')
+		if (slash < 0) return false
+		file = file.slice(0, slash)
+	}
+	return true
 }
 
 // The number of the pull request a merge brought in, such as "#107", read from the subject GitHub writes for it. ken

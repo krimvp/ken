@@ -98,7 +98,7 @@ The map learns only from what the reader says: a question, a button, a tour stop
 - `set`: they pressed "Not right" and picked one of the five levels below. It keeps the level and takes the place of every line before it for those paths. Only "I know it" says they know the part as it is now. Any other level leaves the count of commits since they looked as it was;
 - `undo`: they took back one line of what ken recorded. It names that line by its time and has no paths. The line stays in the file and counts for nothing.
 
-A line counts for a box when one of its paths is the box's path or inside it. From the lines that count, and from the map's topics in the box, plain code gives every box one level, the strongest thing the reader did there:
+Opening a part, saying you know it, or correcting its level counts for that part alone. Reading about it, opening code, or looking at a change also counts toward the part that holds it. From the lines that count, and from the map's topics in the box, plain code gives every box one level, the strongest thing the reader did there:
 
 | Level  | On the page          | What put the reader there                                                           |
 | ------ | -------------------- | ----------------------------------------------------------------------------------- |
@@ -112,7 +112,7 @@ Beside the level the box says why, in one sentence built by code that names what
 
 The box also says where ken would open the part for this reader: a part new to them at its job, one they have seen at how it works, one they have read at the code, and a stale one at what changed since they looked. The list of what to look at next reads the same answer, so a box and its item cannot disagree.
 
-Looking is never understanding. ken says the reader read a part or opened its code. It says they know a part only when they said so.
+Looking is never understanding. ken says the reader read a part or opened its code. It says they know a part only when they said so. When a free question uses one part's exact name, its first answer starts with the last level the reader gave that part. If they said they know it and its code now differs, ken tells its model that too.
 
 Opening a part does not move the commit they last looked at: only reading does. For a change the reader walked through, that commit is the change's own last commit when HEAD has it. Of all the lines that move it, the one at the newest commit counts, so walking through an older change does not undo having read the part at HEAD. The map keeps a day and no commit, so for a box that only the map speaks of, ken counts from where the reader's understanding of a changed topic starts.
 

@@ -4,7 +4,7 @@
 // quote a tool returns is checked at HEAD as it goes out. The model never writes here; only a reply does, through the
 // cards it shows, and show checks every quote against git again.
 import type { Tool } from 'aigent/plugin'
-import { checkQuote } from '../../checks/index.ts'
+import { fileQuotesAtHead } from '../../checks/index.ts'
 import { stateLine, type UnderstandingMap } from '../../map/index.ts'
 import {
 	describeEntry,
@@ -14,6 +14,7 @@ import {
 	type RecordEntry,
 	type RecordRead,
 	type RecordStore,
+	sameName,
 } from '../../record/index.ts'
 import type { CommitHash, Repository } from '../../repo/index.ts'
 import type { Asking } from '../reply/show-tool.ts'
@@ -31,6 +32,10 @@ export type Known = {
 	kind: string
 	name: string
 	line: string
+	reader: string | null
+	quotes: MemoryQuote[]
+	changed: string[]
+	links: string[]
 	points: { line: string; quotes: MemoryQuote[] }[]
 	terms: string[]
 	questions: { text: string; answered: boolean }[]
@@ -57,6 +62,7 @@ export type Fact = {
 
 // Plain code on the server answers these from the layout, the record and the reader's history.
 export type Memory = {
+	readerPart(question: string, record: RecordRead, signal?: AbortSignal): Promise<string | null>
 	known(about: string): Promise<Known | null>
 	level(within: string[]): Promise<KnownLevel | null>
 	facts(): Promise<Fact[]>
@@ -77,6 +83,33 @@ const CAPS = {
 }
 const CHANGED = 'changed since: read the file again'
 
+type Anchor = Pick<MemoryQuote, 'path' | 'startLine' | 'endLine'> & { changed: boolean }
+
+function memoryAnchors(repo: Repository, signal?: AbortSignal) {
+	const locate = fileQuotesAtHead(repo, signal)
+	return (quotes: MemoryQuote[]) =>
+		Promise.all(
+			quotes.map(async (quote): Promise<Anchor> => {
+				const found = await locate(quote)
+				const { startLine, endLine } = found ?? quote
+				return { path: quote.path, startLine, endLine, changed: found === null }
+			}),
+		)
+}
+
+function anchorText(at: Anchor): string {
+	const lines = at.startLine === at.endLine ? at.startLine : `${at.startLine}-${at.endLine}`
+	return `${at.path}:${lines}${at.changed ? ` (${CHANGED})` : ''}`
+}
+
+function factLine(fact: Fact, at: Anchor[], limit?: number): string {
+	const detail = `${fact.kind} of ${fact.about} (${fact.name}): ${fact.text}${at.length ? ` [${at.map(anchorText).join(', ')}]` : ''}`
+	if (limit === undefined || detail.length <= limit) return detail
+	// Never let a clipped search result turn a changed quote back into an unqualified claim.
+	const status = at.some((anchor) => anchor.changed) ? `[${CHANGED}] ` : ''
+	return shortLine(`${status}${fact.kind} of ${fact.about}: ${at.map(anchorText).join(', ')} ${fact.text}`, limit)
+}
+
 // asked is what the reader asked and was told: their map of the topics and the earlier answers. A run whose output
 // goes into the project record gets null, so memory gives it the record and the briefs ken wrote from the code alone.
 export function memoryTools(deps: {
@@ -88,31 +121,7 @@ export function memoryTools(deps: {
 	const { store, repo, memory, asked } = deps
 	const map = asked?.map
 	const chat: ChatRecall = asked?.chat ?? { find: async () => [] }
-	// A question's brief is the answer to what the reader asked.
-	const held = async (about: string) => {
-		const found = await memory?.known(about)
-		if (!found || asked) return found
-		return found.kind === 'question' ? null : { ...found, questions: [] }
-	}
-	const facts = async () => ((await memory?.facts()) ?? []).filter((fact) => asked || fact.kind !== 'answer')
-
-	// Each quote as path:lines where its text is at HEAD, or where it was, marked changed, when its text is gone.
-	async function anchors(quotes: MemoryQuote[], signal?: AbortSignal): Promise<string[]> {
-		return await Promise.all(
-			quotes.map(async (quote) => {
-				const asked = { path: quote.path, commit: 'HEAD', text: quote.text, line: quote.startLine }
-				const check = await checkQuote(repo, asked, signal)
-				const at = check.kind === 'verified' ? check.quote : quote
-				const lines = at.startLine === at.endLine ? `${at.startLine}` : `${at.startLine}-${at.endLine}`
-				return `${quote.path}:${lines}${check.kind === 'verified' ? '' : ` (${CHANGED})`}`
-			}),
-		)
-	}
-
-	async function factLine(fact: Fact, signal?: AbortSignal): Promise<string> {
-		const at = await anchors(fact.quotes, signal)
-		return `${fact.kind} of ${fact.about} (${fact.name}): ${fact.text}${at.length ? ` [${at.join(', ')}]` : ''}`
-	}
+	const visibleFacts = async () => ((await memory?.facts()) ?? []).filter((fact) => asked || fact.kind !== 'answer')
 
 	const known: Tool = {
 		name: 'memory_known',
@@ -143,18 +152,43 @@ export function memoryTools(deps: {
 				const state = read.states[0]
 				return page(state ? `Reader: ${stateLine(state)}\n${full}` : full)
 			}
-			const known = await held(about)
-			const [saved] = known ? [] : await chat.find(undefined, about)
+			const found = await memory?.known(about)
+			// A term's brief can come from a private answer. A shared run gets the term as the project recorded it.
+			if (!asked && found?.kind === 'term') {
+				const topic = record.current.find((entry) => entry.kind === 'topic' && sameName(entry.name, found.name))
+				return topic
+					? page(await describeEntry(repo, record, topic, ctx.signal))
+					: refuse(`There is no recorded topic "${found.name}".`)
+			}
+			// Processes and their steps can come from a diagram in a private reply.
+			const held = !asked && found && ['question', 'process', 'step'].includes(found.kind) ? null : found
+			const [saved] = held ? [] : await chat.find(undefined, about)
 			if (saved) return page(saved.text)
-			if (!known) return refuse(`ken holds nothing on "${about}". Search memory with memory_search, or read the code.`)
+			if (!held) return refuse(`ken holds nothing on "${about}". Search memory with memory_search, or read the code.`)
+			const anchors = memoryAnchors(repo, ctx.signal)
+			const sources = await anchors(held.quotes)
 			const points = await Promise.all(
-				known.points.map(async (point) => `- ${point.line} [${(await anchors(point.quotes, ctx.signal)).join(', ')}]`),
+				held.points.map(
+					async (point) => `- ${point.line} [${(await anchors(point.quotes)).map(anchorText).join(', ')}]`,
+				),
 			)
-			const questions = known.questions.map((each) => `- ${each.text}${each.answered ? ' (answered)' : ''}`)
+			const questions = asked
+				? held.questions.map((question) => `- ${question.text}${question.answered ? ' (answered)' : ''}`)
+				: []
 			const text = [
-				`${known.kind} ${known.id} (${known.name}): ${known.line}`,
-				...(points.length ? ['Things to know:', ...points] : ["ken's model has not explained it yet."]),
-				...(known.terms.length ? [`Terms: ${known.terms.join(', ')}`] : []),
+				`${held.kind} ${held.id} (${held.name}): ${held.line}`,
+				...(held.changed.length
+					? [`Earlier description: check the changed source in ${held.changed.join(', ')}.`]
+					: []),
+				...(sources.length ? [`Source: ${sources.map(anchorText).join(', ')}`] : []),
+				...(map && held.reader ? [`Reader's map (addressed to the reader): ${held.reader}`] : []),
+				...(points.length
+					? ['Things to know:', ...points]
+					: sources.length
+						? []
+						: ["ken's model has not explained it yet."]),
+				...held.links,
+				...(held.terms.length ? [`Terms: ${held.terms.join(', ')}`] : []),
 				...(questions.length ? ['Questions:', ...questions] : []),
 			]
 			return page(text.join('\n'))
@@ -192,13 +226,14 @@ export function memoryTools(deps: {
 
 	const quotedIn: Tool = {
 		name: 'memory_quoted_in',
-		description: `The briefs, answers and terms ken holds that quote a file, or lines of it, each with what it says and the lines it quotes, marked fresh or ${CHANGED}. path may be a folder. At most ${CAPS.quotedIn.entries} entries and ${CAPS.quotedIn.chars} characters.`,
+		description: `The briefs, answers and terms ken holds that quote a file, or lines of it, each with what it says and the lines it quotes, marked fresh or ${CHANGED}. path may be a folder. At most ${CAPS.quotedIn.entries} entries and ${CAPS.quotedIn.chars} characters per page. Pass the returned from value to continue.`,
 		parameters: {
 			type: 'object',
 			properties: {
 				path: { type: 'string' },
 				start: { type: 'integer', minimum: 1 },
 				end: { type: 'integer', minimum: 1 },
+				from: { type: 'integer', minimum: 1 },
 			},
 			required: ['path'],
 			additionalProperties: false,
@@ -208,21 +243,37 @@ export function memoryTools(deps: {
 			const path = read.text('path').replace(/\/+$/, '')
 			const start = read.optionalLine('start') ?? 1
 			const end = read.optionalLine('end') ?? Number.POSITIVE_INFINITY
-			const quotes = (fact: Fact) =>
-				fact.quotes.filter(
-					(quote) =>
-						(quote.path === path || quote.path.startsWith(`${path}/`)) &&
-						quote.startLine <= end &&
-						quote.endLine >= start,
+			const anchors = memoryAnchors(repo, ctx.signal)
+			const facts = await visibleFacts()
+			const from = read.optionalLine('from') ?? 1
+			const heading = `Quotes of ${shortLine(path, 300)}:`
+			const continuation = (index: number) => `Continue with from ${index}.`
+			const lines = [heading]
+			// Leave room for the continuation even when one fact would fill the entire page.
+			const budget = CAPS.quotedIn.chars - heading.length - continuation(facts.length).length - 2
+			let left = budget
+			for (let index = from - 1; index < facts.length; index++) {
+				const fact = facts[index]
+				if (!fact) continue
+				const inPath = fact.quotes.filter((quote) => quote.path === path || quote.path.startsWith(`${path}/`))
+				if (inPath.length === 0) continue
+				const at = (await anchors(inPath)).filter((quote) => quote.startLine <= end && quote.endLine >= start)
+				if (at.length === 0) continue
+				const line = factLine(fact, at, budget)
+				if (line.length > left || lines.length > CAPS.quotedIn.entries) {
+					lines.push(continuation(index + 1))
+					break
+				}
+				lines.push(line)
+				left -= line.length + 1
+			}
+			if (lines.length === 1)
+				return reply(
+					from > 1
+						? 'The end of these quotes.'
+						: `ken holds nothing that quotes ${shortLine(path, 300)}${start > 1 || end < Infinity ? ' there' : ''}.`,
 				)
-			const found = (await facts())
-				.map((fact) => ({ ...fact, quotes: quotes(fact) }))
-				.filter((fact) => fact.quotes.length > 0)
-				.slice(0, CAPS.quotedIn.entries)
-			if (found.length === 0)
-				return reply(`ken holds nothing that quotes ${path}${start > 1 || end < Infinity ? ` there` : ''}.`)
-			const lines = await Promise.all(found.map((fact) => factLine(fact, ctx.signal)))
-			return reply(capped([`${found.length} that quote ${path}:`, ...lines], CAPS.quotedIn.chars))
+			return reply(lines.join('\n'))
 		},
 	}
 
@@ -256,21 +307,21 @@ export function memoryTools(deps: {
 				.filter((entry) => (kind === undefined || entry.kind === kind) && has(JSON.stringify(entry)))
 				.reverse()
 				.sort((a, b) => b.at.localeCompare(a.at))
-			const byWords = kind === undefined && words.length > 0
-			const answers = byWords ? await chat.find(words.join(' ')) : []
-			const found = byWords ? (await facts()).filter((fact) => has(`${fact.name} ${fact.text}`)) : []
-			const hits: (() => Promise<string>)[] = [
+			const asked = kind === undefined && words.length > 0
+			const answers = asked ? await chat.find(words.join(' ')) : []
+			const facts = asked ? (await visibleFacts()).filter((fact) => has(`${fact.name} ${fact.text}`)) : []
+			const anchors = memoryAnchors(repo, ctx.signal)
+			const hits: ((limit: number) => Promise<string>)[] = [
 				...answers.map((each) => async () => `answer ${each.id}: ${each.text}`),
-				...found.map((fact) => () => factLine(fact, ctx.signal)),
+				...facts.map((fact) => async (limit: number) => factLine(fact, await anchors(fact.quotes), limit)),
 				...entries.map((entry) => async () => entryLine(entry)),
 			]
-			const shown = await Promise.all(
-				hits.slice((page - 1) * CAPS.search.hits, page * CAPS.search.hits).map((hit) => hit()),
-			)
+			const shown = hits.slice((page - 1) * CAPS.search.hits, page * CAPS.search.hits)
 			const more = page * CAPS.search.hits < hits.length ? `\nAsk for page ${page + 1} for more.` : ''
 			const header = `${hits.length} hits:`
 			const budget = Math.floor((CAPS.search.chars - header.length - more.length) / Math.max(1, shown.length)) - 1
-			return reply([header, ...shown.map((line) => shortLine(line, budget))].join('\n') + more)
+			const lines = await Promise.all(shown.map(async (hit) => shortLine(await hit(budget), budget)))
+			return reply([header, ...lines].join('\n') + more)
 		},
 	}
 

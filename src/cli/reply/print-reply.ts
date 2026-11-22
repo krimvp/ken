@@ -55,6 +55,8 @@ export async function printQuestion(events: AsyncIterable<ChatEvent>, out: NodeJ
 			}
 			case 'done':
 				answered = event.outcome === 'answered'
+				if (event.outcome === 'unverified')
+					line(paint('red', 'Unverified source answer: ken gave no checked file quote.'))
 				if (event.outcome === 'partial') line(paint('red', 'Some parts still need a brief.'))
 				if (event.outcome === 'incomplete') line(paint('red', "ken's model did not give a brief with a checked point."))
 				if (event.outcome === 'no-answer') line(paint('red', "ken's model stopped without a reply."))

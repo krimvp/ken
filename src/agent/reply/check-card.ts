@@ -25,6 +25,7 @@ import { RECORD_LIMITS, textProblem, type Undo } from '../../record/index.ts'
 import type { CommitHash, Range, Repository } from '../../repo/index.ts'
 import { BRIEF_BOUNDS, type Point, wordCount } from '../brief/brief.ts'
 import type { Card, Change, Item, Weight } from './reply.ts'
+import type { QuestionFocus } from './show-tool.ts'
 
 // absent is the text the card says is missing, and the path prefix to search under. point is there on a thing to know
 // of a brief.
@@ -195,6 +196,11 @@ function limitProblems(card: CardDraft): string[] {
 		if (count > quotes) problems.push(`it has ${count} quotes${what}; keep it to ${quotes}.`)
 	}
 	return problems
+}
+
+// A typed question about open code can have a prose reply with no file quote that passed the checks.
+export function unverifiedSource(focus: QuestionFocus | undefined, items: Item[]): boolean {
+	return Boolean(focus && 'path' in focus && !quotesOf(items).some((quote) => quote.path !== null))
 }
 
 // Every git quote a card shows, a decision's reasons and a diagram's arrows included.

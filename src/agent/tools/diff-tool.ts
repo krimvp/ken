@@ -19,7 +19,7 @@ export function diffTool(repo: Repository, elsewhere: Elsewhere): Tool {
 			properties: {
 				base: { type: 'string', description: 'The commit the change starts from, such as main or a merge commit^1' },
 				head: { type: 'string', description: 'The last commit of the change, such as HEAD or a branch' },
-				path: { type: 'string', description: 'Show only this file' },
+				path: { type: 'string', description: 'Show changes to this file or under this directory' },
 			},
 			required: ['base', 'head'],
 			additionalProperties: false,
@@ -31,12 +31,10 @@ export function diffTool(repo: Repository, elsewhere: Elsewhere): Tool {
 			const rawPath = read.optionalText('path')
 			const only = rawPath === undefined ? undefined : pathOf(rawPath)
 			if (only !== undefined && only.kind !== 'ok') return only.result
-			const diff = await repo.diff(range, ctx.signal)
+			const diff = await repo.diff(range, ctx.signal, only ? [only.path] : undefined)
 			if (diff.kind === 'too-large') return refuse('The diff is too large to read. Ask for a shorter range.')
 
-			const files = only
-				? diff.files.filter((file) => file.path === only.path || file.oldPath === only.path)
-				: diff.files
+			const files = diff.files
 			if (only && files.length === 0) return refuse(`${only.path} did not change in this range.`)
 			const hunks = files.reduce((sum, file) => sum + (file.kind === 'text' ? file.hunks.length : 0), 0)
 			const header = [
@@ -44,11 +42,11 @@ export function diffTool(repo: Repository, elsewhere: Elsewhere): Tool {
 				`Lines with + are at head ${short(range.head)}. Lines with - are at base ${short(range.base)}. Quote either without the sign and the number.`,
 			].join('\n')
 			const full = files.map(renderFile).join('\n\n')
-			if (only) {
+			if (only && files.length === 1) {
 				const cut = full.length > MAX_DIFF_CHARS ? `\n[cut at ${MAX_DIFF_CHARS} characters]` : ''
 				return reply(`${header}\n\n${full.slice(0, MAX_DIFF_CHARS)}${cut}`)
 			}
-			const used = await elsewhere(range, ctx.signal)
+			const used = only ? null : await elsewhere(range, ctx.signal)
 			const tail = used === null ? '' : `\n\n${used}`
 			if (full.length <= MAX_DIFF_CHARS) return reply(`${header}\n\n${full}${tail}`)
 			const overview = files.slice(0, MAX_OVERVIEW_FILES).map(renderOverview).join('\n')

@@ -12,6 +12,7 @@ export {
 	type LensQuestion,
 	openQuestion,
 	type PartsLevel,
+	partChangeQuestion,
 	partsQuestion,
 	personLens,
 	rangeLens,

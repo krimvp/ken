@@ -2,6 +2,7 @@
 // the box, send the box, and show their earlier replies. The drawer keeps the briefs the reader opened last, for the
 // questions it suggests.
 import { fill } from '../shell/fill.js'
+import { focusLabel } from '../views/format.js'
 import { askDrawerHtml } from './ask.js'
 
 const REMEMBERED = 6
@@ -25,6 +26,23 @@ export function askActions(app) {
 	const briefOf = (id) => {
 		const found = app.briefs.get(id, render)
 		return found.kind === 'ok' ? found.brief : null
+	}
+
+	// Carry the active architecture view and a few of its links. The model can open their saved evidence on demand.
+	function architectureFocus() {
+		const { look } = state.home
+		if (state.view !== 'home' || state.shell.page !== 'architecture' || !look || state.home.reading) return null
+		const view = state.arch.shown
+		if (!view) return null
+		const nodes = document.querySelectorAll('#arch-world [data-concept], .k-arch-reading article [data-concept]')
+		const ids = [...new Set(Array.from(nodes, (node) => node.dataset.concept))].filter((id) => id && id.length <= 120)
+		const links = ids.filter((id) => /^(crossing|arrow):/.test(id)).slice(0, 3)
+		const concepts = [...new Set([...links, ...ids])].slice(0, 8)
+		const earlier =
+			view === 'parts'
+				? look.arrows.some((arrow) => arrow.stale) || look.boxes.some((box) => box.state === 'changed')
+				: Boolean(look.views?.stale?.some((item) => item.view === view))
+		return { view, commit: look.at, concepts, earlier }
 	}
 
 	// A brief the reader opened, newest first, for the questions the drawer suggests.
@@ -55,7 +73,9 @@ export function askActions(app) {
 		const about = ask.about
 		const typed = text !== ask.suggestion
 		Object.assign(ask, { text: '', open: false, about: null, suggestion: null })
-		if (about) {
+		if (state.brief.on === 'source') app.brief.close()
+		if (about?.focus) void send({ question: text, focus: about.focus })
+		else if (about) {
 			app.brief.show(about.id, { opener: ask.opener })
 			void app.brief.ask(text, typed)
 		} else void send({ question: text })
@@ -67,8 +87,19 @@ export function askActions(app) {
 			ask.open = true
 			ask.opener = el.dataset.key
 			const brief = app.brief.open()
-			if (!ask.text.trim()) ask.about = brief && !brief.local ? { id: brief.id, name: brief.name } : null
-			app.brief.close()
+			const page = state.brief.on === 'source' ? state.brief.source : null
+			if (!ask.text.trim() || el.dataset.key === 'ask-source') {
+				if (page?.lines?.length) {
+					const { path, commit } = page.where
+					const focus = { path, commit, start: page.start, end: page.start + page.lines.length - 1 }
+					ask.about = { name: focusLabel(focus), focus }
+				} else if (brief && !brief.local) ask.about = { id: brief.id, name: brief.name }
+				else {
+					const focus = brief ? null : architectureFocus()
+					ask.about = focus ? { name: focusLabel(focus), focus } : null
+				}
+			}
+			if (!page?.lines?.length) app.brief.close()
 			render()
 			$('#ask-title')?.focus()
 		},

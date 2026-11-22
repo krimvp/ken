@@ -31,7 +31,15 @@ export type NextBox = { name: string; knows: Knows; landed: LandedSize | null }
 // The change the reader has not reviewed. what is the change in a few words, and why may be empty. change asks the
 // layout for it, and files and parts say how large it is: the files it changed, and the boxes of this level that hold
 // one of them.
-export type ToReview = { title: string; what: string; why: string; change: string; files: number; parts: string[] }
+export type ToReview = {
+	title: string
+	what: string
+	why: string
+	change: string
+	files: number
+	parts: string[]
+	part?: string
+}
 
 export type NextFacts = {
 	// The questions of the decisions that wait on the reader, newest first.
@@ -109,14 +117,14 @@ function staleItem({ name, knows, landed }: NextBox): NextItem {
 	}
 }
 
-function reviewItem({ title, what, why, change, files, parts }: ToReview): NextItem {
+function reviewItem({ title, what, why, change, files, parts, part }: ToReview): NextItem {
 	const size =
 		parts.length === 0 ? `${count(files, 'file')}.` : `${count(files, 'file')} in ${count(parts.length, 'part')}.`
 	return {
 		kind: 'review',
 		title,
 		why: why === '' ? size : `${why} ${size}`,
-		go: { way: 'review', detail: 'how', change },
+		go: { way: 'review', detail: 'how', change, ...(part ? { part } : {}) },
 		parts,
 		size: { files, what },
 	}

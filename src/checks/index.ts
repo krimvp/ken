@@ -6,7 +6,7 @@
 export { type ChangedHunk, type Coverage, checkCoverage, quotedHunks } from './coverage-check.ts'
 export { checkLabel, decisionLabel, type Label, type LabelCheck, quotesOutsideChange } from './label-check.ts'
 export { countMessages, type MessageCount } from './message-count.ts'
-export { checkQuote, type GitQuote, type QuoteCheck, type VerifiedGitQuote } from './quote-check.ts'
+export { checkQuote, fileQuotesAtHead, type GitQuote, type QuoteCheck, type VerifiedGitQuote } from './quote-check.ts'
 export {
 	checkSessionQuote,
 	type SessionQuote,

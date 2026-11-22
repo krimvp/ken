@@ -7,6 +7,7 @@ import {
 	type NoFile,
 	parsePath,
 	type Refused,
+	type RepoPath,
 	type Repository,
 	type TooLarge,
 } from '../repo/index.ts'
@@ -34,6 +35,7 @@ export type QuoteCheck =
 	| TooLarge
 
 const MAX_CLOSEST = 3
+const MAX_RECALLED_FILES = 4
 
 export async function checkQuote(repo: Repository, quote: GitQuote, signal?: AbortSignal): Promise<QuoteCheck> {
 	if (!/[\p{L}\p{N}]/u.test(quote.text)) return { kind: 'empty' }
@@ -71,12 +73,51 @@ export function quotedLines(text: string): string[] {
 
 // The line number, from 1, of each place where the wanted lines start.
 export function startsOf(lines: string[], wanted: string[]): number[] {
-	const trimmed = lines.map((line) => line.trimEnd())
+	return startsOfTrimmed(
+		lines.map((line) => line.trimEnd()),
+		wanted,
+	)
+}
+
+function startsOfTrimmed(trimmed: string[], wanted: string[]): number[] {
 	const starts: number[] = []
 	for (let index = 0; index + wanted.length <= trimmed.length; index++) {
 		if (wanted.every((line, offset) => trimmed[index + offset] === line)) starts.push(index + 1)
 	}
 	return starts
+}
+
+// Locate already verified file quotes at one HEAD for this read. Older quotes in the same file share its blob.
+export function fileQuotesAtHead(repo: Repository, signal?: AbortSignal) {
+	let head: ReturnType<Repository['resolve']> | undefined
+	const files = new Map<RepoPath, Promise<string[] | null>>()
+	return async (quote: VerifiedGitQuote & { path: string }) => {
+		head ??= repo.resolve('HEAD', signal)
+		const resolved = await head
+		if (resolved.kind !== 'ok') return null
+		if (quote.commit === resolved.commit) return { startLine: quote.startLine, endLine: quote.endLine }
+		const path = parsePath(quote.path)
+		if (path.kind !== 'ok') return null
+		let file = files.get(path.path)
+		if (!file) {
+			file = repo
+				.readFile(resolved.commit, path.path, signal)
+				.then((read) => (read.kind === 'ok' ? read.text.split('\n').map((line) => line.trimEnd()) : null))
+			// A folder query can visit many large files before it finds a match in the requested lines.
+			const oldest = files.keys().next().value
+			if (files.size >= MAX_RECALLED_FILES && oldest !== undefined) files.delete(oldest)
+			files.set(path.path, file)
+		}
+		const lines = await file
+		if (!lines) return null
+		const wanted = quotedLines(quote.text)
+		// Most edits leave the quote at its old line. It is already the closest possible match.
+		if (wanted.every((line, offset) => lines[quote.startLine - 1 + offset] === line)) {
+			return { startLine: quote.startLine, endLine: quote.startLine + wanted.length - 1 }
+		}
+		const startLine = pickStart(startsOfTrimmed(lines, wanted), quote.startLine)
+		return startLine === undefined ? null : { startLine, endLine: startLine + wanted.length - 1 }
+	}
 }
 
 function pickStart(starts: number[], hint: number | undefined): number | undefined {

@@ -34,4 +34,4 @@ export type ChatEvent =
 	| { kind: 'error'; message: string; model?: true }
 
 // "no-answer": the model wrote nothing and showed nothing. "out-of-turns": it was still reading at the turn limit.
-export type Outcome = 'answered' | 'no-answer' | 'out-of-turns' | 'incomplete' | 'partial'
+export type Outcome = 'answered' | 'unverified' | 'no-answer' | 'out-of-turns' | 'incomplete' | 'partial'

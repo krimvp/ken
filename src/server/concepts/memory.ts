@@ -3,9 +3,9 @@
 // record and the reader's history, read again on each call, so it holds what was saved a moment ago.
 import type { Fact, Known, KnownLevel, Memory } from '../../agent/index.ts'
 import type { History } from '../../history/index.ts'
-import { type LayoutSources, lookAtLayout, readLayoutAsk } from '../../layout/index.ts'
+import { type LayoutSources, lookAtLayout, readerPart, readLayoutAsk } from '../../layout/index.ts'
 import { sameName } from '../../record/index.ts'
-import type { conceptReads } from './brief.ts'
+import { type conceptReads, readerLine } from './brief.ts'
 import { parseConcept, partId, termId } from './concept.ts'
 import { answeredOf, answersOf, fileQuotes, toldOfPart } from './told.ts'
 
@@ -23,6 +23,14 @@ export function memoryOf(layout: LayoutSources, reads: ReturnType<typeof concept
 			kind: brief.kind,
 			name: brief.name,
 			line: brief.line,
+			reader: readerLine(brief.knows),
+			quotes: brief.quotes ?? [],
+			changed: brief.staleFiles ?? [],
+			links: [
+				...brief.sideways.uses.map((link) => `From ${brief.name} to ${link.name}: ${link.verb} (${link.id})`),
+				...brief.sideways.usedBy.map((link) => `From ${link.name} to ${brief.name}: ${link.verb} (${link.id})`),
+				...[...(brief.inside ?? []), ...(brief.parts ?? [])].map((child) => `Contains ${child.name} (${child.id})`),
+			],
 			points: brief.explained ? brief.points.map(({ line, quotes }) => ({ line, quotes })) : [],
 			terms: brief.terms.map((term) => term.name),
 			questions: brief.questions.map(({ text, answered }) => ({ text, answered })),
@@ -88,5 +96,5 @@ export function memoryOf(layout: LayoutSources, reads: ReturnType<typeof concept
 		return [...[...parts.values()].flat(), ...answers, ...terms]
 	}
 
-	return { known, level, facts }
+	return { known, level, facts, readerPart: (question, record, signal) => readerPart(layout, question, record, signal) }
 }

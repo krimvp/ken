@@ -1,6 +1,6 @@
 // One question the reader asked, or one note ken wrote in live mode, as it ended: what the model did, and its reply when
 // there was one. The page reopens a reply from this without a model call, so an entry is plain data with no behaviour.
-import type { ChatEvent, Outcome, Reply, Step } from '../agent/index.ts'
+import type { ChatEvent, Outcome, QuestionFocus, Reply, Step } from '../agent/index.ts'
 import type { About } from '../live/index.ts'
 import type { EntryId } from '../record/index.ts'
 
@@ -13,8 +13,9 @@ type BriefRetry =
 
 export type Ending =
 	| { outcome: 'answered'; reply: Reply; recorded: EntryId[] }
+	| { outcome: 'unverified'; reply: Reply; recorded: EntryId[] }
 	| { outcome: 'partial'; reply: Reply; recorded: EntryId[]; retry?: BriefRetry }
-	| { outcome: Exclude<Outcome, 'answered' | 'partial' | 'incomplete'> | 'stopped' }
+	| { outcome: Exclude<Outcome, 'answered' | 'unverified' | 'partial' | 'incomplete'> | 'stopped' }
 	| { outcome: 'incomplete'; retry?: BriefRetry }
 	| { outcome: 'error'; error: string }
 
@@ -29,6 +30,7 @@ export type HistoryEntry = {
 	head: string | null
 	thread: string | null
 	about?: About
+	focus?: QuestionFocus
 	steps: Step[]
 	usage: Usage | null
 } & Ending
@@ -39,6 +41,7 @@ export type Asked = {
 	askedAt: string
 	head: string | null
 	thread: string
+	focus?: QuestionFocus
 	about?: About
 }
 
@@ -63,7 +66,8 @@ export function entryFrom(asked: Asked, events: ChatEvent[], stopped: boolean): 
 				usage = { inputTokens: event.inputTokens, outputTokens: event.outputTokens, seconds: event.seconds }
 				break
 			case 'done':
-				if (event.outcome !== 'answered' && event.outcome !== 'partial') ending = { outcome: event.outcome }
+				if (event.outcome !== 'answered' && event.outcome !== 'unverified' && event.outcome !== 'partial')
+					ending = { outcome: event.outcome }
 				else if (replied)
 					ending = { outcome: event.outcome, reply: replied.reply, recorded: replied.recorded.map((entry) => entry.id) }
 				else ending = { outcome: 'no-answer' }
@@ -88,6 +92,8 @@ export function whyNoNote(entry: HistoryEntry): string | null {
 	switch (entry.outcome) {
 		case 'answered':
 			return null
+		case 'unverified':
+			return "ken's model gave no checked source for this reply."
 		case 'partial':
 			return "ken's model explained only some parts."
 		case 'incomplete':

@@ -48,13 +48,13 @@ export function changeActions(app) {
 		if (!box) {
 			chg.partDiff = { message: 'ken could not find this part in the project.' }
 		} else {
-			const query = new URLSearchParams({ change })
+			const query = new URLSearchParams({ change, part: name })
 			for (const path of box.paths) query.append('within', path)
 			const answer = await app
 				.read(`/api/change/diff?${query}`)
 				.catch((error) => ({ ok: false, body: { message: error.message } }))
 			if (mine !== readingPart || chg.part !== name || state.shell.page !== 'changes') return
-			chg.partDiff = answer.body
+			chg.partDiff = { ...answer.body, within: box.paths }
 			if (remember && answer.ok && !answer.body.tooLarge)
 				void app.level.tell({ did: 'change', paths: box.paths, change: answer.body.range })
 		}
@@ -162,6 +162,12 @@ export function changeActions(app) {
 		'chg-pick': (el) => show(el.dataset.change).then(() => $('#chg-name')?.focus({ preventScroll: true })),
 		'chg-shift': (el) => shift(Number(el.dataset.by)),
 		'chg-step': (el) => openStep(Number(el.dataset.n), el.dataset.key),
+		'chg-explain-part'() {
+			const { range, within } = chg.partDiff
+			return app.send({
+				lens: { kind: 'change', want: 'story', change: `${range.base}..${range.head}`, part: chg.part, within },
+			})
+		},
 		'chg-story': (el) => openStory(el.dataset.key),
 		async 'chg-tab'(el) {
 			chg.tab = el.dataset.tab

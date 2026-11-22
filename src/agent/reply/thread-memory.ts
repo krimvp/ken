@@ -1,11 +1,19 @@
 // A chat keeps what the reader was told and where to look again. Its next question gets two short replies.
 // Older replies in this thread can be found by number or words through memory_known and memory_search, without
 // sending the model its old tool results, and so can the answers saved on earlier visits.
-import { quotesOf } from './check-card.ts'
+import { quotesOf, unverifiedSource } from './check-card.ts'
 import type { Item, Reply } from './reply.ts'
+import type { QuestionFocus } from './show-tool.ts'
 
 const KEPT_REPLIES = 40
-export type SavedAnswer = { id: string; askedAt: string; head: string | null; question: string; reply: Reply }
+export type SavedAnswer = {
+	id: string
+	askedAt: string
+	head: string | null
+	question: string
+	reply: Reply
+	focus?: QuestionFocus
+}
 type Excerpt = { question: string; answer: string; topics: string; sources: string; change?: string }
 type Exchange = Excerpt & { number: number }
 
@@ -41,10 +49,19 @@ function words(item: Item): string {
 	}
 }
 
-function contents(question: string, shown: Reply, readPaths: Iterable<string>): Excerpt {
+function contents(question: string, shown: Reply, readPaths: Iterable<string>, focus?: QuestionFocus): Excerpt {
 	const quoted = quotesOf(shown.items).map((quote) =>
 		quote.path ? `${quote.path}:${quote.startLine}@${quote.commit}` : quote.commit,
 	)
+	const source = focus && 'path' in focus ? `${focus.path}:${focus.start}-${focus.end}@${focus.commit}` : null
+	if (source && unverifiedSource(focus, shown.items)) {
+		return {
+			question,
+			answer: 'The reply had no checked source. Read the open lines before using it.',
+			topics: '',
+			sources: source,
+		}
+	}
 	return {
 		question,
 		answer: [
@@ -52,7 +69,7 @@ function contents(question: string, shown: Reply, readPaths: Iterable<string>): 
 			...shown.items.map(words),
 		].join(' '),
 		topics: shown.topics.join(', '),
-		sources: [...new Set([...quoted, ...readPaths])].join(', '),
+		sources: [...new Set([...(source ? [source] : []), ...quoted, ...readPaths])].join(', '),
 		...(shown.change && { change: `${shown.change.base}..${shown.change.head}` }),
 	}
 }
@@ -76,8 +93,8 @@ function matches(each: Excerpt, search: string | undefined): boolean {
 export function threadMemory(readSaved?: () => Promise<SavedAnswer[]>) {
 	const exchanges: Exchange[] = []
 	let number = 0
-	function keep(question: string, shown: Reply, readPaths: Set<string>) {
-		exchanges.push({ number: ++number, ...preview(contents(question, shown, readPaths)) })
+	function keep(question: string, shown: Reply, readPaths: Set<string>, focus?: QuestionFocus) {
+		exchanges.push({ number: ++number, ...preview(contents(question, shown, readPaths, focus)) })
 		if (exchanges.length > KEPT_REPLIES) exchanges.shift()
 	}
 	function recent(): string {
@@ -103,7 +120,7 @@ export function threadMemory(readSaved?: () => Promise<SavedAnswer[]>) {
 		for (let i = rows.length - 1; i >= 0 && found.length < 3; i--) {
 			const row = rows[i]
 			if (!row || (id && id !== row.id)) continue
-			const full = contents(row.reply.answers?.text ?? row.reply.view?.asked ?? row.question, row.reply, [])
+			const full = contents(row.reply.answers?.text ?? row.reply.view?.asked ?? row.question, row.reply, [], row.focus)
 			if (id || matches(full, lower)) {
 				const brief = id ? full : preview(full, lower)
 				found.push({ id: row.id, text: JSON.stringify({ id: row.id, askedAt: row.askedAt, head: row.head, ...brief }) })

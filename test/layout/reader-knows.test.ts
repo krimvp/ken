@@ -46,6 +46,19 @@ test('opening a group of files leaves each file new until its own brief is opene
 	assert.match(knows(await look(sources, group))['x.ts']?.why ?? '', /opened it once/)
 })
 
+test("saying a file is familiar and correcting it both leave its parent's standing alone", async () => {
+	const { root, hashes } = buildRepository([{ message: 'feat: start', files: START }])
+	const sources = await sourcesFor(root)
+	const [head = ''] = hashes
+	const file = ['src/a/x.ts']
+	await did(sources, 1, head, { did: 'said', paths: file })
+	assert.equal(knows(await look(sources)).a?.level, 'new')
+	await did(sources, 2, head, { did: 'said', paths: ['src/a'] })
+	await did(sources, 3, head, { did: 'set', paths: file, level: 'new' })
+	assert.equal(knows(await look(sources)).a?.level, 'said')
+	assert.equal(knows(await look(sources, ['src/a']))['x.ts']?.level, 'new')
+})
+
 test('a part the reader read counts the commits that touched it since, and a part they read that nobody touched or one they never opened counts none', async () => {
 	const { root, hashes } = buildRepository([{ message: 'feat: start', files: START }])
 	const sources = await sourcesFor(root)

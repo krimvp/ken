@@ -210,7 +210,7 @@ test("a job the model refused is tried again after a growing wait, with the mode
 	assert.deepEqual([started.length, shown()?.state.kind], [3, 'done'])
 })
 
-test('on an endpoint that serves one request at a time, KEN_PARALLEL above 1 fails a few runs, not every job', async () => {
+test('on an endpoint that serves one request at a time, KEN_PARALLEL above 1 fails a few runs, not every job', async (t) => {
 	const { ask, settle } = harness()
 	const finishing = new Map<string, () => void>()
 	let inFlight = 0
@@ -232,6 +232,7 @@ test('on an endpoint that serves one request at a time, KEN_PARALLEL above 1 fai
 		fresh: async () => false,
 		rankOf: () => 4,
 	})
+	t.after(() => busy.close())
 	for (const key of ['a', 'b', 'c', 'd', 'e']) busy.want(ask(key), 'ken')
 	await settle()
 	const states = () => busy.view().map((job) => `${job.key}:${job.state.kind}`)
