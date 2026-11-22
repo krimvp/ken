@@ -14,6 +14,7 @@ export {
 	type TourLevel,
 	topicQuestion,
 	tourQuestion,
+	viewQuestion,
 } from './lens-questions.ts'
 export {
 	type ChangeCommit,

@@ -41,6 +41,7 @@ const SENTENCES: Record<string, (args: Said) => string> = {
 		return `Read saved session ${code(args.text('session')?.slice(0, 8))}${part}`
 	},
 	search_sessions: (args) => `Searched the saved sessions for ${code(args.text('text'))}`,
+	remember: () => 'Kept a note on how you want things shown',
 	show: (args) => {
 		const cards = ['claims', 'decisions', 'risks', 'diagrams', 'topics'].reduce((n, list) => n + args.count(list), 0)
 		return cards === 0

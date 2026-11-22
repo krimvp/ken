@@ -7,9 +7,15 @@ import { fileRecordStore } from '../../src/record/index.ts'
 import { gitRepository } from '../../src/repo/index.ts'
 import { buildRepository } from '../fixtures/build-repository.ts'
 import { ask, call, json, openKen, readerHome } from '../fixtures/ken-server.ts'
-import { scriptedModel, type Turn } from '../fixtures/scripted-model.ts'
+import { type ChatRequest, scriptedModel, type Turn } from '../fixtures/scripted-model.ts'
 
 const names = (look: { boxes: { name: string }[] }) => look.boxes.map((box) => box.name)
+
+// What one question sent the model: the indexes ken starts it with, then the question.
+function prompt(request: ChatRequest | undefined): string {
+	const message = request?.messages.findLast((each) => each.role === 'user')
+	return typeof message?.content === 'string' ? message.content : JSON.stringify(message?.content)
+}
 
 // A commit made now. The fixture's own commits are dated in January 2026 and are the owner's.
 function commitNow(root: string, file: string, text: string, by = 'bo@example.com'): string {
@@ -175,4 +181,63 @@ test('a walk asked through the change lens is about that change though the model
 
 	const [row] = (await json(server, '/api/questions')).questions
 	assert.deepEqual([row.change, row.steps], [{ base, head }, 2])
+})
+
+test('a level the reader asks to see another way is stored with their own words when the model draws it again, and the layout then shows the new parts and those words', async () => {
+	const { root } = buildRepository([
+		{
+			message: 'feat: start',
+			files: {
+				'src/server/serve.ts': 'export const port = 80\n',
+				'src/agent/answer.ts': 'export function answer() {}\n',
+				'src/store/save.ts': 'export function save() {}\n',
+			},
+		},
+	])
+	const layout = {
+		within: ['src'],
+		parts: [
+			{ name: 'Front', job: 'serves and answers', paths: ['src/server', 'src/agent'] },
+			{ name: 'Store', job: 'saves', paths: ['src/store'] },
+		],
+	}
+	const model = await scriptedModel([{ tool: 'ken__show', text: 'Two parts now.', args: { layout } }, { text: '' }])
+	const server = await openKen(root, readerHome(), model.baseUrl)
+	const view = (text: string) => ({ lens: { kind: 'view', text, within: ['src'], name: null } })
+	assert.equal((await call(server, '/api/questions', view(' '))).status, 400, 'the reader said nothing')
+	assert.equal((await call(server, '/api/questions', view('x'.repeat(301)))).status, 400)
+
+	const words = 'fewer parts, by what runs together'
+	const lines = await ask(server, view(words))
+	assert.ok(lines[0].question.split('\n')[0].endsWith(words), "the question leads with the reader's words")
+	const { look } = await json(server, '/api/layout?within=src')
+	assert.deepEqual(names(look), ['Front', 'Store'])
+	assert.equal(look.named.asked, words)
+})
+
+test('a note the model keeps when the reader says how they want things shown is listed for the reader and starts each later question, until the reader removes it', async () => {
+	const { root } = buildRepository([{ message: 'feat: start', files: { 'src/a/x.ts': 'x\n', 'src/b/y.ts': 'y\n' } }])
+	const note = 'Explain with examples from the tests.'
+	const model = await scriptedModel([
+		{ tool: 'ken__remember', args: { note }, text: 'I will keep that.' },
+		{ text: 'From now on I explain with examples from the tests.' },
+		{ text: 'a holds x.' },
+		{ text: 'b holds y.' },
+	])
+	const server = await openKen(root, readerHome(), model.baseUrl)
+	assert.deepEqual((await json(server, '/api/notes')).notes, [])
+
+	await ask(server, { lens: { kind: 'view', text: 'explain with examples from the tests', within: [] } })
+	const { notes } = await json(server, '/api/notes')
+	assert.deepEqual(
+		notes.map((each: { text: string }) => each.text),
+		[note],
+	)
+	await ask(server, { question: 'What does a hold?' })
+	assert.ok(prompt(model.requests[2]).includes(note), 'the next question starts with the note')
+
+	const removed = await json(server, '/api/notes', { remove: notes[0].id })
+	assert.deepEqual(removed.notes, [])
+	await ask(server, { question: 'And b?' })
+	assert.ok(!prompt(model.requests[3]).includes(note), 'a removed note no longer starts a question')
 })

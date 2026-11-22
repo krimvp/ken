@@ -42,10 +42,12 @@ export type Gate = {
 // pending until their turn ends, so they follow that turn's words. held is the risks of a change that passed, waiting
 // for the second look. shown holds a hash of each card the reader has, so the same card twice shows once. step is
 // "risks" while the second look runs, and passRejections counts the revisions it refused. tour is the tour the
-// question asks for, whose stops the reader's map learns from the page as the reader reaches them.
+// question asks for, whose stops the reader's map learns from the page as the reader reaches them. view is the level
+// the reader asked to see another way, with their words, which ken keeps with a layout the reply shows for that level.
 export type Round = {
 	asked: boolean
 	tour: Tour | null
+	view: { within: string[]; text: string } | null
 	step: 'talk' | 'risks'
 	passRejections: number
 	scope: { range: Range; work: string | null; hunks: Promise<ChangedHunk[]> | null } | null
@@ -61,16 +63,19 @@ export type Round = {
 // it. note: ken writes by itself in live mode, which tells the reader's map nothing. tour: a tour of a named level,
 // which tells the map nothing either, since the page marks each stop as the reader reaches it. change: a question
 // about one change that plain code picked, so the reply is about that range whether or not the model sends a scope.
+// view: the reader asked, in the words of text, for another way to show the level whose paths are within.
 export type Asking =
 	| { kind: 'question' }
 	| { kind: 'note' }
 	| { kind: 'tour'; tour: Tour }
 	| { kind: 'change'; range: Range }
+	| { kind: 'view'; within: string[]; text: string }
 
 export function freshRound(as: Asking, emit: Round['emit']): Round {
 	return {
-		asked: as.kind === 'question' || as.kind === 'change',
+		asked: as.kind !== 'note' && as.kind !== 'tour',
 		tour: as.kind === 'tour' ? as.tour : null,
+		view: as.kind === 'view' ? { within: as.within, text: as.text } : null,
 		step: 'talk',
 		passRejections: 0,
 		scope: as.kind === 'change' ? { range: as.range, work: null, hunks: null } : null,
@@ -164,6 +169,10 @@ export function showTool(gate: Gate, round: () => Round): Tool {
 					continue
 				}
 				const { card } = checked
+				// The reader's own words go with the picture they asked for. Plain code sets them: the model has no field.
+				if (card.kind === 'layout' && current.view?.within.join('\n') === card.layout.within.join('\n')) {
+					card.layout.asked = current.view.text
+				}
 				const id = createHash('sha256').update(JSON.stringify(card)).digest('hex')
 				if (current.shown.has(id)) {
 					lines.push(`${where} was shown already.`)

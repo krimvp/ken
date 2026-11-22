@@ -50,7 +50,7 @@ export async function openServer(options: {
 	const opened = await openProject(options)
 	if (opened.kind !== 'ok') return opened
 	const { project } = opened
-	const { root, shown, repo, history, record, map, layout, model, desk, live } = project
+	const { root, shown, repo, history, record, map, readerNotes, layout, model, desk, live } = project
 	if (options.live && !live) {
 		await project.close()
 		return {
@@ -120,6 +120,15 @@ export async function openServer(options: {
 			if (signal.kind !== 'ok') return sendJson(response, 400, { message: signal.problem })
 			const states = await map.learn(signal.signal, signal.topics, new Date())
 			return sendJson(response, 200, { states })
+		}
+		if (where === 'GET /api/notes') return sendJson(response, 200, { notes: await readerNotes.read() })
+		if (where === 'POST /api/notes') {
+			const body = await readJson(request)
+			const id = body.kind === 'ok' ? fieldOf(body.value, 'remove') : undefined
+			if (typeof id !== 'string') {
+				return sendJson(response, 400, { message: 'Send remove: the id of the note to remove.' })
+			}
+			return sendJson(response, 200, { notes: await readerNotes.remove(id, new Date()) })
 		}
 		if (where === 'GET /api/open') return sendJson(response, 200, await openNow())
 		if (where === 'GET /api/layout') {

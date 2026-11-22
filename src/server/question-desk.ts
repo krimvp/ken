@@ -10,6 +10,7 @@ import {
 	rangeLens,
 	topicQuestion,
 	tourQuestion,
+	viewQuestion,
 } from '../follow-up/index.ts'
 import { entryFrom, type History, type HistoryEntry, whyNoNote } from '../history/index.ts'
 import { type Change, type LayoutSources, lookAtLayout, readLayoutAsk } from '../layout/index.ts'
@@ -253,10 +254,28 @@ export function questionDesk(
 		return { record: read, states, lastQuestion: asked.at(-1) }
 	}
 
+	// The level a parts or view lens names, as the reader sees it. The model draws parts at HEAD, so the starting point
+	// is the level at HEAD whatever commit the page shows.
+	async function levelOf(lens: unknown) {
+		const within = fieldOf(lens, 'within')
+		const ask = await readLayoutAsk(layout, { within: Array.isArray(within) ? within.map(String) : [] })
+		if (ask.kind !== 'ok') return { kind: 'refused' as const, problem: ask.message }
+		const look = await lookAtLayout(layout, ask.ask, new Date())
+		const name = fieldOf(lens, 'name')
+		const level = {
+			...look,
+			name: typeof name === 'string' && name.trim() !== '' ? name.trim().slice(0, 80) : null,
+			within: ask.ask.within,
+			bounds: LAYOUT_BOUNDS,
+		}
+		return { kind: 'ok' as const, level }
+	}
+
 	// The page sends a question, or a lens for ken to write the question from: catch up, an area, "Go deeper" on the
 	// topics of an answer, which also tells the map the reader needs more on them, a person, a time range, "Explain
-	// what changed" on a topic of the open list, or one change. "empty" is a lens whose list holds nothing to explain.
-	// as is there when the question is asked in a way of its own: a tour, or a change plain code picked.
+	// what changed" on a topic of the open list, one change, or another way to show a level. "empty" is a lens whose
+	// list holds nothing to explain. as is there when the question is asked in a way of its own: a tour, a change plain
+	// code picked, or a level to show another way.
 	async function questionOf(
 		body: unknown,
 	): Promise<{ kind: 'ok' | 'empty'; text: string; as?: Asking } | { kind: 'refused'; problem: string }> {
@@ -305,20 +324,21 @@ export function questionDesk(
 			return { kind: 'ok', text: deeperOnNote(note.about, note.askedAt, said, commits) }
 		}
 		if (kind === 'parts') {
-			const within = fieldOf(lens, 'within')
-			const paths = Array.isArray(within) ? within.map(String) : []
-			// The model names parts at HEAD, so the starting point is the level at HEAD whatever commit the page shows.
-			const ask = await readLayoutAsk(layout, { within: paths })
-			if (ask.kind !== 'ok') return { kind: 'refused', problem: ask.message }
-			const look = await lookAtLayout(layout, ask.ask, new Date())
-			const name = fieldOf(lens, 'name')
-			const level = {
-				...look,
-				name: typeof name === 'string' && name.trim() !== '' ? name.trim().slice(0, 80) : null,
-				within: ask.ask.within,
-				bounds: LAYOUT_BOUNDS,
+			const read = await levelOf(lens)
+			return read.kind === 'ok' ? { kind: 'ok', text: partsQuestion(read.level).text } : read
+		}
+		if (kind === 'view') {
+			const said = fieldOf(lens, 'text')
+			// The reader's words head the question, so they stay on one line.
+			const text = typeof said === 'string' ? said.replaceAll(/\s+/g, ' ').trim() : ''
+			if (text === '' || text.length > LAYOUT_BOUNDS.asked) {
+				const problem = `Say how ken should show it, in 1 to ${LAYOUT_BOUNDS.asked} characters.`
+				return { kind: 'refused', problem }
 			}
-			return { kind: 'ok', text: partsQuestion(level).text }
+			const read = await levelOf(lens)
+			if (read.kind !== 'ok') return read
+			const { level } = read
+			return { kind: 'ok', text: viewQuestion(level, text).text, as: { kind: 'view', within: level.within, text } }
 		}
 		if (kind === 'tour') {
 			const within = fieldOf(lens, 'within')
@@ -370,7 +390,7 @@ export function questionDesk(
 			return {
 				kind: 'refused',
 				problem:
-					'Send a question, or a lens: catch-up, area with a path, change, deeper, parts, person, range, topic, tour or note.',
+					'Send a question, or a lens: catch-up, area with a path, change, deeper, parts, person, range, topic, tour, view or note.',
 			}
 		}
 		await map.learn('deeper', names, new Date())

@@ -4,7 +4,7 @@ import { appendFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { after, test } from 'node:test'
-import { openMap, type TopicState } from '../../src/map/index.ts'
+import { openMap, openNotes, type TopicState } from '../../src/map/index.ts'
 import { type EntryDraft, fileRecordStore } from '../../src/record/index.ts'
 import { gitRepository } from '../../src/repo/index.ts'
 import { buildRepository } from '../fixtures/build-repository.ts'
@@ -140,4 +140,31 @@ test('a line a person changed by hand counts, a line that does not parse is skip
 		['heard-of', 'forgot'],
 		'"I do not know this any more" drops the understanding and the depth',
 	)
+})
+
+test('ken keeps a reader note once whatever its case and spaces, reads the newest twelve oldest first, drops one the reader removed, and skips a line that does not parse', async () => {
+	const { home, repo } = setUp()
+	const opened = await openNotes(home, repo)
+	if (opened.kind !== 'ok') assert.fail('the repository has commits')
+	const { notes } = opened
+	const texts = async () => (await notes.read()).map((note) => note.text)
+
+	await notes.add('Explain with examples.', NOW)
+	await notes.add('  explain   with EXAMPLES. ', NOW)
+	assert.deepEqual(await texts(), ['Explain with examples.'])
+	assert.equal((await notes.add('two\nlines', NOW)).kind, 'refused')
+	assert.equal((await notes.add('x'.repeat(201), NOW)).kind, 'refused')
+
+	appendFileSync(notes.file, 'not json\n{"id":"by-hand","text":"I know git well.","at":"2026-11-16T10:00:00Z"}\n')
+	assert.deepEqual(await texts(), ['Explain with examples.', 'I know git well.'], 'a person may add a line')
+	const [first] = await notes.read()
+	const left = await notes.remove(first?.id ?? '', NOW)
+	assert.deepEqual(
+		left.map((note) => note.text),
+		['I know git well.'],
+	)
+
+	for (let n = 1; n <= 13; n++) await notes.add(`Note ${n}.`, NOW)
+	const read = await texts()
+	assert.deepEqual([read.length, read[0], read.at(-1)], [12, 'Note 2.', 'Note 13.'])
 })
