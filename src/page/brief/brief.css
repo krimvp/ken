@@ -804,7 +804,7 @@ li.k-row.is-open .k-row-main {
 
 @media (max-width: 760px) {
 	.k-brief {
-		bottom: var(--k-foot);
+		width: 100%;
 		border-left: 0;
 	}
 

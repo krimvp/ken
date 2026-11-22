@@ -92,6 +92,11 @@ export function endedHtml(q, t) {
 	}
 	const said = {
 		stopped: ['You stopped this question', ''],
+		partial: [
+			'Some parts still need a brief',
+			`Still to cover: ${(q.reply?.missingParts ?? []).map(esc).join(', ')}. Ask again to cover them.`,
+		],
+		incomplete: ['The brief is incomplete', "ken's model did not give a point it could check against the code."],
 		'no-answer': ["ken's model stopped without a reply", 'It read the project but wrote nothing back.'],
 		'out-of-turns': [
 			"ken's model ran out of turns",

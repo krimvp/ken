@@ -19,6 +19,8 @@ const TRUST = "ken's model wrote the words. ken found each changed line in git."
 
 export const freshChanges = () => ({
 	tab: 'changes',
+	part: null,
+	partDiff: null,
 	// The span the reader is dragging across the timeline, { from, to } as days, or null.
 	drag: null,
 	// What the reader typed in "Another change" and has not sent.
@@ -34,26 +36,61 @@ export function changeActions(app) {
 	const page = $('#pg-changes')
 	const loads = () => app.level.loads
 
-	async function show(change) {
+	let readingPart = 0
+	async function readPart(name, change, remember, mine) {
+		let look = state.shell.top?.look
+		if (!look) {
+			const top = await app.read('/api/layout?change=none').catch(() => null)
+			if (mine !== readingPart || state.shell.page !== 'changes') return
+			look = top?.body.look
+		}
+		const box = look?.boxes.find((each) => each.name === name)
+		if (!box) {
+			chg.partDiff = { message: 'ken could not find this part in the project.' }
+		} else {
+			const query = new URLSearchParams({ change })
+			for (const path of box.paths) query.append('within', path)
+			const answer = await app
+				.read(`/api/change/diff?${query}`)
+				.catch((error) => ({ ok: false, body: { message: error.message } }))
+			if (mine !== readingPart || chg.part !== name || state.shell.page !== 'changes') return
+			chg.partDiff = answer.body
+			if (remember && answer.ok && !answer.body.tooLarge)
+				void app.level.tell({ did: 'change', paths: box.paths, change: answer.body.range })
+		}
+		render()
+	}
+
+	async function show(change, part = null, remember = false) {
+		const mine = ++readingPart
+		chg.part = part
+		chg.partDiff = null
 		const home = state.home
 		Object.assign(home, { trail: [WHOLE], change, at: '', selected: null, shown: null, wayIn: 'review' })
 		chg.drag = null
-		await loads().loadLayout()
+		if (part) {
+			render()
+			return readPart(part, change, remember, mine)
+		}
+		if (!(await loads().loadLayout()) || chg.part !== part || state.shell.page !== 'changes') return
 		await loads().settle()
 		render()
 	}
 
 	// The span the page opens on: since the reader last looked when anything landed since, else the first span ken
 	// offers.
-	async function enter(change = null) {
+	async function enter(change = null, remember = false) {
+		const part = chg.part
 		const home = state.home
+		if (change && part && chg.tab === 'changes') return show(change, part, remember)
 		if (!state.shell.timeline || home.changes.length === 0) await app.reread()
 		if (chg.tab !== 'changes') await app.older.load(chg.tab)
-		if (change) return show(change)
+		if (state.shell.page !== 'changes' || chg.part !== part) return
+		if (change) return show(change, part, remember)
 		const kept = home.trail.length === 1 && home.change !== 'none' && home.look?.change
-		if (kept) return show(home.change)
+		if (kept) return show(home.change, part, remember)
 		const first = spanChoices(state.shell.top?.changes ?? home.changes)[0]
-		await show(first?.change ?? 'since:7d')
+		await show(first?.change ?? 'since:7d', part, remember)
 	}
 
 	function draw(env) {
@@ -120,6 +157,8 @@ export function changeActions(app) {
 	}
 
 	const actions = {
+		'chg-part': (el) =>
+			show(state.home.change, el.dataset.name ?? null, true).then(() => $('#chg-name')?.focus({ preventScroll: true })),
 		'chg-pick': (el) => show(el.dataset.change).then(() => $('#chg-name')?.focus({ preventScroll: true })),
 		'chg-shift': (el) => shift(Number(el.dataset.by)),
 		'chg-step': (el) => openStep(Number(el.dataset.n), el.dataset.key),

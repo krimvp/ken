@@ -84,11 +84,11 @@ export function jobsLineHtml(jobs) {
 		? [count(running.length + waiting, 'run left', 'runs left'), seconds ? aboutTime(seconds) : ''].filter(Boolean)
 		: []
 	const label = rest.length > 0 ? `${now} ${rest.join(', ')}.` : now
-	const line = `<button class="k-jobs-line${busy ? '' : ' is-done'}" data-act="jobs-open" data-key="jobs-open" title="${esc(label)}" aria-label="${esc(label)}" aria-expanded="${jobs.open}" aria-controls="jobs-list"><span class="k-jobs-dot" aria-hidden="true"></span><span class="k-jobs-now" data-fit="${esc(now)}">${esc(now)}</span>${rest.length > 0 ? `<span class="k-jobs-wait k-num" data-fit="${rest.join(', ')}">${rest.join(', ')}</span>` : ''}</button>`
+	const line = `<button class="k-jobs-line${busy ? '' : ' is-done'}" data-act="jobs-open" data-key="jobs-open" title="${esc(label)}" aria-label="Queue: ${esc(label)}" aria-expanded="${jobs.open}" aria-controls="jobs-list"><span class="k-jobs-dot" aria-hidden="true"></span><span class="k-jobs-short">Queue</span><span class="k-jobs-now" data-fit="${esc(now)}">${esc(now)}</span>${rest.length > 0 ? `<span class="k-jobs-wait k-num" data-fit="${rest.join(', ')}">${rest.join(', ')}</span>` : ''}</button>`
 	if (!jobs.open) return line
 	const row = (job) => {
 		const stop = live(job)
-			? `<button class="k-link" data-act="job-stop" data-job="${esc(job.key)}" data-key="job-stop-${esc(job.key)}">Stop</button>`
+			? `<button class="k-link" data-act="job-stop" aria-label="Stop: ${esc(sentenceOf(job))}" data-job="${esc(job.key)}" data-key="job-stop-${esc(job.key)}">Stop</button>`
 			: ''
 		const by = job.by === 'reader' ? '<span class="k-job-by">You asked</span>' : ''
 		return `<li class="k-job is-${job.state.kind}"><span class="k-job-title">${prose(sentenceOf(job))}</span>${by}<span class="k-job-state">${stateHtml(job)}</span>${stop}</li>`
@@ -116,6 +116,8 @@ export function jobsActions(app, made) {
 
 	function take({ jobs, left }) {
 		const before = new Map(state.jobs.list.map((job) => [job.key, job.state.kind]))
+		const focused = document.activeElement
+		const inQueue = focused?.closest('#jobs')
 		state.jobs.list = jobs
 		state.jobs.left = left ?? null
 		const ended = jobs.filter(
@@ -123,6 +125,9 @@ export function jobsActions(app, made) {
 		)
 		if (ended.length > 0) void made(ended)
 		render()
+		if (inQueue && document.activeElement === document.body) {
+			;(document.querySelector('[data-key="jobs-open"]') ?? document.querySelector('#search-text')).focus()
+		}
 	}
 
 	// Reads the stream for as long as the page is open, and again a moment after the server goes away.

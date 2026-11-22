@@ -26,6 +26,7 @@ export type Reply = {
 	// Every topic a card names, and on a tour the topic of each stop. The reader's map buttons act on these.
 	topics: string[]
 	tour?: Tour
+	missingParts?: string[]
 	view?: { within: string[]; asked: string }
 	want?: Want
 	answers?: { concept: string; text: string }
@@ -51,6 +52,24 @@ export type Item =
 	| { kind: 'words'; text: string }
 	| { kind: 'card'; card: Card; step?: number }
 	| { kind: 'step'; number: number; text: string; questions?: string[] }
+
+// A brief needs a numbered step and a checked point. Older tours kept a checked claim with the step instead.
+export function checkedBriefs(items: Item[]): Set<number> {
+	const numbers = new Set<number>()
+	for (const item of items) {
+		if (item.kind !== 'card' || item.card.kind !== 'claim' || item.step === undefined) continue
+		const heading = items.find((other) => other.kind === 'step' && other.number === item.step)
+		if (heading?.kind === 'step' && (item.card.claim.point || !heading.questions)) numbers.add(item.step)
+	}
+	return numbers
+}
+
+export function briefCoverage(items: Item[], wanted: string[]) {
+	const numbers = checkedBriefs(items)
+	const missing = wanted.filter((_, at) => !numbers.has(at + 1))
+	const outcome = missing.length === 0 ? 'answered' : missing.length === wanted.length ? 'incomplete' : 'partial'
+	return { outcome, missing } as const
+}
 
 // Every kind of card, listed once. The page has a renderer for each, and a test holds it to this list.
 export const CARD_KINDS = ['claim', 'risk', 'decision', 'diagram', 'layout', 'topic', 'withdrawn'] as const

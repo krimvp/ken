@@ -160,3 +160,46 @@ test("a question the reader asks in their own words is listed under the concept 
 	assert.deepEqual((await briefOf('part::Core', later)).staleFiles, [file])
 	assert.equal((await briefOf(written.id, later)).staleFiles, undefined, 'another answer still matches the code')
 })
+
+test('a proposed tool call cannot answer a scoped question or complete its job', async () => {
+	const proposed = '```json\n{"name":"ken__read_file","arguments":{"path":"src/core/run.ts"}}\n```'
+	const provider = await scriptedModel([
+		{ text: proposed },
+		{ text: proposed },
+		{ text: proposed },
+		...brief('The code does not decide the delivery date.', {
+			points: [point('The store throws when full.', 'src/store/db.ts', '\tthrow new Error("full")')],
+		}),
+	])
+	const fresh = await openKen(root, readerHome(), provider.baseUrl)
+	const lens = { kind: 'answer', concept: 'part::Core', text: 'When does it deliver?', typed: true }
+	const first = await ask(fresh, { lens })
+	const failed = first.find((line) => line.kind === 'saved').view
+	assert.equal(failed.entry.outcome, 'incomplete')
+	assert.equal(failed.brief, null)
+	assert.deepEqual(failed.entry.retry, lens)
+	assert.equal(provider.requests.length, 2, 'one repair attempt')
+	assert.ok(!first.some((line) => line.kind === 'replied' || line.kind === 'item' || line.kind === 'text'))
+	const jobs = await json(fresh, '/api/jobs', { looking: { brief: null, within: null } })
+	assert.equal(jobs.jobs[0].state.kind, 'failed')
+	const again = await ask(fresh, { lens: failed.entry.retry })
+	assert.equal(again.at(-1).view.entry.outcome, 'answered')
+	assert.equal(again.at(-1).view.entry.reply.items[0].text, 'The code does not decide the delivery date.')
+	assert.equal(provider.requests.length, 4)
+})
+
+test('correcting a brief replaces a heading whose only quote failed', async () => {
+	const model = await scriptedModel([
+		...brief('Delivery takes two days.', {
+			points: [point('It takes two days.', 'src/store/db.ts', 'return 2')],
+		}),
+		...brief('The code leaves delivery open.', {
+			points: [point('The store throws when full.', 'src/store/db.ts', '\tthrow new Error("full")')],
+		}),
+	])
+	const fresh = await openKen(root, readerHome(), model.baseUrl)
+	const lines = await ask(fresh, { lens: { kind: 'answer', concept: 'part::Core', text: 'When does it deliver?' } })
+	const headings = lines.flatMap((line) => (line.item?.kind === 'step' ? [line.item.text] : []))
+	assert.deepEqual(headings, ['The code leaves delivery open.'])
+	assert.equal(lines.at(-1).view.entry.reply.items[0].text, headings[0])
+})

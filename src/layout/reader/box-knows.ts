@@ -89,11 +89,16 @@ const FROM_MAP: Record<MapEvidence, Kind> = {
 	forgot: 'unlearned',
 }
 
-// A line counts for a box when one of its paths is the box's path or inside it. So a line on one file counts for the
-// part that holds the file, and a line on a whole part does not count for the boxes inside that part. states are the
-// map's topics that sit in the box.
+// An open belongs to the exact group the reader chose. Reading or correcting that group does not mark each of its
+// files, while looking at a file's code or change counts for the part that holds it.
 export function looksAt(paths: string[], lines: SeenLine[], states: TopicState[]): Looks {
-	const counted = lines.filter((line) => line.paths.some((file) => paths.some((place) => under(file, place))))
+	const counted = lines.filter((line) => {
+		if (line.did === 'opened')
+			return line.paths.length === paths.length && line.paths.every((file) => paths.includes(file))
+		const inside = (file: string) => paths.some((place) => under(file, place))
+		// Code and change events name individual files. The other events describe the whole group the reader saw.
+		return line.did === 'code' || line.did === 'change' ? line.paths.some(inside) : line.paths.every(inside)
+	})
 	const looked: Evidence[] = counted.map((line) =>
 		line.did === 'set' ? { kind: 'set', level: line.level, at: line.at } : { kind: line.did, at: line.at },
 	)

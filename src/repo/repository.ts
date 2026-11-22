@@ -87,6 +87,7 @@ export interface Repository {
 		range: Range,
 		limit: number,
 		signal?: AbortSignal,
+		within?: string[],
 	): Promise<
 		{ kind: 'ok'; commits: Omit<Commit, 'paths'>[]; more: number; merges: number; oldest: string | null } | TooLarge
 	>
@@ -109,7 +110,7 @@ export interface Repository {
 	// The newest commit on head's main line that git committed at or before the moment, an ISO date. Null when every
 	// commit is newer. The commit date, not the author date, so a commit rebased onto the line counts from when it landed.
 	before(head: CommitHash, moment: string, signal?: AbortSignal): Promise<CommitHash | null>
-	diff(range: Range, signal?: AbortSignal): Promise<{ kind: 'ok'; files: FileDiff[] } | TooLarge>
+	diff(range: Range, signal?: AbortSignal, within?: string[]): Promise<{ kind: 'ok'; files: FileDiff[] } | TooLarge>
 	// The branch HEAD is on, or null when HEAD is detached.
 	branch(signal?: AbortSignal): Promise<string | null>
 	// The project's local branches, the one with the newest commit first.

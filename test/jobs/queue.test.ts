@@ -296,3 +296,56 @@ test('no job starts while a running job makes one of the same things, as two bri
 	await finish('every')
 	assert.deepEqual(started, ['every', 'store', 'core'])
 })
+
+test('ken can renew a completed brief after its code changes and keeps a stopped brief stopped', async () => {
+	const { queue, ask, finish, settle, started } = harness()
+	const asks = [ask('brief'), ask('paused')]
+	queue.wantAll(asks, 'first commit')
+	queue.stop('paused', 'stop')
+	await settle()
+	await finish('brief')
+	queue.wantAll(asks, 'first commit')
+	await settle()
+	assert.deepEqual(started, ['brief'])
+	queue.wantAll(asks, 'next commit')
+	await settle()
+	assert.deepEqual(started, ['brief', 'brief'])
+	await finish('brief')
+})
+
+test('closing ken finishes a background job that was giving way to the reader', { timeout: 1000 }, async () => {
+	const { queue, ask, settle } = harness()
+	queue.want(ask('background'), 'ken')
+	await settle()
+	queue.want(ask('reader'), 'reader')
+	await queue.close()
+	assert.ok(queue.view().every((job) => job.state.kind === 'failed'))
+})
+
+test('closing one of two tabs following a brief leaves the other one reading the same run', async () => {
+	const { queue, ask, started, settle, finish } = harness()
+	queue.want(ask('brief'), 'reader')
+	const tab = new AbortController()
+	const left = queue.follow('brief', () => {}, tab.signal)
+	queue.want(ask('brief'), 'reader')
+	const heard: string[] = []
+	const stayed = queue.follow('brief', (line) => heard.push(line))
+	tab.abort()
+	assert.equal(await left, null)
+	await settle()
+	await finish('brief')
+	assert.deepEqual(await stayed, { kind: 'done', skipped: false })
+	assert.deepEqual(started, ['brief'])
+	assert.deepEqual(heard, ['brief said'])
+})
+
+test('two waiting readers can take two busy background slots', async () => {
+	const { queue, ask, started, finish, settle } = harness({ parallel: 2 })
+	queue.wantAll([ask('parts'), ask('process')])
+	await settle()
+	queue.want(ask('first question'), 'reader')
+	queue.want(ask('second question'), 'reader')
+	await settle()
+	assert.deepEqual(started, ['parts', 'process', 'first question', 'second question'])
+	for (const key of ['first question', 'second question', 'parts', 'process']) await finish(key)
+})

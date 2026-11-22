@@ -148,8 +148,10 @@ export function questionDesk(
 				if (line.kind === 'tool') acted()
 				say(line)
 			}
-			const ran = await run(chat, asked.text, signal, sent, asked.as)
+			const { ran, entry } = await run(chat, asked.text, signal, sent, asked.as)
 			if (ran.kind === 'model-error') return ran
+			if (entry?.outcome === 'partial') throw new Error("ken's model explained only some parts.")
+			if (entry?.outcome === 'incomplete') throw new Error("ken's model did not give a brief with a checked point.")
 			// A run can end without making its thing, such as a brief whose every point was sent back.
 			if (work.layer !== null && !signal.aborted && !(await plan.fresh(job.key))) {
 				throw new Error("ken's model ran, but made nothing that passed ken's checks.")
@@ -157,8 +159,8 @@ export function questionDesk(
 			return RAN
 		},
 		fresh: async ({ key, work }) => work.kind === 'ask' && work.layer !== null && (await plan.fresh(key)),
-		rankOf: ({ key, concept, work }) =>
-			work.kind === 'ask' && work.layer !== null ? plan.rankOf({ key, layer: work.layer, concept }) : 2,
+		rankOf: ({ key, kind, concept, work }) =>
+			work.kind === 'ask' && work.layer !== null ? plan.rankOf({ key, layer: work.layer, concept, kind }) : 2,
 		ended: () => void refill(),
 	})
 
@@ -169,6 +171,7 @@ export function questionDesk(
 		if (!jobs.background || !chats || closed) return filling
 		filling = filling
 			.then(async () => {
+				const head = await headNow()
 				const missing = await plan.missing(new Date())
 				queue.wantAll(
 					missing.map((job) => {
@@ -183,6 +186,7 @@ export function questionDesk(
 						const holds = job.kind === 'explain' && job.concept ? [job.concept] : []
 						return { ...job, yields: job.kind !== 'parts', holds, work }
 					}),
+					head ?? '',
 				)
 			})
 			.catch((error: unknown) => {
@@ -225,16 +229,17 @@ export function questionDesk(
 		const job = queue.want(ask, 'reader')
 		if (!job) return send({ kind: 'error', message: 'ken is closing.' })
 		if (job.state.kind === 'waiting') send({ kind: 'waiting' })
-		const leave = () => queue.stop(key, 'unfollow')
-		if (stop.aborted) return leave()
-		stop.addEventListener('abort', leave)
-		let erred = false
-		const ended = await queue.follow(key, (line) => {
-			if (line.kind === 'error') erred = true
-			send(line)
-		})
-		stop.removeEventListener('abort', leave)
-		if (ended?.kind === 'failed' && !stop.aborted && !erred) send({ kind: 'error', message: ended.why })
+		// A run that said its error, or saved what it made, has told the reader already.
+		let told = false
+		const ended = await queue.follow(
+			key,
+			(line) => {
+				if (line.kind === 'saved' || line.kind === 'error') told = true
+				send(line)
+			},
+			stop,
+		)
+		if (ended?.kind === 'failed' && !told && !stop.aborted) send({ kind: 'error', message: ended.why })
 	}
 
 	async function run(
@@ -243,7 +248,7 @@ export function questionDesk(
 		stop: AbortSignal,
 		send: (line: QuestionLine) => void,
 		as?: Asking,
-	): Promise<Ran> {
+	): Promise<{ ran: Ran; entry: HistoryEntry | null }> {
 		const asked = {
 			id: randomUUID(),
 			question,
@@ -261,15 +266,26 @@ export function questionDesk(
 			} else send(event)
 		}
 		// A job that gave way to the reader runs again from the start, so this run leaves nothing in the history.
-		if (gaveWay(stop)) return RAN
+		if (gaveWay(stop)) return { ran: RAN, entry: null }
 		const entry = entryFrom(asked, events, stop.aborted)
+		if (entry.outcome === 'incomplete' || entry.outcome === 'partial') {
+			if (as?.kind === 'answer')
+				entry.retry = { kind: 'answer', concept: as.concept, text: as.text, typed: as.typed === true }
+			if (as?.kind === 'explain')
+				entry.retry = {
+					kind: 'explain',
+					within: as.tour.within,
+					part: as.tour.stops.length === 1 ? (as.tour.stops[0]?.name ?? null) : null,
+				}
+		}
 		// The reader's list of questions holds what they asked and what ken made; the jobs list says why ken's failed.
 		if (entry.outcome === 'answered' || chat !== chats?.ken) {
 			await history.add(entry)
 			send({ kind: 'saved', view: await viewOf(entry) })
 		}
 		const last = events.at(-1)
-		return last?.kind === 'error' && last.model ? { kind: 'model-error', why: last.message } : RAN
+		const ran: Ran = last?.kind === 'error' && last.model ? { kind: 'model-error', why: last.message } : RAN
+		return { ran, entry }
 	}
 
 	// A note ken writes by itself in live mode, saved in the history with what it is about. null when live mode was
@@ -356,7 +372,7 @@ export function questionDesk(
 
 	async function viewOf(entry: HistoryEntry): Promise<QuestionView> {
 		const head = await headNow()
-		if (entry.outcome !== 'answered') {
+		if (!('reply' in entry)) {
 			return { entry, head, topics: [], noNote: entry.about ? whyNoNote(entry) : null, brief: null }
 		}
 		const shown = { ...entry, reply: drawnReply(entry.reply) }
@@ -378,7 +394,7 @@ export function questionDesk(
 			asked.map(async (entry) => {
 				const { id, question, askedAt, thread, outcome } = entry
 				const row = { id, question, askedAt, thread, outcome }
-				if (entry.outcome !== 'answered') {
+				if (!('reply' in entry)) {
 					const none = { hunks: null, tour: null, change: null, want: null, steps: 0, view: null, brief: null }
 					return { ...row, cards: 0, calls: 0, risks: 0, ...none }
 				}

@@ -2,6 +2,7 @@
 // what ken's model is doing about it and how long that takes; and, once the model has named the parts, its one line
 // on the project, its parts and the main process, in the same place. For a reader who has been here before it is
 // smaller: the quote shorter, fewer facts, and the model's line with the main process in place of the parts.
+import { partId } from '../brief/concept-id.js'
 import { jobLineHtml, live } from '../jobs/jobs.js'
 import { partClass } from '../project/part-colours.js'
 import { icon } from '../shell/icons.js'
@@ -51,15 +52,21 @@ function languagesHtml(languages, most) {
 
 function entriesHtml(entries, most) {
 	if (entries.length === 0) return ''
+	const entryFile = (each) => {
+		const label = `<code>${esc(each.runs)}</code>`
+		if (!each.source || /[:,]/.test(each.source)) return label
+		const id = partId([each.source], each.source.split('/').at(-1))
+		return `<button class="k-link" data-act="brief-open" data-key="entry-${esc(each.source)}" data-concept="${esc(id)}">${label}</button>`
+	}
 	const said = (each) =>
 		each.kind === 'script'
 			? `<code>npm run ${esc(each.name)}</code>`
 			: each.kind === 'main'
-				? `<code>${esc(each.runs)}</code> is what other code loads`
+				? `${entryFile(each)} is the library entry`
 				: `<code>${esc(each.name)}</code> runs <code>${esc(each.runs)}</code>`
 	const shown = entries.slice(0, most).map((each) => `<li>${said(each)}</li>`)
 	const more = entries.length > most ? `<li class="k-muted">and ${entries.length - most} more</li>` : ''
-	return `<div><dt>Started by</dt><dd><ul class="k-first-list">${shown.join('')}${more}</ul></dd></div>`
+	return `<div><dt>Commands and entry points</dt><dd><ul class="k-first-list">${shown.join('')}${more}</ul></dd></div>`
 }
 
 function factsHtml(first, small) {

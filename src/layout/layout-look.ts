@@ -17,6 +17,7 @@ import { type BoxMap, type BoxTopic, boxMap, markOf, type Next, nextOf, topicsIn
 import { sinceLooked } from './reader/since-looked.ts'
 import { toReview } from './reader/to-review.ts'
 import { type TourStop, tourOrder } from './tour-order.ts'
+import { type ChangedViewItem, changedViewItems } from './view-changes.ts'
 
 // The paths a level shows the inside of, sorted. The empty list is the whole project.
 export type Scope = RepoPath[]
@@ -102,6 +103,7 @@ export type LookViews = {
 	world: (NonNullable<StoredViews['world']> & { project: { line: string | null } }) | null
 	runtime: StoredViews['runtime']
 	drawn: string | null
+	stale?: ChangedViewItem[]
 }
 
 const NO_VIEWS: LookViews = { world: null, runtime: null, drawn: null }
@@ -173,7 +175,7 @@ export async function lookAtLayout(
 		const within = versionsOf(read.entries, box.paths.toSorted())
 		return {
 			...box,
-			opens: box.files > 1,
+			opens: level.named ? box.files > 1 : box.files > 0 && !box.file,
 			inside: within.length > 0 ? newest(within).parts.length : null,
 			touched: diff && touchedIn(box.paths, diff),
 			topics: marks,
@@ -241,7 +243,7 @@ async function landedIn(
 	signal?: AbortSignal,
 ): Promise<LandedSize | null> {
 	const base = await repo.resolve(lookedAt, signal)
-	const diff = base.kind === 'ok' ? await repo.diff({ base: base.commit, head }, signal) : null
+	const diff = base.kind === 'ok' ? await repo.diff({ base: base.commit, head }, signal, paths) : null
 	const touched = diff?.kind === 'ok' ? touchedIn(paths, diff.files) : null
 	return touched && { files: touched.files, added: touched.added, removed: touched.removed }
 }
@@ -314,13 +316,14 @@ async function namedLevel(
 			flows: chosen.flows ?? [],
 		},
 		boxes,
-		arrows: chosen.arrows.map((arrow) => ({ ...arrow, text: fromStart(arrow.text), stale: changed.has(arrow.from) })),
+		arrows: chosen.arrows.map((arrow) => ({ ...arrow, text: fromStart(arrow), stale: changed.has(arrow.from) })),
 		loose,
 		views: chosen.views
 			? {
 					world: chosen.views.world && { project: { line: chosen.about ?? null }, ...chosen.views.world },
 					runtime: chosen.views.runtime,
 					drawn: chosen.at.slice(0, 10),
+					stale: await changedViewItems(repo, chosen.id, chosen.views, ask.at, signal),
 				}
 			: NO_VIEWS,
 	}
@@ -357,7 +360,16 @@ async function folderLevel(repo: Repository, ask: LayoutAsk, head: CommitHash, s
 
 // An arrow starts at the part whose lines name the other, and the page reads it as "start, verb, end". A verb saved the
 // other way round, such as "is used by", would say the opposite, so it reads as "uses".
-function fromStart(verb: string): string {
+function fromStart(arrow: Stored['arrows'][number]): string {
+	const verb = arrow.text
+	// A static import alone shows a dependency. A second quoted line can show what the caller does with it.
+	const onlyImport = /^\s*import\s+(?:[\w$*,\s{}]+\s+from\s*)?["'][^"'\n]+["']\s*;?\s*$/
+	if (
+		arrow.quotes.length &&
+		arrow.quotes.every((q) => /\.[cm]?[jt]sx?$/i.test(q.path ?? '') && onlyImport.test(q.text))
+	) {
+		return 'imports'
+	}
 	return /^(is|are|gets?)\b|\bby$/i.test(verb.trim()) ? 'uses' : verb
 }
 

@@ -119,28 +119,33 @@ export function memoryTools(deps: {
 		description: `What ken already holds of one thing: a part, a term, a process or a question, by its id (such as part::Core) or its name; an entry of the project record by its id; or an earlier answer, as chat:2 in this chat or by the id memory_search gave. A concept comes with its line, its things to know with the lines each quotes, its terms and its questions, each quote marked fresh or ${CHANGED}. At most ${CAPS.known} characters.`,
 		parameters: {
 			type: 'object',
-			properties: { about: { type: 'string', description: 'An id or a name' } },
+			properties: {
+				about: { type: 'string', description: 'An id or a name' },
+				from: { type: 'integer', minimum: 1, description: 'Where a previous read says to continue' },
+			},
 			required: ['about'],
 			additionalProperties: false,
 		},
 		async execute(args, ctx) {
-			const about = readArgs(args, 'memory_known').text('about').trim()
+			const read = readArgs(args, 'memory_known')
+			const about = read.text('about').trim()
+			const page = (text: string) => reply(memoryPage(text, read.optionalLine('from') ?? 1))
 			if (/^chat:\d+$/.test(about)) {
 				const [found] = await chat.find(undefined, about)
-				return found ? reply(cappedText(found.text, CAPS.known)) : refuse(`There is no answer ${about} in this chat.`)
+				return found ? page(found.text) : refuse(`There is no answer ${about} in this chat.`)
 			}
 			const record = await store.read()
 			const entry = record.entries.find((other) => other.id === about)
 			if (entry) {
 				const full = await describeEntry(repo, record, entry, ctx.signal)
-				if (entry.kind !== 'topic' || !map) return reply(cappedText(full, CAPS.known))
+				if (entry.kind !== 'topic' || !map) return page(full)
 				const read = await map.read(new Date(), ctx.signal, { record, names: [entry.name] })
 				const state = read.states[0]
-				return reply(cappedText(state ? `Reader: ${stateLine(state)}\n${full}` : full, CAPS.known))
+				return page(state ? `Reader: ${stateLine(state)}\n${full}` : full)
 			}
 			const known = await held(about)
 			const [saved] = known ? [] : await chat.find(undefined, about)
-			if (saved) return reply(cappedText(saved.text, CAPS.known))
+			if (saved) return page(saved.text)
 			if (!known) return refuse(`ken holds nothing on "${about}". Search memory with memory_search, or read the code.`)
 			const points = await Promise.all(
 				known.points.map(async (point) => `- ${point.line} [${(await anchors(point.quotes, ctx.signal)).join(', ')}]`),
@@ -152,7 +157,7 @@ export function memoryTools(deps: {
 				...(known.terms.length ? [`Terms: ${known.terms.join(', ')}`] : []),
 				...(questions.length ? ['Questions:', ...questions] : []),
 			]
-			return reply(capped(text, CAPS.known))
+			return page(text.join('\n'))
 		},
 	}
 
@@ -263,12 +268,25 @@ export function memoryTools(deps: {
 				hits.slice((page - 1) * CAPS.search.hits, page * CAPS.search.hits).map((hit) => hit()),
 			)
 			const more = page * CAPS.search.hits < hits.length ? `\nAsk for page ${page + 1} for more.` : ''
-			return reply(`${capped([`${hits.length} hits:`, ...shown], CAPS.search.chars - more.length)}${more}`)
+			const header = `${hits.length} hits:`
+			const budget = Math.floor((CAPS.search.chars - header.length - more.length) / Math.max(1, shown.length)) - 1
+			return reply([header, ...shown.map((line) => shortLine(line, budget))].join('\n') + more)
 		},
 	}
 
 	// Without what the server holds, only the record and earlier answers are there to ask.
 	return memory ? [known, level, quotedIn, search] : [known, search]
+}
+
+// Keep a quoted line together when it fits. A longer line can be read across two pages.
+function memoryPage(text: string, from: number): string {
+	const start = from - 1
+	if (start >= text.length) return 'The end of this entry.'
+	if (text.length - start <= CAPS.known) return text.slice(start)
+	const limit = start + CAPS.known - `\nContinue with from ${text.length}.`.length
+	const newline = text.lastIndexOf('\n', limit - 1)
+	const end = newline >= start ? newline + 1 : limit
+	return `${text.slice(start, end)}\nContinue with from ${end + 1}.`
 }
 
 // Whole lines up to the cap, and a last line that says what was left out.
@@ -285,12 +303,6 @@ function capped(lines: string[], most: number): string {
 		size += line.length + 1
 	}
 	return kept.join('\n')
-}
-
-// The same for a text whose one line may pass the cap.
-function cappedText(text: string, most: number): string {
-	const short = (line: string) => (line.length < most ? line : `${line.slice(0, most - 50)}...`)
-	return capped(text.split('\n').map(short), most)
 }
 
 // A lens puts instructions and examples after the question. Match its subject, so those words cannot outrank it.
@@ -360,7 +372,7 @@ export async function recordIndex(
 			const freshness = await noteFreshness(repo, first, note, signal)
 			rows.push(
 				freshness.kind === 'fresh'
-					? `Saved note for ${first.name}, checked at HEAD: ${note.text}`
+					? `Saved note for ${first.name}, checked at HEAD: ${shortLine(note.text)}`
 					: `The saved note for ${first.name} is stale. Read the current code in ${freshness.changed.join(', ')}.`,
 			)
 		}
@@ -382,6 +394,6 @@ function partsIndex(record: RecordRead): string[] {
 	]
 }
 
-function shortLine(line: string): string {
-	return line.length > 300 ? `${line.slice(0, 297)}...` : line
+function shortLine(line: string, limit = 300): string {
+	return line.length > limit ? `${line.slice(0, limit - 3)}...` : line
 }

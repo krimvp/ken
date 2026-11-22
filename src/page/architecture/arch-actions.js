@@ -171,11 +171,11 @@ export function archActions(app) {
 	async function viewsEnded(q) {
 		await app.level.loads.refresh()
 		const views = state.home.look?.views
-		const drew = Boolean(views?.runtime || views?.world)
+		const drew = Boolean(q.outcome === 'answered' && (views?.runtime || views?.world) && !views?.stale?.length)
 		arch.viewsProblem = drew
 			? null
 			: (q.error ?? "ken's model drew nothing ken could check against the repository. Its reply says why.")
-		if (drew) arch.view = views.runtime ? 'runtime' : 'world'
+		if (drew && (arch.view === 'parts' || !views[arch.view])) arch.view = views.runtime ? 'runtime' : 'world'
 		render()
 	}
 
@@ -204,7 +204,11 @@ export function archActions(app) {
 			arch.folded = false
 			render()
 		},
-		'arch-draw-views'() {
+		async 'arch-draw-views'() {
+			if (state.brief.id) {
+				await showConcept(state.brief.id)
+				app.brief.close()
+			}
 			arch.viewsProblem = null
 			const { home } = state
 			return app.send(

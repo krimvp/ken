@@ -11,6 +11,7 @@ type Said = {
 }
 
 const SENTENCES: Record<string, (args: Said) => string> = {
+	core__load_skill: () => 'Read how to show the requested card',
 	resolve_ref: (args) => `Found ${commitNamed(args.text('ref'))}`,
 	read_file: (args) => `Read ${code(args.text('path'))}${lines(args)}${at(args)}`,
 	list_files: (args) => `Listed the files${under(args)}${at(args)}`,

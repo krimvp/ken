@@ -8,7 +8,7 @@ export type Said = { text: string; file: string }
 
 // bin is a command the project installs, main the file another program loads, script a command its manifest names,
 // such as "npm run test". runs is what it runs: a file, or a command line.
-export type EntryPoint = { kind: 'bin' | 'main' | 'script'; name: string; runs: string; file: string }
+export type EntryPoint = { kind: 'bin' | 'main' | 'script'; name: string; runs: string; file: string; source?: string }
 
 export type Manifests = { name: Said | null; description: Said | null; entries: EntryPoint[] }
 
@@ -30,7 +30,15 @@ export async function readManifests(repo: Repository, head: CommitHash, files: S
 		const found = read.find((each) => each[key])
 		return found?.[key] ? { text: found[key], file: found.file } : null
 	}
-	return { name: first('name'), description: first('description'), entries: read.flatMap((each) => each.entries) }
+	const entries = read
+		.flatMap((each) => each.entries)
+		.map((entry) => {
+			const path = parsePath(entry.runs)
+			return entry.kind === 'main' && path.kind === 'ok' && files.has(path.path)
+				? { ...entry, source: path.path }
+				: entry
+		})
+	return { name: first('name'), description: first('description'), entries }
 }
 
 const READERS: Record<(typeof MANIFESTS)[number], (text: string, file: string) => Read> = {
@@ -75,7 +83,10 @@ function packageJson(text: string, file: string): Read {
 			: []
 	const bin = field('bin')
 	const bins = typeof bin === 'string' ? [[name ?? 'bin', bin] as const] : strings(bin)
-	const main = stringAt('main')
+	const exports = field('exports')
+	const root = exports && typeof exports === 'object' && '.' in exports ? exports['.'] : exports
+	const target = root && typeof root === 'object' && 'default' in root ? root.default : root
+	const main = typeof target === 'string' ? target : stringAt('main')
 	return {
 		name,
 		description: stringAt('description'),

@@ -179,7 +179,12 @@ function runHtml(home, env) {
 	const close = (act) =>
 		`<button class="k-icon-btn" data-act="${act}" data-key="${act}" aria-label="Close this">${icon('close')}</button>`
 	if (home.ended?.kind === 'nothing') {
-		const why = home.ended.outcome === 'stopped' ? 'You stopped the run.' : "ken's model made nothing to show for that."
+		const why =
+			home.ended.outcome === 'partial'
+				? 'ken checked some parts. Ask again to explain the rest.'
+				: home.ended.outcome === 'stopped'
+					? 'You stopped the run.'
+					: "ken's model made nothing to show for that."
 		const reply = home.ended.id
 			? ` <button class="k-link" data-act="open" data-id="${esc(home.ended.id)}" data-key="ended-reply">Read its reply</button>`
 			: ''

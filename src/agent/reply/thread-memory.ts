@@ -11,8 +11,11 @@ type Exchange = Excerpt & { number: number }
 
 function excerpt(text: string, chars: number, search?: string): string {
 	let line = text.replaceAll(/\s+/g, ' ').trim()
-	const match = search ? line.toLowerCase().indexOf(search) : -1
-	if (match >= 0 && match >= chars - (search?.length ?? 0)) line = `...${line.slice(Math.max(0, match - 48))}`
+	if (search) {
+		const lower = line.toLowerCase()
+		const match = search.split(/\s+/).reduce((last, word) => Math.max(last, lower.indexOf(word)), -1)
+		if (match >= chars - search.length && match > 48) line = `...${line.slice(match - 48)}`
+	}
 	return line.length > chars ? `${line.slice(0, chars - 3)}...` : line
 }
 
@@ -38,16 +41,29 @@ function words(item: Item): string {
 	}
 }
 
-function summary(question: string, shown: Reply, readPaths: Iterable<string>, search?: string): Excerpt {
+function contents(question: string, shown: Reply, readPaths: Iterable<string>): Excerpt {
 	const quoted = quotesOf(shown.items).map((quote) =>
 		quote.path ? `${quote.path}:${quote.startLine}@${quote.commit}` : quote.commit,
 	)
 	return {
-		question: excerpt(question, 600, search),
-		answer: excerpt(shown.items.map(words).join(' '), 2400, search),
-		topics: excerpt(shown.topics.join(', '), 240, search),
-		sources: excerpt([...new Set([...quoted, ...readPaths])].join(', '), 600, search),
+		question,
+		answer: [
+			...(shown.missingParts ? [`Still to cover: ${shown.missingParts.join(', ')}.`] : []),
+			...shown.items.map(words),
+		].join(' '),
+		topics: shown.topics.join(', '),
+		sources: [...new Set([...quoted, ...readPaths])].join(', '),
 		...(shown.change && { change: `${shown.change.base}..${shown.change.head}` }),
+	}
+}
+
+function preview(full: Excerpt, search?: string): Excerpt {
+	return {
+		...full,
+		question: excerpt(full.question, 600, search),
+		answer: excerpt(full.answer, 2400, search),
+		topics: excerpt(full.topics, 240, search),
+		sources: excerpt(full.sources, 600, search),
 	}
 }
 
@@ -61,7 +77,7 @@ export function threadMemory(readSaved?: () => Promise<SavedAnswer[]>) {
 	const exchanges: Exchange[] = []
 	let number = 0
 	function keep(question: string, shown: Reply, readPaths: Set<string>) {
-		exchanges.push({ number: ++number, ...summary(question, shown, readPaths) })
+		exchanges.push({ number: ++number, ...preview(contents(question, shown, readPaths)) })
 		if (exchanges.length > KEPT_REPLIES) exchanges.shift()
 	}
 	function recent(): string {
@@ -87,8 +103,9 @@ export function threadMemory(readSaved?: () => Promise<SavedAnswer[]>) {
 		for (let i = rows.length - 1; i >= 0 && found.length < 3; i--) {
 			const row = rows[i]
 			if (!row || (id && id !== row.id)) continue
-			const brief = summary(row.reply.answers?.text ?? row.reply.view?.asked ?? row.question, row.reply, [], lower)
-			if (matches(brief, lower)) {
+			const full = contents(row.reply.answers?.text ?? row.reply.view?.asked ?? row.question, row.reply, [])
+			if (id || matches(full, lower)) {
+				const brief = id ? full : preview(full, lower)
 				found.push({ id: row.id, text: JSON.stringify({ id: row.id, askedAt: row.askedAt, head: row.head, ...brief }) })
 			}
 		}

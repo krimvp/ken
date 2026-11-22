@@ -416,6 +416,8 @@ function schedule() {
 function rowMeta(row) {
 	const ended = {
 		stopped: 'You stopped it',
+		incomplete: 'No checked brief',
+		partial: 'Some parts still need a brief',
 		error: "ken's model did not reply",
 		'no-answer': "ken's model gave no reply",
 		'out-of-turns': "ken's model ran out of turns",
@@ -491,7 +493,7 @@ function turnHtml(q, t, ui) {
 	let body
 	if (q.reply) {
 		const reply = replyHtml(q, t, ui, { running: state.running !== null, inThread: true })
-		body = `${q.live ? '' : runLine(q, t, ui)}${reply}${working}`
+		body = `${q.live ? '' : runLine(q, t, ui)}${q.outcome === 'partial' ? endedHtml(q, t) : ''}${reply}${working}`
 	} else if (q.live) body = working
 	else body = runLine(q, t, ui) + endedHtml(q, t)
 	return `<article class="turn" id="turn-${t}">
@@ -612,14 +614,20 @@ function render() {
 	const active = document.activeElement
 	if (active !== document.body) focusLost = null
 	const focused = active?.dataset?.key ?? focusLost
+	const pane = active?.closest('#brief, #ask-drawer, #settings')
 	const caret = caretOf(active)
 	// Only a focus the draw dropped is put back: one the draw moved on purpose, as into an opened brief, stays.
 	const refocus = () => {
 		const moved = document.activeElement !== active && document.activeElement !== document.body
-		if (!focused || moved || document.activeElement?.dataset?.key === focused) return
-		const now = document.querySelector(`[data-key="${CSS.escape(focused)}"]`)
+		if (moved || (focused && document.activeElement?.dataset?.key === focused)) return
+		const now = focused ? document.querySelector(`[data-key="${CSS.escape(focused)}"]`) : null
 		now?.focus({ preventScroll: true })
 		if (caret && caretOf(now)) now.setSelectionRange(...caret)
+		// Starting a run can replace its button while the reader is still in the drawer.
+		if (pane && !pane.hidden && !pane.inert && document.activeElement === document.body) {
+			const heading = pane.querySelector('h2[tabindex="-1"]') ?? pane.querySelector('button:not(:disabled)')
+			heading?.focus({ preventScroll: true })
+		}
 		focusLost = now?.closest('[inert]') ? focused : null
 	}
 	// The frame and the page under it come first. Only a view from before the pages is drawn by what follows.
@@ -1207,7 +1215,10 @@ const actions = {
 		render()
 		if (state.ui.coverageOpen) $('#coverage-list')?.scrollIntoView({ block: 'nearest' })
 	},
-	again: (el) => send({ question: state.thread[Number(el.dataset.turn)].question }),
+	again: (el) => {
+		const q = state.thread[Number(el.dataset.turn)]
+		return send(q.retry ? { lens: q.retry } : { question: q.question })
+	},
 	stop() {
 		state.running?.controller.abort()
 	},
@@ -1239,6 +1250,7 @@ document.addEventListener(
 )
 
 document.addEventListener('keydown', (event) => {
+	if (shell.wrapTab(event)) return
 	if (!state.menuOpen && $('#tip').hidden && shell.key(event)) return
 	if (!state.menuOpen && $('#tip').hidden && ask.key(event)) return
 	if ((event.key === 'ArrowLeft' || event.key === 'ArrowRight') && state.view === 'question') {
@@ -1438,6 +1450,7 @@ try {
 	// The saved questions come first, since a page finds its stored replies among them. The place the address names
 	// is read while the rest comes, so the first page does not wait on the server's state.
 	const reads = Promise.all([getJson('/api/state'), getJson('/api/authors'), loadFollowUp()])
+	const reply = readReply(location.hash)
 	await loadRows()
 	const started = shell.start()
 	const [server, recent] = await reads
@@ -1451,7 +1464,6 @@ try {
 	state.authors = recent.authors
 	render()
 	// An address that names a reply opens it over the pages. A reply ken no longer has leaves the Home page.
-	const reply = readReply(location.hash)
 	await started
 	if (reply) await actions.open({ dataset: { id: reply } }).catch(() => {})
 } catch (error) {

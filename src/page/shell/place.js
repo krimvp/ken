@@ -26,11 +26,19 @@ export function writePlace(place) {
 	}
 	if (page === 'changes') {
 		if (place.tab !== 'changes') query.set('tab', place.tab)
-		else if (place.change !== 'none') query.set('change', place.change)
+		else {
+			if (place.change !== 'none') query.set('change', place.change)
+			if (place.part) query.set('part', place.part)
+		}
 	}
 	if (brief) {
 		query.set('brief', brief)
 		if (on) query.set('on', on)
+		if (on === 'source' && place.source) {
+			query.set('file', place.source.path)
+			query.set('at', place.source.commit)
+			query.set('line', String(place.source.line))
+		}
 	}
 	const fields = query.toString()
 	return `#/${page}${fields ? `?${fields}` : ''}`
@@ -66,6 +74,18 @@ export function readPlace(hash) {
 	const page = PAGES.includes(name) ? name : 'home'
 	const layer = page === 'architecture' ? (LAYERS.find((each) => each === query.get('layer')) ?? null) : null
 	const brief = query.get('brief')
+	const path = query.get('file')
+	const commit = query.get('at') ?? ''
+	const line = Number(query.get('line'))
+	const source =
+		brief &&
+		query.get('on') === 'source' &&
+		path &&
+		/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(commit) &&
+		Number.isSafeInteger(line) &&
+		line >= 1
+			? { path, commit, line }
+			: null
 	const changed = page === 'changes' || layer === 'changes'
 	return {
 		page,
@@ -74,8 +94,10 @@ export function readPlace(hash) {
 		process: layer === 'processes' ? query.get('process') : null,
 		change: changed ? (query.get('change') ?? 'none') : 'none',
 		tab: page === 'changes' ? (TABS.find((each) => each === query.get('tab')) ?? 'changes') : 'changes',
+		...(page === 'changes' && !query.get('tab') && query.get('part') ? { part: query.get('part') } : {}),
 		brief,
-		on: brief ? (WAYS_ON.find((each) => each === query.get('on')) ?? null) : null,
+		on: source ? 'source' : brief ? (WAYS_ON.find((each) => each === query.get('on')) ?? null) : null,
+		...(source ? { source } : {}),
 		reply: null,
 	}
 }

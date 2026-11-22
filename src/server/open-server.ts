@@ -16,8 +16,10 @@ import {
 import { type MapSignal, prefsOf, TEXT_PREFS } from '../map/index.ts'
 import { MERMAID_FILE, PAGE_FOLDER } from '../page/index.ts'
 import { OUTCOMES } from '../record/index.ts'
-import { type CommitHash, type Hunk, parsePath } from '../repo/index.ts'
+import type { CommitHash } from '../repo/index.ts'
 import { decisionRows } from './decision-list.ts'
+import { readChangeDiff } from './http/change-diff.ts'
+import { readSource } from './http/file-source.ts'
 import { refusal } from './http/guard-request.ts'
 import { type PageFile, readPageFiles } from './http/page-files.ts'
 import { openProject } from './ken-project.ts'
@@ -33,9 +35,6 @@ export type KenServer = { url: string; root: string; model: string | null; live:
 const MAX_BODY_BYTES = 64 * 1024
 // The person lens offers the authors of this many days.
 const RECENT_DAYS = 90
-// The diff of a change is asked a few files at a time and shows this many changed lines, so the page stays light.
-const DIFF_PATHS = 10
-const DIFF_LINES = 400
 // Mermaid puts a <style> element and style attributes in every drawing it makes, so styles may be inline. Nothing else
 // is widened: scripts, images, fonts and requests still come only from this server, so a style cannot fetch anything
 // from another host.
@@ -234,6 +233,10 @@ export async function openServer(options: {
 			if (ask.kind !== 'ok') return sendJson(response, 400, { message: ask.message, field: ask.field })
 			return sendJson(response, 200, await layoutView(ask.ask))
 		}
+		if (where === 'GET /api/source') {
+			const { status, body } = await readSource(repo, url.searchParams)
+			return sendJson(response, status, body)
+		}
 		if (where === 'GET /api/brief') {
 			const brief = await reads.brief(url.searchParams.get('concept') ?? '', new Date())
 			if (!brief) return sendJson(response, 404, { message: 'ken has no such concept in this project.' })
@@ -269,27 +272,8 @@ export async function openServer(options: {
 			return sendJson(response, 200, await prefs.write(chosen))
 		}
 		if (where === 'GET /api/change/diff') {
-			const paths = url.searchParams.getAll('path').map(parsePath)
-			const bad = paths.find((each) => each.kind !== 'ok')
-			if (paths.length === 0 || paths.length > DIFF_PATHS || bad) {
-				return sendJson(response, 400, { message: `Send path once for each file, ${DIFF_PATHS} at most.` })
-			}
-			const ask = await readLayoutAsk(layout, { change: url.searchParams.get('change') ?? '' }, new Date())
-			if (ask.kind !== 'ok') return sendJson(response, 400, { message: ask.message, field: ask.field })
-			const { change } = ask.ask
-			if (!change) return sendJson(response, 400, { message: 'Name the change to show the diff of.' })
-			const wanted = new Set<string>(paths.flatMap((each) => (each.kind === 'ok' ? [each.path] : [])))
-			const diff = await layout.repo.diff(change.range)
-			if (diff.kind !== 'ok') return sendJson(response, 200, { hunks: [], cut: false, binary: [], tooLarge: true })
-			// A moved file is asked by either of its paths, as the box that lost it and the box that got it list it.
-			const asked = diff.files.filter((file) => wanted.has(file.path) || wanted.has(file.oldPath))
-			const hunks = asked.flatMap((file) =>
-				file.kind === 'text' ? file.hunks.map((hunk) => ({ path: file.path, oldPath: file.oldPath, hunk })) : [],
-			)
-			const binary = asked.flatMap((file) =>
-				file.kind === 'binary' ? [file.path, file.oldPath].filter((each) => wanted.has(each)) : [],
-			)
-			return sendJson(response, 200, { ...cutAt(hunks, DIFF_LINES), binary: [...new Set(binary)], tooLarge: false })
+			const { status, body } = await readChangeDiff(layout, url.searchParams)
+			return sendJson(response, status, body)
 		}
 		if (where === 'POST /api/layout/back') {
 			const body = await readJson(request)
@@ -420,34 +404,6 @@ async function readJson(
 	} catch {
 		return { kind: 'refused', problem: 'Send the request as JSON.' }
 	}
-}
-
-type ChangedHunk = { path: string; oldPath: string; hunk: Hunk }
-
-// The hunks up to most changed lines, in the shape a walkthrough step's hunks have. The hunk that passes the limit
-// keeps the lines that fit and counts them again, and cut says the diff goes on.
-function cutAt(hunks: ChangedHunk[], most: number): { hunks: ChangedHunk[]; cut: boolean } {
-	const changed = (line: string) => line.startsWith('+') || line.startsWith('-')
-	const kept: ChangedHunk[] = []
-	let room = most
-	for (const each of hunks) {
-		const lines: string[] = []
-		for (const line of each.hunk.lines) {
-			if (changed(line) && room === 0) break
-			if (changed(line)) room -= 1
-			lines.push(line)
-		}
-		if (lines.length === each.hunk.lines.length) {
-			kept.push(each)
-			continue
-		}
-		const allBut = (sign: string) => lines.filter((line) => !line.startsWith(sign) && !line.startsWith('\\')).length
-		if (lines.some(changed)) {
-			kept.push({ ...each, hunk: { ...each.hunk, lines, oldLength: allBut('+'), newLength: allBut('-') } })
-		}
-		return { hunks: kept, cut: true }
-	}
-	return { hunks: kept, cut: false }
 }
 
 // Two of the three buttons under an answer, "I do not know this any more" on the map, and a tour stop the reader

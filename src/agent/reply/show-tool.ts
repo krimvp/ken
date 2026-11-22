@@ -3,7 +3,7 @@
 // words and the other cards stand. A question allows MAX_SENT_BACK cards sent back, so a model that cannot quote stops
 // trying and says the rest in words. The risks of a change are held for the second look (see risk-pass.ts).
 import { createHash } from 'node:crypto'
-import type { JsonObject, JsonValue, Tool } from 'aigent/plugin'
+import type { JsonObject, JsonValue, Skill, Tool } from 'aigent/plugin'
 import type { ChangedHunk, Quote, QuoteSources } from '../../checks/index.ts'
 import {
 	CARDINALITIES,
@@ -139,7 +139,7 @@ export type ShowField = keyof typeof SHOW_SCHEMA.properties
 export function showTool(
 	gate: Gate,
 	round: () => Round,
-	{ fields, shorten }: { fields?: readonly ShowField[]; shorten?: Shorten } = {},
+	{ fields, shorten, freeQuestion }: { fields?: readonly ShowField[]; shorten?: Shorten; freeQuestion?: boolean } = {},
 ): Tool {
 	const brief = fields?.includes('brief') === true
 	return {
@@ -147,7 +147,7 @@ export function showTool(
 		description: brief
 			? 'Show the reader the brief the question asks for, with its checked quotes.'
 			: 'Show the reader cards that prove what you say: claims, decisions, risks, diagrams, topics, the parts of the project and the brief of a part, each with the exact lines it rests on. ken checks each card alone against git and shows it after the words you write in this turn. A card that fails comes back with its problems, and the reader sees nothing of it. Every field is optional.',
-		parameters: allowJsonText(fields ? offered(fields) : SHOW_SCHEMA),
+		parameters: allowJsonText(fields ? offered(fields) : freeQuestion ? QUESTION_SCHEMA : SHOW_SCHEMA),
 		async execute(args, ctx) {
 			const current = round()
 			if (current.sentBack >= sentBackLimit(current)) return refuse(spent(current))
@@ -179,7 +179,7 @@ export function showTool(
 				const what = brief ? 'Brief' : 'Step'
 				const long = textProblem(brief ? 'The line of the brief' : 'The step text', step.text, RECORD_LIMITS.reason)
 				if (long) return refuse(nothingShown([long]))
-				const stops = current.tour?.stops.length
+				const stops = current.answers ? 1 : current.tour?.stops.length
 				if (stops !== undefined && step.number > stops) {
 					const asked = stops === 1 ? 'for 1 part' : `for ${stops} parts`
 					return refuse(nothingShown([`The question asks ${asked}, so there is no number ${step.number}.`]))
@@ -1091,4 +1091,39 @@ const SHOW_SCHEMA = {
 function offered(fields: readonly ShowField[]) {
 	const properties = Object.fromEntries(fields.map((field) => [field, SHOW_SCHEMA.properties[field]]))
 	return { type: 'object', properties } as const
+}
+
+// A free question can ask for any card. Keep the large drawing and brief forms within reach without sending them
+// on every read. The tool still checks its arguments against SHOW_SCHEMA, including forms the model already knows.
+const FORMATS = [
+	['diagrams', 'Component, sequence and data diagrams'],
+	['layout', 'Named parts and the paths and arrows that connect them'],
+	['brief', 'One part or answer with points, terms and questions'],
+	['views', 'Outside systems, runtime containers, stores and calls'],
+] as const
+
+export const showFormats: Skill[] = FORMATS.map(([name, description]) => ({
+	name,
+	description,
+	load: () => JSON.stringify(SHOW_SCHEMA.properties[name]),
+}))
+
+const QUESTION_SCHEMA = {
+	...SHOW_SCHEMA,
+	properties: {
+		...SHOW_SCHEMA.properties,
+		...Object.fromEntries(
+			FORMATS.map(([name, description]) => {
+				const shape = SHOW_SCHEMA.properties[name]
+				return [
+					name,
+					{
+						type: shape.type,
+						...(shape.type === 'array' ? { items: { type: 'object' } } : {}),
+						description: `${description}. Load ken__${name} with core__load_skill for its fields.`,
+					},
+				]
+			}),
+		),
+	},
 }

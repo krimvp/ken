@@ -362,3 +362,27 @@ test("a brief's question carries each file's lines and outline and the most it m
 	assert.match(results[1] ?? '', /lines 401-800 of 1000[\s\S]*That was the last of the 800 lines/)
 	assert.match(results[2] ?? '', /This question has read its 800 lines of files/, 'a read past the limit is refused')
 })
+
+test('a tour that explains only one part keeps that brief and names what is missing', async () => {
+	const scripted = await scriptedModel([
+		brief(1, 'Runs the work.', {
+			points: [point({ line: 'The core runs the work.', file: 'src/core/run.ts', quoted: 'export function run() {' })],
+		}),
+		{ text: '' },
+		{ text: 'I could not finish the other parts.' },
+	])
+	const fresh = await openKen(root, readerHome(), scripted.baseUrl)
+	const lens = { kind: 'explain', within: [], part: null }
+	const lines = await ask(fresh, { lens })
+	const saved = lines.at(-1).view.entry
+	assert.equal(saved.outcome, 'partial')
+	assert.deepEqual(saved.reply.missingParts, ['Store', 'Command', 'Tests'])
+	assert.deepEqual(saved.retry, lens)
+	assert.equal((await json(fresh, '/api/brief?concept=part%3A%3ACore')).explained, true)
+	assert.equal((await json(fresh, '/api/brief?concept=part%3A%3AStore')).explained, false)
+	assert.equal((await json(fresh, '/api/questions')).questions[0].outcome, 'partial')
+	assert.equal(
+		(await json(fresh, '/api/jobs', { looking: { brief: null, within: null } })).jobs[0].state.kind,
+		'failed',
+	)
+})

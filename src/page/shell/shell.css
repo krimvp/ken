@@ -740,9 +740,17 @@ body {
 	}
 
 	.k-bar {
-		grid-template-columns: auto minmax(0, 1fr) auto;
+		grid-template-columns: minmax(0, max-content) minmax(90px, 1fr) auto;
 		gap: 8px;
 		padding: 0 16px;
+	}
+
+	.k-search input {
+		padding: 0 8px 0 30px;
+	}
+
+	.k-bar .k-search > .k-i {
+		left: 8px;
 	}
 
 	.k-bar h1 {

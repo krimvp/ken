@@ -35,6 +35,17 @@ async function did(sources: LayoutSources, minute: number, head: string, looked:
 
 const knows = (seen: LayoutLook) => Object.fromEntries(seen.boxes.map((box) => [box.name, box.knows]))
 
+test('opening a group of files leaves each file new until its own brief is opened', async () => {
+	const { root, hashes } = buildRepository([{ message: 'feat: start', files: START }])
+	const sources = await sourcesFor(root)
+	const [head = ''] = hashes
+	const group = ['src/a/x.ts', 'src/b/y.ts']
+	await did(sources, 1, head, { did: 'opened', paths: group })
+	assert.equal(knows(await look(sources, group))['x.ts']?.level, 'new')
+	await did(sources, 2, head, { did: 'opened', paths: ['src/a/x.ts'] })
+	assert.match(knows(await look(sources, group))['x.ts']?.why ?? '', /opened it once/)
+})
+
 test('a part the reader read counts the commits that touched it since, and a part they read that nobody touched or one they never opened counts none', async () => {
 	const { root, hashes } = buildRepository([{ message: 'feat: start', files: START }])
 	const sources = await sourcesFor(root)

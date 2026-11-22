@@ -39,14 +39,14 @@ export function viewOfConcept(id, views) {
 	return null
 }
 
-function askHtml(home, env) {
+function askHtml(home, env, label = 'Ask ken to draw where this runs') {
 	const run = env.running?.onHome
 	if (run?.kind === 'views') {
 		return `<p class="k-vw-run" role="status"><span class="k-spin" aria-hidden="true"></span><span><b>${VIEWS_RUN[1]}.</b> <span class="k-clock k-num">${Math.round(env.seconds)} s so far</span></span><button class="k-link" data-act="stop" data-key="views-stop">Stop</button></p>`
 	}
 	if (home.trail.length > 1 || !home.look?.named) return ''
 	const said = env.off ?? "One run of ken's model, a few minutes."
-	return `<p class="k-vw-ask"><button class="k-link" data-act="arch-draw-views" data-key="arch-draw-views"${env.off ? ' disabled' : ''}>${mark('runs')}Ask ken to draw where this runs</button><span class="k-muted">${esc(said)}</span></p>`
+	return `<p class="k-vw-ask"><button class="k-link" data-act="arch-draw-views" data-key="arch-draw-views"${env.off ? ' disabled' : ''}>${mark('runs')}${label}</button><span class="k-muted">${esc(said)}</span></p>`
 }
 
 // crumb is the breadcrumb's HTML. problem is what the last run to draw them left to say.
@@ -62,6 +62,15 @@ export function switchCardHtml({ home, arch, env, crumb, offered, on, format, ab
 		const problem = arch.viewsProblem ? `<p class="k-vw-problem" role="alert">${esc(arch.viewsProblem)}</p>` : ''
 		return `<div class="k-float k-vw-card">${head}${summary}${ask}${problem}</div>`
 	}
+	const stale = home.look?.views?.stale?.filter((item) => item.view === on) ?? []
+	const names = stale
+		.slice(0, 3)
+		.map((item) => esc(item.name))
+		.join(', ')
+	const more = stale.length > 3 ? ` and ${stale.length - 3} more` : ''
+	const changed = stale.length
+		? `<p class="k-vw-problem">Earlier drawing. The source for ${names}${more} has changed.</p>${home.look.at === home.look.head ? askHtml(home, env, 'Update the drawings') : ''}`
+		: ''
 	const buttons = offered.map(
 		(view) =>
 			`<button data-act="arch-view" data-view="${view}" data-key="view-${view}" aria-pressed="${on === view}">${VIEW_ICONS[view] ? mark(VIEW_ICONS[view]) : '<svg class="k-i" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="8" height="6" rx="1.500"/><rect x="13" y="14" width="8" height="6" rx="1.500"/><path d="M11 7h3a3 3 0 0 1 3 3v4"/></svg>'}<span>${VIEW_NAMES[view]}</span></button>`,
@@ -73,7 +82,7 @@ export function switchCardHtml({ home, arch, env, crumb, offered, on, format, ab
 	const asks = offered.map(
 		(view) => `<span${view === on ? ' class="is-on"' : ''}>${VIEW_NAMES[view]} shows ${VIEW_ASKS[view]}.</span>`,
 	)
-	return `<div class="k-float k-vw-card">${head}<div class="k-vw-switch" role="group" aria-label="Which drawing">${buttons.join('')}${key}</div>${summary || (reading ? '' : `<p class="k-vw-asks">${asks.join(' ')}</p>`)}</div>`
+	return `<div class="k-float k-vw-card">${head}<div class="k-vw-switch" role="group" aria-label="Which drawing">${buttons.join('')}${key}</div>${summary || (reading ? '' : `<p class="k-vw-asks">${asks.join(' ')}</p>`)}${changed}${arch.viewsProblem ? `<p class="k-vw-problem" role="alert">${esc(arch.viewsProblem)}</p>` : ''}</div>`
 }
 
 const KEY_SHAPES = [

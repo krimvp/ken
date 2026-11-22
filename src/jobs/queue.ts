@@ -63,10 +63,10 @@ type Job<W, L> = JobAsk<W> & {
 	bumped: number
 	seq: number
 	stop: AbortController | null
+	// The run now going: a job that gave way runs again, so its run ends long before the job does.
+	attempt: Promise<void> | null
 	lines: L[]
 	followers: Set<(line: L) => void>
-	// The run now going, or the last one: a job that gave way runs again, so its run ends long before the job does.
-	run: Promise<void>
 	ended: Promise<void>
 	end: () => void
 	retryAt: number | null
@@ -97,9 +97,10 @@ const RETRY_WAITS = [30_000, 120_000, 600_000]
 export function jobQueue<W, L>(deps: QueueDeps<W, L>) {
 	const jobs: Job<W, L>[] = []
 	const listeners = new Set<(jobs: JobView[]) => void>()
-	// A background thing ken tried once in this server's life is not tried again by itself: a run that made nothing
-	// would otherwise run again each time ken looks for what is missing. The reader can still ask for it.
-	const tried = new Set<string>()
+	// A commit marks work already tried on that code. A failed or stopped job waits for the reader to ask again, but
+	// one the model refused is tried again by itself after a wait.
+	const tried = new Map<string, string | null>()
+	let revision = ''
 	// The model refusals of each thing so far, and when ken may try it again.
 	const refused = new Map<string, { times: number; at: number }>()
 	const timers = new Set<ReturnType<typeof setTimeout>>()
@@ -187,6 +188,7 @@ export function jobQueue<W, L>(deps: QueueDeps<W, L>) {
 			const held = running().some((other) => other.holds?.some((thing) => job.holds?.includes(thing)))
 			if (!held) start(job)
 		}
+		if (jobs.some((job) => job.asked && job.state.kind === 'waiting')) makeRoom()
 		changed()
 	}
 
@@ -194,7 +196,11 @@ export function jobQueue<W, L>(deps: QueueDeps<W, L>) {
 		const stop = new AbortController()
 		const startedAt = Date.now()
 		Object.assign(job, { state: { kind: 'running', startedAt, actions: 0 }, stop, lines: [] })
-		if (!job.asked) tried.add(job.key)
+		if (job.from === 'ken' || tried.has(job.key)) tried.set(job.key, revision)
+		const aborted = (): JobState =>
+			!closed && gaveWay(stop.signal) && tried.get(job.key) !== null
+				? { kind: 'waiting' }
+				: { kind: 'failed', why: STOPPED }
 		const say = (said: L) => {
 			if (job.stop !== stop) return
 			job.lines.push(said)
@@ -205,15 +211,15 @@ export function jobQueue<W, L>(deps: QueueDeps<W, L>) {
 				job.state = { ...job.state, actions: job.state.actions + 1 }
 			changed()
 		}
-		job.run = (async () => {
+		job.attempt = (async () => {
 			let state: JobState
 			try {
 				const made = !job.asked && (await deps.fresh(job))
-				if (stop.signal.aborted) state = stopped(stop.signal)
+				if (stop.signal.aborted) state = aborted()
 				else if (made) state = { kind: 'done', skipped: true }
 				else {
 					const ran = await deps.run(job, stop.signal, say, acted)
-					if (stop.signal.aborted) state = stopped(stop.signal)
+					if (stop.signal.aborted) state = aborted()
 					else if (ran.kind === 'model-error') {
 						state = { kind: 'failed', why: ran.why }
 						slots = Math.max(1, running().filter((each) => each !== job).length)
@@ -226,9 +232,11 @@ export function jobQueue<W, L>(deps: QueueDeps<W, L>) {
 					}
 				}
 			} catch (error) {
-				state = stop.signal.aborted ? stopped(stop.signal) : { kind: 'failed', why: messageOf(error) }
+				state = stop.signal.aborted ? aborted() : { kind: 'failed', why: messageOf(error) }
 			}
 			job.stop = null
+			job.attempt = null
+			if (state.kind === 'failed' && tried.has(job.key)) tried.set(job.key, null)
 			job.state = state
 			if (state.kind === 'waiting') job.bumped = ++bumps
 			else finish(job)
@@ -275,7 +283,7 @@ export function jobQueue<W, L>(deps: QueueDeps<W, L>) {
 	}
 
 	// Asks for a job. One for the same thing that waits or runs is that job: the reader asking for it moves it to the
-	// front. Returns null when ken already tried the thing by itself in this server's life, or the queue has closed.
+	// front. Returns null when ken should skip it or the queue has closed.
 	function want(ask: JobAsk<W>, by: 'reader' | 'ken'): JobView | null {
 		const job = add(ask, by)
 		pump()
@@ -283,7 +291,8 @@ export function jobQueue<W, L>(deps: QueueDeps<W, L>) {
 	}
 
 	// Asks for each job before any starts, so the first to start is the first in line.
-	function wantAll(asks: JobAsk<W>[]) {
+	function wantAll(asks: JobAsk<W>[], at = revision) {
+		revision = at
 		for (const ask of asks) add(ask, 'ken')
 		pump()
 	}
@@ -295,11 +304,12 @@ export function jobQueue<W, L>(deps: QueueDeps<W, L>) {
 			if (by === 'reader' && !same.asked) {
 				same.asked = true
 				same.seq = ++seq
-				if (same.state.kind === 'waiting') makeRoom()
 			}
 			return same
 		}
-		if (by === 'ken' && (tried.has(ask.key) || (refused.get(ask.key)?.at ?? 0) > Date.now())) return null
+		const triedAt = tried.get(ask.key)
+		if (by === 'ken' && (triedAt === null || triedAt === revision || (refused.get(ask.key)?.at ?? 0) > Date.now()))
+			return null
 		let end = () => {}
 		const ended = new Promise<void>((resolve) => (end = resolve))
 		const job: Job<W, L> = {
@@ -310,15 +320,14 @@ export function jobQueue<W, L>(deps: QueueDeps<W, L>) {
 			bumped: 0,
 			seq: ++seq,
 			stop: null,
+			attempt: null,
 			lines: [],
 			followers: new Set(),
-			run: Promise.resolve(),
 			ended,
 			end,
 			retryAt: null,
 		}
 		jobs.push(job)
-		if (job.asked) makeRoom()
 		return job
 	}
 
@@ -327,13 +336,23 @@ export function jobQueue<W, L>(deps: QueueDeps<W, L>) {
 	}
 
 	// Sends the lines a job has said so far and each one after, until the job ends. Resolves when it has.
-	async function follow(key: string, onLine: (line: L) => void): Promise<JobState | null> {
+	async function follow(key: string, onLine: (line: L) => void, signal?: AbortSignal): Promise<JobState | null> {
 		const job = jobs.find((each) => each.key === key && live(each))
 		if (!job) return null
+		let left = () => {}
+		const detached = new Promise<void>((resolve) => (left = resolve))
+		const leave = () => {
+			job.followers.delete(onLine)
+			if (job.followers.size === 0) stop(key, 'unfollow')
+			left()
+		}
 		for (const said of job.lines) onLine(said)
 		job.followers.add(onLine)
-		await job.ended
-		return job.state
+		if (signal?.aborted) leave()
+		else signal?.addEventListener('abort', leave, { once: true })
+		await Promise.race([job.ended, detached])
+		signal?.removeEventListener('abort', leave)
+		return signal?.aborted ? null : job.state
 	}
 
 	// The reader stopped it, or closed the page that followed it. A job ken started that the reader only followed goes
@@ -346,7 +365,7 @@ export function jobQueue<W, L>(deps: QueueDeps<W, L>) {
 			return pump()
 		}
 		// The reader said no to it, so ken does not queue it again by itself.
-		if (job.from === 'ken') tried.add(job.key)
+		if (job.from === 'ken') tried.set(job.key, null)
 		if (job.state.kind === 'running') return job.stop?.abort('stopped')
 		job.state = { kind: 'failed', why: STOPPED }
 		finish(job)
@@ -358,7 +377,7 @@ export function jobQueue<W, L>(deps: QueueDeps<W, L>) {
 		while (true) {
 			const ending = running().filter((job) => job.stop?.signal.aborted)
 			if (ending.length === 0) return
-			await Promise.all(ending.map((job) => job.run))
+			await Promise.all(ending.map((job) => job.attempt))
 		}
 	}
 
@@ -368,7 +387,7 @@ export function jobQueue<W, L>(deps: QueueDeps<W, L>) {
 		for (const timer of timers) clearTimeout(timer)
 		const ending = running().map((job) => {
 			job.stop?.abort('stopped')
-			return job.run
+			return job.attempt
 		})
 		await Promise.all(ending)
 		for (const job of jobs.filter(live)) {
@@ -392,10 +411,6 @@ const STOPPED = 'You stopped it.'
 // A run that sees this gave way to the reader and runs again later, so it keeps nothing of what it did.
 export function gaveWay(signal: AbortSignal): boolean {
 	return signal.reason === GAVE_WAY
-}
-
-function stopped(signal: AbortSignal): JobState {
-	return signal.reason === GAVE_WAY ? { kind: 'waiting' } : { kind: 'failed', why: STOPPED }
 }
 
 function messageOf(error: unknown): string {

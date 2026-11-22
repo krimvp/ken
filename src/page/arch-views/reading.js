@@ -24,8 +24,10 @@ function partsHtml(look) {
 	return section('Parts', parts) + section('How the parts connect', arrows)
 }
 
-function worldHtml(world, project) {
-	const people = world.outside.map((each) => row(`outside:${each.id}`, each.name, each.line))
+function worldHtml({ world, stale }, project) {
+	const people = world.outside.map((each) =>
+		row(`outside:${each.id}`, each.name, changedNote(each.line, stale, each.id)),
+	)
 	const links = world.crossings.map((c) => {
 		const other = world.outside.find((each) => each.id === c.outside)?.name ?? c.outside
 		const ends =
@@ -34,12 +36,17 @@ function worldHtml(world, project) {
 				: c.direction === 'in'
 					? `${other} to ${project}`
 					: `${project} to ${other}`
-		return row(`crossing:${c.id}`, ends, crossingWords(c))
+		return row(`crossing:${c.id}`, ends, changedNote(crossingWords(c), stale, c.id))
 	})
 	return section('People and other systems', people) + section('What passes between them', links)
 }
 
-function runtimeHtml({ runtime, world }) {
+function changedNote(note, stale, id) {
+	const item = stale?.find((item) => item.id === id)
+	return item ? `Earlier drawing. ${note} (source changed in ${item.files.join(', ')})` : note
+}
+
+function runtimeHtml({ runtime, world, stale }) {
 	const { frames, things, crossings } = runtime
 	const outside = (id) => world?.outside.find((each) => each.id === id)
 	const names = new Map(things.map((t) => [t.id, t.part ?? t.name ?? outside(t.id)?.name ?? t.id]))
@@ -52,20 +59,20 @@ function runtimeHtml({ runtime, world }) {
 		]
 			.filter(Boolean)
 			.join(', ')
-		return row(`frame:${f.id}`, f.name, `${context}. ${f.line}`)
+		return row(`frame:${f.id}`, f.name, changedNote(`${context}. ${f.line}`, stale, f.id))
 	})
 	const components = things.map((t) => {
 		const id = t.kind === 'part' ? partId([], t.part) : `${t.kind}:${t.id}`
 		const where = t.frame ? `In ${frameName(t.frame)}. ` : ''
 		const description = t.line ?? (t.kind === 'outside' ? outside(t.id)?.line : '') ?? ''
-		return row(id, names.get(t.id), where + description, t.id)
+		return row(id, names.get(t.id), changedNote(where + description, stale, t.id), t.id)
 	})
 	const links = crossings.map((c) => {
 		const from = names.get(c.from)
 		const to = names.get(c.to)
 		const line = c.kind === 'call' ? `${from} calls ${to}` : `${from} sends ${c.topic} to ${to}`
 		const note = c.kind === 'call' ? crossingWords(c) : c.text
-		return row(`crossing:${c.id}`, line, note)
+		return row(`crossing:${c.id}`, line, changedNote(note, stale, c.id))
 	})
 	return (
 		section('Places the code runs', places) +
@@ -75,7 +82,7 @@ function runtimeHtml({ runtime, world }) {
 }
 
 export function readingHtml(look, view, project) {
-	if (view === 'world') return worldHtml(look.views.world, project)
+	if (view === 'world') return worldHtml(look.views, project)
 	if (view === 'runtime') return runtimeHtml(look.views)
 	return partsHtml(look)
 }
