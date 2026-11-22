@@ -116,4 +116,5 @@ export const KIND_ICONS = {
 	question: 'question',
 	decision: 'decision',
 	arrow: 'arrow',
+	change: 'changes',
 }

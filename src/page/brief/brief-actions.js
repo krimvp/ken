@@ -75,6 +75,7 @@ export function briefActions(app) {
 	// The level the open concept stands in, when the page has it: the one on the canvas, or the top one.
 	function lookOf(id) {
 		const concept = readConcept(id)
+		if (open()?.lit) return state.shell.top?.look ?? null
 		if (concept?.kind !== 'part') return null
 		const same = (look) => look && look.within.join(',') === concept.within.join(',')
 		return [state.home.look, state.shell.top?.look].find(same) ?? null

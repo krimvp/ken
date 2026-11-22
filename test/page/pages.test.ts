@@ -51,13 +51,34 @@ const ENGINE = { name: 'Plugin engine', within: ['src/engine.ts', 'src/hooks.ts'
 
 test('an address written for a place reads back as that place, so a reload and Back keep where the reader is', () => {
 	const places = [
-		{ page: 'home', trail: [WHOLE], layer: null, process: null, change: 'none', brief: null, on: null },
+		{ page: 'home', trail: [WHOLE], layer: null, process: null, change: 'none', tab: 'changes', brief: null, on: null },
+		{
+			page: 'changes',
+			trail: [WHOLE],
+			layer: null,
+			process: null,
+			change: 'since:2026-11-13',
+			tab: 'changes',
+			brief: 'part::Sandbox',
+			on: null,
+		},
+		{
+			page: 'changes',
+			trail: [WHOLE],
+			layer: null,
+			process: null,
+			change: 'none',
+			tab: 'decisions',
+			brief: null,
+			on: null,
+		},
 		{
 			page: 'architecture',
 			trail: [WHOLE, ENGINE],
 			layer: 'changes',
 			process: null,
 			change: 'abc..def',
+			tab: 'changes',
 			brief: 'part:src/engine.ts,src/hooks.ts:Tool-call gate',
 			on: 'sideways',
 		},
@@ -67,6 +88,7 @@ test('an address written for a place reads back as that place, so a reload and B
 			layer: 'processes',
 			process: 'p-1',
 			change: 'none',
+			tab: 'changes',
 			brief: 'step:p-1:3',
 			on: null,
 		},
@@ -76,12 +98,13 @@ test('an address written for a place reads back as that place, so a reload and B
 			layer: null,
 			process: null,
 			change: 'none',
+			tab: 'changes',
 			brief: 'term:record log',
 			on: 'questions',
 		},
 	]
 	for (const place of places) {
-		assert.deepEqual(readPlace(writePlace({ ...place, older: null })), { ...place, older: null, reply: null })
+		assert.deepEqual(readPlace(writePlace(place)), { ...place, reply: null })
 	}
 })
 
@@ -99,7 +122,7 @@ test('an address from before the pages opens the nearest place there is now', ()
 
 	const review = readPlace('#way=review&detail=how&change=main..feature')
 	assert.equal(review.page, 'changes', 'a change to review is on the Changes page')
-	assert.equal(writePlace({ ...review, brief: null, on: null }), '#/changes?way=review&detail=how&change=main..feature')
+	assert.equal(review.change, 'main..feature', 'with that change laid over the parts')
 
 	assert.equal(readPlace('#way=learn&detail=big&picture=q-7').page, 'processes', 'a drawn picture is on Processes')
 	assert.equal(readPlace('#reply=q-9').reply, 'q-9', 'and a saved reply still opens as itself')

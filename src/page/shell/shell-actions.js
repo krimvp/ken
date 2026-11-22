@@ -5,14 +5,12 @@
 // and You the reader's map.
 import { partId, readConcept } from '../brief/concept-id.js'
 import { askDrawerHtml } from '../home/inspector/ask-drawer.js'
-import { WAYS, WHOLE } from '../level/level-state.js'
 import { learnParts } from '../project/part-colours.js'
 import { startPageHtml } from '../start/start.js'
 import { fill } from './fill.js'
 import { readPlace, writePlace } from './place.js'
 import { barTitle, findConcepts, foundHtml, railHtml, settingsHtml } from './shell.js'
 
-const OLDER = ['changes']
 const narrow = matchMedia('(max-width: 760px)')
 
 // What the frame holds: the page, the top level of the project for the Home page, what search can find, what the
@@ -35,7 +33,6 @@ export function shellActions(app) {
 	const { state, render, read } = app
 	const shell = state.shell
 	const $ = (selector) => document.querySelector(selector)
-	const { loads } = app.home
 
 	// A reply, the decisions, the live notes or what is open lie over whichever page the reader is on.
 	const overlaid = () => state.view !== 'home' && state.view !== 'map'
@@ -46,16 +43,16 @@ export function shellActions(app) {
 		layer: state.arch.layer,
 		process: state.arch.process,
 		change: state.home.change,
+		tab: state.chg.tab,
 		brief: state.brief.id,
 		on: state.brief.on,
-		older: state.home,
 	})
 
 	// The address follows the reader once the page has read where it starts. Another page, another level or another
 	// brief is a new entry in the browser's history, so Back goes to the one before. Anything finer rewrites the
 	// entry it is in. A reply open over the pages keeps its own address.
 	let addressed = null
-	const coarse = (place) => JSON.stringify([place.page, place.trail, place.brief, place.on])
+	const coarse = (place) => JSON.stringify([place.page, place.trail, place.tab, place.brief, place.on])
 	function address() {
 		if (addressed === null || overlaid()) return
 		const place = placeNow()
@@ -81,17 +78,11 @@ export function shellActions(app) {
 
 	// What a page reads when the reader comes to it.
 	async function enter(page) {
-		const { home } = state
 		if (page === 'home') return loadTop()
 		if (page === 'architecture') return app.arch.enter()
 		if (page === 'processes') return app.procs.enter()
 		if (page === 'you') return app.you.enter()
-		Object.assign(home, { selected: null, opened: true, why: null })
-		const kept = Object.keys(WAYS).find((way) => way === app.stored('ken-way-in'))
-		const way = [home.wayIn, kept, home.suggestion?.suggested].find((each) => each && each !== 'learn')
-		home.trail = [WHOLE]
-		await loads.enter(way ?? 'catch-up')
-		await loads.settle()
+		return app.chg.enter()
 	}
 
 	async function goPage(page) {
@@ -110,10 +101,9 @@ export function shellActions(app) {
 		const { home, arch, brief } = state
 		Object.assign(shell, { page: place.page, settingsOpen: false })
 		Object.assign(arch, { layer: place.layer, process: place.process, drawOpen: false })
+		state.chg.tab = place.tab
 		state.view = state.base = 'home'
-		if (place.older)
-			Object.assign(home, place.older, { askOpen: false, openArrows: new Set(), opened: false, fixing: null })
-		else Object.assign(home, { trail: place.trail, change: place.change, selected: null, shown: null, at: '' })
+		Object.assign(home, { trail: place.trail, change: place.change, selected: null, shown: null, at: '' })
 		if (place.brief !== brief.id) {
 			const at = brief.trail.findIndex((step) => step.id === place.brief)
 			const step = { id: place.brief, name: readConcept(place.brief ?? '')?.name ?? '' }
@@ -128,9 +118,9 @@ export function shellActions(app) {
 		brief.on = place.on
 		addressed = coarse(placeNow())
 		render()
+		const { loads } = app.level
 		if (first) await Promise.all([loadTop(), loads.loadNotes(), loads.loadReader(), app.prefs.load()])
-		if (place.page === 'architecture') await app.arch.enter()
-		else if (place.older) await loads.refresh()
+		if (place.page === 'changes') await app.chg.enter(place.change === 'none' ? null : place.change)
 		else if (place.page !== 'home') await enter(place.page)
 		else if (!first) await loadTop()
 		addressed = coarse(placeNow())
@@ -161,7 +151,7 @@ export function shellActions(app) {
 	// the page then draws as it did.
 	function draw(env) {
 		const over = overlaid()
-		const older = over || OLDER.includes(shell.page)
+		const older = over
 		const { home } = state
 		fill(
 			$('#rail'),
@@ -182,6 +172,10 @@ export function shellActions(app) {
 		you.hidden = older || shell.page !== 'you'
 		if (you.hidden) fill(you, '')
 		else app.you.draw()
+		const changes = $('#pg-changes')
+		changes.hidden = older || shell.page !== 'changes'
+		if (changes.hidden) fill(changes, '')
+		else app.chg.draw(env)
 		$('#pg-old').hidden = !older
 		if (start.hidden) fill(start, '')
 		else {
@@ -223,11 +217,11 @@ export function shellActions(app) {
 			await goPage('architecture')
 			return item.go.part ? app.brief.show(partId([], item.go.part), { opener }) : null
 		}
-		Object.assign(shell, { page: 'changes' })
+		Object.assign(shell, { page: 'changes', settingsOpen: false })
 		state.view = state.base = 'home'
-		state.home.trail = [WHOLE]
+		state.chg.tab = 'changes'
 		render()
-		await app.home.goTo(item.go, item.why)
+		await app.chg.enter(item.go.change ?? null)
 		render()
 	}
 
@@ -348,6 +342,6 @@ export function shellActions(app) {
 		key,
 		pressed,
 		overlaid,
-		isOlder: () => overlaid() || OLDER.includes(shell.page),
+		isOlder: overlaid,
 	}
 }

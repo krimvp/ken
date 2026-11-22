@@ -5,6 +5,7 @@
 import { archActions, freshArch } from './architecture/arch-actions.js'
 import { briefActions, freshBrief } from './brief/brief-actions.js'
 import { briefStore } from './brief/briefs.js'
+import { changeActions, freshChanges } from './changes/change-actions.js'
 import { fillDrawings, markPart, numberAt } from './draw-diagrams.js'
 import { homeActions } from './home/home-actions.js'
 import { clearHome, drawCanvas, showHome } from './home/home-view.js'
@@ -71,6 +72,7 @@ const state = {
 	brief: freshBrief(),
 	procs: freshProcesses(),
 	you: freshYou(),
+	chg: freshChanges(),
 	project: null,
 	model: null,
 	rows: [],
@@ -1101,6 +1103,47 @@ const procs = processActions(app)
 app.procs = procs
 const you = youActions(app)
 app.you = you
+const chg = changeActions(app)
+app.chg = chg
+
+// The two tabs of the Changes page that show a view from before the pages: what waits on the reader with the
+// record's decisions, and live mode.
+app.older = {
+	html(tab) {
+		const canAsk = state.model?.kind === 'ok' && !state.running
+		if (tab === 'live') {
+			const seen = { seen: state.liveSeen, hideAsk: state.hideAsk }
+			return liveViewHtml(state.live, state.liveUi, state.unfolded, canAsk, state.liveProblem, seen)
+		}
+		const open = openViewHtml(state.followUp, state.followUi, canAsk, state.followSaid, state.followDecided)
+		return `${open}${decisionsViewHtml(state.decisions, state.decisionsKey)}`
+	},
+	async load(tab) {
+		if (tab === 'live') {
+			await loadLive()
+			state.liveSeen = stored('ken-live-seen')
+			const newest = state.live?.notes[0]?.entry.askedAt
+			if (newest) store('ken-live-seen', newest)
+			return
+		}
+		state.followSaid = ''
+		await loadFollowUp()
+		// Every decision shows open here: the reader came to decide.
+		state.followUi = {
+			...freshUi(),
+			wide: false,
+			openDecisions: new Set(state.followUp?.decisions.map((_, i) => `o${i}`)),
+		}
+		try {
+			state.decisions = (await getJson('/api/decisions')).decisions
+		} catch (error) {
+			state.problem = error.message
+			state.decisions = []
+		}
+	},
+	waiting: () => openCount(state.followUp),
+	live: () => liveLook(state.liveStatus),
+}
 const shell = shellActions(app)
 app.shell = shell
 
@@ -1122,6 +1165,7 @@ const actions = {
 	...brief.actions,
 	...procs.actions,
 	...you.actions,
+	...chg.actions,
 	map: () => (state.view === 'map' ? closeMap() : showMap()),
 	decisions: () => (state.view === 'decisions' ? closeDecisions() : showDecisions()),
 	'cc-open': (el) => openChangePart(Number(el.dataset.turn), Number(el.dataset.index)),
@@ -1375,7 +1419,7 @@ $('#ask').addEventListener('submit', (event) => {
 })
 
 document.addEventListener('submit', (event) => {
-	if (brief.submit(event) || procs.submit(event)) return
+	if (brief.submit(event) || procs.submit(event) || chg.submit(event)) return
 	if (home.submit(event)) {
 		// A request sent from the canvas's tool closes the tool, so the canvas shows the run.
 		if (event.target.id === 'redraw-form' && state.home.redraw.problem === null && state.arch.drawOpen) {
@@ -1405,7 +1449,7 @@ document.addEventListener('submit', (event) => {
 	if (path !== '') void send({ lens: { kind: 'area', path } })
 })
 
-document.addEventListener('input', (event) => shell.input(event) || home.input(event))
+document.addEventListener('input', (event) => shell.input(event) || chg.input(event) || home.input(event))
 document.addEventListener('mousedown', (event) => home.press(event))
 window.addEventListener('popstate', () => shell.back(showReply))
 
@@ -1509,7 +1553,8 @@ window.addEventListener('resize', () => drawPictures(document.body))
 new ResizeObserver(() => drawCanvas($('#home-canvas'))).observe($('#home-canvas'))
 setInterval(tick, 1000)
 setInterval(async () => {
-	if (state.view !== 'live' && state.liveStatus === 'off') return
+	const onLive = state.view === 'live' || (state.shell.page === 'changes' && state.chg.tab === 'live')
+	if (!onLive && state.liveStatus === 'off') return
 	if (await loadLive()) render()
 }, 3000)
 
