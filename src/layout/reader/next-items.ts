@@ -1,7 +1,7 @@
 // What the reader should look at next, the first thing first: a decision that waits on them, a part that changed
 // since they looked, a change to review, a part one commit touched since, the next stop of the tour, then the parts
 // they never opened. Parts that changed come most commits first, then most lines. For a reader
-// who has opened nothing, the tour comes before the change. Plain code ranks them from the record, what the reader
+// who has read fewer than half the parts, the tour comes before the change. Plain code ranks them from the record, what the reader
 // looked at and git, so the page can show them before the reader asks.
 import type { Knows, Level, OpensAt } from './box-knows.ts'
 
@@ -66,15 +66,17 @@ export function nextItems(facts: NextFacts): NextItem[] {
 		? inOrder.find((box) => box.knows.level === 'new' || box.knows.level === 'seen')
 		: undefined
 	const untouched = boxes.every((box) => box.knows.level === 'new')
+	const read = boxes.filter((box) => box.knows.level !== 'new' && box.knows.level !== 'seen').length
+	const newcomer = read * 2 < boxes.length
 	const tour = onTour ? [tourItem(onTour, untouched)] : []
 	const items: NextItem[] = [
 		...decisionItem(facts.decisions),
 		...stale.filter((box) => !small(box)).map(staleItem),
-		// A reader who has opened nothing starts with the tour: a change says little before they know the parts.
-		...(untouched ? tour : []),
+		// A newcomer goes on with the tour first: a change says little before they know the parts.
+		...(newcomer ? tour : []),
 		...(review ? [reviewItem(review)] : []),
 		...stale.filter(small).map(staleItem),
-		...(untouched ? [] : tour),
+		...(newcomer ? [] : tour),
 		...inOrder.filter((box) => box.knows.level === 'new' && box !== onTour).map(meetItem),
 	]
 	return items.slice(0, MOST)

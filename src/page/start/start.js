@@ -2,8 +2,8 @@
 // would have the reader look at, and offers the next two. Under it, one tile for each page says its count in a big
 // number over a small picture: the architecture filled as far as the reader knows each part, a few concepts worth a
 // few minutes, the drawn processes, the commits that landed, and the reader's own map. A tile's picture is pressed
-// like the page it stands for. On a first visit, and until ken's model names the parts, what the project says it is
-// leads in place of "Start here".
+// like the page it stands for. What the project is leads on every visit: on a first one, and until ken's model names
+// the parts, in place of "Start here", and after that smaller, above it.
 import { partId } from '../brief/concept-id.js'
 import { dayText } from '../changes/timeline.js'
 import { KNOWN, levelLabel } from '../level/level-state.js'
@@ -70,14 +70,12 @@ function nextButton(item, index) {
 	return `<button class="k-chip" data-act="start-go" data-index="${index}" data-key="start-chip-${index}">${icon(mark)}<span>${prose(item.title)}</span></button>`
 }
 
-function startHtml({ look }) {
+// briefOf gives a brief the page has read: a stop of the tour says what its part does, from its brief.
+function startHtml({ look, briefOf }) {
 	const items = look.next?.items ?? []
-	const about = look.named
-		? `<p class="k-home-about">${prose(look.named.about)} <button class="k-link" data-act="project-brief" data-key="home-about">Open the project's brief</button></p>`
-		: ''
 	const [lead, ...rest] = items
 	if (!lead) {
-		return `${about}<section class="k-tile k-start" aria-labelledby="start-title">
+		return `<section class="k-tile k-start" aria-labelledby="start-title">
 			<div class="k-start-pic">${mapHtml(look, { lit: [], key: 'start-map' })}</div>
 			<div class="k-start-words"><p class="k-eyebrow">Start here</p><h2 id="start-title">Nothing new since you looked</h2><p class="k-start-why">${look.named ? 'The architecture is as you left it.' : "ken's model has not named the parts of this project yet."}</p></div>
 			<button class="k-btn is-big" data-act="go-page" data-page="architecture" data-key="start-primary">See the architecture${icon('right')}</button>
@@ -85,9 +83,10 @@ function startHtml({ look }) {
 	}
 	const stale = lead.kind === 'stale' ? look.boxes.find((box) => box.name === lead.parts[0])?.knows.since : null
 	const badge = stale ? `<span class="k-badge">${icon('changed')}<span class="k-num">${stale}</span></span>` : ''
-	return `${about}<section class="k-tile k-start" aria-labelledby="start-title">
+	const stop = lead.kind === 'tour' ? briefOf(partId(look.within, lead.parts[0]))?.line : null
+	return `<section class="k-tile k-start" aria-labelledby="start-title">
 		<div class="k-start-pic">${mapHtml(look, { lit: lead.parts, key: 'start-map' })}${badge}</div>
-		<div class="k-start-words"><p class="k-eyebrow">Start here</p><h2 id="start-title">${prose(lead.title)}</h2><p class="k-start-why">${prose(lead.why)}</p>
+		<div class="k-start-words"><p class="k-eyebrow">Start here</p><h2 id="start-title">${prose(lead.title)}</h2><p class="k-start-why">${prose(stop ?? lead.why)}</p>
 			<div class="k-then">${rest
 				.slice(0, 2)
 				.map((item, i) => nextButton(item, i + 1))
@@ -259,7 +258,9 @@ export function startPageHtml(view) {
 	}
 	const { look, changes } = top
 	const lead =
-		!look.named || isFirst(look, view.reader) ? firstVisitHtml({ ...view, look }, drawn) : startHtml({ look })
+		!look.named || isFirst(look, view.reader)
+			? firstVisitHtml({ ...view, look }, drawn)
+			: `${firstVisitHtml({ ...view, look, small: true }, drawn)}${startHtml({ look, briefOf: view.briefOf })}`
 	return `<div class="k-home">
 		${lead}
 		${architectureHtml(look)}

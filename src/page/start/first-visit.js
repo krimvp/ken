@@ -1,6 +1,7 @@
-// Home on a first visit, and on a project whose parts ken's model has not named: what the project is, in its own
-// words, from plain code in the first second; then what ken's model is doing about it and how long that takes; and,
-// once the model has named the parts, its one line on the project, its parts and the main process, in the same place.
+// What the project is, at the top of Home on every visit: in its own words, from plain code in the first second; then
+// what ken's model is doing about it and how long that takes; and, once the model has named the parts, its one line
+// on the project, its parts and the main process, in the same place. For a reader who has been here before it is
+// smaller: the quote shorter, fewer facts, and the model's line with the main process in place of the parts.
 import { jobLineHtml, live } from '../jobs/jobs.js'
 import { partClass } from '../project/part-colours.js'
 import { icon } from '../shell/icons.js'
@@ -38,17 +39,17 @@ function wordsHtml(first, name) {
 	return `<div class="k-first-words"><p class="k-eyebrow">What it is, in its own words</p><h2 id="first-title">${esc(said)}</h2>${description}${quote}</div>`
 }
 
-function languagesHtml(languages) {
+function languagesHtml(languages, most) {
 	const total = languages.reduce((sum, each) => sum + each.lines, 0)
 	if (total === 0) return ''
-	const shown = languages.slice(0, SHOWN_LANGUAGES).map((each) => {
+	const shown = languages.slice(0, most).map((each) => {
 		const share = Math.max(1, Math.round((each.lines / total) * 100))
 		return `<li><span class="k-lang-name">${esc(each.name)}</span><span class="k-lang-bar" style="--share:${share}%" aria-hidden="true"></span><span class="k-num">${share}%</span></li>`
 	})
 	return `<div><dt>Written in</dt><dd><ul class="k-langs">${shown.join('')}</ul></dd></div>`
 }
 
-function entriesHtml(entries) {
+function entriesHtml(entries, most) {
 	if (entries.length === 0) return ''
 	const said = (each) =>
 		each.kind === 'script'
@@ -56,13 +57,12 @@ function entriesHtml(entries) {
 			: each.kind === 'main'
 				? `<code>${esc(each.runs)}</code> is what other code loads`
 				: `<code>${esc(each.name)}</code> runs <code>${esc(each.runs)}</code>`
-	const shown = entries.slice(0, SHOWN_ENTRIES).map((each) => `<li>${said(each)}</li>`)
-	const more =
-		entries.length > SHOWN_ENTRIES ? `<li class="k-muted">and ${entries.length - SHOWN_ENTRIES} more</li>` : ''
+	const shown = entries.slice(0, most).map((each) => `<li>${said(each)}</li>`)
+	const more = entries.length > most ? `<li class="k-muted">and ${entries.length - most} more</li>` : ''
 	return `<div><dt>Started by</dt><dd><ul class="k-first-list">${shown.join('')}${more}</ul></dd></div>`
 }
 
-function factsHtml(first) {
+function factsHtml(first, small) {
 	const { size, activity, deploy } = first
 	const deployed =
 		deploy.length === 0
@@ -74,7 +74,7 @@ function factsHtml(first) {
 			: `${count(activity.commits, 'commit', 'commits')} in the last ${activity.days} days, by ${count(activity.authors, 'person', 'people')}. The newest is from ${ago(activity.last)}.`
 	return `<dl class="k-first-facts">
 		<div><dt>Size</dt><dd>${count(size.files, 'file', 'files')}, ${count(size.lines, 'line', 'lines')}</dd></div>
-		${languagesHtml(first.languages)}${entriesHtml(first.entries)}${deployed}
+		${languagesHtml(first.languages, small ? 2 : SHOWN_LANGUAGES)}${entriesHtml(first.entries, small ? 2 : SHOWN_ENTRIES)}${deployed}
 		<div><dt>Lately</dt><dd>${lately}</dd></div>
 	</dl>`
 }
@@ -137,16 +137,20 @@ function processHtml({ look, concepts, briefOf, env, routeHtml }) {
 // view is the Home's view, with first as GET /api/first-look sends it and env as the page's. mapHtml draws the parts
 // small, and routeHtml a process.
 export function firstVisitHtml(view, { mapHtml, routeHtml }) {
-	const { first, project, look } = view
+	const { first, project, look, small } = view
+	const line = () =>
+		`<div class="k-first-line"><p class="k-eyebrow">In ken's model's words</p><p class="k-first-about">${prose(look.named.about ?? '')}${small ? ' <button class="k-link" data-act="project-brief" data-key="home-about">Open the project\'s brief</button>' : ''}</p>${processHtml({ ...view, routeHtml })}</div>`
 	const said = !look
 		? '<p class="k-first-next" role="status">Reading the folders from git.</p>'
-		: look.named
-			? `<div class="k-first-named"><div class="k-first-map">${mapHtml(look, { lit: [], key: 'first-map' })}</div><div class="k-first-line"><p class="k-eyebrow">In ken's model's words</p><p class="k-first-about">${prose(look.named.about ?? '')}</p>${processHtml({ ...view, routeHtml })}</div><button class="k-btn is-big" data-act="go-page" data-page="architecture" data-key="first-primary">See how it works${icon('right')}</button></div>`
-			: nextHtml(view)
+		: !look.named
+			? nextHtml(view)
+			: small
+				? `<div class="k-first-named">${line()}</div>`
+				: `<div class="k-first-named"><div class="k-first-map">${mapHtml(look, { lit: [], key: 'first-map' })}</div>${line()}<button class="k-btn is-big" data-act="go-page" data-page="architecture" data-key="first-primary">See how it works${icon('right')}</button></div>`
 	const read = first?.kind === 'ok'
-	const facts = read ? factsHtml(first.look) : ''
+	const facts = read ? factsHtml(first.look, small) : ''
 	const words = read
 		? wordsHtml(first.look, project)
 		: `<div class="k-first-words"><p class="k-eyebrow">What it is, in its own words</p><h2 id="first-title">${esc(project)}</h2><p class="k-first-none">${first?.kind === 'failed' ? `ken could not read it. ${esc(first.message)}` : 'Reading the README and the manifests.'}</p></div>`
-	return `<section class="k-tile k-first" aria-labelledby="first-title">${words}${facts}${said}</section>`
+	return `<section class="k-tile k-first${small ? ' is-small' : ''}" aria-labelledby="first-title">${words}${facts}${said}</section>`
 }
