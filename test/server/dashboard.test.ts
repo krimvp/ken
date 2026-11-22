@@ -268,6 +268,18 @@ test('a row says which lens asked it: the story of a change, a later question ab
 	const committed = { base, head, snapshot: false }
 	assert.deepEqual([rows[0]?.change, rows[1]?.change], [committed, committed], 'both are about the same commits')
 	assert.deepEqual([rows[2]?.change.base, rows[2]?.change.snapshot], [head, true])
+
+	// A rebase that drops the asked commits leaves a head that neither the project nor ken's store holds.
+	const git = (...args: string[]) => execFileSync('git', args, { cwd: root, stdio: 'ignore' })
+	git('reset', '--quiet', '--hard', base)
+	git('reflog', 'expire', '--expire=now', '--all')
+	git('gc', '--quiet', '--prune=now')
+	const after: typeof rows = (await json(server, '/api/questions')).questions
+	assert.deepEqual(
+		after.map((row) => row.change.snapshot),
+		[false, false, true],
+		'a commit gone from the project is not a snapshot',
+	)
 })
 
 test('a level the reader asks to see another way is stored with their own words when the model draws it again, and the layout then shows the new parts and those words', async () => {

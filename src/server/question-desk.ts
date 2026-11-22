@@ -25,7 +25,7 @@ import {
 } from '../follow-up/index.ts'
 import { entryFrom, type History, type HistoryEntry, whyNoNote } from '../history/index.ts'
 import { type Change, type LayoutSources, lookAtLayout, readLayoutAsk } from '../layout/index.ts'
-import type { About } from '../live/index.ts'
+import { type About, holdsSnapshot } from '../live/index.ts'
 import { areaQuestion, catchUpQuestion, deeperQuestion, type TopicState, type UnderstandingMap } from '../map/index.ts'
 import { type RecordStore, sameName } from '../record/index.ts'
 import { parsePath, type Repository } from '../repo/index.ts'
@@ -237,17 +237,6 @@ export function questionDesk(
 	async function rows(): Promise<QuestionRow[]> {
 		await settled()
 		const asked = (await history.list()).filter((entry) => entry.about === undefined)
-		// repo is the project's own git, which does not hold the commits ken makes of uncommitted work. Rows about the
-		// same change ask git once.
-		const inProject = new Map<string, Promise<boolean>>()
-		const isSnapshot = async (head: string) => {
-			if (!inProject.has(head))
-				inProject.set(
-					head,
-					repo.resolve(head).then((found) => found.kind === 'ok'),
-				)
-			return !(await inProject.get(head))
-		}
 		return await Promise.all(
 			asked.map(async (entry) => {
 				const { id, question, askedAt, thread, outcome } = entry
@@ -257,7 +246,7 @@ export function questionDesk(
 					return { ...row, cards: 0, calls: 0, risks: 0, ...none }
 				}
 				const { items, change, tour, view, want } = entry.reply
-				const snapshot = change !== null && (await isSnapshot(change.head))
+				const snapshot = change !== null && (await holdsSnapshot(layout.snapshots, change.head))
 				const cards = items.flatMap((item) => (item.kind === 'card' ? [item.card] : []))
 				const has = (kind: CardKind) => cards.some((card) => card.kind === kind)
 				const total = change ? change.covered.length + change.uncovered.length : 0
