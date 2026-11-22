@@ -59,7 +59,7 @@ export async function openNotes(
 			file,
 			read,
 			async add(text, now) {
-				const said = text.trim()
+				const said = oneLine(text)
 				if (!isNote(said)) {
 					return { kind: 'refused', problem: `A note is one line of 1 to ${NOTE_CHARS} characters.` }
 				}
@@ -77,12 +77,16 @@ export async function openNotes(
 }
 
 function isNote(text: string): boolean {
-	return text !== '' && text.length <= NOTE_CHARS && !text.includes('\n')
+	return text !== '' && text.length <= NOTE_CHARS
+}
+
+// Every run of white space, line breaks of any kind among them, is one space: a note starts each question on one line.
+function oneLine(text: string): string {
+	return text.replaceAll(/\s+/g, ' ').trim()
 }
 
 function sameWords(a: string, b: string): boolean {
-	const words = (text: string) => text.toLowerCase().replaceAll(/\s+/g, ' ').trim()
-	return words(a) === words(b)
+	return oneLine(a).toLowerCase() === oneLine(b).toLowerCase()
 }
 
 function parseLine(line: string): Line | null {
@@ -96,7 +100,7 @@ function parseLine(line: string): Line | null {
 	const [id, text, at, removes] = ['id', 'text', 'at', 'removes'].map((name) => Reflect.get(value, name))
 	if (typeof removes === 'string') return { kind: 'removes', id: removes }
 	if (typeof id !== 'string' || id === '' || typeof text !== 'string' || typeof at !== 'string') return null
-	return isNote(text.trim()) ? { kind: 'note', note: { id, text: text.trim(), at } } : null
+	return isNote(oneLine(text)) ? { kind: 'note', note: { id, text: oneLine(text), at } } : null
 }
 
 function emptyWhenMissing(error: unknown): string {

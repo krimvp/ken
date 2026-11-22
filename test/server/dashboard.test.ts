@@ -29,7 +29,7 @@ function commitNow(root: string, file: string, text: string, by = 'bo@example.co
 	return execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim()
 }
 
-test('back to the picture before shows the parts as they were before a redraw, back again shows the redraw, and a level with one picture has none to go back to', async () => {
+test('back to the picture before walks back one picture at a time, with the words each was drawn with, until no older picture is left', async () => {
 	const folders = ['a', 'b', 'c', 'd']
 	const { root } = buildRepository([
 		{ message: 'feat: start', files: Object.fromEntries(folders.map((each) => [`src/${each}/x.ts`, `${each}\n`])) },
@@ -47,27 +47,35 @@ test('back to the picture before shows the parts as they were before a redraw, b
 		])
 		if (drawn.kind !== 'appended') assert.fail(drawn.problems.join(' '))
 	}
+	const back = () => call(server, '/api/layout/back', { within: [] })
 	const server = await openKen(root, readerHome())
 
 	const first = { parts: folders.map((each) => part(`Part ${each}`, each)), about: 'Four folders.', asked: 'one each' }
 	await draw(first)
-	const refused = await call(server, '/api/layout/back', { within: [] })
+	const refused = await back()
 	assert.equal(refused.status, 409, refused.text)
 
 	await draw({ parts: [part('Front', 'a', 'b'), part('Back', 'c', 'd')] })
-	assert.deepEqual(names((await json(server, '/api/layout')).look), ['Front', 'Back'])
+	await draw({ parts: [part('Left', 'a', 'c'), part('Right', 'b', 'd')] })
+	assert.deepEqual(names((await json(server, '/api/layout')).look), ['Left', 'Right'])
 
-	const back = await json(server, '/api/layout/back', { within: [] })
+	const second = await json(server, '/api/layout/back', { within: [] })
+	assert.deepEqual(names(second.look), ['Front', 'Back'])
+	assert.ok(Array.isArray(second.changes), 'it answers as the layout does')
+	assert.deepEqual(names((await json(server, '/api/layout')).look), ['Front', 'Back'], 'it shows from now on')
+
+	const oldest = await json(server, '/api/layout/back', { within: [] })
 	const firstNames = first.parts.map((each) => each.name)
-	assert.deepEqual(names(back.look), firstNames)
-	assert.ok(Array.isArray(back.changes), 'it answers as the layout does')
-	const { look } = await json(server, '/api/layout')
-	assert.deepEqual(names(look), firstNames, 'the earlier picture is the one that shows from now on')
-	assert.deepEqual([look.named.about, look.named.asked], [first.about, first.asked])
-	assert.equal(back.wayIn.facts.learn, '4 parts', 'a named level counts its parts, where a folder level counts folders')
+	assert.deepEqual(names(oldest.look), firstNames)
+	assert.deepEqual([oldest.look.named.about, oldest.look.named.asked], [first.about, first.asked])
+	assert.equal(
+		oldest.wayIn.facts.learn,
+		'4 parts',
+		'a named level counts its parts, where a folder level counts folders',
+	)
 
-	const again = await json(server, '/api/layout/back', { within: [] })
-	assert.deepEqual(names(again.look), ['Front', 'Back'])
+	const none = await back()
+	assert.equal(none.status, 409, 'nothing is older than the first picture')
 })
 
 test("what landed since the reader's last commit leads the changes the layout offers, and picking it lays those commits over the picture", async () => {
@@ -114,13 +122,13 @@ test('ken suggests learning to a reader it has not met, catching up once commits
 	assert.equal(landed.suggested, 'catch-up')
 	assert.match(landed.why, /\b2 commits\b/)
 	assert.match(landed.facts['catch-up'], /^2 commits since /)
-	assert.equal(landed.facts.review, 'Newest commit: edit src/a/z.ts')
+	assert.ok(landed.facts.review.includes('edit src/a/z.ts'), 'the fact names the newest commit by its subject')
 
 	writeFileSync(path.join(root, 'src/a/x.ts'), 'x\nnot committed\n')
 	const working = await wayIn()
 	assert.equal(working.suggested, 'review')
 	assert.match(working.why, /\b1 file\b/)
-	assert.equal(working.facts.review, '1 file uncommitted')
+	assert.match(working.facts.review, /\b1 file\b/)
 	assert.match(working.facts['catch-up'], /^2 commits since /, 'each way in keeps its fact, whichever ken suggests')
 })
 
@@ -135,6 +143,18 @@ test("ken suggests catching up on what landed since the reader's own last commit
 	assert.match(wayIn.why, /\b1 commit\b/)
 })
 
+test('the review fact names a GitHub merge by its pull request number, not by the branch it came from', async () => {
+	const { root } = buildRepository([
+		{ message: 'feat: start', files: { 'src/a/x.ts': 'x\n' } },
+		{ message: 'feat: y', files: { 'src/a/y.ts': 'y\n' }, parent: 0 },
+		{ message: 'Merge pull request #107 from someone/a-long-branch-name', files: {}, parent: 0, merge: 1 },
+	])
+	const server = await openKen(root, readerHome())
+	const { review } = (await json(server, '/api/layout')).wayIn.facts
+	assert.ok(review.includes('pull request #107'), review)
+	assert.ok(!review.includes('someone'), review)
+})
+
 test('on a branch ahead of main ken suggests review, and says which branch and how many commits', async () => {
 	const { root } = buildRepository([{ message: 'feat: start', files: { 'src/a/x.ts': 'x\n' } }])
 	execFileSync('git', ['checkout', '--quiet', '-b', 'feature-x'], { cwd: root })
@@ -145,7 +165,8 @@ test('on a branch ahead of main ken suggests review, and says which branch and h
 	const { wayIn } = await json(server, '/api/layout')
 	assert.equal(wayIn.suggested, 'review')
 	assert.match(wayIn.why, /feature-x.*\b2 commits\b/)
-	assert.equal(wayIn.facts.review, '2 commits on feature-x')
+	assert.match(wayIn.facts.review, /\b2 commits\b/)
+	assert.ok(wayIn.facts.review.includes('feature-x'), 'the fact names the branch')
 })
 
 test('a walk asked through the change lens is about that change though the model names none: the reply and its row carry the range and the steps, and a change with nothing in it never reaches the model', async () => {

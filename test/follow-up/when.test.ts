@@ -22,8 +22,8 @@ test('the terminal writes a moment in the reader time zone, as the page does', (
 	assert.equal(onDay('2025-11-16', now), 'on 16 Nov 2025')
 	assert.equal(
 		day('2026-11-15T20:00:00Z', now),
-		'earlier today',
-		"the day is the reader's, and there it is already the 16th",
+		'01:30',
+		"the day is the reader's, and there it is already the 16th, so the moment reads as its time today",
 	)
 	assert.equal(day('2026-11-02T01:06:00Z', now), '2 Nov')
 	assert.equal(day('2025-11-16T01:06:00Z', now), '16 Nov 2025')
