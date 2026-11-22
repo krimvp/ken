@@ -161,22 +161,88 @@ export type PartsLevel = {
 	boxes: { name: string; paths: string[]; files: number; job: string | null; state: 'same' | 'changed' | 'gone' }[]
 	named: { drawnAt: string; added: string[] } | null
 	loose: string[]
+	drawings?: ViewsAsk
 }
 
+// What the drawings of where a project runs start from: the deploy files plain code read, and the bounds show checks
+// them against.
+export type ViewsAsk = {
+	deploy: {
+		workloads: { file: string; name: string; kind: string; copies: number | null; said: number | null }[]
+		dockerfiles: string[]
+		unread: string[]
+	}
+	bounds: { outside: number; frames: number; things: number; crossings: number; gaps: number; quotes: number }
+}
+
+// At the top level, drawings is there, and the same run draws "In its world" and "Where it runs" with the parts.
 export function partsQuestion(level: PartsLevel): LensQuestion {
-	const { within, head, named } = level
+	const { within, head, named, drawings } = level
 	return {
 		text: [
 			`${named ? 'Name again' : 'Name'} the main parts of ${whereOf(level)}`,
 			LIST_SAID,
 			...levelLines(level),
+			...(drawings ? deployLines(drawings) : []),
 			'',
 			`Read the code at HEAD (${head}), then call show with layout, and within set to ${JSON.stringify(within)}.`,
 			...layoutRules(level),
+			...(drawings
+				? [
+						'Then draw two pictures of the whole project with those parts, as an architect would: "In its world" and "Where it runs". Send them with views, in the same show call as the layout or after it, never before: a thing names a part by the name the layout gives it.',
+						...viewsRules(drawings),
+					]
+				: []),
 			'Then say in two or three sentences how the parts fit together.',
 		].join('\n'),
 		empty: false,
 	}
+}
+
+// "Ask ken to draw where this runs" on the top level, for a project whose parts were named before ken drew these.
+export function viewsQuestion(level: PartsLevel & { drawings: ViewsAsk }): LensQuestion {
+	return {
+		text: [
+			`Draw where ${whereOf(level)} runs and what it talks to`,
+			LIST_SAID,
+			...levelLines(level),
+			...deployLines(level.drawings),
+			'',
+			`Read the code at HEAD (${level.head}), then call show with views: "In its world" and "Where it runs", as an architect would draw them. A thing names a part by its name above.`,
+			...viewsRules(level.drawings),
+			'Then say in one or two sentences where the project runs.',
+		].join('\n'),
+		empty: false,
+	}
+}
+
+function deployLines({ deploy }: ViewsAsk): string[] {
+	const workload = ({ file, name, kind, copies, said }: ViewsAsk['deploy']['workloads'][number]) =>
+		`${kind} ${name} in ${file}, ${copies === null ? 'copies not given' : `${copies} ${copies === 1 ? 'copy' : 'copies'}`}${said ? ` (line ${said})` : ''}`
+	return [
+		...(deploy.workloads.length > 0
+			? [`- ken read these from compose files and manifests: ${deploy.workloads.map(workload).join('; ')}.`]
+			: ['- ken found no compose file and no manifest of a Deployment, StatefulSet or DaemonSet.']),
+		...(deploy.dockerfiles.length > 0 ? [`- Dockerfiles: ${deploy.dockerfiles.join(', ')}.`] : []),
+		...(deploy.unread.length > 0
+			? [`- ken cannot read these, so read them yourself: ${deploy.unread.join(', ')}.`]
+			: []),
+	]
+}
+
+// What the two drawings hold, and the rules show checks them against, so the model can pass the check first time.
+function viewsRules({ bounds }: ViewsAsk): string[] {
+	return [
+		'Give every item a short id of your own, such as "worker-thread". Items name each other by these ids, and one id names one item across both pictures.',
+		`"In its world" (views.world): the project as one block, and around it at most ${bounds.outside} people and outside systems it deals with: who uses it, what it calls over a network or a process, what calls it, what it is a library inside, and code it loads at run time that it does not hold, such as plugins. A package the project imports runs inside the project, so it is neither an outside system nor a frame. For each, kind person or system, a name, one line on what it is, and the lines that show it: where the code reads a person's input, calls a host, imports a client library, or is imported. Then the crossings between the project and each: what crosses, how (http, https, grpc, sql, event, file, process, library, other), the direction said from the project (in, out or both), and the lines.`,
+		`"Where it runs" (views.runtime): at most ${bounds.frames} frames, each a place code runs: a browser, a machine, a cluster, a process, a container, a worker thread, a virtual machine or sandbox, a function. Find every place the code starts code apart from itself: a new Worker, a spawn or a fork, a virtual machine or sandbox it creates, an entry point, a compose service, a manifest, a Dockerfile. Each is a frame, and its lines make it. A frame inside another names it with in, so a virtual machine made inside a worker thread sits in that thread. Code that runs inside the process with no thread of its own is no frame: its part sits in the process. Give copies only when a line gives the number, and quote that line.`,
+		"Put each part in the frame it runs in, as a thing of kind part with the part's name, and quote the lines that show it runs there, such as where the frame's entry point imports it. A part that runs in two places is two things. A part that never runs when the product runs, such as repository tooling, sits in no frame.",
+		'A store is a thing of kind store: a database, a cache, a queue, a bus, files or other, with a name, one line, and for a bus its topics. Quote where the code connects to it or reads and writes it. An outside system of "In its world" that the runtime calls is a thing of kind outside whose id is that system\'s id.',
+		`At most ${bounds.crossings} crossings from one thing to another: a call that waits for its answer, with how it crosses, or an event picked up later, with its topic. Quote the lines on each side where the repository has them: the call or the send, and the handler or the read.`,
+		`Where the repository does not say something a reader would ask, write a gap on that thing instead of guessing, such as "who runs it: not in the repository" or "no reader in the repository". At most ${bounds.gaps}.`,
+		`Never guess. Each item rests on 1 to ${bounds.quotes} quoted lines of files. Leave out a frame, a thing or a crossing you cannot quote, or say it as a gap.`,
+		'ken checks each item alone. One that comes back says why: fix it and send it again alone, in views. The items ken took stay.',
+	]
 }
 
 // The box where the reader tells ken to show a level another way. asked is their own words. The level as they see it

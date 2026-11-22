@@ -18,7 +18,9 @@ export {
 	rangeQuestion,
 	sinceWords,
 	topicQuestion,
+	type ViewsAsk,
 	viewQuestion,
+	viewsQuestion,
 } from './lens-questions.ts'
 export {
 	type ChangeCommit,

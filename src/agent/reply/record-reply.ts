@@ -8,7 +8,7 @@
 // a reply that cites a commit the project's own git cannot find adds nothing to the project record. The reader's
 // history keeps it, decisions and all.
 import type { Quote, VerifiedQuote } from '../../checks/index.ts'
-import { diagramDraft, layoutDraft } from '../../diagram/index.ts'
+import { diagramDraft, layoutDraft, type Views, viewsDraft } from '../../diagram/index.ts'
 import {
 	type EntryDraft,
 	type EntryId,
@@ -34,13 +34,14 @@ export type Recorded =
 	| { kind: 'refused'; problems: string[] }
 
 // project reads the project's own git, never ken's snapshot store. scope is the change the reply is about, with the
-// title of its piece of work when it has one.
+// title of its piece of work when it has one. views is what the reply holds of the drawings of the top level.
 export async function recordReply(
 	store: RecordStore,
 	project: Repository,
 	items: Item[],
 	scope: { range: Range; work: string | null } | null,
 	tour: Tour | null,
+	views: Views | null,
 	signal: AbortSignal,
 ): Promise<Recorded> {
 	const cards = items.flatMap((item) => (item.kind === 'card' ? [item.card] : []))
@@ -129,13 +130,25 @@ export async function recordReply(
 		})
 	}
 	// A new level of the same paths replaces the one before. The record keeps both, so an old commit can still use it.
-	for (const card of cards) {
-		if (card.kind !== 'layout') continue
-		const { within } = card.layout
-		const before = [...(await store.read()).current, ...pending].findLast(
+	// The drawings go with the last top level the reply names, else with the one the record holds, as a new version.
+	const isTop = (card: (typeof cards)[number]) => card.kind === 'layout' && card.layout.within.length === 0
+	const lastTop = cards.findLast(isTop)
+	const drawings = views && { views: viewsDraft(views) }
+	const sameLevel = async (within: string[]) =>
+		[...(await store.read()).current, ...pending].findLast(
 			(entry) => entry.kind === 'layout' && entry.within.join('\n') === within.join('\n'),
 		)
-		await add('The layout', { kind: 'layout', ...layoutDraft(card.layout), replaces: before?.id })
+	for (const card of cards) {
+		if (card.kind !== 'layout') continue
+		const before = await sameLevel(card.layout.within)
+		const kept = card === lastTop ? drawings : {}
+		await add('The layout', { kind: 'layout', ...layoutDraft(card.layout), ...kept, replaces: before?.id })
+	}
+	if (drawings && !lastTop) {
+		const before = await sameLevel([])
+		if (before?.kind === 'layout') {
+			await add('The drawings', { kind: 'layout', ...layoutDraft(before), ...drawings, replaces: before.id })
+		} else problems.push('The drawings: the record has no named parts of the project to keep them with.')
 	}
 	if (drafts.length === 0) return { kind: 'recorded', entries: [], problems }
 	const appended = await store.append(drafts, signal)
@@ -159,7 +172,7 @@ export async function endReply(
 ): Promise<{ reply: Reply; recorded: RecordEntry[]; problems: string[] }> {
 	const { scope } = round
 	const change = scope && (await changeOf(gate.sources.repo, scope.range, round.items, signal))
-	const recorded = await recordReply(gate.store, gate.project, round.items, scope, round.tour, signal)
+	const recorded = await recordReply(gate.store, gate.project, round.items, scope, round.tour, round.views, signal)
 	// Every topic is in the record now, so each card names it as the record spells it.
 	const names = (await gate.store.read()).current.flatMap((entry) => (entry.kind === 'topic' ? [entry.name] : []))
 	const canonical = (name: string) => names.find((other) => sameName(other, name)) ?? name
