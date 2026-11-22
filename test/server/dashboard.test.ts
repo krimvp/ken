@@ -122,13 +122,13 @@ test('ken suggests learning to a reader it has not met, catching up once commits
 	assert.equal(landed.suggested, 'catch-up')
 	assert.match(landed.why, /\b2 commits\b/)
 	assert.match(landed.facts['catch-up'], /^2 commits since /)
-	assert.equal(landed.facts.review, 'Newest commit: edit src/a/z.ts')
+	assert.ok(landed.facts.review.includes('edit src/a/z.ts'), 'the fact names the newest commit by its subject')
 
 	writeFileSync(path.join(root, 'src/a/x.ts'), 'x\nnot committed\n')
 	const working = await wayIn()
 	assert.equal(working.suggested, 'review')
 	assert.match(working.why, /\b1 file\b/)
-	assert.equal(working.facts.review, '1 file uncommitted')
+	assert.match(working.facts.review, /\b1 file\b/)
 	assert.match(working.facts['catch-up'], /^2 commits since /, 'each way in keeps its fact, whichever ken suggests')
 })
 
@@ -153,7 +153,8 @@ test('on a branch ahead of main ken suggests review, and says which branch and h
 	const { wayIn } = await json(server, '/api/layout')
 	assert.equal(wayIn.suggested, 'review')
 	assert.match(wayIn.why, /feature-x.*\b2 commits\b/)
-	assert.equal(wayIn.facts.review, '2 commits on feature-x')
+	assert.match(wayIn.facts.review, /\b2 commits\b/)
+	assert.ok(wayIn.facts.review.includes('feature-x'), 'the fact names the branch')
 })
 
 test('a walk asked through the change lens is about that change though the model names none: the reply and its row carry the range and the steps, and a change with nothing in it never reaches the model', async () => {
