@@ -5,6 +5,7 @@
 import { glide, gliders } from '../arch-views/glide.js'
 import { foldedAt } from '../arch-views/runtime-layout.js'
 import { viewOfConcept, viewOn, viewsOffered } from '../arch-views/switch.js'
+import { freshTree } from '../folder-tree/folder-tree.js'
 import { WHOLE } from '../level/level-state.js'
 import { fill } from '../shell/fill.js'
 import { architectureHtml, processesOf } from './architecture.js'
@@ -25,11 +26,16 @@ export const freshArch = () => ({
 	// The drawing the reader chose last ("world", "runtime" or "parts"), whether the key is open, whether a crowded
 	// frame of "Where it runs" is folded, and what the last run to draw them left to say.
 	view: null,
+	format: null,
 	keyOpen: false,
 	folded: true,
 	viewsProblem: null,
 	// The drawing on screen when the canvas was last drawn, so a switch glides.
 	shown: null,
+	// The folders open in the tree of a level ken's model has not named.
+	tree: freshTree(),
+	// Whether the reader picked a layer themselves. Until they do, a drawn process is lit.
+	layerPicked: false,
 })
 
 const narrow = matchMedia('(max-width: 760px)')
@@ -79,7 +85,14 @@ export function archActions(app) {
 		const before = switched ? gliders(page) : new Map()
 		arch.shown = view
 		const topViews = state.shell.top?.look?.views ?? null
-		const drawn = fill(page, architectureHtml({ home, arch, env, brief: state.brief.id, column, topViews }))
+		const reading = page.querySelector('.k-arch-reading')
+		const scroll = reading?.scrollTop ?? 0
+		const drawn = fill(
+			page,
+			architectureHtml({ home, arch, env, brief: state.brief.id, column, topViews, text: state.shell.prefs.text }),
+		)
+		const readAfter = page.querySelector('.k-arch-reading')
+		if (readAfter && reading?.dataset.level === readAfter.dataset.level) readAfter.scrollTop = scroll
 		if (drawn && arch.drawOpen) {
 			const box = page.querySelector('#redraw-text')
 			if (box && box.value !== home.redraw.text) box.value = home.redraw.text
@@ -165,6 +178,12 @@ export function archActions(app) {
 	}
 
 	const actions = {
+		'arch-format'(el) {
+			arch.format = el.dataset.format
+			arch.keyOpen = false
+			render()
+			page.querySelector('[data-key="arch-format"]')?.focus()
+		},
 		'arch-view': (el) => showView(el.dataset.view),
 		'arch-view-pick': pickPart,
 		'arch-key'() {
@@ -198,6 +217,7 @@ export function archActions(app) {
 				? app.brief.project(el.dataset.key)
 				: moveTo(state.home.trail.slice(0, Number(el.dataset.index) + 1)),
 		async 'arch-layer'(el) {
+			arch.layerPicked = true
 			const layer = arch.layer === el.dataset.layer ? null : el.dataset.layer
 			const wasChanges = arch.layer === 'changes'
 			arch.layer = layer
@@ -212,6 +232,27 @@ export function archActions(app) {
 		},
 		async 'arch-change'(el) {
 			await layChange(el.dataset.change)
+			render()
+		},
+		// A folder of the tree opens in place, and its folders and files are read the way the level is.
+		async 'tree-open'(el) {
+			const key = el.dataset.paths
+			if (arch.tree.has(key)) {
+				arch.tree.delete(key)
+				return render()
+			}
+			arch.tree.set(key, { kind: 'reading' })
+			render()
+			const within = key.split(',').map((each) => `within=${encodeURIComponent(each)}`)
+			const answer = await app.read(`/api/layout?${within.join('&')}`).catch((error) => ({
+				ok: false,
+				body: { message: error.message },
+			}))
+			if (!arch.tree.has(key)) return
+			arch.tree.set(
+				key,
+				answer.ok ? { kind: 'ok', boxes: answer.body.look.boxes } : { kind: 'failed', message: answer.body.message },
+			)
 			render()
 		},
 		'arch-zoom': (el) => camera.zoomBy(Number(el.dataset.by)),
@@ -231,6 +272,8 @@ export function archActions(app) {
 		if (arch.layer !== 'changes') home.change = 'none'
 		else if (home.change === 'none') home.change = changeChoices(home.changes)[0]?.change ?? 'none'
 		await app.level.loads.refresh()
+		// Process first: the page opens on how it works, so a drawn process is lit until the reader picks a layer.
+		if (arch.layer === null && !arch.layerPicked && processesOf(home).length > 0) arch.layer = 'processes'
 		if (arch.layer === 'processes') arch.process ??= processesOf(home)[0]?.id ?? null
 	}
 

@@ -1274,7 +1274,7 @@ $('#ask').addEventListener('submit', (event) => {
 
 document.addEventListener('submit', (event) => {
 	if (brief.submit(event) || procs.submit(event) || chg.submit(event)) return
-	if (ask.submit(event)) return
+	if (ask.submit(event) || you.submit(event)) return
 	if (level.submit(event)) {
 		// A request sent from the canvas's tool closes the tool, so the canvas shows the run.
 		if (event.target.id === 'redraw-form' && state.home.redraw.problem === null && state.arch.drawOpen) {
@@ -1306,7 +1306,7 @@ document.addEventListener('submit', (event) => {
 
 document.addEventListener(
 	'input',
-	(event) => shell.input(event) || chg.input(event) || ask.input(event) || level.input(event),
+	(event) => shell.input(event) || chg.input(event) || ask.input(event) || you.input(event) || level.input(event),
 )
 document.addEventListener('mousedown', (event) => level.press(event))
 window.addEventListener('popstate', () => shell.back(showReply))
@@ -1423,6 +1423,9 @@ try {
 	state.home.project = server.name
 	learnParts(server.parts)
 	state.model = server.model
+	// shortcut: on the reader's first open ken's model names the parts by itself, once, as the history then holds the
+	// run. Stage 2's queue of jobs replaces this.
+	if (state.model.kind === 'ok' && !server.named && state.rows.length === 0) void level.nameTop(true)
 	if (server.live === true) await loadLive()
 	state.authors = recent.authors
 	render()

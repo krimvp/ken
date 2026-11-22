@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { createSession, type RunResult } from 'aigent'
+import { createSession, type RunResult, type Session } from 'aigent'
 import type { Tool, ToolOutcome } from 'aigent/plugin'
 import { followedNames, usedElsewhere } from '../checks/index.ts'
 import type { ReaderNotes, ReaderPrefs, UnderstandingMap } from '../map/index.ts'
@@ -8,7 +8,7 @@ import { findRoot, gitRepository } from '../repo/index.ts'
 import { projectSessions } from '../transcripts/index.ts'
 import { SHORTEN_PROMPT, type Shorten, shortened, shortenQuestion } from './brief/shorten-lines.ts'
 import type { ChatEvent, Cost } from './chat-event.ts'
-import { briefParts, type Lens, lensOf, readLimit } from './lens/lens.ts'
+import { briefParts, lensOf, readLimit } from './lens/lens.ts'
 import { plainFacts } from './lens/plain-facts.ts'
 import type { ModelConfig } from './model-config.ts'
 import { readerIndex, readerNotes } from './reader-index.ts'
@@ -18,6 +18,7 @@ import { endReply } from './reply/record-reply.ts'
 import type { Item } from './reply/reply.ts'
 import { laterCommits, laterText, MAX_PASS_REJECTIONS, reviseTool, riskPassQuestion } from './reply/risk-pass.ts'
 import { type Asking, changeNamed, freshRound, type Round, showTool } from './reply/show-tool.ts'
+import { type SavedAnswer, threadMemory } from './reply/thread-memory.ts'
 import { SYSTEM_PROMPT } from './system-prompt.ts'
 import { describeCall } from './tools/describe-call.ts'
 import { diffTool } from './tools/diff-tool.ts'
@@ -65,7 +66,7 @@ export async function startChat(options: {
 	directory: string
 	model: ModelConfig
 	env: Record<string, string | undefined>
-	reader?: { map: UnderstandingMap; notes: ReaderNotes; prefs: ReaderPrefs }
+	reader?: { map: UnderstandingMap; notes: ReaderNotes; prefs: ReaderPrefs; readSaved?: () => Promise<SavedAnswer[]> }
 	snapshots?: string
 }): Promise<{ kind: 'ok'; chat: Chat } | { kind: 'no-repository'; message: string }> {
 	const found = await findRoot(options.directory)
@@ -106,8 +107,29 @@ export async function startChat(options: {
 	const { reader } = options
 	const gate = { sources: { repo, sessions }, store, project, map: reader?.map ?? null }
 	const { model, baseUrl, apiKeyEnv } = options.model
-	const sessionOf = async (tools: Tool[], systemPrompt: string) =>
-		await createSession({
+	const memory = threadMemory(reader?.readSaved)
+	// A question's own session: a lens's tools and prompt, or every tool and the whole prompt.
+	const open = (as: Asking = { kind: 'question' }) => {
+		const lens = lensOf(as)
+		const reads = explorationTools(repo, elsewhere, () => round.read)
+		const record = recordTool(store, repo, reader?.map)
+		const remember = reader ? [rememberTool(reader.notes, () => round)] : []
+		const tools = lens
+			? [
+					...[...reads, record, ...memory.tools(), ...remember].filter((tool) => lens.tools.includes(tool.name)),
+					showTool(gate, () => round, { fields: lens.show, shorten }),
+				]
+			: [
+					...reads,
+					diffTool(repo, elsewhere),
+					record,
+					...sessionTools(sessions),
+					...(as.kind === 'note' ? [] : memory.tools()),
+					...remember,
+					showTool(gate, () => round, { shorten }),
+					reviseTool(gate, () => round),
+				]
+		return createSession({
 			model: { kind: 'openai-compatible', baseUrl, id: model, apiKeyEnv },
 			plugins: [
 				{
@@ -120,8 +142,9 @@ export async function startChat(options: {
 			toolMode: 'native',
 			maxTurns: STEPS.talk.turns,
 			maxToolResultChars: MAX_TOOL_RESULT_CHARS,
-			systemPrompt,
+			systemPrompt: lens?.systemPrompt ?? SYSTEM_PROMPT,
 		})
+	}
 	// The question running now counts what the small requests to shorten a line cost.
 	let charge: (usage: { input: number; output: number }) => void = () => {}
 	const shorten: Shorten = async (lines, signal) => {
@@ -149,35 +172,48 @@ export async function startChat(options: {
 			await helper.close()
 		}
 	}
-	const session = await sessionOf(
-		[
-			...explorationTools(repo, elsewhere),
-			diffTool(repo, elsewhere),
-			recordTool(store, repo),
-			...sessionTools(sessions),
-			...(reader ? [rememberTool(reader.notes, () => round)] : []),
-			showTool(gate, () => round, { shorten }),
-			reviseTool(gate, () => round),
-		],
-		SYSTEM_PROMPT,
-	)
-	// A lens's own session, for one question.
-	const lensSession = async (lens: Lens) =>
-		await sessionOf(
-			[
-				...explorationTools(repo, elsewhere, () => round.read).filter((tool) => lens.tools.includes(tool.name)),
-				showTool(gate, () => round, { fields: lens.show, shorten }),
-			],
-			lens.systemPrompt,
-		)
 
+	// Open once at startup so a bad model setting still fails before the first question.
+	let next: Promise<Session> | null = open()
+	await next
+	let busy = false
+	let closed = false
 	async function* ask(
 		question: string,
 		signal?: AbortSignal,
 		as: Asking = { kind: 'question' },
 	): AsyncGenerator<ChatEvent> {
-		const lens = lensOf(as)
-		const runner = lens ? await lensSession(lens) : session
+		if (closed || busy) {
+			yield { kind: 'error', message: closed ? 'This chat has closed.' : 'The previous question is still running.' }
+			return
+		}
+		busy = true
+		if (next && as.kind !== 'question') {
+			next = next.then(async (initial) => {
+				await initial.close()
+				return open(as)
+			})
+		}
+		next ??= open(as)
+		const opening = next
+		try {
+			yield* askIn(await opening, question, signal, as)
+		} finally {
+			try {
+				await opening.then((session) => session.close())
+			} finally {
+				next = null
+				busy = false
+			}
+		}
+	}
+
+	async function* askIn(
+		session: Session,
+		question: string,
+		signal: AbortSignal | undefined,
+		as: Asking,
+	): AsyncGenerator<ChatEvent> {
 		const events = eventQueue()
 		const current = freshRound(as, events.push)
 		const most = readLimit(as)
@@ -192,6 +228,7 @@ export async function startChat(options: {
 			tokens.input += usage.input
 			tokens.output += usage.output
 		}
+		const readPaths = new Set<string>()
 		const file = (cards: Round['pending']) => {
 			for (const event of fileTurn({ text: '', calls: [] }, cards)) {
 				if (event.kind === 'item') current.items.push(event.item)
@@ -212,7 +249,7 @@ export async function startChat(options: {
 			current.items.splice(at, 0, words)
 			events.push({ kind: 'item', item: words })
 		}
-		const unsubscribe = runner.subscribe((event) => {
+		const unsubscribe = session.subscribe((event) => {
 			if (event.type === 'text') events.push({ kind: 'text', delta: event.delta })
 			if (event.type === 'tool_start') {
 				const name = event.call.name.replace(`${PLUGIN}__`, '')
@@ -226,6 +263,16 @@ export async function startChat(options: {
 			if (event.type === 'turn_end') {
 				turnsEnded += 1
 				const { calls } = event.turn
+				for (const { call, outcome } of calls) {
+					if (
+						call.tool === 'read_file' &&
+						outcome.kind === 'ran' &&
+						!outcome.result.isError &&
+						typeof call.args.path === 'string'
+					) {
+						readPaths.add(call.args.path)
+					}
+				}
 				const text = event.turn.text.trim()
 				const showOnly = calls.length > 0 && calls.every(({ call }) => call.tool === 'show')
 				const writes = text !== '' && calls.every(({ call }) => call.tool === 'show')
@@ -254,14 +301,17 @@ export async function startChat(options: {
 		})
 		const started = performance.now()
 		const prompt = async (text: string, own: AbortController): Promise<RunResult> =>
-			await runner
+			await session
 				.prompt(text, { signal: signal ? AbortSignal.any([signal, own.signal]) : own.signal })
 				.catch((error: unknown): RunResult => ({ stop: 'error', message: String(error), turns: 0 }))
 		const talk = async () => {
 			if (as.kind === 'change') events.push(await changeNamed(repo, as.range, signal))
-			const opening = lens ? await lensOpening() : await chatOpening(signal)
+			const lens = lensOf(as)
+			const followUp = lens ? lens.followUp : as.kind !== 'note'
+			const opening = lens && !lens.followUp ? await lensOpening() : await chatOpening(question, as, signal)
+			const earlier = followUp ? memory.recent() : ''
 			const facts = lens ? await briefFacts(as, signal) : ''
-			const ran = await prompt(`${opening}The question: ${question}${facts}`, stops.talk)
+			const ran = await prompt(`${opening}${earlier}The question: ${question}${facts}`, stops.talk)
 			const result: RunResult =
 				endedOnShow && ran.stop === 'aborted' ? { stop: 'done', text: '', turns: ran.turns } : ran
 			settleRetry('reply')
@@ -298,6 +348,9 @@ export async function startChat(options: {
 					const what = 'The project record'
 					events.push({ kind: 'step', step: { kind: 'sent-back', what, problems: ended.problems } })
 				}
+				if (as.kind !== 'note') {
+					memory.keep(as.kind === 'answer' || as.kind === 'view' ? as.text : question, ended.reply, readPaths)
+				}
 				events.push({ kind: 'replied', reply: ended.reply, recorded: ended.recorded })
 			}
 			const seconds = Math.round((performance.now() - started) / 100) / 10
@@ -317,16 +370,20 @@ export async function startChat(options: {
 			unsubscribe()
 			for (const each of Object.values(stops)) each.abort()
 			await run
-			if (runner !== session) await runner.close()
 		}
 	}
 
-	// A question in the reader's words starts with the project record's index and the reader's map.
-	async function chatOpening(signal?: AbortSignal): Promise<string> {
-		const index = recordIndex(await store.read())
-		if (!reader) return `${index}\n\n`
-		const map = await reader.map.read(new Date(), signal)
-		return `${index}\n\n${readerIndex(map, await reader.notes.read(), await reader.prefs.read())}\n\n`
+	// A question in the reader's words starts with the records that match it and the reader's map of their topics.
+	async function chatOpening(question: string, as: Asking, signal?: AbortSignal): Promise<string> {
+		const record = await store.read()
+		const index = await recordIndex(record, question, as, repo, signal)
+		if (!reader) return `${index.text}\n\n`
+		const [map, notes, prefs] = await Promise.all([
+			reader.map.read(new Date(), signal, { record, names: index.topics }),
+			reader.notes.read(),
+			reader.prefs.read(),
+		])
+		return `${index.text}\n\n${readerIndex(map, notes, prefs)}\n\n`
 	}
 
 	// A brief's question ends with what plain code knows of its files and the most it may read.
@@ -349,7 +406,11 @@ export async function startChat(options: {
 		return notes === '' ? '' : `${notes}\n\n`
 	}
 
-	return { kind: 'ok', chat: { root: found.root, thread: randomUUID(), ask, close: () => session.close() } }
+	async function close() {
+		closed = true
+		await next?.then((session) => session.close())
+	}
+	return { kind: 'ok', chat: { root: found.root, thread: randomUUID(), ask, close } }
 }
 
 function accepted(outcome: ToolOutcome): boolean {

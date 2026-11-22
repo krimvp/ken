@@ -49,6 +49,7 @@ export function briefActions(app) {
 	function show(id, { inside = false, opener = null } = {}) {
 		const at = ui.trail.findIndex((step) => step.id === id)
 		const step = { id, name: readConcept(id)?.name ?? id }
+		if (id !== ui.id) briefs.reopen(id)
 		app.ask.remember(id)
 		state.ask.open = false
 		if (!inside || ui.id === null) Object.assign(ui, { trail: [step], opener: opener ?? ui.opener })
@@ -92,6 +93,7 @@ export function briefActions(app) {
 		if (!brief?.deeper || ui.inner !== undefined) return
 		ui.inner = null
 		void briefs.lookAt(brief.deeper.within.split(',')).then((look) => {
+			if (ui.id !== brief.id) return
 			ui.inner = look ?? { boxes: [] }
 			render()
 		})
@@ -158,13 +160,15 @@ export function briefActions(app) {
 	}
 
 	// Asks ken's model a question about the open concept. Its answer comes back as a brief of its own.
-	function ask(text) {
-		const brief = open()
+	function ask(text, typed = false) {
 		const said = text.trim()
-		if (!brief || said === '') return
+		if (!ui.id || said === '') return
 		ui.problem = null
 		const started = { trail: state.home.trail, change: state.home.change, wayIn: state.home.wayIn, concept: ui.id }
-		return send({ lens: { kind: 'answer', concept: ui.id, text: said } }, { ...started, kind: 'answer', text: said })
+		return send(
+			{ lens: { kind: 'answer', concept: ui.id, text: said, typed } },
+			{ ...started, kind: 'answer', text: said },
+		)
 	}
 
 	// A run this drawer started is over: the brief is read again, and an answer opens as its own brief.
@@ -254,7 +258,7 @@ export function briefActions(app) {
 		}
 		if (state.running || state.model?.kind !== 'ok') return true
 		box.value = ''
-		void ask(text)
+		void ask(text, true)
 		return true
 	}
 
@@ -273,5 +277,5 @@ export function briefActions(app) {
 		show(id, { opener })
 	}
 
-	return { actions, show, close, draw, ended, submit, readPaths, open, project }
+	return { actions, show, close, draw, ended, submit, readPaths, open, project, ask }
 }

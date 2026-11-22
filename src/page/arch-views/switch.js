@@ -2,7 +2,7 @@
 // runs", "How the code is split", and the key. A drawing the project does not have is not offered. With none drawn,
 // the card offers one run of ken's model to draw them. This module also lays out the drawing on show, once per
 // drawing and fold, and says which lines a process lights.
-import { esc } from '../views/format.js'
+import { esc, prose } from '../views/format.js'
 import { mark, runtimeHtml, runtimePictureHtml, worldHtml } from './drawing.js'
 import { runtimeLayout } from './runtime-layout.js'
 import { worldLayout } from './world-layout.js'
@@ -12,20 +12,21 @@ export const VIEWS_RUN = ['Drawing where it runs', "ken's model is drawing where
 
 export const VIEW_NAMES = { world: 'In its world', runtime: 'Where it runs', parts: 'How the code is split' }
 const VIEW_ICONS = { world: 'world', runtime: 'runs', parts: null }
+// The question each view answers, said under the switch.
+const VIEW_ASKS = { runtime: 'how it works', parts: 'where each thing is in the code', world: 'what it talks to' }
 
-// The views the switch offers, in its order: the top level's drawings, given as top. Below the top level only the
+// The views the switch offers, in its order: the top level's drawings, given as top. How it works comes first and how
+// the code is split second, since a reader learning a system asks them in that order. Below the top level only the
 // parts are drawn, and the others take the reader back up.
 export function viewsOffered(home, top = null) {
 	const views = home.trail.length > 1 ? top : home.look?.views
-	if (!views) return []
-	const offered = [views.world ? 'world' : null, views.runtime ? 'runtime' : null].filter(Boolean)
-	return offered.length === 0 ? [] : [...offered, 'parts']
+	if (!views?.world && !views?.runtime) return []
+	return [views.runtime ? 'runtime' : null, 'parts', views.world ? 'world' : null].filter(Boolean)
 }
 
-// The view on show: the reader's last choice when the level has it, else "Where it runs" when it is drawn.
+// The view on show: the reader's last choice when the level has it, else the first the switch offers.
 export function viewOn(arch, offered) {
-	if (offered.includes(arch.view)) return arch.view
-	return offered.includes('runtime') ? 'runtime' : offered.includes('world') ? 'world' : 'parts'
+	return offered.includes(arch.view) ? arch.view : (offered[0] ?? 'parts')
 }
 
 // The view a concept from search is drawn in.
@@ -49,18 +50,30 @@ function askHtml(home, env) {
 }
 
 // crumb is the breadcrumb's HTML. problem is what the last run to draw them left to say.
-export function switchCardHtml({ home, arch, env, crumb, offered, on }) {
+export function switchCardHtml({ home, arch, env, crumb, offered, on, format, about }) {
+	const reading = format === 'text'
+	const formatButton = format
+		? `<button class="k-link" data-act="arch-format" data-format="${reading ? 'drawing' : 'text'}" data-key="arch-format">${reading ? 'Show diagram' : 'Read as text'}</button>`
+		: ''
+	const head = `<div class="k-vw-head">${crumb}${formatButton}</div>`
+	const summary = about ? `<p class="k-vw-asks">${prose(about)}</p>` : ''
 	if (offered.length === 0) {
 		const ask = askHtml(home, env)
 		const problem = arch.viewsProblem ? `<p class="k-vw-problem" role="alert">${esc(arch.viewsProblem)}</p>` : ''
-		return `<div class="k-float k-vw-card">${crumb}${ask}${problem}</div>`
+		return `<div class="k-float k-vw-card">${head}${summary}${ask}${problem}</div>`
 	}
 	const buttons = offered.map(
 		(view) =>
 			`<button data-act="arch-view" data-view="${view}" data-key="view-${view}" aria-pressed="${on === view}">${VIEW_ICONS[view] ? mark(VIEW_ICONS[view]) : '<svg class="k-i" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="8" height="6" rx="1.500"/><rect x="13" y="14" width="8" height="6" rx="1.500"/><path d="M11 7h3a3 3 0 0 1 3 3v4"/></svg>'}<span>${VIEW_NAMES[view]}</span></button>`,
 	)
-	const key = `<button class="k-vw-keybtn" data-act="arch-key" data-key="view-key" aria-expanded="${arch.keyOpen}">${mark('key')}<span>Key</span></button>`
-	return `<div class="k-float k-vw-card">${crumb}<div class="k-vw-switch" role="group" aria-label="Which drawing">${buttons.join('')}${key}</div></div>`
+	const key =
+		reading || !home.look?.named
+			? ''
+			: `<button class="k-vw-keybtn" data-act="arch-key" data-key="view-key" aria-expanded="${arch.keyOpen}">${mark('key')}<span>Key</span></button>`
+	const asks = offered.map(
+		(view) => `<span${view === on ? ' class="is-on"' : ''}>${VIEW_NAMES[view]} shows ${VIEW_ASKS[view]}.</span>`,
+	)
+	return `<div class="k-float k-vw-card">${head}<div class="k-vw-switch" role="group" aria-label="Which drawing">${buttons.join('')}${key}</div>${summary || (reading ? '' : `<p class="k-vw-asks">${asks.join(' ')}</p>`)}</div>`
 }
 
 const KEY_SHAPES = [

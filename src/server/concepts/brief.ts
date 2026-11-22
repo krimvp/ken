@@ -36,6 +36,7 @@ import {
 	type BriefPoint,
 	type BriefQuote,
 	fileQuotes,
+	staleFiles,
 	type Told,
 	toldOfPart,
 } from './told.ts'
@@ -71,6 +72,7 @@ export type Brief = {
 	steps: { n: number; part: string | null; line: string; quotes: BriefQuote[] }[] | null
 	knows: Knows | null
 	trust: string
+	staleFiles?: string[] | undefined
 	about?: Named
 	usedIn?: Named[]
 	note?: string
@@ -194,6 +196,11 @@ export function conceptReads(layout: LayoutSources, history: History) {
 		return {
 			...blank(id, file ? 'file' : 'part', box.name, line),
 			...fields,
+			staleFiles: await staleFiles(
+				layout.repo,
+				look.head,
+				fields.points.flatMap((point) => point.quotes),
+			),
 			minutes: told ? fields.minutes : minutesFor([line, ...connections, ...written]),
 			explain: { lens: { kind: 'explain', within: look.within, part: box.name } },
 			questions: questionsAbout(id, written, all.answers),
@@ -227,6 +234,8 @@ export function conceptReads(layout: LayoutSources, history: History) {
 		const id = termId(topic.name)
 		const quotes = fileQuotes(topic.quotes)
 		const top = await levelAt([], all.now)
+		const outdatedPlaces = await staleFiles(layout.repo, top?.head, quotes)
+		const places = quotes.filter((quote) => !outdatedPlaces?.includes(quote.path))
 		const parts = top ? partsOf(top) : []
 		const [knows = null] = await knowsOf(layout, [knownTerm(topic.name, quotes)], all.now)
 		const meaning = meaningOf(all.read, topic.id)
@@ -234,19 +243,28 @@ export function conceptReads(layout: LayoutSources, history: History) {
 		const told = all.answers.find((answer) => answer.concept === id && answer.text === meansWhat(topic.name))?.told
 		const words = told ? toldFields(told, all.read) : null
 		const usedIn = parts
-			.filter((part) => quotes.some((quote) => part.paths.some((place) => under(quote.path, place))))
+			.filter((part) => places.some((quote) => part.paths.some((place) => under(quote.path, place))))
 			.map(({ id: part, name: called }) => ({ id: part, name: called }))
 		// Before ken's model explains a term, its line says where the project uses it, and what the record holds of its
 		// meaning, often dense with code, follows as a note.
-		const where = usedIn.length > 0 ? usedIn.map((part) => part.name) : [...new Set(quotes.map((quote) => quote.path))]
-		const plain = `A term the project uses in ${listed(where.slice(0, 3)) || 'its code'}.`
+		const where = usedIn.length > 0 ? usedIn.map((part) => part.name) : [...new Set(places.map((quote) => quote.path))]
+		const plain = where.length
+			? `A term the project uses in ${listed(where.slice(0, 3))}.`
+			: 'A term in the project record.'
 		return {
 			...blank(id, 'term', topic.name, told?.line ?? plain),
-			...(told || !meaning ? {} : { note: meaning }),
+			...(told || outdatedPlaces || !meaning ? {} : { note: meaning }),
 			// What the record says a term means is its line; the things to know are the model's alone.
 			explained: told !== undefined,
+			staleFiles: told
+				? await staleFiles(
+						layout.repo,
+						top?.head,
+						told.points.flatMap((point) => point.quotes),
+					)
+				: outdatedPlaces,
 			explain: { lens: { kind: 'answer', concept: id, text: meansWhat(topic.name) } },
-			points: [...(words?.points ?? []), ...quotes.slice(0, TERM_PLACES).map(placePoint)],
+			points: [...(words?.points ?? []), ...places.slice(0, TERM_PLACES).map(placePoint)],
 			terms: words?.terms.filter((term) => term.id !== id) ?? [],
 			minutes: Math.max(words?.minutes ?? 1, minutesFor([meaning ?? ''])),
 			questions: questionsAbout(id, [], all.answers),
@@ -319,12 +337,19 @@ export function conceptReads(layout: LayoutSources, history: History) {
 		}
 		const top = await levelAt([], all.now)
 		const quoted = [...new Set(answer.told.points.flatMap((point) => point.quotes.map((quote) => quote.path)))]
+		const changed = await staleFiles(
+			layout.repo,
+			top?.head,
+			answer.told.points.flatMap((point) => point.quotes),
+		)
 		const boxes = (top?.boxes ?? []).filter((box) =>
 			quoted.some((path) => box.paths.some((place) => under(path, place))),
 		)
 		return {
 			...base,
 			...toldFields(answer.told, all.read),
+			staleFiles: changed,
+			explain: changed ? { lens: { kind: 'answer', concept: written.concept, text: written.text } } : null,
 			about,
 			lit: boxes.map((box) => box.name),
 			questions: others,

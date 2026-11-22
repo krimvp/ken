@@ -131,7 +131,7 @@ function sideHtml({ look, home, you }) {
 			: `<ul class="k-recs">${shown.map((each) => lineHtml(each, { look, home, you })).join('')}</ul>${once.length > SHOWN_LINES ? `<button class="k-link" data-act="you-all" data-key="you-all">${you.all ? 'Show fewer' : `Show all ${once.length}`}</button>` : ''}`
 	const notes =
 		home.notes.length === 0
-			? '<p class="k-muted">None yet. Tell ken how you like things shown with "Draw it another way" on the Architecture page, and it keeps a note.</p>'
+			? ''
 			: `<ul class="k-you-notes">${home.notes
 					.map(
 						(note) =>
@@ -150,7 +150,13 @@ function sideHtml({ look, home, you }) {
 		${lines}
 		<h2 class="k-eyebrow">How you like things shown</h2>
 		${notes}
-		${home.noteProblem ? `<p class="k-ask-problem" role="alert">ken could not remove the note. ${esc(home.noteProblem)}</p>` : ''}
+		<form id="reader-note-form" class="k-ask-form">
+			<label for="reader-note">What should ken remember for your next questions?</label>
+			<textarea id="reader-note" data-key="reader-note" name="text" rows="2" maxlength="200" required placeholder="I know Python. Explain TypeScript terms as they come up."${you.savingNote ? ' readonly' : ''}>${esc(you.note)}</textarea>
+			<button class="k-btn is-quiet" data-key="reader-note-save" type="submit"${you.savingNote ? ' disabled' : ''}>Save note</button>
+		</form>
+		${you.noteStatus ? `<p class="k-muted" role="status">${esc(you.noteStatus)}</p>` : ''}
+		${home.noteProblem ? `<p class="k-ask-problem" role="alert">${esc(home.noteProblem)}</p>` : ''}
 		<h2 class="k-eyebrow">Where these files are</h2>
 		${files}
 	</aside>`

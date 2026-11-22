@@ -6,6 +6,7 @@ import { test } from 'node:test'
 import { fileRecordStore } from '../../src/record/index.ts'
 import { gitRepository } from '../../src/repo/index.ts'
 import { buildRepository, OWNER } from '../fixtures/build-repository.ts'
+import { SHOP } from '../fixtures/drawings.ts'
 import { call, json, openKen, readerHome } from '../fixtures/ken-server.ts'
 
 // The page is plain JavaScript in the browser, so the test loads it by path and says what it expects to find.
@@ -242,6 +243,27 @@ function briefOf(store: { get: (id: string, then: () => void) => Found }, id: st
 	})
 }
 
+test('Home gives a returning reader a way to open each suggested next step', async () => {
+	const { server } = await namedProject()
+	await json(server, '/api/seen', { did: 'opened', paths: ['src/core'] })
+	const top = await json(server, '/api/layout?change=none')
+	const home = freshHome(() => null, { unfolded: new Set() })
+	const html = startPageHtml({
+		top,
+		home,
+		project: 'p',
+		concepts: [],
+		briefOf: () => null,
+		followUp: { decisions: [], topics: [] },
+	})
+	const next = top.look.next.items.slice(0, 3)
+	assert.ok(next.length > 1)
+	for (const [i, item] of next.entries()) {
+		assert.ok(textOf(html).includes(item.title))
+		assert.ok(html.includes(`data-act="start-go" data-index="${i}"`))
+	}
+})
+
 test('Sideways shows a part two arrows join once, with both verbs, and counts it once', async () => {
 	const { read } = await namedProject()
 	const found = await briefOf(briefStore({ read }), 'part::store')
@@ -251,6 +273,29 @@ test('Sideways shows a part two arrows join once, with both verbs, and counts it
 	const text = textOf(briefHtml(ui, found, { ...ctx, inner: null }))
 	assert.match(text, /Used by core starts it, and waits on it (?!core)/, 'core is one row that says both arrows')
 	assert.match(text, / 1 Sideways /, 'and Sideways counts one part')
+})
+
+test('a reader can follow the same parts, runtime and system connections in words', async () => {
+	const { read } = await namedProject()
+	const home = freshHome(() => null, { unfolded: new Set() })
+	const { look } = (await read('/api/layout?change=none')).body as { look: { named: { about: string } } }
+	look.named.about = 'The project keeps orders.'
+	home.look = { ...look, views: SHOP }
+	const page = (view: string, text: string, format?: string) =>
+		architectureHtml({ home, arch: { view, format }, env: {}, brief: null, column: true, text })
+	const parts = page('parts', 'words')
+	assert.match(parts, /Show diagram/)
+	assert.match(parts, /data-concept="arrow::1"[^>]*>core starts store</)
+	const runtime = page('runtime', 'words')
+	assert.match(runtime, /inside Cluster, namespace shop, 2 copies/)
+	assert.match(runtime, /data-concept="crossing:e1"[^>]*>orders sends order\.placed to payments</)
+	const world = page('world', 'pictures', 'text')
+	assert.match(world, /Shopper to [^<]+<\/button><p>places orders/)
+	assert.match(world, /to Payment provider<\/button><p>charges cards/)
+	const mixed = page('parts', 'balanced')
+	assert.match(mixed, /The project keeps orders\./)
+	assert.match(mixed, /id="arch-world"/)
+	assert.match(page('parts', 'words', 'drawing'), /Read as text/)
 })
 
 test('the canvas draws a level it read from a real server, and the changes layer says what each part changed', async () => {
@@ -265,7 +310,7 @@ test('the canvas draws a level it read from a real server, and the changes layer
 		stored: () => null,
 	}
 	const loads = homeLoads(app)
-	const arch = { layer: null as string | null, process: null, drawOpen: false }
+	const arch = { layer: null as string | null, process: null, drawOpen: false, tree: new Map() }
 	const env = { off: null, running: null, seconds: 0 }
 	const draw = () => architectureHtml({ home: state.home, arch, env, brief: null, column: false })
 
@@ -290,7 +335,10 @@ test('the canvas draws a level it read from a real server, and the changes layer
 	Object.assign(state.home, { trail: [WHOLE, { name: 'store', within: ['src/store'] }], change: 'none' })
 	arch.layer = null
 	await loads.refresh()
-	assert.match(textOf(draw()), /db\.ts/, 'inside a part nobody named, the blocks are what git lists')
+	assert.match(textOf(draw()), /db\.ts/, 'inside a part nobody named, the tree lists what git lists')
+	const inside = architectureHtml({ home: state.home, arch, env, brief: null, column: true, topViews: SHOP })
+	assert.match(inside, /data-view="runtime"/, 'the reader can return to the runtime from inside an unnamed folder')
+	assert.match(inside, /data-view="world"/)
 })
 
 // What a reader reads on a page: its text without the markup.
@@ -351,6 +399,8 @@ async function pagesOf(root: string, home: string, pick: (changes: { kind: strin
 		timeline,
 		project: 'p',
 		briefOf: () => null,
+		first: null,
+		env,
 	}
 	const waiting = openViewHtml(followUp, {}, false, '', [], changedParts(top.look))
 	return { changes: textOf(changes), home: textOf(startPageHtml(view)), waiting: textOf(waiting) }

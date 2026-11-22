@@ -3,8 +3,10 @@
 // map of it. A press on a block opens its brief. A second press, or the block's corner, opens the part in place into
 // its own blocks, and then into files, and a breadcrumb says how deep they are. The layers lay a second reading over
 // the same blocks, and one tool asks ken's model to draw the level another way.
-import { keyHtml, switchCardHtml, viewDrawing, viewOn, viewsOffered } from '../arch-views/switch.js'
+import { readingHtml } from '../arch-views/reading.js'
+import { keyHtml, switchCardHtml, VIEW_NAMES, viewDrawing, viewOn, viewsOffered } from '../arch-views/switch.js'
 import { arrowId, partId, processId } from '../brief/concept-id.js'
+import { folderTreeHtml } from '../folder-tree/folder-tree.js'
 import { diagramOf } from '../level/content.js'
 import { colourOf, projectName } from '../level/level-state.js'
 import { DOING } from '../level/runs.js'
@@ -153,7 +155,8 @@ function runHtml(home, env) {
 	const run = env.running?.onHome
 	if (run && DOING[run.kind]) {
 		const tools = env.running.q.steps.filter((step) => step.kind === 'tool').length
-		return `<div class="k-float k-run" role="status"><span class="k-spin" aria-hidden="true"></span><span><b>${DOING[run.kind][1]}.</b> <span class="k-clock k-num">${Math.round(env.seconds)} s so far, ${count(tools, 'action', 'actions')}</span></span><button class="k-link" data-act="stop" data-key="run-stop">Stop</button></div>`
+		const by = run.auto ? ' ken started this by itself, since you opened the project for the first time.' : ''
+		return `<div class="k-float k-run" role="status"><span class="k-spin" aria-hidden="true"></span><span><b>${DOING[run.kind][1]}.</b> <span class="k-clock k-num">${Math.round(env.seconds)} s so far, ${count(tools, 'action', 'actions')}</span>.${by}</span><button class="k-link" data-act="stop" data-key="run-stop">Stop</button></div>`
 	}
 	const close = (act) =>
 		`<button class="k-icon-btn" data-act="${act}" data-key="${act}" aria-label="Close this">${icon('close')}</button>`
@@ -204,17 +207,39 @@ function minimapHtml(rects, world) {
 
 const READING = '<p class="k-canvas-line" role="status">Reading the project from git.</p>'
 
+// Over the folder tree: the run of ken's model under way or what it left to say, or else the way to start one.
+function treeSaidHtml(home, env) {
+	const run = runHtml(home, env)
+	if (run !== '' || env.running) return run
+	if (env.model?.kind !== 'ok') {
+		return '<p class="k-tree-ask">ken has no model to ask, so it cannot name the parts yet. Home says what to set.</p>'
+	}
+	return `<p class="k-tree-ask"><button class="k-btn" data-act="run-name" data-key="run-name"${env.off ? ' disabled' : ''}>Ask ken to name the main parts</button><span class="k-muted">${env.off ? esc(env.off) : RUN_COST}</span></p>`
+}
+
 // view is { home, arch, env, brief, column, topViews }: the level and what is laid over it, the canvas's own state,
 // what the page around it is doing, the id of the open brief, whether the window is narrow, and the top level's
 // drawings, which the switch offers at any depth.
-export function architectureHtml({ home, arch, env, brief, column, topViews }) {
+export function architectureHtml({ home, arch, env, brief, column, topViews, text = 'pictures' }) {
 	const { look, problem } = home
 	const offered = viewsOffered(home, topViews)
 	const on = home.trail.length > 1 ? 'parts' : viewOn(arch, offered)
-	const top = switchCardHtml({ home, arch, env, crumb: crumbHtml(home), offered, on })
+	const format = look?.named ? (arch.format ?? (text === 'words' ? 'text' : 'drawing')) : null
+	const about = format === 'drawing' && text === 'balanced' ? look.named.about : ''
+	const top = switchCardHtml({ home, arch, env, crumb: crumbHtml(home), offered, on, format, about })
 	if (!look || home.reading === 'level') return `<div class="k-canvas">${top}${problem ? '' : READING}</div>`
 	if (problem && !problem.keeps) {
 		return `<div class="k-canvas">${top}<p class="k-canvas-line" role="alert">ken could not show this. ${prose(problem.message)} <button class="k-link" data-act="home-reset" data-key="home-reset">Show where you are now</button></p></div>`
+	}
+	if (!look.named && look.boxes.length > 0 && on === 'parts') {
+		const said = treeSaidHtml(home, env)
+		return folderTreeHtml({ home, tree: arch.tree, brief, crumb: offered.length ? top : crumbHtml(home), said })
+	}
+	if (format === 'text') {
+		const about = look.named.about ? `<p>${prose(look.named.about)}</p>` : ''
+		return `<div class="k-tree-page k-arch-reading${brief ? ' has-brief' : ''}" data-level="${esc(JSON.stringify([on, look.within]))}">${top}
+			<article><h2>${VIEW_NAMES[on]}</h2>${about}${readingHtml(look, on, projectName(home))}</article>
+			${runHtml(home, env)}${notesHtml(home, env, arch, null)}</div>`
 	}
 	const inside = home.trail.length > 1
 	const layout = levelLayout(look, column)

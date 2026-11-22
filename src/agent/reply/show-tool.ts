@@ -83,8 +83,8 @@ export type Round = {
 // of a level, or of one of them, which tells the map nothing either, since the page marks each part as the reader
 // reaches it. change: a question about one change that plain code picked, so the reply is about that range whether or
 // not the model sends a scope, with what the reader wants of it. answer: a question about one concept, which the
-// reader pressed or typed in its brief, answered as a brief; paths are the files and folders of the part it is about,
-// empty for a concept that is no part.
+// reader pressed or typed in its brief, answered as a brief; paths are the files and folders it is about (the part's,
+// or the files whose quoted lines changed since its brief), and typed is true when the reader typed it.
 // view: the reader asked, in the words of text, for another way to show the level whose paths are within. parts: the
 // main parts of a level, named from what ken wrote of it. views: the drawings of where the project runs.
 export type Asking =
@@ -93,14 +93,14 @@ export type Asking =
 	| { kind: 'views' }
 	| { kind: 'note' }
 	| { kind: 'explain'; tour: Tour }
-	| { kind: 'answer'; concept: string; text: string; paths: string[] }
+	| { kind: 'answer'; concept: string; text: string; paths: string[]; typed?: boolean }
 	| { kind: 'change'; range: Range; want: Want }
 	| { kind: 'view'; within: string[]; text: string }
 
 export function freshRound(as: Asking, emit: Round['emit']): Round {
 	return {
 		asked: as.kind !== 'note' && as.kind !== 'explain',
-		typed: as.kind === 'question' || as.kind === 'view',
+		typed: as.kind === 'question' || as.kind === 'view' || (as.kind === 'answer' && as.typed === true),
 		tour: as.kind === 'explain' ? as.tour : null,
 		view: as.kind === 'view' ? { within: as.within, text: as.text } : null,
 		want: as.kind === 'change' ? as.want : null,
@@ -130,8 +130,8 @@ function spent(round: Round): string {
 }
 
 // The fields of show a lens offers (see lens/lens.ts). Every request sends the schema again, so a lens that sends only
-// a brief sees only the brief. show still reads every field it takes, so a reply in a shape ken asked for before, such
-// as the steps of a tour, is checked as it always was.
+// a brief sees only the brief. The offered schema leaves other fields open and show reads every field it takes, so a
+// provider that still sends a tour stop as a step and its claims is checked as it always was.
 export type ShowField = keyof typeof SHOW_SCHEMA.properties
 
 // shorten asks the model, in a small request of its own, for a brief's line that has too many words (see
@@ -141,10 +141,12 @@ export function showTool(
 	round: () => Round,
 	{ fields, shorten }: { fields?: readonly ShowField[]; shorten?: Shorten } = {},
 ): Tool {
+	const brief = fields?.includes('brief') === true
 	return {
 		name: 'show',
-		description:
-			'Show the reader cards that prove what you say: claims, decisions, risks, diagrams, topics, the parts of the project and the brief of a part, each with the exact lines it rests on. ken checks each card alone against git and shows it after the words you write in this turn. A card that fails comes back with its problems, and the reader sees nothing of it. Every field is optional.',
+		description: brief
+			? 'Show the reader the brief the question asks for, with its checked quotes.'
+			: 'Show the reader cards that prove what you say: claims, decisions, risks, diagrams, topics, the parts of the project and the brief of a part, each with the exact lines it rests on. ken checks each card alone against git and shows it after the words you write in this turn. A card that fails comes back with its problems, and the reader sees nothing of it. Every field is optional.',
 		parameters: allowJsonText(fields ? offered(fields) : SHOW_SCHEMA),
 		async execute(args, ctx) {
 			const current = round()

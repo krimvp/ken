@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
 import { test } from 'node:test'
-import { type ChatEvent, startChat } from '../../src/agent/index.ts'
+import { type Asking, type ChatEvent, startChat } from '../../src/agent/index.ts'
 import { fileRecordStore } from '../../src/record/index.ts'
 import { gitRepository } from '../../src/repo/index.ts'
 import { buildRepository } from '../fixtures/build-repository.ts'
@@ -39,7 +40,7 @@ function show(extra: Record<string, unknown>): Turn {
 }
 
 // A new chat each time, the way a new ken process starts, so what one question wrote must come back from disk.
-async function ask(script: Turn[], directory = root) {
+async function ask(script: Turn[], directory = root, question = 'What did the last commit do?', as?: Asking) {
 	const model = await scriptedModel(script)
 	const started = await startChat({
 		directory,
@@ -48,7 +49,7 @@ async function ask(script: Turn[], directory = root) {
 	})
 	if (started.kind !== 'ok') throw new Error(started.message)
 	const events: ChatEvent[] = []
-	for await (const event of started.chat.ask('What did the last commit do?')) events.push(event)
+	for await (const event of started.chat.ask(question, undefined, as)) events.push(event)
 	await started.chat.close()
 	return { events, requests: model.requests }
 }
@@ -90,6 +91,40 @@ test('a reply stores its work, decision and topic when it ends, and the next que
 	assert.ok(read.includes('\t\tsleep(100)') && read.includes(head), `read_record gives the stored quote: ${read}`)
 	assert.deepEqual(replyIn(second.events).recorded, [], 'the range already has its piece of work')
 	assert.equal((await fileRecordStore(root, gitRepository(root)).read()).entries.length, 4)
+})
+
+test('a question recalls a matching note before browsing other topics, and drops the note when its code changes', async () => {
+	const built = buildRepository([
+		{ message: 'initial wait', files: { 'retry.ts': 'sleep(100)' } },
+		{ message: 'shorter wait', files: { 'retry.ts': 'sleep(10)' } },
+	])
+	const [before = '', after = ''] = built.hashes
+	const at = (commit: string) => execFileSync('git', ['checkout', '--quiet', '--detach', commit], { cwd: built.root })
+	at(before)
+	const store = fileRecordStore(built.root, gitRepository(built.root))
+	const quotes = [{ path: 'retry.ts', commit: before, text: 'sleep(100)' }]
+	const target = await store.append([{ kind: 'topic', name: 'Backoff', quotes }])
+	assert.ok(target.kind === 'appended' && target.entries[0])
+	const id = target.entries[0].entry.id
+	const note = 'Each attempt waits a tenth of a second.'
+	const others = Array.from({ length: 32 }, (_, i) => ({ kind: 'topic' as const, name: `Workshop ${i}`, quotes }))
+	assert.equal((await store.append([{ kind: 'note', topic: id, text: note }, ...others])).kind, 'appended')
+	const question = 'Explain backoff.'
+	const lens: Asking = { kind: 'answer', concept: 'part::Backoff', text: question, paths: [] }
+	const first = await ask(
+		[{ tool: 'ken__read_record', args: { kind: 'topic', search: 'Workshop', page: 2 } }, { text: 'Done.' }],
+		built.root,
+		`${question}\nWorkshop examples 0 to 31 illustrate the format. Read the code in retry.ts.`,
+		lens,
+	)
+	const prompt = firstPrompt(first.requests[0])
+	assert.ok(prompt.includes(id) && prompt.includes(note), prompt)
+	assert.ok(!prompt.includes('Workshop 0'), prompt)
+	assert.match(toolResults(first.requests[1])[0] ?? '', /"Workshop 0"/)
+	at(after)
+	const next = await ask([{ text: 'Done.' }], built.root, question)
+	const changed = firstPrompt(next.requests[0])
+	assert.ok(changed.includes('stale') && changed.includes('retry.ts') && !changed.includes(note), changed)
 })
 
 test('a topic named like one in the record, in another case and spacing, is refused and the model is told to reuse it', async () => {

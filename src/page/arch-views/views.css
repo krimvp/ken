@@ -59,6 +59,18 @@
 	color: var(--k-surface);
 }
 
+.k-vw-asks {
+	max-width: 62ch;
+	margin: 2px 4px 2px;
+	color: var(--k-muted);
+	font-size: 14px;
+}
+
+.k-vw-asks .is-on {
+	color: var(--k-ink);
+	font-weight: 600;
+}
+
 .k .k-vw-switch .k-vw-keybtn {
 	margin-left: 6px;
 	border: 1px solid var(--k-line);
@@ -1063,11 +1075,48 @@
 	gap: 8px;
 }
 
+/* Stack the controls when the drawing and its layers have to share a narrow canvas. */
+@media (max-width: 1280px) {
+	.k-canvas {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr);
+		align-content: start;
+		gap: 6px;
+		padding: 12px;
+	}
+
+	.k-canvas > :is(.k-vw-card, .k-layers, .k-layer-pick) {
+		position: relative;
+		inset: auto;
+		justify-self: start;
+		max-width: 100%;
+	}
+
+	.k-canvas.has-brief > :is(.k-layers, .k-layer-pick) {
+		right: auto;
+	}
+}
+
+@media (min-width: 1000px) and (max-width: 1280px) {
+	.k-canvas.has-brief {
+		padding-right: calc(var(--k-drawer) + 12px);
+	}
+
+	.k-canvas.has-brief .k-vw-switch {
+		flex-wrap: wrap;
+	}
+}
+
 /* On a phone: the switch is a row of three icons with their names under them, and the key is a sheet. */
 @media (max-width: 760px) {
 	.k-vw-card {
 		left: 12px;
 		max-width: calc(100% - 24px);
+	}
+
+	/* A narrow screen has room to say only what the view on show answers. */
+	.k-vw-asks span:not(.is-on) {
+		display: none;
 	}
 
 	.k .k-vw-switch button {
@@ -1083,14 +1132,6 @@
 	.k .k-vw-switch .k-vw-keybtn {
 		flex: none;
 		margin-left: 2px;
-	}
-
-	.k-vw-card:has(.k-vw-switch) ~ .k-layers {
-		top: 128px;
-	}
-
-	.k-vw-card:has(.k-vw-switch) ~ .k-layer-pick {
-		top: 178px;
 	}
 
 	.k-vw-key {
@@ -1153,4 +1194,60 @@
 .k-rtp-line.is-lit {
 	stroke: var(--k-ink);
 	stroke-width: 3;
+}
+
+.k-vw-head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 4px 16px;
+}
+
+.k-vw-head > .k-link {
+	font-size: 14px;
+}
+
+.k-tree-page .k-vw-card {
+	position: static;
+	display: inline-flex;
+	max-width: 100%;
+}
+
+.k-arch-reading article {
+	max-width: 70ch;
+	margin: 18px 0;
+	padding: clamp(16px, 3vw, 32px);
+	background: var(--k-surface);
+	border-radius: 18px;
+	overflow-wrap: anywhere;
+}
+
+.k-arch-reading h2,
+.k-arch-reading h3 {
+	margin: 0 0 6px;
+}
+
+.k-arch-reading h3 {
+	margin-top: 22px;
+	font-size: 17px;
+}
+
+.k-arch-reading ul {
+	display: grid;
+	gap: 10px;
+	list-style: none;
+	padding: 0;
+}
+
+.k-arch-reading li p {
+	margin: 2px 0;
+}
+
+.k-arch-reading .k-link {
+	text-align: left;
+}
+
+.k-arch-reading .k-notes {
+	position: static;
 }

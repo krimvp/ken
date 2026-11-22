@@ -16,6 +16,9 @@ export const freshShell = (prefs) => ({
 	page: 'home',
 	// The top level as GET /api/layout sends it, with the changes it lists: null until read.
 	top: null,
+	// What plain code read of the project, as GET /api/first-look sends it: { kind: 'ok', look } or { kind: 'failed',
+	// message }, and null until read.
+	first: null,
 	// Commits by day, when the server sends them.
 	timeline: null,
 	concepts: [],
@@ -62,11 +65,13 @@ export function shellActions(app) {
 	let topAsked = 0
 	async function loadTop() {
 		const mine = ++topAsked
-		const [top, timeline] = await Promise.all([
+		const [top, timeline, first] = await Promise.all([
 			read('/api/layout').catch(() => null),
 			read('/api/timeline?days=90').catch(() => null),
+			shell.first?.kind === 'ok' ? null : loadFirst(),
 		])
 		if (mine !== topAsked) return
+		if (first) shell.first = first
 		if (top?.ok) {
 			shell.top = top.body
 			learnParts(top.body.look.boxes)
@@ -76,6 +81,18 @@ export function shellActions(app) {
 		// Home draws with the top level; what search can find fills the Concepts tile when it comes.
 		render()
 		shell.concepts = (await app.briefs.concepts()) ?? []
+	}
+
+	// What plain code says of the project comes in well under a second, so Home shows it as soon as it is here, before
+	// the top level.
+	async function loadFirst() {
+		const answer = await read('/api/first-look').catch((error) => ({ ok: false, body: { message: error.message } }))
+		const first = answer.ok ? { kind: 'ok', look: answer.body } : { kind: 'failed', message: answer.body.message }
+		if (!shell.top) {
+			shell.first = first
+			render()
+		}
+		return first
 	}
 
 	// What a page reads when the reader comes to it.
@@ -109,6 +126,7 @@ export function shellActions(app) {
 		state.view = state.base = 'home'
 		Object.assign(home, { trail: place.trail, change: place.change, selected: null, shown: null, at: '' })
 		if (place.brief !== brief.id) {
+			if (place.brief) app.briefs.reopen(place.brief)
 			const at = brief.trail.findIndex((step) => step.id === place.brief)
 			const step = { id: place.brief, name: readConcept(place.brief ?? '')?.name ?? '' }
 			Object.assign(brief, {
@@ -194,7 +212,8 @@ export function shellActions(app) {
 		if (start.hidden) fill(start, '')
 		else {
 			const view = { top: shell.top, home, reader: home.reader, followUp: state.followUp, concepts: shell.concepts }
-			fill(start, startPageHtml({ ...view, timeline: shell.timeline, project: state.project?.name ?? 'ken', briefOf }))
+			const project = state.project?.name ?? 'ken'
+			fill(start, startPageHtml({ ...view, timeline: shell.timeline, project, briefOf, first: shell.first, env }))
 		}
 		// The canvas and the home from before the pages name some fields alike, so the one off screen is emptied.
 		if (canvas.hidden) fill(canvas, '')
@@ -226,6 +245,7 @@ export function shellActions(app) {
 	// "Start here" and its chips go where the server says: a part to read opens as a brief on the canvas, and a
 	// change opens on the Changes page with that change laid over the parts.
 	async function follow(item, opener) {
+		if (item.kind === 'decision') return goTab('decisions')
 		if (item.go.way === 'learn') {
 			await goPage('architecture')
 			return item.go.part ? app.brief.show(partId([], item.go.part), { opener }) : null
@@ -267,6 +287,13 @@ export function shellActions(app) {
 		'go-page': (el) => goPage(el.dataset.page),
 		'start-go': (el) => follow(shell.top.look.next.items[Number(el.dataset.index)], el.dataset.key),
 		'project-brief': (el) => app.brief.project(el.dataset.key),
+		'first-name': () => app.level.nameTop(),
+		// The main process ken's model named is drawn on the Processes page, where the reader sees it come.
+		async 'first-draw'() {
+			const flow = shell.top.look.named.flows[0]
+			await goPage('processes')
+			app.procs.ask(flow)
+		},
 		'part-changed': (el) =>
 			follow(shell.top.look.boxes.find((box) => box.name === el.dataset.name).knows, el.dataset.key),
 		settings() {
@@ -276,6 +303,7 @@ export function shellActions(app) {
 		},
 		'pref-text'(el) {
 			app.prefs.setText(el.dataset.text)
+			state.arch.format = null
 			render()
 		},
 		'pref-theme'(el) {

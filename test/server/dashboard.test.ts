@@ -430,6 +430,23 @@ test('a note the model keeps when the reader says how they want things shown is 
 	assert.ok(!prompt(model.requests[3]).includes(note), 'a removed note no longer starts a question')
 })
 
+test('a reader can save a preference before choosing a model and use it in their next question', async () => {
+	const { root } = buildRepository([{ message: 'feat: start', files: { 'src/x.ts': 'x\n' } }])
+	const home = readerHome()
+	const local = await openKen(root, home)
+	const text = 'I know Python. Explain TypeScript terms the first time.'
+	const { notes } = await json(local, '/api/notes', { text })
+	assert.equal(notes[0].text, text)
+	assert.equal((await json(local, '/api/notes', { text })).notes.length, 1)
+	assert.equal((await call(local, '/api/notes', { text: ' ' })).status, 400)
+	assert.equal((await call(local, '/api/notes', { text, remove: notes[0].id })).status, 400)
+	const model = await scriptedModel([{ text: 'It holds x.' }])
+	const next = await openKen(root, home, model.baseUrl)
+	await ask(next, { question: 'What does this project do?' })
+	assert.ok(prompt(model.requests[0]).includes(`Reader: ${text}`))
+	assert.deepEqual((await json(next, '/api/notes', { remove: notes[0].id })).notes, [])
+})
+
 test('a note the model tries to keep while it explains a change is refused, since the words came from the change and not the reader', async () => {
 	const { root, hashes } = buildRepository([
 		{ message: 'feat: start', files: { 'src/a/x.ts': 'x\n' } },
