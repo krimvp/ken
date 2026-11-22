@@ -584,7 +584,7 @@ function announce() {
 	const status = $('#run-status')
 	const run = state.running
 	const doing = run?.onHome ? DOING[run.onHome.kind][1] : "ken's model is reading the project"
-	const newest = run?.q.steps.findLast((step) => step.kind === 'tool')?.text ?? ''
+	const newest = run?.q.steps.findLast((step) => step.kind === 'tool')?.text.replaceAll('`', '') ?? ''
 	const said = run ? `${doing}. ${newest}`.trim() : status.textContent === '' ? '' : 'The run ended.'
 	if (status.textContent !== said) status.textContent = said
 }
