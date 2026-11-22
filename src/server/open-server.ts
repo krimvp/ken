@@ -1,15 +1,24 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { MODEL_EXAMPLE, type ModelFlags } from '../agent/index.ts'
-import { authorsOf, decide, openItems, timeRange } from '../follow-up/index.ts'
-import { changeChoices, lookAtLayout, readLayoutAsk } from '../layout/index.ts'
+import { layoutDraft } from '../diagram/index.ts'
+import { authorsOf, decide, openItems, sinceChoices, timeRange } from '../follow-up/index.ts'
+import {
+	type ChangeChoice,
+	changeChoices,
+	type LayoutAsk,
+	lookAtLayout,
+	pictureBefore,
+	readLayoutAsk,
+} from '../layout/index.ts'
 import type { MapSignal } from '../map/index.ts'
 import { MERMAID_FILE, PAGE_FOLDER } from '../page/index.ts'
 import { OUTCOMES } from '../record/index.ts'
 import { decisionRows } from './decision-list.ts'
-import { refusal } from './guard-request.ts'
+import { refusal } from './http/guard-request.ts'
+import { type PageFile, readPageFiles } from './http/page-files.ts'
 import { openProject } from './ken-project.ts'
-import { type PageFile, readPageFiles } from './page-files.ts'
 import { fieldOf, type QuestionLine } from './question-desk.ts'
+import { suggestWayIn } from './way-in.ts'
 
 // model is the name of the model the page asks, or null when none is set and the page can only show earlier answers.
 export type KenServer = { url: string; root: string; model: string | null; live: boolean; close(): Promise<void> }
@@ -41,7 +50,7 @@ export async function openServer(options: {
 	const opened = await openProject(options)
 	if (opened.kind !== 'ok') return opened
 	const { project } = opened
-	const { root, shown, repo, record, map, layout, model, desk, live } = project
+	const { root, shown, repo, history, record, map, readerNotes, layout, model, desk, live } = project
 	if (options.live && !live) {
 		await project.close()
 		return {
@@ -52,6 +61,20 @@ export async function openServer(options: {
 	const openNow = async () => openItems(repo, await record.read(), (await map.read(new Date())).states)
 	const files = await readPageFiles(PAGE_FOLDER, { '/mermaid.min.js': MERMAID_FILE })
 	let port = 0
+
+	// What landed since the reader last looked leads the changes the page offers, so catching up is one pick away.
+	async function layoutView(ask: LayoutAsk) {
+		const now = new Date()
+		// A note ken wrote by itself in live mode is not a question the reader asked.
+		const questions = (await history.list()).filter((entry) => entry.about === undefined)
+		const [look, since, choices] = await Promise.all([
+			lookAtLayout(layout, ask, now),
+			sinceChoices(repo, questions, now),
+			changeChoices(layout),
+		])
+		const changes: ChangeChoice[] = [...since.map((each) => each.choice), ...choices]
+		return { look, changes, wayIn: await suggestWayIn(layout, { history, questions, spans: since }, now) }
+	}
 
 	async function route(request: IncomingMessage, response: ServerResponse) {
 		const problem = refusal(request, port)
@@ -98,6 +121,15 @@ export async function openServer(options: {
 			const states = await map.learn(signal.signal, signal.topics, new Date())
 			return sendJson(response, 200, { states })
 		}
+		if (where === 'GET /api/notes') return sendJson(response, 200, { notes: await readerNotes.read() })
+		if (where === 'POST /api/notes') {
+			const body = await readJson(request)
+			const id = body.kind === 'ok' ? fieldOf(body.value, 'remove') : undefined
+			if (typeof id !== 'string') {
+				return sendJson(response, 400, { message: 'Send remove: the id of the note to remove.' })
+			}
+			return sendJson(response, 200, { notes: await readerNotes.remove(id, new Date()) })
+		}
 		if (where === 'GET /api/open') return sendJson(response, 200, await openNow())
 		if (where === 'GET /api/layout') {
 			const { searchParams: query } = url
@@ -108,8 +140,29 @@ export async function openServer(options: {
 			}
 			const ask = await readLayoutAsk(layout, raw)
 			if (ask.kind !== 'ok') return sendJson(response, 400, { message: ask.message, field: ask.field })
-			const [look, changes] = await Promise.all([lookAtLayout(layout, ask.ask, new Date()), changeChoices(layout)])
-			return sendJson(response, 200, { look, changes })
+			return sendJson(response, 200, await layoutView(ask.ask))
+		}
+		if (where === 'POST /api/layout/back') {
+			const body = await readJson(request)
+			if (body.kind !== 'ok') return sendJson(response, 400, { message: body.problem })
+			const within = fieldOf(body.value, 'within')
+			if (!Array.isArray(within) || !within.every((each) => typeof each === 'string')) {
+				return sendJson(response, 400, { message: 'Send within: the paths of the level, as a list.' })
+			}
+			const ask = await readLayoutAsk(layout, { within })
+			if (ask.kind !== 'ok') return sendJson(response, 400, { message: ask.message, field: ask.field })
+			const pictures = pictureBefore((await record.read()).entries, ask.ask.within)
+			if (!pictures) {
+				return sendJson(response, 409, { message: 'ken has no earlier picture of this level to go back to.' })
+			}
+			// A copy of the earlier picture, written as the newest: the record only grows, and the newest picture shows.
+			const copy = { kind: 'layout' as const, ...layoutDraft(pictures.before), replaces: pictures.shown.id }
+			const appended = await record.append([copy])
+			if (appended.kind === 'refused') {
+				const message = `ken could not bring the earlier picture back: ${appended.problems.join(' ')}`
+				return sendJson(response, 409, { message })
+			}
+			return sendJson(response, 200, await layoutView(ask.ask))
 		}
 		if (where === 'GET /api/authors') {
 			const recent = await timeRange(repo, { kind: 'days', days: RECENT_DAYS }, new Date())
@@ -160,7 +213,7 @@ export async function openServer(options: {
 			if (request.socket.destroyed) stop.abort()
 			response.writeHead(200, { ...HEADERS, 'content-type': 'application/x-ndjson; charset=utf-8' })
 			response.flushHeaders()
-			await desk.ask(model.chat, question.text, stop.signal, (line) => writeLine(response, line), asked.tour)
+			await desk.ask(model.chat, question.text, stop.signal, (line) => writeLine(response, line), asked.as)
 			return response.end()
 		}
 		const file = request.method === 'GET' ? files.get(url.pathname) : undefined

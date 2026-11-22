@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { after, test } from 'node:test'
-import { decide, openItems, rangeQuestion, timeRange } from '../../src/follow-up/index.ts'
+import { decide, openItems, rangeQuestion, sinceChoices, timeRange } from '../../src/follow-up/index.ts'
 import { openMap } from '../../src/map/index.ts'
 import { type EntryDraft, fileRecordStore, type RecordEntry } from '../../src/record/index.ts'
 import { gitRepository } from '../../src/repo/index.ts'
@@ -244,3 +244,73 @@ function contentOf(entry: Extract<RecordEntry, { kind: 'decision' }>) {
 	const { id, at, replaces, needsOwner, answer, ...content } = entry
 	return content
 }
+
+test("the spans for catching up start at the reader's last question when it was at an older commit, and at their own last commit, then the last days, each with the commits it holds, and a span with the same commits as one before it is left out", async () => {
+	const { repo, commit } = setUp()
+	const now = new Date('2026-11-16T12:00:00Z')
+	assert.deepEqual(await sinceChoices(repo, [], now), [], 'nothing landed after the one old commit')
+
+	const asked = commit(OWNER, '2026-08-01T12:00:00Z', { 'README.md': '# demo\n\nOne.\n' })
+	const own = commit(OWNER, '2026-10-20T12:00:00Z', { 'README.md': '# demo\n\nTwo.\n' })
+	const week = commit(COLLABORATOR, '2026-11-01T12:00:00Z', { 'README.md': '# demo\n\nThree.\n' })
+	const head = commit(COLLABORATOR, '2026-11-12T12:00:00Z', { 'README.md': '# demo\n\nFour.\n' })
+	// Only the newest question with a head counts: an older one at a commit further back is not offered.
+	const questions = [
+		{ askedAt: '2026-07-01T12:00:00Z', head: null },
+		{ askedAt: '2026-07-02T12:00:00Z', head: own },
+		{ askedAt: '2026-08-02T12:00:00Z', head: asked },
+		{ askedAt: '2026-08-03T12:00:00Z', head: null },
+	]
+	const changes = async (questions: { askedAt: string; head: string | null }[]) =>
+		(await sinceChoices(repo, questions, now)).map(({ choice }) => [choice.change, choice.commits])
+
+	const choices = await sinceChoices(repo, questions, now)
+	assert.deepEqual(
+		choices.map(({ choice }) => [choice.change, choice.commits]),
+		[
+			[`${asked}..${head}`, 3],
+			[`${own}..${head}`, 2],
+			[`${week}..${head}`, 1],
+		],
+		'the last question, the last commit and 7 days; 30 and 90 days hold what the last question holds',
+	)
+	assert.ok(choices.every(({ choice }) => choice.name.includes(String(choice.commits))))
+
+	const withoutQuestion = [
+		[`${own}..${head}`, 2],
+		[`${week}..${head}`, 1],
+		[`${asked}..${head}`, 3],
+	]
+	assert.deepEqual(
+		await changes([...questions, { askedAt: '2026-11-14T12:00:00Z', head }]),
+		withoutQuestion,
+		'the last question was asked at HEAD, so nothing landed since it',
+	)
+	assert.deepEqual(
+		await changes([...questions, { askedAt: '2026-11-14T12:00:00Z', head: 'f'.repeat(40) }]),
+		withoutQuestion,
+		'the last question was asked at a commit this history does not have, as after a rebase',
+	)
+})
+
+test("the span since the reader's own last commit finds a commit that came in through a merge, with their email in any case", async () => {
+	const decoy = { name: 'Not Ada', email: `x${OWNER.email}` }
+	const { root, hashes } = buildRepository([
+		{ message: 'feat: start', files: { 'a.txt': 'a\n' } },
+		{ message: 'feat: b', files: { 'b.txt': 'b\n' }, author: COLLABORATOR },
+		{
+			message: 'feat: c',
+			files: { 'c.txt': 'c\n' },
+			author: { ...OWNER, email: OWNER.email.toUpperCase() },
+			parent: 0,
+		},
+		{ message: 'Merge c', files: {}, author: COLLABORATOR, parent: 1, merge: 2 },
+		{ message: 'feat: d', files: { 'd.txt': 'd\n' }, author: decoy },
+	])
+	const [, , own, , head] = hashes
+	const choices = await sinceChoices(gitRepository(root), [], new Date('2026-11-16T12:00:00Z'))
+	assert.deepEqual(
+		choices.map(({ anchor, choice }) => [anchor, choice.change]),
+		[['commit', `${own}..${head}`]],
+	)
+})

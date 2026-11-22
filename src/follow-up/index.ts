@@ -14,6 +14,7 @@ export {
 	type TourLevel,
 	topicQuestion,
 	tourQuestion,
+	viewQuestion,
 } from './lens-questions.ts'
 export {
 	type ChangeCommit,
@@ -24,5 +25,14 @@ export {
 	openItems,
 } from './open-items.ts'
 export { type Author, authorsOf, findAuthor, type PersonChanges, personChanges } from './person.ts'
-export { type Since, sinceOf, type TimeRange, timeRange } from './time-range.ts'
-export { at, onDay, when } from './when.ts'
+export {
+	type Anchor,
+	type Landed,
+	type Since,
+	type SinceChoice,
+	sinceChoices,
+	sinceOf,
+	type TimeRange,
+	timeRange,
+} from './time-range.ts'
+export { at, day, onDay, when } from './when.ts'

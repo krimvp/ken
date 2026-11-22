@@ -158,6 +158,7 @@ test('a tour asks for its stops in the order of the arrows, reaches the reader s
 
 	const rows = (await json(server, '/api/questions')).questions
 	assert.deepEqual(rows.at(-1).tour, { within: [], stops: ['Command', 'Core', 'Store', 'Tests'] })
+	assert.deepEqual([rows.at(-1).steps, rows.at(-1).change], [4, null], 'four steps, about no change')
 
 	const reached = await json(server, '/api/map', { signal: 'toured', topics: ['Command'] })
 	assert.deepEqual(kinds(reached.states), { Command: 'met' }, 'reaching a stop marks its part met')

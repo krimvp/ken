@@ -3,7 +3,7 @@ import { test } from 'node:test'
 
 // A zone far from UTC, so a time or a day read in UTC shows here. Node reads TZ again when it changes.
 process.env.TZ = 'Asia/Kolkata'
-const { at, onDay, when } = await import('../../src/follow-up/index.ts')
+const { at, day, onDay, when } = await import('../../src/follow-up/index.ts')
 
 test('the terminal writes a moment in the reader time zone, as the page does', () => {
 	const now = new Date('2026-11-16T12:00:00Z')
@@ -20,4 +20,11 @@ test('the terminal writes a moment in the reader time zone, as the page does', (
 	assert.equal(onDay('2026-11-16', now), 'earlier today')
 	assert.equal(onDay('2026-11-02', now), 'on 2 Nov')
 	assert.equal(onDay('2025-11-16', now), 'on 16 Nov 2025')
+	assert.equal(
+		day('2026-11-15T20:00:00Z', now),
+		'01:30',
+		"the day is the reader's, and there it is already the 16th, so the moment reads as its time today",
+	)
+	assert.equal(day('2026-11-02T01:06:00Z', now), '2 Nov')
+	assert.equal(day('2025-11-16T01:06:00Z', now), '16 Nov 2025')
 })

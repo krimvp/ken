@@ -83,6 +83,7 @@ test('each broken rule refuses the layout and names the problem', async () => {
 			/7 parts/,
 		],
 		['nine arrows', draft({ arrows: Array.from({ length: 9 }, () => arrow) }), /9 arrows\. Keep it to 8/],
+		['an about past its limit', draft({ about: 'x'.repeat(241) }), /about has 241 characters\. Keep it to 240/],
 		['an arrow to no part', draft({ arrows: [{ ...arrow, to: 'Nowhere' }] }), /ends at "Nowhere", which is no part/],
 		['an arrow to itself', draft({ arrows: [{ ...arrow, to: 'Server' }] }), /from a part to itself/],
 		['an arrow without a quote', draft({ arrows: [{ ...arrow, quotes: [] }] }), /has no quote/],

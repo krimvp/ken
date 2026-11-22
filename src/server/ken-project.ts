@@ -4,15 +4,15 @@ import { type Chat, type ModelFlags, type ModelUnset, readModelConfig, startChat
 import { type History, kenHome, openHistory } from '../history/index.ts'
 import type { LayoutSources } from '../layout/index.ts'
 import { openSnapshots } from '../live/index.ts'
-import { openMap, type UnderstandingMap } from '../map/index.ts'
+import { openMap, openNotes, type ReaderNotes, type UnderstandingMap } from '../map/index.ts'
 import { fileRecordStore, type RecordStore } from '../record/index.ts'
 import { findRoot, gitRepository, type Repository } from '../repo/index.ts'
 import { projectSessions } from '../transcripts/index.ts'
 import { type LiveRunner, liveRunner } from './live-runner.ts'
 import { questionDesk } from './question-desk.ts'
 
-// What "ken open" and "ken live" share for one project: its git, the reader's history and map, the record, what the
-// layout reads, the chat when a model is set, the desk that runs one model call at a time, and live mode, which writes
+// What "ken open" and "ken live" share for one project: its git, the reader's history, map and notes, the record, what
+// the layout reads, the chat when a model is set, the desk that runs one model call at a time, and live mode, which writes
 // its notes in a chat of its own. live is null without a model.
 export type KenProject = {
 	root: string
@@ -21,6 +21,7 @@ export type KenProject = {
 	history: History
 	record: RecordStore
 	map: UnderstandingMap
+	readerNotes: ReaderNotes
 	layout: LayoutSources
 	model: { kind: 'ok'; chat: Chat; name: string } | ModelUnset
 	desk: ReturnType<typeof questionDesk>
@@ -49,12 +50,16 @@ export async function openProject(options: {
 	const mapped = await openMap(home, repo, record)
 	if (mapped.kind !== 'ok') throw new Error(`${root} has a history but no first commit`)
 	const { map } = mapped
+	const noted = await openNotes(home, repo)
+	if (noted.kind !== 'ok') throw new Error(`${root} has a history but no first commit`)
+	const readerNotes = noted.notes
 	const store = await openSnapshots(home, repo, root)
 	const config = readModelConfig(options.flags, options.env)
 	let model: KenProject['model']
 	let notes: Chat | null = null
 	if (config.kind === 'ok') {
-		const chat = { directory: root, model: config.config, env: options.env, map, snapshots: store.objects }
+		const reader = { map, notes: readerNotes }
+		const chat = { directory: root, model: config.config, env: options.env, reader, snapshots: store.objects }
 		const [started, forNotes] = await Promise.all([startChat(chat), startChat(chat)])
 		if (started.kind !== 'ok') return { kind: 'refused', message: started.message }
 		if (forNotes.kind !== 'ok') return { kind: 'refused', message: forNotes.message }
@@ -76,5 +81,8 @@ export async function openProject(options: {
 		await notes?.close()
 	}
 
-	return { kind: 'ok', project: { root, shown, repo, history, record, map, layout, model, desk, live, close } }
+	return {
+		kind: 'ok',
+		project: { root, shown, repo, history, record, map, readerNotes, layout, model, desk, live, close },
+	}
 }

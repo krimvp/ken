@@ -157,15 +157,58 @@ export type PartsLevel = {
 	name: string | null
 	within: string[]
 	head: string
-	bounds: { fewest: number; parts: number; arrows: number }
+	bounds: { fewest: number; parts: number; arrows: number; about: number }
 	boxes: { name: string; paths: string[]; files: number; job: string | null; state: 'same' | 'changed' | 'gone' }[]
 	named: { drawnAt: string; added: string[] } | null
 	loose: string[]
 }
 
 export function partsQuestion(level: PartsLevel): LensQuestion {
-	const { within, head, bounds, boxes, named } = level
-	const where = level.name ?? (within.length === 0 ? 'this project' : within.join(', '))
+	const { within, head, named } = level
+	return {
+		text: [
+			`${named ? 'Name again' : 'Name'} the main parts of ${whereOf(level)}`,
+			LIST_SAID,
+			...levelLines(level),
+			'',
+			`Read the code at HEAD (${head}), then call show with layout, and within set to ${JSON.stringify(within)}.`,
+			...layoutRules(level),
+			'Then say in two or three sentences how the parts fit together.',
+		].join('\n'),
+		empty: false,
+	}
+}
+
+// The box where the reader tells ken to show a level another way. asked is their own words. The level as they see it
+// now and the layout rules follow, as in partsQuestion, and then what to do: draw the level again when the words are
+// about the picture, keep a reader note when they are about the reader.
+export function viewQuestion(
+	level: PartsLevel & { arrows: { from: string; to: string; text: string }[] },
+	asked: string,
+): LensQuestion {
+	const { within, head, arrows } = level
+	const uses = arrows.map((arrow) => `${arrow.from} ${arrow.text} ${arrow.to}`)
+	return {
+		text: [
+			`Show ${whereOf(level)} another way: ${asked}`,
+			LIST_SAID,
+			...levelLines(level),
+			...(uses.length > 0 ? [`- The arrows now: ${uses.join('; ')}.`] : []),
+			'',
+			`If what I ask is about the picture, such as how the parts are grouped, how many there are or what the arrows show: read the code at HEAD (${head}), then call show with a layout that does it, with within set to ${JSON.stringify(within)}, and say in one or two sentences what changed.`,
+			...layoutRules(level),
+			'If it is about me, such as what I know or how I want things explained: call remember with one plain sentence, and draw the picture again only if it should change too.',
+			'If the layout rules cannot do what I ask, say so plainly, and say what I can ask for instead.',
+		].join('\n'),
+		empty: false,
+	}
+}
+
+function whereOf({ name, within }: PartsLevel): string {
+	return name ?? (within.length === 0 ? 'this project' : within.join(', '))
+}
+
+function levelLines({ boxes, named, loose }: PartsLevel): string[] {
 	const box = (each: PartsLevel['boxes'][number]) =>
 		`${each.name} (${each.paths.join(', ')}, ${each.files === 1 ? '1 file' : `${each.files} files`})${each.job ? `: ${each.job}` : ''}`
 	const changed = boxes.filter((each) => each.state !== 'same').map((each) => each.name)
@@ -173,26 +216,25 @@ export function partsQuestion(level: PartsLevel): LensQuestion {
 		...(changed.length > 0 ? [`${changed.join(', ')} changed since then`] : []),
 		...(named && named.added.length > 0 ? [`${named.added.join(', ')} is new and in no part`] : []),
 	]
-	const shown = named
-		? [
-				`- ken's model named these parts at ${short(named.drawnAt)}: ${boxes.map(box).join('; ')}.`,
-				...(moved.length > 0 ? [`- Since then: ${moved.join('; ')}.`] : []),
-			]
-		: [`- ken splits it by folder now: ${boxes.map(box).join('; ')}.`]
-	return {
-		text: [
-			`${named ? 'Name again' : 'Name'} the main parts of ${where}`,
-			LIST_SAID,
-			...shown,
-			...(level.loose.length > 0 ? [`- In no part now: ${level.loose.join(', ')}.`] : []),
-			'',
-			`Read the code at HEAD (${head}), then call show with layout, and within set to ${JSON.stringify(within)}.`,
-			`Group the paths into ${bounds.fewest} to ${bounds.parts} parts the owner would name. Give each a short name, one line of about 80 characters on its job, and the folders or files it holds, each inside within. No two parts share a file. Leave out what is not code if it does not help, such as docs; ken lists it as in no part.`,
-			`Add at most ${bounds.arrows} arrows for which part uses which, each with a short verb said from the part it starts at, so that the start part, the verb and the end part read as a sentence, such as "Server runs questions in Chat engine". Never a passive verb such as "is used by". Each arrow quotes lines from a file of the part it starts at that name a folder or file of the part it ends at: an import line does, a comment does not. Leave out an arrow you cannot quote that way.`,
-			'Then say in two or three sentences how the parts fit together.',
-		].join('\n'),
-		empty: false,
-	}
+	return [
+		...(named
+			? [
+					`- ken's model named these parts at ${short(named.drawnAt)}: ${boxes.map(box).join('; ')}.`,
+					...(moved.length > 0 ? [`- Since then: ${moved.join('; ')}.`] : []),
+				]
+			: [`- ken splits it by folder now: ${boxes.map(box).join('; ')}.`]),
+		...(loose.length > 0 ? [`- In no part now: ${loose.join(', ')}.`] : []),
+	]
+}
+
+// The rules show's layout is checked against, so the model can pass the check first time.
+function layoutRules(level: PartsLevel): string[] {
+	const { bounds } = level
+	return [
+		`Fill about with what ${whereOf(level)} is as a whole: one or two plain sentences, at most ${bounds.about} characters, for a reader who has never seen it.`,
+		`Group the paths into ${bounds.fewest} to ${bounds.parts} parts the owner would name. Give each a short name, one line of about 80 characters on its job, and the folders or files it holds, each inside within. No two parts share a file. Leave out what is not code if it does not help, such as docs; ken lists it as in no part.`,
+		`Add at most ${bounds.arrows} arrows for which part uses which, each with a short verb said from the part it starts at, so that the start part, the verb and the end part read as a sentence, such as "Server runs questions in Chat engine". Never a passive verb such as "is used by". Each arrow quotes lines from a file of the part it starts at that name a folder or file of the part it ends at: an import line does, a comment does not. Leave out an arrow you cannot quote that way.`,
+	]
 }
 
 // "Show me around" on a named level. Plain code picked the stops and their order, so the model explains each part in

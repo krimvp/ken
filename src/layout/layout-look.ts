@@ -15,9 +15,10 @@ import { type TourStop, tourOrder } from './tour-order.ts'
 // The paths a level shows the inside of, sorted. The empty list is the whole project.
 export type Scope = RepoPath[]
 
-// name says what the change is to the reader: "Uncommitted work", a branch, or a range as they typed it. asked is the
-// text that asks for this change again.
-export type Change = { name: string; asked: string; range: Range }
+// kind says how the change was asked for: the reader's uncommitted work, a branch against the main branch, or a range
+// of commits. name says what the change is to the reader: "Uncommitted work", a branch, or a range as they typed it.
+// asked is the text that asks for this change again.
+export type Change = { kind: 'uncommitted' | 'branch' | 'range'; name: string; asked: string; range: Range }
 
 export type LayoutAsk = { at: CommitHash; within: Scope; change: Change | null }
 
@@ -47,8 +48,17 @@ export type LookBox = Seed & {
 
 // A level ken's model named: the record entry, the commit it was named at, and what no longer fits there. added names
 // what sits in the scope at the commit asked, in no part, and was not there when the model named the parts. stale says
-// the drawing no longer fits: a part changed or went, or something was added in no part.
-export type Named = { id: EntryId; drawnAt: CommitHash; added: string[]; stale: boolean }
+// the drawing no longer fits: a part changed or went, or something was added in no part. about is the model's sentence
+// or two on the level as a whole, and asked the reader's own words when ken drew it because they asked for another way
+// to show it. Each is null when the entry has none.
+export type Named = {
+	id: EntryId
+	drawnAt: CommitHash
+	added: string[]
+	stale: boolean
+	about: string | null
+	asked: string | null
+}
 
 // An arrow is possibly stale when the part it starts at changed since the model named the parts, since its lines may
 // have changed with it.
@@ -84,9 +94,7 @@ export async function lookAtLayout(
 	const head = await repo.resolve('HEAD', signal)
 	if (head.kind !== 'ok') throw new Error(`${sources.root} has no HEAD commit to lay out`)
 	const read = await sources.record.read()
-	const versions = read.entries.flatMap((entry) =>
-		entry.kind === 'layout' && sameScope(entry, ask.within) ? [entry] : [],
-	)
+	const versions = versionsOf(read.entries, ask.within)
 	const level =
 		versions.length > 0
 			? await namedLevel(repo, versions, ask, head.commit, signal)
@@ -131,8 +139,9 @@ type Level = {
 	loose: string[]
 }
 
-// Among every stored version of the level, the one with the most parts the same at the commit asked, the newest on a
-// tie. So at an old commit the version that fit the code then wins, and at HEAD the newest that fits.
+// Which stored version of the level shows. At the commit checked out it is the newest, so a redraw with fewer parts
+// shows as drawn. At an older commit it is the version with the largest share of its parts the same there, the newest
+// on a tie: the one that fit the code then.
 async function namedLevel(
 	repo: Repository,
 	versions: Stored[],
@@ -149,12 +158,15 @@ async function namedLevel(
 		if (part.places.every((place) => idAt.get(place.path) === null)) return 'gone'
 		return part.places.every((place) => idAt.get(place.path) === place.id) ? 'same' : 'changed'
 	}
-	const same = (version: Stored) => version.parts.filter((part) => stateOf(part) === 'same').length
-	// A merge of two clones' records can put a newer line before an older one, so ties go by when ken wrote each.
-	const chosen = versions.reduce((best, version) => {
-		const [a, b] = [same(version), same(best)]
-		return a > b || (a === b && version.at >= best.at) ? version : best
-	})
+	const share = (version: Stored) =>
+		version.parts.filter((part) => stateOf(part) === 'same').length / version.parts.length
+	const chosen =
+		ask.at === head
+			? newest(versions)
+			: versions.reduce((best, version) => {
+					const [a, b] = [share(version), share(best)]
+					return a > b || (a === b && version.at >= best.at) ? version : best
+				})
 	// At HEAD a part says whether it changed since it was named. At an older commit it says, as a folder does, whether it
 	// was different then from now, which is what the reader looking back wants to know.
 	const headIds = ask.at === head ? null : await repo.objectIds(head, places, signal)
@@ -173,7 +185,14 @@ async function namedLevel(
 	const added = loose.filter((_, i) => thenIds[i] === null)
 	const changed = new Set(chosen.parts.filter((part) => stateOf(part) !== 'same').map((part) => part.name))
 	return {
-		named: { id: chosen.id, drawnAt: chosen.drawnAt, added, stale: changed.size > 0 || added.length > 0 },
+		named: {
+			id: chosen.id,
+			drawnAt: chosen.drawnAt,
+			added,
+			stale: changed.size > 0 || added.length > 0,
+			about: chosen.about ?? null,
+			asked: chosen.asked ?? null,
+		},
 		boxes,
 		arrows: chosen.arrows.map((arrow) => ({ ...arrow, text: fromStart(arrow.text), stale: changed.has(arrow.from) })),
 		loose,
@@ -206,6 +225,32 @@ async function folderLevel(repo: Repository, ask: LayoutAsk, head: CommitHash, s
 // other way round, such as "is used by", would say the opposite, so it reads as "uses".
 function fromStart(verb: string): string {
 	return /^(is|are|gets?)\b|\bby$/i.test(verb.trim()) ? 'uses' : verb
+}
+
+// The picture of a level that shows at the commit checked out, and the one "back to the picture before" brings back:
+// the newest version older than the first one drawn the same as the shown one, so going back again walks further back.
+// null when no version is older.
+export function pictureBefore(entries: RecordEntry[], within: Scope): { shown: Stored; before: Stored } | null {
+	const versions = oldestFirst(versionsOf(entries, within))
+	const shown = versions.at(-1)
+	if (!shown) return null
+	const drawn = (version: Stored) => JSON.stringify([version.parts, version.arrows])
+	const before = versions[versions.findIndex((version) => drawn(version) === drawn(shown)) - 1]
+	return before ? { shown, before } : null
+}
+
+function versionsOf(entries: RecordEntry[], within: Scope): Stored[] {
+	return entries.flatMap((entry) => (entry.kind === 'layout' && sameScope(entry, within) ? [entry] : []))
+}
+
+// A merge of two clones' records can put a newer line before an older one, so the order goes by when ken wrote each,
+// and by the order in the file only between two written in the same moment.
+function newest(versions: Stored[]): Stored {
+	return versions.reduce((best, version) => (version.at >= best.at ? version : best))
+}
+
+function oldestFirst(versions: Stored[]): Stored[] {
+	return versions.toSorted((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0))
 }
 
 function sameScope(layout: Stored, within: Scope): boolean {

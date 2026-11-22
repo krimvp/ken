@@ -50,11 +50,11 @@ async function ownWork(sources: LayoutSources, signal?: AbortSignal): Promise<Ch
 	if (branch === null || main === null || branch === main) return null
 	const range = await resolveRange(repo, { base: main, head: branch }, signal)
 	if (range.kind !== 'ok' || range.range.base === range.range.head) return null
-	return { name: branch, asked: branch, range: range.range }
+	return { kind: 'branch', name: branch, asked: branch, range: range.range }
 }
 
 function uncommitted(head: CommitHash, snapshot: CommitHash): Change {
-	return { name: 'Uncommitted work', asked: UNCOMMITTED, range: { base: head, head: snapshot } }
+	return { kind: 'uncommitted', name: 'Uncommitted work', asked: UNCOMMITTED, range: { base: head, head: snapshot } }
 }
 
 async function changeOf(
@@ -70,7 +70,8 @@ async function changeOf(
 			change: uncommitted(snapshot.head, snapshot.kind === 'taken' ? snapshot.commit : snapshot.head),
 		}
 	}
-	const [base, head, ...rest] = text.includes('..') ? text.split('..') : [await mainBranch(repo, signal), text]
+	const kind = text.includes('..') ? 'range' : 'branch'
+	const [base, head, ...rest] = kind === 'range' ? text.split('..') : [await mainBranch(repo, signal), text]
 	if (base === null) {
 		return {
 			kind: 'refused',
@@ -82,7 +83,7 @@ async function changeOf(
 	const range = await resolveRange(repo, { base, head }, signal)
 	// A change card asks by full hashes, which the reader reads more easily cut to seven characters.
 	const name = text.replace(/\b[0-9a-f]{40}\b/g, (hash) => hash.slice(0, 7))
-	if (range.kind === 'ok') return { kind: 'ok', change: { name, asked: text, range: range.range } }
+	if (range.kind === 'ok') return { kind: 'ok', change: { kind, name, asked: text, range: range.range } }
 	if (range.kind === 'unrelated') return { kind: 'refused', message: `${base} and ${head} share no history.` }
 	return {
 		kind: 'refused',
@@ -95,8 +96,11 @@ async function mainBranch(repo: Repository, signal?: AbortSignal): Promise<strin
 	return null
 }
 
-// change is the text readLayoutAsk takes for it.
-export type ChangeChoice = { kind: 'uncommitted' | 'merge' | 'commit' | 'branch'; change: string; name: string }
+// change is the text readLayoutAsk takes for it. A since choice is a span of time for catching up, with the number of
+// commits it holds. The follow-up module makes those, and the server puts them before the ones made here.
+export type ChangeChoice =
+	| { kind: 'uncommitted' | 'merge' | 'commit' | 'branch'; change: string; name: string }
+	| { kind: 'since'; change: string; name: string; commits: number }
 
 // The changes the page offers to lay over the boxes: the reader's uncommitted work, the newest merges on the main line
 // (or its newest commits when it has no merge), and the branches other than the main one.
@@ -111,7 +115,7 @@ export async function changeChoices(sources: LayoutSources, signal?: AbortSignal
 	])
 	const commits = line.kind === 'ok' ? line.commits.filter((commit) => commit.parents.length > 0) : []
 	const merges = commits.filter((commit) => commit.parents.length > 1)
-	const kind: ChangeChoice['kind'] = merges.length > 0 ? 'merge' : 'commit'
+	const kind = merges.length > 0 ? ('merge' as const) : ('commit' as const)
 	const recent = (merges.length > 0 ? merges : commits).slice(0, RECENT).map((commit) => ({
 		kind,
 		change: `${commit.hash}^1..${commit.hash}`,
