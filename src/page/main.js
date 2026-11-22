@@ -198,9 +198,11 @@ function addEvent(q, event) {
 	}
 }
 
-// What the server answers, whether or not it is ok. It throws only when the server sends no answer at all.
+// What the server answers, whether or not it is ok. It throws only when the server sends no answer at all, or none
+// within READ_MS: a read that never ends would leave the page waiting for good.
+const READ_MS = 30_000
 async function read(url) {
-	const response = await fetch(url)
+	const response = await fetch(url, { signal: AbortSignal.timeout(READ_MS) })
 	return { ok: response.ok, body: await response.json(), status: response.status }
 }
 

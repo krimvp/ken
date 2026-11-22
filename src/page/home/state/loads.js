@@ -21,13 +21,26 @@ export function homeLoads({ state, render, read, post, fromView, stored }) {
 	// The number of the newest request for a level. An answer to an older one is dropped: the reader has moved on.
 	let asked = 0
 	// A request the server never answered is an answer too: one that is not ok, with the reason.
-	const ask = (url) => read(url).catch((error) => ({ ok: false, body: { message: error.message } }))
+	const ask = (url) =>
+		read(url).catch((error) => ({
+			ok: false,
+			body: { message: error.name === 'TimeoutError' ? 'ken took too long to answer.' : error.message },
+		}))
 
-	// A level as the server sent it becomes the level on screen.
+	// What ken has to say about the level on screen, found among the saved questions.
+	function find() {
+		const home = state.home
+		home.pictures = picturesOf(home.look, state.rows, home.replies)
+		home.content = contentOf(home.look, state.rows, home.replies, home.shown)
+	}
+
+	// A level as the server sent it becomes the level on screen. Its content is found at once, so the page never draws
+	// one level beside what ken said of another.
 	function showLevel({ look, changes, wayIn }) {
 		const home = state.home
 		if (look.within.length === 0 && look.at === look.head) learnParts(look.boxes)
 		Object.assign(home, { look, changes, problem: null, change: look.change?.asked ?? 'none' })
+		find()
 		// A field keeps what the reader typed in it only while the level on screen is the one it asked for.
 		if (look.at === look.head) home.typed.at = ''
 		if (!look.change?.asked.startsWith('since:')) home.typed.since = ''
@@ -96,10 +109,6 @@ export function homeLoads({ state, render, read, post, fromView, stored }) {
 	async function settle() {
 		const home = state.home
 		if (!home.look) return
-		const find = () => {
-			home.pictures = picturesOf(home.look, state.rows, home.replies)
-			home.content = contentOf(home.look, state.rows, home.replies, home.shown)
-		}
 		find()
 		// A drawn picture this level does not have gives its place to the parts, and a pick the screen does not hold
 		// is let go.
