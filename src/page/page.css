@@ -379,6 +379,8 @@ html {
 .composer {
 	position: sticky;
 	bottom: 0;
+	/* Above a picture's boxes and arrow labels, which a thread scrolls under the box. */
+	z-index: 3;
 	padding: var(--space-3) 0;
 	border-top: 1px solid var(--color-border);
 	background: var(--color-bg);
