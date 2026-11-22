@@ -112,7 +112,8 @@
 	display: flex;
 	align-items: flex-start;
 	gap: 14px;
-	padding-right: 34px;
+	/* As wide as the corner button, which grows as the canvas zooms out. */
+	padding-right: calc(max(34px, calc(24px * var(--inv))) + 4px);
 }
 
 .k-blk-icon {
@@ -437,14 +438,36 @@
 	font-size: 14px;
 }
 
-.k-notes {
+/* What a run is doing and the notes on the level stand in one column at the foot of the canvas, clear of the blocks
+   and of a brief open on the right. */
+.k-under {
+	position: absolute;
 	bottom: 20px;
 	left: 252px;
+	z-index: 3;
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 8px;
+	/* Clear of the minimap on the right: 252px of tools on the left, 220px of minimap on the right. */
+	max-width: min(560px, calc(100% - 472px));
+	max-height: 45%;
+}
+
+.k-under:empty {
+	display: none;
+}
+
+.k-under .k-float {
+	position: static;
+}
+
+.k-notes {
 	flex-direction: column;
 	align-items: flex-start;
 	gap: 6px;
-	max-width: min(460px, calc(100% - 272px));
-	max-height: 40%;
+	max-width: 100%;
+	min-height: 0;
 	overflow-y: auto;
 	padding: 10px 14px;
 	font-size: 14px;
@@ -461,18 +484,15 @@
 }
 
 .k-run {
-	top: 120px;
-	left: 50%;
 	gap: 12px;
-	max-width: min(620px, calc(100% - 40px));
+	max-width: 100%;
 	padding: 10px 12px 10px 16px;
-	transform: translateX(-50%);
 	font-size: 14.5px;
 }
 
 .k-run.is-said {
 	align-items: flex-start;
-	max-height: 40%;
+	min-height: 0;
 	overflow-y: auto;
 }
 
@@ -658,6 +678,10 @@
 	.k-canvas.has-brief .k-hint {
 		display: none;
 	}
+
+	.k-canvas.has-brief .k-under {
+		max-width: min(560px, calc(100% - 472px - var(--k-drawer)));
+	}
 }
 
 @media (max-width: 1180px) {
@@ -692,14 +716,10 @@
 		max-width: calc(100% - 24px);
 	}
 
-	.k-notes {
+	.k-under {
 		bottom: 72px;
 		left: 12px;
 		max-width: calc(100% - 24px);
-	}
-
-	.k-run {
-		top: 162px;
 	}
 
 	.k-tools {

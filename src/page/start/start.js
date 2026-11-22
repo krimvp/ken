@@ -165,34 +165,49 @@ function processesHtml(concepts, briefOf) {
 function changesHtml(look, changes, timeline) {
 	const stale = look.boxes.filter((box) => box.knows.stale)
 	const spans = changes.filter((choice) => choice.kind === 'since')
-	const title =
-		stale.length > 0
-			? big(stale.length, `${stale.length === 1 ? 'part' : 'parts'} changed since you looked`)
-			: spans.length > 0
-				? big(
-						spans[0].commits,
-						`${spans[0].commits === 1 ? 'commit' : 'commits'} in ${spans[0].name.slice(0, spans[0].name.lastIndexOf(': ')).replace(/^The /, 'the ')}`,
-					)
-				: big(0, 'commits in the last 90 days')
-	const bars =
-		timeline?.days.length > 0
-			? timeline.days.map((each) => [each.commits, each.day > (timeline.lastVisit ?? '').slice(0, 10)])
-			: null
-	const [w, h] = [300, 84]
-	const chart = bars
-		? (() => {
-				const most = Math.max(...bars.map(([n]) => n))
-				const step = w / bars.length
-				return `<svg class="k-bars" viewBox="0 0 ${w} ${h}" aria-hidden="true">${bars.map(([n, since], i) => `<rect class="${since ? 'is-since' : ''}" x="${i * step + 1}" y="${h - Math.max(3, (Math.sqrt(n) / Math.sqrt(most)) * (h - 4))}" width="${Math.max(step - 2, 1.5)}" height="${Math.max(3, (Math.sqrt(n) / Math.sqrt(most)) * (h - 4))}" rx="1.500"/>`).join('')}</svg>`
-			})()
-		: `<ul class="k-spans">${spans
-				.map((span) => {
-					const most = Math.max(...spans.map((each) => each.commits), 1)
-					const days = span.name.match(/\d+ days/)?.[0] ?? span.name
-					return `<li><span class="k-span-bar" style="--share:${Math.sqrt(span.commits / most)}"></span><b class="k-num">${span.commits}</b><span>${esc(days)}</span></li>`
-				})
-				.join('')}</ul>`
-	return `<section class="k-tile">${head('Changes', 'changes', 'Open Changes')}${title}${chart}</section>`
+	const DAY = 86_400_000
+	// The title counts something since a day, and the chart frames the days since then.
+	let title = big(0, 'commits in the last 90 days')
+	let from = null
+	if (stale.length > 0) {
+		title = big(stale.length, `${stale.length === 1 ? 'part' : 'parts'} changed since you looked`)
+		// Since the reader last looked at the first of those parts.
+		const looked = stale.map((box) => Date.parse(box.knows.last ?? '') + DAY).filter(Number.isFinite)
+		from = looked.length > 0 ? Math.min(...looked) : null
+	} else if (spans.length > 0) {
+		const span = spans[0].name.slice(0, spans[0].name.lastIndexOf(': '))
+		title = big(
+			spans[0].commits,
+			`${spans[0].commits === 1 ? 'commit' : 'commits'} in ${span.replace(/^The /, 'the ')}`,
+		)
+		const days = Number(span.match(/(\d+) days/)?.[1] ?? 0)
+		// ken counts from this time that many days ago, so the frame starts on that day.
+		from = days > 0 ? Date.now() - days * DAY : null
+	}
+	return `<section class="k-tile">${head('Changes', 'changes', 'Open Changes')}${title}${timeline ? barsHtml(timeline.days, from) : ''}</section>`
+}
+
+// The commits of each of the last 30 days, one slot a day up to today, and a frame round the days from the time from,
+// when there is one.
+function barsHtml(days, from) {
+	const [w, h, slots] = [300, 84, 30]
+	const step = w / slots
+	const today = Date.parse(new Date().toISOString().slice(0, 10))
+	const slotOf = (time) => slots - 1 - Math.round((today - time) / 86_400_000)
+	const most = Math.max(1, ...days.map((each) => each.commits))
+	const since = from === null ? slots : Math.max(0, slotOf(Date.parse(new Date(from).toISOString().slice(0, 10))))
+	const bars = days
+		.filter((each) => slotOf(Date.parse(each.day)) >= 0 && each.commits > 0)
+		.map((each) => {
+			const at = slotOf(Date.parse(each.day))
+			const tall = Math.max(3, Math.sqrt(each.commits / most) * (h - 8))
+			return `<rect class="${at >= since ? 'is-since' : ''}" x="${at * step + 1}" y="${h - 2 - tall}" width="${step - 2}" height="${tall}" rx="1.5"/>`
+		})
+	const frame =
+		since < slots
+			? `<rect class="k-bars-since" x="${since * step - 1}" y="1" width="${(slots - since) * step + 1}" height="${h - 2}" rx="6"/>`
+			: ''
+	return `<svg class="k-bars" viewBox="0 0 ${w} ${h}" aria-hidden="true">${frame}<path class="k-bars-base" d="M0 ${h - 1.5}H${w}"/>${bars.join('')}</svg>`
 }
 
 // The reader's own map, small: the project in the middle and a branch for each part, which grows with the level.

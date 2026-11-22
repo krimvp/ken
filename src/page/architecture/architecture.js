@@ -237,7 +237,7 @@ export function architectureHtml({ home, arch, env, brief, column }) {
 	const empty = look.boxes.length === 0 ? '<p class="k-canvas-line">Nothing is here at this commit.</p>' : ''
 	const notes = notesHtml(home, env, arch, stops)
 	const hint =
-		look.boxes.length === 0 || notes !== ''
+		look.boxes.length === 0 || notes !== '' || env.running?.onHome
 			? ''
 			: `<p class="k-hint">Press a block for its brief. Press ${icon('inside')} to go inside it.</p>`
 	return `<div class="k-canvas${arch.layer ? ` layer-${arch.layer}` : ''}${brief ? ' has-brief' : ''}" id="arch-canvas" data-world="${world.x} ${world.y} ${world.w} ${world.h}">
@@ -251,8 +251,7 @@ export function architectureHtml({ home, arch, env, brief, column }) {
 		${top}
 		${layersHtml(arch)}
 		${layerPickHtml(home, arch, processes)}
-		${notes}
-		${runHtml(home, env)}
+		<div class="k-under">${runHtml(home, env)}${notes}</div>
 		${home.reading ? READING : ''}
 		${toolsHtml(arch)}
 		${arch.drawOpen ? drawToolHtml(home, env.off) : ''}

@@ -762,13 +762,21 @@ li.k-row {
 	color: inherit;
 }
 
-/* A question with no answer yet: its button stands under its words. */
+/* A question with no answer yet: its words take the row, and its button stands under them. */
 li.k-row.is-open {
 	flex-wrap: wrap;
+	row-gap: 8px;
+}
+
+li.k-row.is-open .k-row-main {
+	flex-basis: calc(100% - 54px);
 }
 
 .k .k-row.is-open .k-run-btn {
-	margin-left: 42px;
+	flex-direction: row;
+	align-items: baseline;
+	gap: 8px;
+	margin-left: 46px;
 }
 
 @media (max-width: 760px) {

@@ -353,37 +353,15 @@
 	fill: var(--k-ink);
 }
 
-.k-spans {
-	display: flex;
-	align-items: flex-end;
-	gap: 18px;
-	height: 108px;
-	margin: 12px 0 0;
-	padding: 0;
-	list-style: none;
+.k-bars .k-bars-since {
+	fill: var(--k-brand-soft);
+	stroke: var(--k-ink);
+	stroke-width: 2;
 }
 
-.k-spans li {
-	display: flex;
-	flex: 1;
-	flex-direction: column;
-	align-items: center;
-	justify-content: flex-end;
-	height: 100%;
-	color: var(--k-muted);
-	font-size: 14px;
-}
-
-.k-spans b {
-	color: var(--k-ink);
-}
-
-.k-span-bar {
-	width: 100%;
-	max-width: 64px;
-	height: max(calc(var(--share) * 56px), 4px);
-	border-radius: 6px 6px 2px 2px;
-	background: var(--k-ink);
+.k-bars-base {
+	stroke: var(--k-line);
+	stroke-width: 1;
 }
 
 .k-you {

@@ -60,7 +60,7 @@ export function blockHtml(box, i, at, view) {
 	const job = look.named
 		? prose(box.job ?? '')
 		: file
-			? ''
+			? `<span class="k-mono">${esc(box.paths[0])}</span>`
 			: `${count(box.files, 'file', 'files')} in ${esc(box.paths.slice(0, 2).join(', '))}${box.paths.length > 2 ? ` and ${box.paths.length - 2} more` : ''}`
 	const state = stateLine(box, look).replace('pv-state', 'k-blk-state')
 	const known = KNOWN.indexOf(box.knows.level) / (KNOWN.length - 1)

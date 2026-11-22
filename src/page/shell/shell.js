@@ -95,7 +95,7 @@ export function settingsHtml(prefs, files) {
 	const theme = (name, label, glyph) =>
 		`<button data-act="pref-theme" data-theme="${name}" data-key="set-theme-${name}" aria-pressed="${prefs.theme === name}">${icon(glyph)}${label}</button>`
 	const kept = files.own
-		? `<p class="k-files">ken reads the project in <code>${esc(files.project ?? '')}</code> and never writes there. What it knows of you is in <code>${esc(files.own)}</code>, on this computer.</p>`
+		? `<p class="k-files">ken reads the project in <code>${esc(files.project ?? '')}</code> and writes there only to its record, in <code>.ken/</code>. What it knows of you is in <code>${esc(files.own)}</code>, on this computer.</p>`
 		: '<p class="k-files">ken keeps what it knows of you on this computer, outside the project.</p>'
 	return `<h2 class="k-eyebrow" id="settings-title" tabindex="-1">How much text</h2>
 		${texts.join('')}
