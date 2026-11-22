@@ -22,7 +22,6 @@ import {
 } from './view-kinds.js'
 
 export const TEXTS = { pictures: 'Pictures first', balanced: 'Balanced', words: 'More words' }
-const TEXT_ICONS = { pictures: 'pictures', balanced: 'balanced', words: 'words' }
 const KINDS = {
 	part: 'Part',
 	file: 'File',
@@ -66,11 +65,7 @@ export function colourOf(brief) {
 const waysCount = (brief) => ({
 	sideways: byPart(brief.sideways.uses).length + byPart(brief.sideways.usedBy).length + brief.sideways.processes.length,
 	questions: brief.questions.length + brief.decisions.length,
-	deeper: isViewKind(brief.kind)
-		? viewDeeperCount(brief)
-		: brief.deeper
-			? (brief.deeper.parts ?? brief.deeper.files)
-			: 0,
+	deeper: isViewKind(brief.kind) ? viewDeeperCount(brief) : brief.deeper ? brief.deeper.parts || brief.deeper.files : 0,
 })
 
 // A row that opens another brief.
@@ -192,7 +187,7 @@ function workingHtml(run, env) {
 function mainHtml(brief, { ui, env, prefs, look, views, inner }) {
 	const texts = Object.entries(TEXTS).map(
 		([text, name]) =>
-			`<button data-act="pref-text" data-text="${text}" data-key="brief-text-${text}" aria-pressed="${prefs.text === text}" aria-label="${name}" title="${name}">${icon(TEXT_ICONS[text])}<span>${name}</span></button>`,
+			`<button data-act="pref-text" data-text="${text}" data-key="brief-text-${text}" aria-pressed="${prefs.text === text}">${name}</button>`,
 	)
 	const about = brief.about
 		? `<p class="k-about">About <button class="k-link" data-act="brief-open" data-concept="${esc(brief.about.id)}" data-key="brief-about">${esc(brief.about.name)}</button></p>`
@@ -364,7 +359,7 @@ function deeperHtml(brief, inner) {
 	return `${backHtml}${icon('left')}The brief</button>
 		<h2 class="k-way-name" id="brief-name" tabindex="-1">Inside ${prose(brief.name)}</h2>
 		<p class="k-brief-line">${size}.</p>
-		<button class="k-btn" data-act="brief-inside" data-key="brief-inside">${icon('inside')}Open it on the canvas</button>
+		${brief.kind === 'part' ? `<button class="k-btn" data-act="brief-inside" data-key="brief-inside">${icon('inside')}Open it on the canvas</button>` : ''}
 		${inner === null ? '<p class="k-none">Reading what is inside, from git.</p>' : `<ul class="k-rows">${rows.join('')}</ul>`}
 		<p class="k-none">${icon('deeper')}Then its files, and then the lines.</p>`
 }

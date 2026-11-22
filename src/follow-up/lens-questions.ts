@@ -432,7 +432,7 @@ function pointRules({ bounds, drawings }: Pick<ExplainLevel, 'bounds' | 'drawing
 }
 
 const termRule = (bounds: ExplainLevel['bounds']) =>
-	`Give each its name as the code spells it, means: what it means in at most ${bounds.meansWords} words, and quote: one line where the code uses it.`
+	`Give each its name in the words people use for it, in lower case with spaces, such as "tool mode" for toolMode: never a name in camelCase, PascalCase or CAPITALS, and never a type, a constant or a function. The code's own name for it belongs only in quote. Give means: what it means in at most ${bounds.meansWords} words, and quote: one line where the code uses it.`
 
 const LAST_RULES = [
 	'Never write that I understand, know or have learned something. Say what the code does.',

@@ -74,6 +74,7 @@
 
 .k-brief-top {
 	display: flex;
+	flex-wrap: wrap;
 	align-items: center;
 	gap: 10px;
 }
@@ -114,19 +115,6 @@
 .k .k-text-seg button {
 	padding: 5px 7px;
 	border-radius: 8px;
-}
-
-.k-text-seg button .k-i {
-	width: 17px;
-	height: 17px;
-}
-
-.k-text-seg button span {
-	display: none;
-}
-
-.k-text-seg button[aria-pressed="true"] span {
-	display: inline;
 }
 
 .k-brief-name {

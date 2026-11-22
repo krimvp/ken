@@ -118,8 +118,9 @@ function storyHtml(home, env) {
 		run && (run.kind === 'story' || run.kind === 'walk')
 			? `<p class="k-chg-run" role="status"><span class="k-spin" aria-hidden="true"></span> ${run.kind === 'walk' ? "ken's model is ordering the change into steps" : "ken's model is reading the change"}. <span class="k-num k-clock">${Math.round(env.seconds)} s so far</span> <button class="k-link" data-act="stop" data-key="chg-stop">Stop</button></p>`
 			: ''
-	const story = content.story?.q
-		? `<button class="k-chg-story" data-act="chg-story" data-key="chg-story">${icon('words')}<span><b>Its story</b><span>What it did, and why</span></span>${icon('right')}</button>`
+	// A saved story opens as it is, once its reply is read. Telling it again is a run of its own.
+	const story = content.story
+		? `<button class="k-chg-story" data-act="chg-story" data-key="chg-story"${content.story.q ? '' : ' disabled'}>${icon('words')}<span><b>Its story</b><span>${content.story.q ? 'What it did, and why' : 'Reading the story ken saved'}</span></span>${icon('right')}</button>`
 		: ''
 	const steps = content.walk?.q ? walkOf(content.walk.q.reply) : []
 	const rows = steps.map((step) => {
@@ -132,8 +133,8 @@ function storyHtml(home, env) {
 		return `<li><button class="k-chg-step" data-act="chg-step" data-n="${step.number}" data-key="chg-step-${step.number}"><span class="k-chg-n k-num ${parts[0] ? partClass(parts[0]) : ''}">${step.number}</span><span class="k-chg-step-words"><b>${prose(stepWords(step).title)}</b><span>${where} &middot; ${count(files.length, 'file', 'files')} <span class="k-num">+${added} &minus;${removed}</span></span></span></button></li>`
 	})
 	const offers = [
-		...(content.walk?.q ? [] : [['run-walk', 'Walk me through it', 'chg-run-walk']]),
-		...(content.story?.q ? [] : [['run-story', 'Tell its story', 'chg-run-story']]),
+		...(content.walk ? [] : [['run-walk', 'Walk me through it', 'chg-run-walk']]),
+		content.story ? ['run-story', 'Tell it again', 'chg-run-story'] : ['run-story', 'Tell its story', 'chg-run-story'],
 	].map(
 		([act, text, key]) =>
 			`<button class="k-btn${act === 'run-walk' ? '' : ' is-quiet'} k-run-btn" data-act="${act}" data-key="${key}"${env.off ? ' disabled' : ''}><span>${text}</span><small>${RUN_COST}</small></button>`,
@@ -158,19 +159,20 @@ function commitsHtml(change, open) {
 	return `<details class="k-chg-commits" data-key="chg-commits"${open ? ' open' : ''}><summary><span class="k-eyebrow">${count(total, 'commit', 'commits')}</span></summary><ul>${rows.join('')}${more}</ul></details>`
 }
 
+// The change on show as the reader would call it: "Pull request #107", a span of time, or what the server named it.
+export function changeName(home) {
+	const chosen = home.changes.find((choice) => choice.change === home.change)
+	const said = chosen?.name ?? home.look?.change?.name ?? ''
+	return pullOf(said) ? `Pull request #${pullOf(said)}` : chosen?.kind === 'since' ? said.replace(/:.*$/, '') : said
+}
+
 function sideHtml(home, chg, env) {
 	const choices = reviewChoices(home.changes).map(
 		(choice, i) =>
 			`<button class="k-chip" data-act="chg-pick" data-change="${esc(choice.change)}" data-key="chg-offer-${i}" aria-pressed="${home.change === choice.change}">${icon(choice.kind === 'uncommitted' ? 'pencil' : 'merge')}<span>${esc(choice.name)}</span></button>`,
 	)
 	const { look } = home
-	const chosen = home.changes.find((choice) => choice.change === home.change)
-	const said = chosen?.name ?? look?.change?.name ?? ''
-	const name = pullOf(said)
-		? `Pull request #${pullOf(said)}`
-		: chosen?.kind === 'since'
-			? said.replace(/:.*$/, '')
-			: said
+	const name = changeName(home)
 	return `<aside class="k-tile k-chg-side" aria-labelledby="chg-name">
 		<h2 class="k-eyebrow">Review a change</h2>
 		<div class="k-chg-choices">${choices.join('')}</div>

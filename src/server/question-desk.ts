@@ -422,9 +422,12 @@ export function questionDesk(
 			if (read.kind !== 'ok') return read
 			const { level } = read
 			const part = fieldOf(lens, 'part') ?? null
-			// The order a tour took: the order the parts were named in, with tests and upkeep last.
+			// The order a tour took: the order the parts were named in, with tests and upkeep last. Asked for the whole
+			// level, the model explains the parts it has not explained yet, or all of them when none is left.
 			const order = tourOrder(level.boxes.filter((box) => box.state !== 'gone'))
-			const stops = part === null ? order : order.filter((stop) => stop.name === part)
+			const { explained } = await concepts.levelTold(level)
+			const rest = order.filter((stop) => !explained.includes(stop.name))
+			const stops = part === null ? (rest.length > 0 ? rest : order) : order.filter((stop) => stop.name === part)
 			if (stops.length === 0) {
 				const problem = part === null ? 'There is no part here to explain.' : `There is no part "${String(part)}" here.`
 				return { kind: 'refused', problem }

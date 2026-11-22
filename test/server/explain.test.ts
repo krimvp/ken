@@ -268,3 +268,21 @@ test('briefs the model sends in one turn reach the reader in the order of the pa
 		['brief 1', 'claim of 1', 'claim of 1', 'topic of 1', 'brief 2', 'claim of 2'],
 	)
 })
+
+test('asked to explain the whole level once one part is explained, the model is asked for the rest alone', async () => {
+	const scripted = await scriptedModel([
+		brief(1, 'Runs the work.', {
+			points: [point({ line: 'The core runs the work.', file: 'src/core/run.ts', quoted: 'export function run() {' })],
+		}),
+		{ text: '' },
+		{ text: '' },
+	])
+	const again = await openKen(root, readerHome(), scripted.baseUrl)
+	await ask(again, { lens: { kind: 'explain', within: [], part: 'Core' } })
+	const said = await ask(again, { lens: { kind: 'explain', within: [], part: null } })
+	const question: string = said.find((line) => line.kind === 'asked').question
+	assert.deepEqual(
+		[...question.matchAll(/^- Part \d+, (.+?) \(/gm)].map((match) => match[1]),
+		['Store', 'Command', 'Tests'],
+	)
+})

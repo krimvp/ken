@@ -308,17 +308,34 @@ export function conceptReads(layout: LayoutSources, history: History) {
 		const answer = all.answers.find((each) => each.id === full)
 		const written = answer ?? writtenQuestion(full, all)
 		if (!written) return null
-		const about = { id: written.concept, name: (await nameOf(written.concept, all)) ?? written.concept }
+		const of = parseConcept(written.concept)?.kind === 'question' ? null : await brief(written.concept, all.now)
+		const about = { id: written.concept, name: of?.name ?? (await nameOf(written.concept, all)) ?? written.concept }
 		const base = blank(full, 'question', written.text, answer?.told.line ?? '')
+		// The other questions about the same thing stand beside this one.
+		const others = (of?.questions ?? []).filter((each) => each.id !== full)
 		if (!answer) {
-			return { ...base, explain: { lens: { kind: 'answer', concept: written.concept, text: written.text } }, about }
+			const lens = { kind: 'answer', concept: written.concept, text: written.text }
+			return { ...base, explain: { lens }, about, questions: others }
 		}
 		const top = await levelAt([], all.now)
-		const quoted = answer.told.points.flatMap((point) => point.quotes.map((quote) => quote.path))
-		const lit = (top?.boxes ?? [])
-			.filter((box) => quoted.some((path) => box.paths.some((place) => under(path, place))))
-			.map((box) => box.name)
-		return { ...base, ...toldFields(answer.told, all.read), about, lit }
+		const quoted = [...new Set(answer.told.points.flatMap((point) => point.quotes.map((quote) => quote.path)))]
+		const boxes = (top?.boxes ?? []).filter((box) =>
+			quoted.some((path) => box.paths.some((place) => under(path, place))),
+		)
+		return {
+			...base,
+			...toldFields(answer.told, all.read),
+			about,
+			lit: boxes.map((box) => box.name),
+			questions: others,
+			// Sideways are the parts its answer quotes, and Deeper the files.
+			sideways: {
+				uses: boxes.map((box) => ({ id: partId([], box.name), name: box.name, verb: 'its answer quotes it' })),
+				usedBy: [],
+				processes: [],
+			},
+			deeper: quoted.length > 0 ? { within: quoted.toSorted().join(','), parts: 0, files: quoted.length } : null,
+		}
 	}
 
 	// The words ken's model wrote of a term so far, for how long its brief takes to read.
@@ -327,9 +344,9 @@ export function conceptReads(layout: LayoutSources, history: History) {
 		return told ? [told.line ?? '', ...told.points.map((point) => point.line)] : []
 	}
 
-	// What ken's model said of each part of a level: how many parts it explained, and for a part that is one file, the
-	// lines it has at HEAD and the sentence the model wrote of it.
-	async function levelTold(look: LayoutLook): Promise<{ explained: number; files: FileTold[] }> {
+	// What ken's model said of each part of a level: the parts it explained, and for a part that is one file, the lines
+	// it has at HEAD and the sentence the model wrote of it.
+	async function levelTold(look: LayoutLook): Promise<{ explained: string[]; files: FileTold[] }> {
 		const all = await held(new Date())
 		const told = look.boxes.map((box) => toldOfPart(all.answered, look.within, box.name))
 		const files = await Promise.all(
@@ -340,7 +357,8 @@ export function conceptReads(layout: LayoutSources, history: History) {
 				return [fileTold(box.name, path, look.head, told[at]?.line ?? null)]
 			}),
 		)
-		return { explained: told.filter(Boolean).length, files: files.flatMap((each) => each ?? []) }
+		const explained = look.boxes.flatMap((box, at) => (told[at] ? [box.name] : []))
+		return { explained, files: files.flatMap((each) => each ?? []) }
 	}
 
 	async function fileTold(name: string, raw: string, head: CommitHash, line: string | null): Promise<FileTold | null> {

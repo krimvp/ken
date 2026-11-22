@@ -8,7 +8,7 @@ import { WHOLE } from '../level/level-state.js'
 import { stepDiffHtml, stepParts, stepWords, walkOf } from '../project/walk.js'
 import { fill } from '../shell/fill.js'
 import { wordsHtml } from '../views/reply.js'
-import { changesPageHtml, spanChoices, spanOf } from './changes.js'
+import { changeName, changesPageHtml, spanChoices, spanOf } from './changes.js'
 import { dayAt, daysShown } from './timeline.js'
 
 const DAY = 86_400_000
@@ -98,7 +98,7 @@ export function changeActions(app) {
 		const [lead = '', ...rest] = words.join('\n\n').split(/\n\s*\n/)
 		const id = `change-story:${q.id}`
 		app.briefs.put(id, {
-			...pageBrief(id, 'change', look.change.name, lead, TRUST),
+			...pageBrief(id, 'change', changeName(state.home), lead, TRUST),
 			lit: look.boxes.filter((box) => box.touched).map((box) => box.name),
 			html: rest.length > 0 ? `<div class="k-story">${wordsHtml(rest.join('\n\n'))}</div>` : '',
 		})

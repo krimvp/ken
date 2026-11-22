@@ -115,10 +115,11 @@ function notesHtml(home, env, arch, stops) {
 	}
 	const unexplained = (look.explained ?? 0) < look.boxes.length
 	if (look.named && look.at === look.head && home.content.kind === 'level' && unexplained && !env.running) {
-		const button = `<button class="k-link" data-act="run-explain" data-key="run-explain"${env.off ? ' disabled' : ''}>Ask ken to explain these parts</button>`
-		said.push(
-			`ken's model has not explained these parts yet. ${button} <span class="k-muted">${env.off ? esc(env.off) : RUN_COST}</span>`,
-		)
+		const done = look.explained ?? 0
+		const button = `<button class="k-link" data-act="run-explain" data-key="run-explain"${env.off ? ' disabled' : ''}>${done === 0 ? 'Ask ken to explain these parts' : 'Ask ken to explain the rest'}</button>`
+		const where =
+			done === 0 ? "ken's model has not explained these parts yet." : `${done} of ${look.boxes.length} parts explained.`
+		said.push(`${where} ${button} <span class="k-muted">${env.off ? esc(env.off) : RUN_COST}</span>`)
 	}
 	if (arch.layer === 'changes' && look.change) {
 		const outside = look.change.outside ?? []
