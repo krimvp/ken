@@ -262,8 +262,8 @@ test('a thing to know that quotes only a comment goes back to the model, and one
 	const declared = first?.tools ?? []
 	assert.deepEqual(
 		declared.map((tool) => tool.function.name).filter((name) => name.startsWith('ken__')),
-		['ken__read_file', 'ken__list_files', 'ken__search', 'ken__show'],
-		'a brief is asked with the tools that read files and show alone',
+		['ken__read_file', 'ken__list_files', 'ken__search', 'ken__memory_level', 'ken__show'],
+		'a brief of a top part is asked with the tools that read files, the level from memory, and show alone',
 	)
 	const show = declared.find((tool) => tool.function.name === 'ken__show')?.function.parameters
 	assert.deepEqual(Object.keys((show as { properties: object }).properties), ['brief'], 'show offers only the brief')

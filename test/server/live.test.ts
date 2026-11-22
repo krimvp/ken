@@ -31,7 +31,12 @@ async function open(home: string, baseUrl: string, root: string, env: Record<str
 		KEN_API_KEY_ENV: KEY_ENV,
 		[KEY_ENV]: 'scripted-model-key',
 	}
-	const opened = await openServer({ directory: root, flags: {}, env: { KEN_HOME: home, ...model, ...env }, port: 0 })
+	const opened = await openServer({
+		directory: root,
+		flags: {},
+		env: { KEN_HOME: home, KEN_BACKGROUND: 'off', ...model, ...env },
+		port: 0,
+	})
 	if (opened.kind !== 'ok') throw new Error(opened.message)
 	after(() => opened.server.close())
 	return opened.server

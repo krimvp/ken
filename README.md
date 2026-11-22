@@ -171,7 +171,14 @@ npm run ken -- open --live --repo ../my-project
 npm run ken -- live --repo ../my-project
 ```
 
-The server listens only on 127.0.0.1 and answers only its own page. It runs one question or live note at a time. Set `KEN_HOME` to keep ken's own files somewhere other than `~/.ken`.
+The server listens only on 127.0.0.1 and answers only its own page. Set `KEN_HOME` to keep ken's own files somewhere other than `~/.ken`.
+
+With a model set, ken reads the project by itself while the page is open, in layers: first it names the main parts and draws where the project runs, then the main process, then a brief of each part in tour order, then the parts inside each part you open, and last the first two questions each brief lists. A quiet line at the top of the page says what it is reading and how many runs wait; press it for the list, where each run can be stopped. A brief whose part ken has not read yet says where it is in line, and fills in by itself when the run ends. What you ask goes first: when every slot is busy, ken stops its own lowest run and runs it again later. Each of these is one model run, so it spends tokens without you asking.
+
+```sh
+KEN_PARALLEL=1        # model runs at once; 1 for an endpoint that serves one request at a time, 3 or 4 for a hosted API
+KEN_BACKGROUND=off    # ken runs only what you ask for
+```
 
 After a session, commit the record in the project: `git add .ken && git commit -m "chore: update the ken record"`.
 

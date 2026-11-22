@@ -27,12 +27,12 @@ export function levelActions(app) {
 		name: state.home.trail.length > 1 ? level().name : null,
 	})
 
-	// The run that names the top level's parts, and draws where the project runs with them. auto says ken started it by
-	// itself, on the reader's first open of the project.
-	function nameTop(auto = false) {
+	// The run that names the top level's parts, and draws where the project runs with them. On a first open ken has
+	// started it already, and the reader's press joins it at the front of the line.
+	function nameTop() {
 		state.home.ended = null
 		const lens = { kind: 'parts', within: [], name: null }
-		return app.send({ lens }, { kind: 'name', auto, trail: [WHOLE], change: 'none', wayIn: 'learn' })
+		return app.send({ lens }, { kind: 'name', trail: [WHOLE], change: 'none', wayIn: 'learn' })
 	}
 
 	const changeLens = (want) => ({ kind: 'change', change: state.home.look.change.asked, want })

@@ -78,7 +78,7 @@ test('a reply stores its work, decision and topic when it ends, and the next que
 	assert.deepEqual(byId(onDisk.current), byId(recorded))
 
 	const second = await ask([
-		{ tool: 'ken__read_record', args: { id: work?.id } },
+		{ tool: 'ken__memory_known', args: { about: work?.id } },
 		show({ work: { title: 'Retries wait, again' } }),
 		{ text: '' },
 	])
@@ -88,7 +88,7 @@ test('a reply stores its work, decision and topic when it ends, and the next que
 		assert.ok(prompt.includes(String(shown)), `the first request of the next question shows ${shown}: ${prompt}`)
 	}
 	const read = toolResults(second.requests[1])[0] ?? ''
-	assert.ok(read.includes('\t\tsleep(100)') && read.includes(head), `read_record gives the stored quote: ${read}`)
+	assert.ok(read.includes('\t\tsleep(100)') && read.includes(head), `memory_known gives the stored quote: ${read}`)
 	assert.deepEqual(replyIn(second.events).recorded, [], 'the range already has its piece of work')
 	assert.equal((await fileRecordStore(root, gitRepository(root)).read()).entries.length, 4)
 })
@@ -112,7 +112,7 @@ test('a question recalls a matching note before browsing other topics, and drops
 	const question = 'Explain backoff.'
 	const lens: Asking = { kind: 'answer', concept: 'part::Backoff', text: question, paths: [] }
 	const first = await ask(
-		[{ tool: 'ken__read_record', args: { kind: 'topic', search: 'Workshop', page: 2 } }, { text: 'Done.' }],
+		[{ tool: 'ken__memory_search', args: { kind: 'topic', words: 'Workshop', page: 2 } }, { text: 'Done.' }],
 		built.root,
 		`${question}\nWorkshop examples 0 to 31 illustrate the format. Read the code in retry.ts.`,
 		lens,

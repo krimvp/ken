@@ -355,6 +355,9 @@ test('the flows the model names with the parts of a level are sent with that lev
 
 	await ask(server, { lens: { kind: 'parts', within: [], name: null } })
 	assert.deepEqual((await json(server, '/api/layout')).look.named.flows, [])
+	const naming = JSON.stringify(model.requests[3]?.messages.at(-1))
+	assert.match(naming, /src\/server\/serve\.ts, 1 line/, "the naming run gets each file's lines from plain code")
+	assert.match(naming, /Read at most 1500 lines of files in all/, 'and the most it may read')
 })
 
 test('a level the reader asks to see as a flow is answered with a diagram, which the reply keeps with their words and its row says it drew', async () => {

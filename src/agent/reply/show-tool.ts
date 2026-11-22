@@ -89,7 +89,7 @@ export type Round = {
 // main parts of a level, named from what ken wrote of it. views: the drawings of where the project runs.
 export type Asking =
 	| { kind: 'question' }
-	| { kind: 'parts' }
+	| { kind: 'parts'; within: string[]; parts: { name: string; paths: string[] }[] }
 	| { kind: 'views' }
 	| { kind: 'note' }
 	| { kind: 'explain'; tour: Tour }

@@ -1,7 +1,9 @@
 // What the reader does with the frame: go to a page by the rail, find a concept with the search, change a setting,
 // and follow what "Start here" leads with. This module also owns the address: every page and every open brief has
 // one, so the browser's Back and a reload bring the reader to the same place. A reply opens over the pages.
+
 import { partId, readConcept } from '../brief/concept-id.js'
+import { jobsLineHtml } from '../jobs/jobs.js'
 import { learnParts } from '../project/part-colours.js'
 import { startPageHtml } from '../start/start.js'
 import { fill } from './fill.js'
@@ -209,6 +211,7 @@ export function shellActions(app) {
 		$('#pg-old').hidden = !over
 		// A brief or Ask ken takes the right of the window, and Home makes room for it.
 		start.classList.toggle('has-drawer', Boolean(state.brief.id) || state.ask.open)
+		$('.k-bar').classList.toggle('has-drawer', Boolean(state.brief.id) || state.ask.open)
 		if (start.hidden) fill(start, '')
 		else {
 			const view = { top: shell.top, home, reader: home.reader, followUp: state.followUp, concepts: shell.concepts }
@@ -235,6 +238,7 @@ export function shellActions(app) {
 		fill(settings, shell.settingsOpen ? settingsHtml(shell.prefs, { project: state.project?.folder, own }) : '')
 
 		fill($('#bar-acts'), barActsHtml({ askOpen: state.ask.open, settingsOpen: shell.settingsOpen }))
+		fill($('#jobs'), jobsLineHtml(state.jobs))
 		app.ask.draw(env)
 
 		app.brief.draw(env)

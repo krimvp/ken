@@ -76,7 +76,7 @@ test('a follow-up keeps the answer and its sources, and can recall an older answ
 		{ text: 'The retry limit belongs to the caller.' },
 		{ text: 'Configuration is loaded on startup.' },
 		{ text: 'A worker applies the configuration.' },
-		{ tool: 'ken__recall_chat', args: { search: 'Retries run three times' } },
+		{ tool: 'ken__memory_search', args: { words: 'Retries run three times' } },
 		{ text: 'Earlier we discussed the retry count.' },
 	])
 	const started = await startChat({
