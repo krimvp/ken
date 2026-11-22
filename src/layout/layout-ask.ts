@@ -95,8 +95,11 @@ async function mainBranch(repo: Repository, signal?: AbortSignal): Promise<strin
 	return null
 }
 
-// change is the text readLayoutAsk takes for it.
-export type ChangeChoice = { kind: 'uncommitted' | 'merge' | 'commit' | 'branch'; change: string; name: string }
+// change is the text readLayoutAsk takes for it. A since choice is a span of time for catching up, with the number of
+// commits it holds. The follow-up module makes those, and the server puts them before the ones made here.
+export type ChangeChoice =
+	| { kind: 'uncommitted' | 'merge' | 'commit' | 'branch'; change: string; name: string }
+	| { kind: 'since'; change: string; name: string; commits: number }
 
 // The changes the page offers to lay over the boxes: the reader's uncommitted work, the newest merges on the main line
 // (or its newest commits when it has no merge), and the branches other than the main one.
@@ -111,7 +114,7 @@ export async function changeChoices(sources: LayoutSources, signal?: AbortSignal
 	])
 	const commits = line.kind === 'ok' ? line.commits.filter((commit) => commit.parents.length > 0) : []
 	const merges = commits.filter((commit) => commit.parents.length > 1)
-	const kind: ChangeChoice['kind'] = merges.length > 0 ? 'merge' : 'commit'
+	const kind = merges.length > 0 ? ('merge' as const) : ('commit' as const)
 	const recent = (merges.length > 0 ? merges : commits).slice(0, RECENT).map((commit) => ({
 		kind,
 		change: `${commit.hash}^1..${commit.hash}`,

@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { after, test } from 'node:test'
-import { decide, openItems, rangeQuestion, timeRange } from '../../src/follow-up/index.ts'
+import { decide, openItems, rangeQuestion, sinceChoices, timeRange } from '../../src/follow-up/index.ts'
 import { openMap } from '../../src/map/index.ts'
 import { type EntryDraft, fileRecordStore, type RecordEntry } from '../../src/record/index.ts'
 import { gitRepository } from '../../src/repo/index.ts'
@@ -244,3 +244,33 @@ function contentOf(entry: Extract<RecordEntry, { kind: 'decision' }>) {
 	const { id, at, replaces, needsOwner, answer, ...content } = entry
 	return content
 }
+
+test("the spans for catching up start at the reader's last question at an older commit and at their own last commit, then the last days, each with the commits it holds, and a span with the same commits as a shorter one is left out", async () => {
+	const { repo, commit } = setUp()
+	const now = new Date('2026-11-16T12:00:00Z')
+	assert.deepEqual(await sinceChoices(repo, [], now), [], 'nothing landed after the one old commit')
+
+	const asked = commit(OWNER, '2026-08-01T12:00:00Z', { 'README.md': '# demo\n\nOne.\n' })
+	const own = commit(OWNER, '2026-10-20T12:00:00Z', { 'README.md': '# demo\n\nTwo.\n' })
+	const week = commit(COLLABORATOR, '2026-11-01T12:00:00Z', { 'README.md': '# demo\n\nThree.\n' })
+	const head = commit(COLLABORATOR, '2026-11-12T12:00:00Z', { 'README.md': '# demo\n\nFour.\n' })
+	// The newest questions were asked at HEAD and at a commit this history does not have, so the one before them counts.
+	const questions = [
+		{ askedAt: '2026-08-02T12:00:00Z', head: asked },
+		{ askedAt: '2026-11-13T12:00:00Z', head: 'f'.repeat(40) },
+		{ askedAt: '2026-11-14T12:00:00Z', head },
+	]
+
+	const choices = await sinceChoices(repo, questions, now)
+	assert.deepEqual(
+		choices.map(({ choice }) => [choice.change, choice.commits]),
+		[
+			[`${asked}..${head}`, 3],
+			[`${own}..${head}`, 2],
+			[`${week}..${head}`, 1],
+			[`${asked}..${head}`, 3],
+		],
+		'the last question, the last commit, 7 days and 30 days; 90 days holds what 30 days holds',
+	)
+	assert.ok(choices.every(({ choice }) => choice.name.includes(String(choice.commits))))
+})

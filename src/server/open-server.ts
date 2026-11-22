@@ -1,8 +1,15 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { MODEL_EXAMPLE, type ModelFlags } from '../agent/index.ts'
 import { layoutDraft } from '../diagram/index.ts'
-import { authorsOf, decide, openItems, timeRange } from '../follow-up/index.ts'
-import { changeChoices, type LayoutAsk, lookAtLayout, pictureBefore, readLayoutAsk } from '../layout/index.ts'
+import { authorsOf, decide, openItems, sinceChoices, timeRange } from '../follow-up/index.ts'
+import {
+	type ChangeChoice,
+	changeChoices,
+	type LayoutAsk,
+	lookAtLayout,
+	pictureBefore,
+	readLayoutAsk,
+} from '../layout/index.ts'
 import type { MapSignal } from '../map/index.ts'
 import { MERMAID_FILE, PAGE_FOLDER } from '../page/index.ts'
 import { OUTCOMES } from '../record/index.ts'
@@ -42,7 +49,7 @@ export async function openServer(options: {
 	const opened = await openProject(options)
 	if (opened.kind !== 'ok') return opened
 	const { project } = opened
-	const { root, shown, repo, record, map, layout, model, desk, live } = project
+	const { root, shown, repo, history, record, map, layout, model, desk, live } = project
 	if (options.live && !live) {
 		await project.close()
 		return {
@@ -54,8 +61,17 @@ export async function openServer(options: {
 	const files = await readPageFiles(PAGE_FOLDER, { '/mermaid.min.js': MERMAID_FILE })
 	let port = 0
 
+	// What landed since the reader last looked leads the changes the page offers, so catching up is one pick away.
 	async function layoutView(ask: LayoutAsk) {
-		const [look, changes] = await Promise.all([lookAtLayout(layout, ask, new Date()), changeChoices(layout)])
+		const now = new Date()
+		// A note ken wrote by itself in live mode is not a question the reader asked.
+		const questions = (await history.list()).filter((entry) => entry.about === undefined)
+		const [look, since, choices] = await Promise.all([
+			lookAtLayout(layout, ask, now),
+			sinceChoices(repo, questions, now),
+			changeChoices(layout),
+		])
+		const changes: ChangeChoice[] = [...since.map((each) => each.choice), ...choices]
 		return { look, changes }
 	}
 

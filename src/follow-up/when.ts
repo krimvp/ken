@@ -23,6 +23,12 @@ export function at(iso: string, now = new Date()): string {
 	return said.includes(' ') ? `on ${said}` : `at ${said}`
 }
 
+// The day of a moment, for a list: "today", "16 Nov", "16 Nov 2025".
+export function day(iso: string, now = new Date()): string {
+	const at = new Date(iso)
+	return at.toDateString() === now.toDateString() ? 'today' : dayOf(at, now)
+}
+
 // A day with no time, such as a map line's 2026-11-16, in a sentence: "earlier today", "on 16 Nov", "on 16 Nov 2025".
 export function onDay(date: string, now = new Date()): string {
 	const day = new Date(`${date}T00:00`)
