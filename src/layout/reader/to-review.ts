@@ -10,17 +10,17 @@ import type { ToReview } from './next-items.ts'
 // The main line is read this far back for its newest merge, as the layout's own choice of changes reads it.
 const MAIN_LINE = 100
 
-// own is the reader's own work, and diff its changed files when the caller has read them already. boxes holds the
-// paths of each box of the level, so the change can say how many of them it touched. lines are what the reader looked at.
+// own is the reader's own work, and diff its changed files when the caller has read them already. boxes are the boxes
+// of the level, so the change can name those it touched. lines are what the reader looked at.
 export async function toReview(
 	repo: Repository,
 	{ own, diff }: { own: Change | null; diff: FileDiff[] | null },
 	head: CommitHash,
-	{ boxes, lines }: { boxes: string[][]; lines: SeenLine[] },
+	{ boxes, lines }: { boxes: { name: string; paths: string[] }[]; lines: SeenLine[] },
 	signal?: AbortSignal,
 ): Promise<ToReview | null> {
 	const touched = (files: string[]) =>
-		boxes.filter((paths) => files.some((file) => paths.some((place) => under(file, place)))).length
+		boxes.filter(({ paths }) => files.some((file) => paths.some((place) => under(file, place)))).map((box) => box.name)
 	if (own) {
 		const read = diff ? null : await repo.diff(own.range, signal)
 		const files = diff ?? (read?.kind === 'ok' ? read.files : [])

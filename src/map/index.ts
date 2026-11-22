@@ -9,5 +9,15 @@ export { type MapSignal, SIGNALS } from './learn.ts'
 export { type Asked, areaQuestion, catchUpQuestion, type DayWords, deeperQuestion, LIST_SAID } from './lens.ts'
 export { DEPTHS, type Depth, EVIDENCE, type Evidence, type MapEntry } from './map-entry.ts'
 export { openNotes, type ReaderNote, type ReaderNotes } from './reader-notes.ts'
-export { DID, type Did, type Looked, openSeen, type ReaderSeen, type SeenLine, type SeenRead } from './reader-seen.ts'
+export {
+	DID,
+	type Did,
+	KNOWN,
+	type Known,
+	type Looked,
+	openSeen,
+	type ReaderSeen,
+	type SeenLine,
+	type SeenRead,
+} from './reader-seen.ts'
 export { LONG_AGO_DAYS, linesText, type QuotedLines, stateLine, type TopicState } from './topic-state.ts'

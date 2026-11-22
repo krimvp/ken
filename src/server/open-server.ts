@@ -138,8 +138,12 @@ export async function openServer(options: {
 		if (where === 'POST /api/seen') {
 			const body = await readJson(request)
 			const looked = body.kind === 'ok' ? await readLooked(layout.repo, body.value) : body
-			if (looked.kind !== 'ok') return sendJson(response, 400, { message: looked.problem })
-			const added = await seen.add(looked.looked, looked.head, new Date())
+			if (looked.kind === 'refused') return sendJson(response, 400, { message: looked.problem })
+			const added =
+				looked.kind === 'undo'
+					? await seen.undo(looked.at, looked.head, new Date())
+					: await seen.add(looked.looked, looked.head, new Date())
+			if (added === 'missing') return sendJson(response, 400, { message: 'ken wrote no line at that moment.' })
 			return sendJson(response, 200, { written: added === 'written' })
 		}
 		if (where === 'GET /api/reader') {

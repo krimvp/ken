@@ -13,8 +13,10 @@ export type PartArrow = { from: string; to: string; text: string; quotes: Verifi
 // within is the paths this level shows the inside of, sorted, and empty for the whole project. A part opens the level
 // whose within is the part's paths, so zoom is a lookup with nothing to keep in step. about is the model's sentence or
 // two on the level as a whole. asked is the reader's own words when ken drew the level because they asked for another
-// way to show it: plain code sets it, never the model. A layout stored before ken kept either has neither, and a
-// layout without one has no such key, so its id in the record stays what it was.
+// way to show it: plain code sets it, never the model. flows are the processes of the level the model finds worth a
+// diagram of their own, each a short request such as "How a tool call is gated", which the page offers to draw. A
+// layout stored before ken kept one of these has none, and a layout without one has no such key, so its id in the
+// record stays what it was.
 export type Layout = {
 	kind: 'layout'
 	within: RepoPath[]
@@ -23,6 +25,7 @@ export type Layout = {
 	arrows: PartArrow[]
 	about?: string
 	asked?: string
+	flows?: string[]
 }
 
 // at is the commit the model read, HEAD when left out.
@@ -33,6 +36,7 @@ export type LayoutDraft = {
 	arrows: { from: string; to: string; text: string; quotes: GitQuote[] }[]
 	about?: string | undefined
 	asked?: string | undefined
+	flows?: string[] | undefined
 }
 
 export const LAYOUT_BOUNDS = {
@@ -45,6 +49,8 @@ export const LAYOUT_BOUNDS = {
 	text: 40,
 	about: 240,
 	asked: 300,
+	flows: 3,
+	flow: 60,
 } as const
 
 export type LayoutCheck = { kind: 'ok'; layout: Layout } | { kind: 'refused'; problems: string[] }
@@ -92,6 +98,14 @@ export async function checkLayout(
 		["the reader's request", asked, LAYOUT_BOUNDS.asked],
 	] as const) {
 		if (text && text.length > most) say(`${what} has ${text.length} characters. Keep it to ${most}.`)
+	}
+
+	const flows = (draft.flows ?? []).map((flow) => flow.trim()).filter((flow) => flow !== '')
+	if (flows.length > LAYOUT_BOUNDS.flows) say(`it names ${flows.length} flows. Keep it to ${LAYOUT_BOUNDS.flows}.`)
+	for (const flow of flows) {
+		if (flow.length > LAYOUT_BOUNDS.flow) {
+			say(`the flow "${flow}" has ${flow.length} characters. Keep it to ${LAYOUT_BOUNDS.flow}.`)
+		}
 	}
 
 	const parts = draft.parts.map((part, index) => {
@@ -175,6 +189,7 @@ export async function checkLayout(
 			arrows,
 			...(about ? { about } : {}),
 			...(asked ? { asked } : {}),
+			...(flows.length > 0 ? { flows } : {}),
 		},
 	}
 }
@@ -198,6 +213,7 @@ export function layoutDraft(layout: Layout): LayoutDraft {
 		})),
 		about: layout.about,
 		asked: layout.asked,
+		flows: layout.flows,
 	}
 }
 

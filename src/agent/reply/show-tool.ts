@@ -363,6 +363,7 @@ function layoutOf(raw: JsonObject, quoteOf: ReadQuote, problems: string[]): Layo
 			return { from: arrow.text('from'), to: arrow.text('to'), text: arrow.text('text'), quotes }
 		}),
 		about: layout.optionalText('about'),
+		flows: texts(raw.flows),
 	}
 }
 
@@ -799,6 +800,11 @@ const LAYOUT_SCHEMA = {
 		about: {
 			type: 'string',
 			description: `What this level is, who uses it, and the one idea its maintainer would say first, in one or two plain sentences, at most ${LAYOUT_BOUNDS.about} characters. ken sends back a layout without it.`,
+		},
+		flows: {
+			type: 'array',
+			description: `Up to ${LAYOUT_BOUNDS.flows} processes of this level that a diagram would show better than the parts do, each as a short request the reader can press, such as "How a tool call is gated", at most ${LAYOUT_BOUNDS.flow} characters. Name only what the code you read does, and leave it out when there is none.`,
+			items: { type: 'string' },
 		},
 		parts: {
 			type: 'array',

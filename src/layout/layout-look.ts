@@ -12,7 +12,7 @@ import type { EntryId, RecordEntry, RecordStore } from '../record/index.ts'
 import type { CommitHash, FileDiff, ObjectId, Range, RepoPath, Repository } from '../repo/index.ts'
 import { type Seed, splitScope, under } from './folder-split.ts'
 import { believe, type Knows, looksAt } from './reader/box-knows.ts'
-import { nextItems } from './reader/next-items.ts'
+import { type LandedSize, nextItems } from './reader/next-items.ts'
 import { type BoxMap, type BoxTopic, boxMap, markOf, type Next, nextOf, topicsIn } from './reader/reader-marks.ts'
 import { sinceLooked } from './reader/since-looked.ts'
 import { toReview } from './reader/to-review.ts'
@@ -77,7 +77,8 @@ export type LookBox = Seed & {
 // what sits in the scope at the commit asked, in no part, and was not there when the model named the parts. stale says
 // the drawing no longer fits: a part changed or went, or something was added in no part. about is the model's sentence
 // or two on the level as a whole, and asked the reader's own words when ken drew it because they asked for another way
-// to show it. Each is null when the entry has none.
+// to show it. Each is null when the entry has none. flows are the processes of the level the model found worth a
+// diagram, each a short request the page offers to draw, and none for a level named before ken asked for them.
 export type Named = {
 	id: EntryId
 	drawnAt: CommitHash
@@ -85,6 +86,7 @@ export type Named = {
 	stale: boolean
 	about: string | null
 	asked: string | null
+	flows: string[]
 }
 
 // An arrow is possibly stale when the part it starts at changed since the model named the parts, since its lines may
@@ -146,7 +148,7 @@ export async function lookAtLayout(
 	})
 	const sinces = await sinceLooked(repo, read, head.commit, drawn, signal)
 	const boxes: LookBox[] = drawn.map(({ box, inBox, looks }, index) => {
-		const knows = believe(looks, sinces[index] ?? null, now)
+		const knows = believe(looks, sinces[index] ?? null, head.commit, now)
 		const marks = inBox.map(({ topic, state }) => ({ topic, mark: markOf(state) }))
 		const within = versionsOf(read.entries, box.paths.toSorted())
 		return {
@@ -175,20 +177,22 @@ export async function lookAtLayout(
 				}
 			: null
 	const tour = level.named ? tourOrder(boxes.filter((box) => box.state !== 'gone')) : null
-	const paths = boxes.map((box) => box.paths)
 	const items = nextItems({
-		head: head.commit,
 		decisions: openDecisions(read)
 			.toSorted((a, b) => b.at.localeCompare(a.at))
 			.map((decision) => decision.question),
-		boxes: boxes.map(({ name, knows }, index) => {
-			const since = sinces[index]
-			return { name, knows, lookedAt: since && since !== 'gone' ? since.commit : null }
-		}),
+		boxes: await Promise.all(
+			boxes.map(async ({ name, paths, knows }, index) => {
+				const since = sinces[index]
+				const stale = knows.stale && since && since !== 'gone' ? since.commit : null
+				const landed = stale === null ? null : await landedIn(repo, paths, stale, head.commit, signal)
+				return { name, knows, landed }
+			}),
+		),
 		order: (tour ?? boxes).map((each) => each.name),
 		toured: tour !== null,
 		review: await toReview(repo, { own: ask.own, diff: sameChange(ask.own, ask.change) ? diff : null }, head.commit, {
-			boxes: paths,
+			boxes,
 			lines: seen.lines,
 		}),
 	})
@@ -202,6 +206,21 @@ export async function lookAtLayout(
 		next: nextOf(boxes, items),
 		tour,
 	}
+}
+
+// What the commits after one the reader looked at did to a box, or null when the diff is too large to read. The few
+// boxes that changed since are each read once: they may have been looked at at different commits.
+async function landedIn(
+	repo: Repository,
+	paths: string[],
+	lookedAt: string,
+	head: CommitHash,
+	signal?: AbortSignal,
+): Promise<LandedSize | null> {
+	const base = await repo.resolve(lookedAt, signal)
+	const diff = base.kind === 'ok' ? await repo.diff({ base: base.commit, head }, signal) : null
+	const touched = diff?.kind === 'ok' ? touchedIn(paths, diff.files) : null
+	return touched && { files: touched.files, added: touched.added, removed: touched.removed }
 }
 
 function sameChange(a: Change | null, b: Change | null): boolean {
@@ -268,6 +287,7 @@ async function namedLevel(
 			stale: changed.size > 0 || added.length > 0,
 			about: chosen.about ?? null,
 			asked: chosen.asked ?? null,
+			flows: chosen.flows ?? [],
 		},
 		boxes,
 		arrows: chosen.arrows.map((arrow) => ({ ...arrow, text: fromStart(arrow.text), stale: changed.has(arrow.from) })),

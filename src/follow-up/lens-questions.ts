@@ -157,7 +157,7 @@ export type PartsLevel = {
 	name: string | null
 	within: string[]
 	head: string
-	bounds: { fewest: number; parts: number; arrows: number; about: number }
+	bounds: { fewest: number; parts: number; arrows: number; about: number; flows: number; flow: number }
 	boxes: { name: string; paths: string[]; files: number; job: string | null; state: 'same' | 'changed' | 'gone' }[]
 	named: { drawnAt: string; added: string[] } | null
 	loose: string[]
@@ -254,6 +254,7 @@ function layoutRules(level: PartsLevel): string[] {
 		`Add at most ${bounds.arrows} arrows for which part uses which. Show the relation that matters when the code runs: one part calls the other, launches it as its own process, or reads its files. When a part launches another, quote the lines that launch it, down to the one that names its file. Use an import of types only when nothing stronger joins the two parts.`,
 		'Give each arrow a short verb said from the part it starts at, so that the start part, the verb and the end part read as a sentence, such as "Server runs questions in Chat engine". A part that launches another "runs" or "launches" it. Never a passive verb such as "is used by". The verb says only what the quoted lines show: a line that imports a list shows "reads", not "runs".',
 		'Each arrow quotes lines of code from a file of the part it starts at that name a folder or file of the part it ends at. A comment does not count. Leave out an arrow you cannot quote that way.',
+		`Set the field flows to at most ${bounds.flows} processes here that a diagram of steps would show better than the parts do, each as a short request of at most ${bounds.flow} characters, such as "How a tool call is gated". Name only what you read in the code, and leave the field out when there is none.`,
 	]
 }
 

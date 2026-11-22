@@ -1,29 +1,34 @@
 // What the reader should look at next, the first thing first: a decision that waits on them, a part that changed
 // since they looked, a change to review, the next stop of the tour, then the parts they never opened. Plain code
 // ranks them from the record, what the reader looked at and git, so the page can show them before the reader asks.
-import type { CommitHash } from '../../repo/index.ts'
-import type { Knows, Level } from './box-knows.ts'
+import type { Knows, Level, OpensAt } from './box-knows.ts'
 
 // Where an item takes the reader: a way in, and there a part of this level, a level of detail and a change, as the
-// layout takes a change. A field left out keeps what the page shows.
-export type Go = {
-	way: 'learn' | 'catch-up' | 'review'
-	part?: string
-	detail?: 'big' | 'how' | 'code'
-	change?: string
+// layout takes a change. A field left out keeps what the page shows. A part opens where its box says ken would open
+// it, so an item and the box it is about cannot disagree.
+export type Go = Pick<OpensAt, 'way'> & Partial<OpensAt> & { part?: string }
+
+// What landed in a part since the reader looked: the files it changed there, and their lines added and removed.
+export type LandedSize = { files: number; added: number; removed: number }
+
+// parts names the boxes of this level the item is about. Only a part that changed has landed.
+export type NextItem = {
+	kind: 'decision' | 'stale' | 'review' | 'tour' | 'read'
+	title: string
+	why: string
+	go: Go
+	parts: string[]
+	landed?: LandedSize
 }
 
-export type NextItem = { kind: 'decision' | 'stale' | 'review' | 'tour' | 'read'; title: string; why: string; go: Go }
-
-// A box as the ranking reads it. lookedAt is the commit the reader last looked at it, when ken knows it.
-export type NextBox = { name: string; knows: Knows; lookedAt: string | null }
+// A box as the ranking reads it. landed is what the commits since the reader looked did there, when git could say.
+export type NextBox = { name: string; knows: Knows; landed: LandedSize | null }
 
 // The change the reader has not reviewed. why may be empty. change asks the layout for it, and files and parts say
 // how large it is: the files it changed, and the boxes of this level that hold one of them.
-export type ToReview = { title: string; why: string; change: string; files: number; parts: number }
+export type ToReview = { title: string; why: string; change: string; files: number; parts: string[] }
 
 export type NextFacts = {
-	head: CommitHash
 	// The questions of the decisions that wait on the reader, newest first.
 	decisions: string[]
 	boxes: NextBox[]
@@ -53,7 +58,7 @@ export function nextItems(facts: NextFacts): NextItem[] {
 	const untouched = boxes.every((box) => box.knows.level === 'new')
 	const items: NextItem[] = [
 		...decisionItem(facts.decisions),
-		...stale.map((box) => staleItem(box, facts.head)),
+		...stale.map(staleItem),
 		...(review ? [reviewItem(review)] : []),
 		...(onTour ? [tourItem(onTour, untouched)] : []),
 		...inOrder.filter((box) => box.knows.level === 'new' && box !== onTour).map(meetItem),
@@ -71,42 +76,53 @@ function decisionItem(questions: string[]): NextItem[] {
 			title: one ? '1 decision waits on you' : `${questions.length} decisions wait on you`,
 			why: one ? `It asks: ${newest}` : `The newest asks: ${newest}`,
 			go: { way: 'review' },
+			parts: [],
 		},
 	]
 }
 
-function staleItem({ name, knows, lookedAt }: NextBox, head: CommitHash): NextItem {
-	const landed = knows.since === 1 ? '1 commit landed' : `${knows.since} commits landed`
+function staleItem({ name, knows, landed }: NextBox): NextItem {
+	const commits = knows.since === 1 ? '1 commit landed' : `${knows.since} commits landed`
 	return {
 		kind: 'stale',
 		title: `See what changed in ${name}`,
-		why: `${landed} there since ${SINCE[knows.level]}.`,
-		go: { way: 'catch-up', part: name, detail: 'code', ...(lookedAt ? { change: `${lookedAt}..${head}` } : {}) },
+		why: `${commits} there since ${SINCE[knows.level]}.`,
+		go: { ...knows.go, part: name },
+		parts: [name],
+		...(landed ? { landed } : {}),
 	}
 }
 
 function reviewItem({ title, why, change, files, parts }: ToReview): NextItem {
-	const size = parts === 0 ? `${count(files, 'file')}.` : `${count(files, 'file')} in ${count(parts, 'part')}.`
+	const size =
+		parts.length === 0 ? `${count(files, 'file')}.` : `${count(files, 'file')} in ${count(parts.length, 'part')}.`
 	return {
 		kind: 'review',
 		title,
 		why: why === '' ? size : `${why} ${size}`,
 		go: { way: 'review', detail: 'how', change },
+		parts,
 	}
 }
 
-// A part new to the reader shows its job first, and one they opened shows how it works.
 function tourItem({ name, knows }: NextBox, untouched: boolean): NextItem {
 	return {
 		kind: 'tour',
 		title: `${untouched ? 'Start the tour' : 'Go on with the tour'}: ${name}`,
 		why: untouched ? 'It is the first stop of the tour.' : 'It is the next stop of the tour you have not read.',
-		go: { way: 'learn', part: name, detail: knows.level === 'new' ? 'big' : 'how' },
+		go: { ...knows.go, part: name },
+		parts: [name],
 	}
 }
 
 function meetItem({ name, knows }: NextBox): NextItem {
-	return { kind: 'read', title: `Meet ${name}`, why: knows.why, go: { way: 'learn', part: name, detail: 'big' } }
+	return {
+		kind: 'read',
+		title: `Read what ${name} does`,
+		why: knows.why,
+		go: { ...knows.go, part: name },
+		parts: [name],
+	}
 }
 
 function count(n: number, one: string): string {

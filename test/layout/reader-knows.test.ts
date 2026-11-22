@@ -117,15 +117,49 @@ test('what to look at next leads with the part that changed since the reader rea
 	const head = commit(root, { 'src/c/z.ts': 'z2\n' })
 	writeFileSync(path.join(root, 'src/b/y.ts'), 'y\nnot committed\n')
 
-	const { items } = (await look(sources)).next
+	const seen = await look(sources)
+	const { items } = seen.next
 	assert.deepEqual(
-		items.map((item) => [item.kind, item.go.way, item.go.part ?? null, item.go.change ?? null]),
+		items.map((item) => [item.kind, item.go.way, item.go.part ?? null, item.go.detail, item.go.change ?? null]),
 		[
-			['stale', 'catch-up', 'Gamma', `${start}..${head}`],
-			['review', 'review', null, 'uncommitted'],
-			['tour', 'learn', 'Alpha', null],
-			['read', 'learn', 'Beta', null],
-			['read', 'learn', 'Delta', null],
+			['stale', 'catch-up', 'Gamma', 'code', `${start}..${head}`],
+			['review', 'review', null, 'how', 'uncommitted'],
+			['tour', 'learn', 'Alpha', 'how', null],
+			['read', 'learn', 'Beta', 'big', null],
+			['read', 'learn', 'Delta', 'big', null],
 		],
 	)
+	assert.deepEqual(
+		items.map((item) => item.parts),
+		[['Gamma'], ['Beta'], ['Alpha'], ['Beta'], ['Delta']],
+		'each item names the boxes it is about, and the review the box the uncommitted work touched',
+	)
+	assert.deepEqual(items[0]?.landed, { files: 1, added: 1, removed: 1 })
+	for (const item of items.filter((each) => each.kind !== 'review')) {
+		const { part, ...opens } = item.go
+		assert.deepEqual(seen.boxes.find((box) => box.name === part)?.knows.go, opens, `${part} opens where its item goes`)
+	}
+})
+
+test('a correction sets the level the reader picks in place of what came before, and only "I know it" clears the commits that landed since they looked', async () => {
+	const { root, hashes } = buildRepository([{ message: 'feat: start', files: START }])
+	const [start = ''] = hashes
+	const sources = await sourcesFor(root)
+	await did(sources, 1, start, { did: 'code', paths: ['src/a/x.ts'] })
+	const head = commit(root, { 'src/a/x.ts': 'x2\n' })
+	const a = async () => knows(await look(sources)).a
+
+	await did(sources, 2, head, { did: 'set', level: 'read', paths: ['src/a'] })
+	const down = await a()
+	assert.deepEqual([down?.level, down?.since, down?.stale], ['read', 1, true], 'it still says the part changed')
+	assert.deepEqual(down?.go, { way: 'catch-up', detail: 'code', change: `${start}..${head}` })
+
+	await did(sources, 3, head, { did: 'set', level: 'said', paths: ['src/a'] })
+	const known = await a()
+	assert.deepEqual([known?.level, known?.since, known?.stale], ['said', 0, false])
+	assert.deepEqual(known?.go, { way: 'learn', detail: 'code' })
+
+	await did(sources, 4, head, { did: 'set', level: 'new', paths: ['src/a'] })
+	const fresh = await a()
+	assert.deepEqual([fresh?.level, fresh?.stale, fresh?.go], ['new', false, { way: 'learn', detail: 'big' }])
 })

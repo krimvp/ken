@@ -2,12 +2,13 @@
 // ken recorded there and in the map, and when they last looked. Each sentence is built by code from one line, so the
 // reader can check it against the file.
 import { under } from '../../layout/index.ts'
-import type { Evidence, SeenLine, SeenRead, TopicState } from '../../map/index.ts'
+import type { Evidence, Known, SeenLine, SeenRead, TopicState } from '../../map/index.ts'
 import type { Topic } from '../../record/index.ts'
 
 // did is the line's did, or the evidence of a map line. at is a moment, or a day for a map line, which keeps no time.
-// part is the top-level part the line counts for, null when it counts for none.
-export type Learned = { at: string; did: string; part: string | null; text: string }
+// part is the top-level part the line counts for, null when it counts for none. topic is the topic of a map line,
+// null for a line on what the reader looked at: the page takes back the first by its topic and the second by its at.
+export type Learned = { at: string; did: string; part: string | null; topic: string | null; text: string }
 
 export type ReaderView = { file: string; learned: Learned[]; lastVisit: string | null; problems: string[] }
 
@@ -17,13 +18,21 @@ const MOST = 20
 // A line this old was written on an earlier visit, not on this one.
 const VISIT_MS = 30 * 60 * 1000
 
-const LOOKED: Record<SeenLine['did'], (where: string) => string> = {
+const LOOKED: Record<Exclude<SeenLine['did'], 'set'>, (where: string) => string> = {
 	opened: (where) => `You opened ${where}.`,
 	read: (where) => `You read about ${where}.`,
 	code: (where) => `You opened the code of ${where}.`,
 	said: (where) => `You said you know ${where}.`,
 	forgot: (where) => `You said you do not know ${where}.`,
 	change: (where) => `You walked through a change in ${where}.`,
+}
+
+const SET: Record<Known, (where: string) => string> = {
+	new: (where) => `You said ${where} is new to you.`,
+	seen: (where) => `You said you have only seen ${where}.`,
+	read: (where) => `You said you have read about ${where}.`,
+	code: (where) => `You said you have read the code of ${where}.`,
+	said: (where) => `You said you know ${where}.`,
 }
 
 const SIGNALLED: Record<Evidence, (topic: string) => string> = {
@@ -56,15 +65,15 @@ export function readerView(
 		const part = holds(line.paths)?.name ?? null
 		const [first = '', ...more] = line.paths
 		const where = part ?? (more.length === 0 ? first : `${first} and ${more.length} more`)
-		return { at: line.at, did: line.did, part, text: LOOKED[line.did](where) }
+		const text = line.did === 'set' ? SET[line.level](where) : LOOKED[line.did](where)
+		return { at: line.at, did: line.did, part, topic: null, text }
 	})
 	const signalled = map.states.flatMap((state) => {
 		if (state.kind === 'never-met') return []
 		const quoted = topics.find((topic) => topic.name === state.topic)?.quotes.flatMap((quote) => quote.path ?? [])
 		const { date, evidence } = state.entry
-		return [
-			{ at: date, did: evidence, part: holds(quoted ?? [])?.name ?? null, text: SIGNALLED[evidence](state.topic) },
-		]
+		const part = holds(quoted ?? [])?.name ?? null
+		return [{ at: date, did: evidence, part, topic: state.topic, text: SIGNALLED[evidence](state.topic) }]
 	})
 	const learned = [...looked, ...signalled].toSorted((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0))
 	return {

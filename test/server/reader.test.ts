@@ -24,6 +24,9 @@ test('what the page says the reader looked at is refused when ken cannot place i
 		{ did: 'read', paths: [] },
 		{ did: 'read', paths: Array.from({ length: 201 }, () => 'src') },
 		{ did: 'change', paths: ['src/a/x.ts'], change: { base: hashes[0], head: 'nope' } },
+		{ did: 'set', paths: ['src'] },
+		{ did: 'set', level: 'expert', paths: ['src'] },
+		{ did: 'undo', at: '2026-01-01T00:00:00.000Z' },
 	]
 	for (const body of refused) {
 		assert.equal((await call(server, '/api/seen', body)).status, 400, JSON.stringify(body).slice(0, 80))
@@ -55,6 +58,28 @@ test('what the page says the reader looked at is refused when ken cannot place i
 	assert.equal(await levelOf(server, 'src'), 'seen')
 	assert.deepEqual(await json(server, '/api/seen', said), { written: true }, 'said again after taking it back')
 	assert.equal(await levelOf(server, 'src'), 'said')
+})
+
+test('a line the reader takes back counts for nothing and leaves what ken recorded, while the file keeps it and the line that took it back', async () => {
+	const { root } = buildRepository([{ message: 'feat: start', files: { 'src/a/x.ts': 'x\n', 'src/b/y.ts': 'y\n' } }])
+	const server = await openKen(root, readerHome())
+	await json(server, '/api/seen', { did: 'read', paths: ['src/a/x.ts'] })
+	await json(server, '/api/seen', { did: 'set', level: 'code', paths: ['src'] })
+	assert.equal(await levelOf(server, 'src'), 'code')
+
+	const before = await json(server, '/api/reader')
+	const [correction] = before.learned
+	assert.equal(correction.did, 'set')
+	assert.deepEqual(await json(server, '/api/seen', { did: 'undo', at: correction.at }), { written: true })
+	assert.deepEqual(await json(server, '/api/seen', { did: 'undo', at: correction.at }), { written: false })
+
+	assert.equal(await levelOf(server, 'src'), 'read', 'what the correction replaced counts again')
+	const after = await json(server, '/api/reader')
+	assert.deepEqual(
+		after.learned.map((each: { did: string }) => each.did),
+		['read'],
+	)
+	assert.equal(readFileSync(after.file, 'utf8').trim().split('\n').length, 3, 'the file only grows')
 })
 
 test('a reader who comes back after a commit landed is offered what landed since they last looked, before any span of days', async () => {

@@ -93,20 +93,24 @@ The map learns only from what the reader says: a question, a button, a tour stop
 - `read`: they stayed on its explanation, or moved on from its tour stop;
 - `code`: they opened its files, quoted lines or a diff;
 - `said`: they pressed "I know this part";
-- `forgot`: they pressed "Not right", which takes back every line before it;
-- `change`: they read a step or a diff of a change that touched the paths. It keeps the change's range.
+- `forgot`: they said they do not know the part, which is the same as setting it to `seen`;
+- `change`: they read a step or a diff of a change that touched the paths. It keeps the change's range;
+- `set`: they pressed "Not right" and picked one of the five levels below. It keeps the level and takes the place of every line before it for those paths. Only "I know it" says they know the part as it is now. Any other level leaves the count of commits since they looked as it was;
+- `undo`: they took back one line of what ken recorded. It names that line by its time and has no paths. The line stays in the file and counts for nothing.
 
 A line counts for a box when one of its paths is the box's path or inside it. From the lines that count, and from the map's topics in the box, plain code gives every box one level, the strongest thing the reader did there:
 
 | Level  | On the page          | What put the reader there                                                           |
 | ------ | -------------------- | ----------------------------------------------------------------------------------- |
 | `new`  | New to you           | Nothing yet                                                                         |
-| `seen` | Seen                 | Opened the part, read a change that touched it, or pressed "Not right"              |
+| `seen` | Seen                 | Opened the part, or read a change that touched it                                   |
 | `read` | Read                 | Stayed on its explanation, moved on from its tour stop, or asked ken about it       |
 | `code` | Read the code        | Opened its files, quoted lines or a diff                                            |
 | `said` | You said you know it | Pressed "I know this part", or said "I know this" on every topic ken has in the box |
 
 Beside the level the box says why, in one sentence built by code that names what the reader did and the day. It says the day they last looked, and how many commits, merges left out, touched the box after the commit they last looked at. A box they looked at that commits touched since is stale. When history was rewritten and that commit is gone, the count is 0 and the sentence says ken could not find the commit.
+
+The box also says where ken would open the part for this reader: a part new to them at its job, one they have seen at how it works, one they have read at the code, and a stale one at what changed since they looked. The list of what to look at next reads the same answer, so a box and its item cannot disagree.
 
 Looking is never understanding. ken says the reader read a part or opened its code. It says they know a part only when they said so.
 
