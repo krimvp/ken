@@ -152,6 +152,27 @@ export async function openServer(options: {
 			if (action === 'note-now') live.noteNow()
 			return sendJson(response, 200, await live.view())
 		}
+		if (where === 'GET /api/jobs') {
+			// One line with every job, then one each time a job changes, until the page goes away.
+			response.writeHead(200, { ...HEADERS, 'content-type': 'application/x-ndjson; charset=utf-8' })
+			response.flushHeaders()
+			writeLine(response, { jobs: desk.jobs() })
+			const off = desk.subscribe((jobs) => writeLine(response, { jobs }))
+			response.on('close', off)
+			return
+		}
+		if (where === 'POST /api/jobs') {
+			const body = await readJson(request)
+			const looking = body.kind === 'ok' ? lookingOf(fieldOf(body.value, 'looking')) : null
+			const stop = body.kind === 'ok' ? fieldOf(body.value, 'stop') : undefined
+			if (typeof stop === 'string') desk.stop(stop)
+			else if (looking) desk.look(looking)
+			else {
+				const message = 'Send looking, with the open brief and the level on the canvas, or the key of a job to stop.'
+				return sendJson(response, 400, { message })
+			}
+			return sendJson(response, 200, { jobs: desk.jobs() })
+		}
 		if (where === 'GET /api/decisions') return sendJson(response, 200, { decisions: decisionRows(await record.read()) })
 		if (where === 'GET /api/map') return sendJson(response, 200, { file: map.file, ...(await map.read(new Date())) })
 		if (where === 'POST /api/map') {
@@ -327,20 +348,16 @@ export async function openServer(options: {
 					question: asked.text,
 				})
 			}
-			const question = { text: asked.text }
 			await desk.settled()
-			if (desk.busy()) {
-				return sendJson(response, 409, { message: 'ken is answering another question. Stop it, or wait for it.' })
-			}
 			const stop = new AbortController()
-			// Closing the request, by Stop on the page or by closing the tab, stops the question.
+			// Closing the request, by Stop on the page or by closing the tab, stops the question, unless ken started it.
 			response.on('close', () => {
 				if (!response.writableFinished) stop.abort()
 			})
 			if (request.socket.destroyed) stop.abort()
 			response.writeHead(200, { ...HEADERS, 'content-type': 'application/x-ndjson; charset=utf-8' })
 			response.flushHeaders()
-			await desk.ask(model.chat, question.text, stop.signal, (line) => writeLine(response, line), asked.as)
+			await desk.ask(body.kind === 'ok' ? body.value : null, asked, stop.signal, (line) => writeLine(response, line))
 			return response.end()
 		}
 		const file = request.method === 'GET' ? files.get(url.pathname) : undefined
@@ -373,6 +390,8 @@ export async function openServer(options: {
 	port = address.port
 
 	if (options.live) await live?.start()
+	// The first thing missing, on a first open the naming of the parts, starts now: a closed tab does not stop it.
+	void desk.refill()
 
 	async function close() {
 		server.closeAllConnections()
@@ -447,6 +466,16 @@ function mapSignalOf(
 	return { kind: 'ok', signal, topics }
 }
 
+// What the page says the reader looks at: the id of the open brief, or null, and the paths of the level on the
+// Architecture canvas, or null on another page.
+function lookingOf(value: unknown): { brief: string | null; within: string[] | null } | null {
+	const brief = fieldOf(value, 'brief')
+	const within = fieldOf(value, 'within')
+	const paths = Array.isArray(within) && within.every((each) => typeof each === 'string') ? within : null
+	if ((brief !== null && typeof brief !== 'string') || (within !== null && paths === null)) return null
+	return { brief: brief ?? null, within: paths }
+}
+
 function sendJson(response: ServerResponse, status: number, value: unknown) {
 	response.writeHead(status, { ...HEADERS, 'content-type': 'application/json; charset=utf-8' })
 	response.end(JSON.stringify(value))
@@ -458,6 +487,6 @@ function sendFile(response: ServerResponse, file: PageFile) {
 }
 
 // The reader may have closed the request already; the question still ends and is saved.
-function writeLine(response: ServerResponse, value: QuestionLine | { kind: 'error'; message: string }) {
+function writeLine(response: ServerResponse, value: QuestionLine | { kind: 'error'; message: string } | object) {
 	if (!response.destroyed) response.write(`${JSON.stringify(value)}\n`)
 }

@@ -108,6 +108,7 @@ export function liveRunner(deps: {
 					leftOut: action.about.kind === 'uncommitted' ? leftOut : 0,
 				}
 				const view = await desk.note(chat, action.about, noteQuestion(action.about, facts), signal)
+				if (view === null) return
 				if (view.noNote !== null) said = 'There is no note on the last change.'
 				for (const listener of listeners) listener({ kind: 'note', view })
 				return apply({ kind: 'noted' })

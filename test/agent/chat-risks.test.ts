@@ -81,9 +81,9 @@ test('a risk with a false quote is sent back and named; with a true quote the ri
 		'the record keeps the risk without the mark and the weight',
 	)
 
-	const second = await ask([{ tool: 'ken__read_record', args: { id: stored?.id } }, { text: 'Done.' }])
+	const second = await ask([{ tool: 'ken__memory_known', args: { about: stored?.id } }, { text: 'Done.' }])
 	const read = toolResults(second.requests[1])[0] ?? ''
-	assert.ok(read.includes(`risk 1 [inferred]: ${RISK.text}`) && read.includes(CALL.text), `read_record: ${read}`)
+	assert.ok(read.includes(`risk 1 [inferred]: ${RISK.text}`) && read.includes(CALL.text), `memory_known: ${read}`)
 })
 
 test("a risk that says a name is missing is sent back when ken finds the name, with the place, and shown with ken's search when it does not", async () => {

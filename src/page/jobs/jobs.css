@@ -1,0 +1,167 @@
+/* The quiet line in the bar that says what ken reads by itself, the list it opens, and the line a brief shows while
+   ken reads its part. */
+.k-bar-end {
+	position: relative;
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 8px;
+	min-width: 0;
+}
+
+.k-jobs {
+	min-width: 0;
+}
+
+.k .k-jobs-line {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	max-width: 100%;
+	min-height: 36px;
+	padding: 4px 10px;
+	border: 0;
+	border-radius: 999px;
+	background: transparent;
+	color: var(--k-muted);
+	font: inherit;
+	font-size: 14px;
+	cursor: pointer;
+}
+
+.k .k-jobs-line:hover,
+.k .k-jobs-line[aria-expanded="true"] {
+	background: var(--k-sunk);
+	color: var(--k-ink);
+}
+
+.k-jobs-now {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.k-jobs-wait {
+	flex: none;
+	padding-left: 8px;
+	border-left: 1px solid var(--k-line);
+}
+
+.k-jobs-dot {
+	flex: none;
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: var(--k-brand);
+	animation: k-jobs-breathe 1.6s ease-in-out infinite;
+}
+
+@keyframes k-jobs-breathe {
+	50% {
+		opacity: 0.35;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.k-jobs-dot {
+		animation: none;
+	}
+}
+
+.k-jobs-list {
+	position: absolute;
+	top: calc(100% + 6px);
+	right: 0;
+	z-index: 30;
+	width: min(420px, calc(100vw - 32px));
+	max-height: 60vh;
+	overflow: auto;
+	padding: 14px 16px;
+	border: 1px solid var(--k-line);
+	border-radius: 12px;
+	background: var(--k-surface);
+	box-shadow: var(--k-shadow-up);
+	color: var(--k-ink);
+	font-size: 14px;
+}
+
+.k-jobs-rows {
+	display: grid;
+	gap: 2px;
+	margin: 8px 0;
+	padding: 0;
+	list-style: none;
+}
+
+.k-job {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: baseline;
+	gap: 2px 12px;
+	padding: 6px 0;
+	border-bottom: 1px solid var(--k-line);
+}
+
+.k-job-title {
+	grid-column: 1;
+}
+
+.k-job-by {
+	grid-column: 1;
+	color: var(--k-brand);
+	font-size: 13px;
+}
+
+.k-job-state {
+	grid-column: 1;
+	color: var(--k-muted);
+	font-size: 13px;
+}
+
+.k-job .k-link {
+	grid-column: 2;
+	grid-row: 1;
+}
+
+.k-job.is-done .k-job-title,
+.k-job.is-failed .k-job-title {
+	color: var(--k-muted);
+}
+
+.k-jobs-note {
+	margin: 0;
+	font-size: 13px;
+}
+
+.k-job-says {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin: 0 0 8px;
+	color: var(--k-muted);
+}
+
+/* A brief or Ask ken takes the right of the window, so the bar keeps the line in view beside it. */
+@media (min-width: 761px) {
+	.k-bar.has-drawer {
+		padding-right: calc(var(--k-drawer) + 24px);
+	}
+}
+
+@media (max-width: 760px) {
+	.k .k-jobs-line {
+		padding: 4px 6px;
+	}
+
+	/* A phone has room for the dot alone; its label says what ken reads and how many runs wait. */
+	.k-jobs-now,
+	.k-jobs-wait {
+		display: none;
+	}
+
+	.k .k-jobs-line {
+		justify-content: center;
+		min-width: 44px;
+		min-height: 44px;
+	}
+}

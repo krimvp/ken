@@ -89,11 +89,11 @@ test('a diagram with true quotes is numbered, stored with its piece of work and 
 	)
 	assert.deepEqual(onDisk?.kind === 'work' && onDisk.diagrams, [checked])
 
-	const second = await ask([{ tool: 'ken__read_record', args: { id: work?.id } }, { text: 'Done.' }])
+	const second = await ask([{ tool: 'ken__memory_known', args: { about: work?.id } }, { text: 'Done.' }])
 	const read = toolResults(second.requests[1])[0] ?? ''
 	assert.ok(
 		read.includes('3. From app to store: calls') && read.includes("\tsave('done')"),
-		`read_record shows the diagram: ${read}`,
+		`memory_known shows the diagram: ${read}`,
 	)
 
 	// The file indents with a tab; the false quote uses four spaces, the miss real models make most.

@@ -10,6 +10,7 @@ import { briefActions, freshBrief } from './brief/brief-actions.js'
 import { briefStore } from './brief/briefs.js'
 import { changeActions, freshChanges } from './changes/change-actions.js'
 import { fillDrawings, markPart, numberAt } from './draw-diagrams.js'
+import { freshJobs, jobsActions } from './jobs/jobs.js'
 import { readReply, replyAddress } from './level/address.js'
 import { levelActions } from './level/level-actions.js'
 import { freshHome } from './level/level-state.js'
@@ -74,6 +75,7 @@ const state = {
 	brief: freshBrief(),
 	procs: freshProcesses(),
 	you: freshYou(),
+	jobs: freshJobs(),
 	chg: freshChanges(),
 	project: null,
 	model: null,
@@ -574,6 +576,7 @@ function envNow() {
 		off: whyNoRun(),
 		running: state.running,
 		seconds: state.running ? (Date.now() - state.running.started) / 1000 : 0,
+		jobs: state.jobs.list,
 		model: state.model,
 		rows: state.rows,
 		asked: state.rows.length > 0,
@@ -621,6 +624,7 @@ function render() {
 	// The frame and the page under it come first. Only a view from before the pages is drawn by what follows.
 	const env = envNow()
 	const older = shell.draw(env)
+	jobs.look()
 	level.watch()
 	if (!older) {
 		refocus()
@@ -732,6 +736,9 @@ function markDescribed() {
 }
 
 function tick() {
+	for (const clock of document.querySelectorAll('.k-job-clock[data-since]')) {
+		clock.textContent = `${duration((Date.now() - Number(clock.dataset.since)) / 1000)} so far`
+	}
 	const shown = state.view === 'home' ? state.running?.onHome : state.open === state.running?.q
 	if (!state.running || !shown) return
 	const tools = state.running.q.steps.filter((step) => step.kind === 'tool').length
@@ -986,6 +993,14 @@ const you = youActions(app)
 app.you = you
 const chg = changeActions(app)
 app.chg = chg
+// A run ken started by itself made something: the pages read what they show again, so it fills in with no reload.
+const jobs = jobsActions({ ...app, linesOf }, async (made) => {
+	await Promise.all([loadRows(), shell.reread()])
+	// The reader asked for nothing, so the level on screen stays while it is read again.
+	await Promise.all([level.loads.loadLayout(true), made.some((job) => job.kind === 'process') ? procs.reread() : null])
+	await level.loads.settle()
+	render()
+})
 
 // The two tabs of the Changes page that show a view from before the pages: what waits on the reader with the
 // record's decisions, and live mode.
@@ -1049,6 +1064,7 @@ const actions = {
 	...procs.actions,
 	...you.actions,
 	...chg.actions,
+	...jobs.actions,
 	// What waits on the reader, the record's decisions and live mode are tabs of the Changes page now.
 	'follow-up': () => shell.goTab('decisions'),
 	'back-page'() {
@@ -1423,9 +1439,8 @@ try {
 	state.home.project = server.name
 	learnParts(server.parts)
 	state.model = server.model
-	// shortcut: on the reader's first open ken's model names the parts by itself, once, as the history then holds the
-	// run. Stage 2's queue of jobs replaces this.
-	if (state.model.kind === 'ok' && !server.named && state.rows.length === 0) void level.nameTop(true)
+	// What ken reads by itself, on a first open the naming of the parts, which the server started.
+	if (state.model.kind === 'ok') void jobs.feed()
 	if (server.live === true) await loadLive()
 	state.authors = recent.authors
 	render()

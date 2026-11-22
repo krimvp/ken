@@ -6,6 +6,7 @@
 // model has not explained yet still opens, with what git says of it and one button for the rest.
 
 import { runtimePicture } from '../arch-views/switch.js'
+import { inLine, jobLineHtml, jobOf } from '../jobs/jobs.js'
 import { KNOWN, levelLabel } from '../level/level-state.js'
 import { DOING } from '../level/runs.js'
 import { partClass, partOfFile } from '../project/part-colours.js'
@@ -168,7 +169,16 @@ function pointHtml(point, i, ui) {
 function explainHtml(brief, env, ui) {
 	const run = env.running?.onHome
 	if (run?.kind === 'explain' && run.concept === brief.id) return workingHtml(run, env)
+	const job = jobOf(env.jobs ?? [], brief.id)
 	const what = brief.kind === 'question' ? 'answered this' : 'explained this'
+	if (job && !brief.staleFiles) {
+		const reading = jobLineHtml(job, brief.kind === 'question' ? 'answering this' : 'reading this part')
+		const sooner =
+			job.state.kind === 'waiting'
+				? `<button class="k-btn is-quiet k-run-btn" data-act="brief-explain" data-key="brief-explain"${env.off ? ' disabled' : ''}><span>Explain it now</span><small>It goes first</small></button>`
+				: ''
+		return `<div class="k-unexplained">${reading}<p class="k-muted">The brief fills in here when ken is done.</p>${sooner}</div>`
+	}
 	if (!brief.explain) {
 		return `<div class="k-unexplained"><p>ken's model has not ${what} yet.</p></div>`
 	}
@@ -306,7 +316,15 @@ function questionsHtml(brief, { ui, env }) {
 		if (question.answered)
 			return rowHtml({ id: question.id, name: question.text, note: 'Answered', key: `brief-q-${i}` })
 		const busy = asking?.text === question.text
-		return `<li class="k-row is-open"><span class="k-row-ic">${icon('question')}</span><span class="k-row-main"><b>${prose(question.text)}</b><span class="k-row-note">${busy ? "ken's model is answering it." : 'No answer yet.'}</span></span><button class="k-btn is-quiet k-run-btn" data-act="brief-answer" data-index="${i}" data-key="brief-ask-${i}"${env.off ? ' disabled' : ''}><span>Ask ken</span><small>One run of ken's model</small></button></li>`
+		const ahead = jobOf(env.jobs ?? [], question.id)
+		const note = busy
+			? "ken's model is answering it."
+			: ahead?.state.kind === 'running'
+				? 'ken is answering it now, ahead of you.'
+				: ahead
+					? `ken will answer it ahead of you: ${inLine(ahead.place)}.`
+					: 'No answer yet.'
+		return `<li class="k-row is-open"><span class="k-row-ic">${icon('question')}</span><span class="k-row-main"><b>${prose(question.text)}</b><span class="k-row-note">${note}</span></span><button class="k-btn is-quiet k-run-btn" data-act="brief-answer" data-index="${i}" data-key="brief-ask-${i}"${env.off ? ' disabled' : ''}><span>Ask ken</span><small>One run of ken's model</small></button></li>`
 	})
 	const decided =
 		brief.decisions.length === 0

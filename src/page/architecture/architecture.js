@@ -7,6 +7,7 @@ import { readingHtml } from '../arch-views/reading.js'
 import { keyHtml, switchCardHtml, VIEW_NAMES, viewDrawing, viewOn, viewsOffered } from '../arch-views/switch.js'
 import { arrowId, partId, processId } from '../brief/concept-id.js'
 import { folderTreeHtml } from '../folder-tree/folder-tree.js'
+import { jobLineHtml, live } from '../jobs/jobs.js'
 import { diagramOf } from '../level/content.js'
 import { colourOf, projectName } from '../level/level-state.js'
 import { DOING } from '../level/runs.js'
@@ -116,7 +117,17 @@ function notesHtml(home, env, arch, stops) {
 		said.push(`These blocks are folders. ken's model has not named the parts ${where} yet. ${name}`)
 	}
 	const unexplained = (look.explained ?? 0) < look.boxes.length
-	if (look.named && look.at === look.head && home.content.kind === 'level' && unexplained && !env.running) {
+	const queued = (env.jobs ?? []).filter(
+		(job) =>
+			job.kind === 'explain' && live(job) && look.boxes.some((box) => job.concept === partId(look.within, box.name)),
+	)
+	if (look.named && look.at === look.head && unexplained && queued.length > 0) {
+		const done = look.explained ?? 0
+		const more = queued.length === 1 ? 'the last part' : `${queued.length} parts`
+		said.push(
+			`${done} of ${look.boxes.length} parts explained. ken is explaining ${more} by itself, one at a time. Open a part to have it explained first.`,
+		)
+	} else if (look.named && look.at === look.head && home.content.kind === 'level' && unexplained && !env.running) {
 		const done = look.explained ?? 0
 		const button = `<button class="k-link" data-act="run-explain" data-key="run-explain"${env.off ? ' disabled' : ''}>${done === 0 ? 'Ask ken to explain these parts' : 'Ask ken to explain the rest'}</button>`
 		const where =
@@ -213,6 +224,10 @@ function treeSaidHtml(home, env) {
 	if (run !== '' || env.running) return run
 	if (env.model?.kind !== 'ok') {
 		return '<p class="k-tree-ask">ken has no model to ask, so it cannot name the parts yet. Home says what to set.</p>'
+	}
+	const naming = (env.jobs ?? []).find((job) => job.key === `parts:${home.look.within.join(',')}` && live(job))
+	if (naming) {
+		return `<div class="k-tree-ask">${jobLineHtml(naming, 'naming the main parts', 'span')}<span class="k-muted">The parts show here when it is done.</span></div>`
 	}
 	return `<p class="k-tree-ask"><button class="k-btn" data-act="run-name" data-key="run-name"${env.off ? ' disabled' : ''}>Ask ken to name the main parts</button><span class="k-muted">${env.off ? esc(env.off) : RUN_COST}</span></p>`
 }
