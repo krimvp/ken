@@ -1,12 +1,14 @@
-// ken's page: one state object and one render per frame, with no framework. The thread on the left holds the words;
-// the panel on the right holds what ken checked. Under 1100 pixels the panel goes away and the same things open in
-// place. The page talks only to the server that sent it.
+// ken's page: one state object and one render per frame, with no framework. The home is the project as a picture, with
+// what ken says about it beside it (src/page/home). A question opens as a thread: the words on the left, and on the
+// right the panel with what ken checked. Under 1100 pixels the panel goes away and the same things open in place. The
+// page talks only to the server that sent it.
 import { fillDrawings, markPart } from './draw-diagrams.js'
+import { freshHome, homeActions } from './home/home-actions.js'
+import { showHome } from './home/home-view.js'
 import { liveLook, liveViewHtml } from './live/live-view.js'
 import { changeKey } from './project/change-card.js'
 import { learnParts } from './project/part-colours.js'
-import { drawPictures, lightPicture } from './project/parts-picture.js'
-import { projectViewHtml } from './project/project-view.js'
+import { atRest, drawPictures, lightPicture } from './project/parts-picture.js'
 import { tourKey } from './project/tour-card.js'
 import { partOf, stepDiffHtml, stopState, stopTopics, tourStart, walkOf } from './project/walk.js'
 import { allQuotesHtml, checksHtml, quoteCardHtml } from './views/checks.js'
@@ -25,21 +27,11 @@ import {
 	replyHtml,
 	stepCardsHtml,
 } from './views/reply.js'
-import {
-	emptyAfterHtml,
-	emptyHtml,
-	endedHtml,
-	noChecksPanelHtml,
-	noModelHtml,
-	stepsHtml,
-	workingHtml,
-} from './views/states.js'
+import { endedHtml, noChecksPanelHtml, noModelHtml, stepsHtml, workingHtml } from './views/states.js'
 
 const $ = (selector) => document.querySelector(selector)
 const wideQuery = matchMedia('(min-width: 1100px)')
 const darkQuery = matchMedia('(prefers-color-scheme: dark)')
-
-const WHOLE = { name: 'Whole project', within: [] }
 
 // panel is what the right column shows on a wide screen: what ken checked, the quotes of one item, or all quotes.
 const CHECKS = { kind: 'checks' }
@@ -74,8 +66,6 @@ const freshUi = () => ({
 
 const state = {
 	project: '',
-	// The top level holds parts ken's model named, so a tour can start from the first visit.
-	named: false,
 	model: null,
 	rows: [],
 	// The thread on screen, oldest question first: saved ones from the history, and the one running now. open is the
@@ -86,27 +76,17 @@ const state = {
 	menuOpen: false,
 	lensesOpen: false,
 	problem: null,
-	// "map" shows the reader's understanding map in place of the question, "decisions" the record's decisions,
-	// "follow-up" what is open, and "project" the project's layout.
-	view: 'question',
+	// "home" shows the project as a picture and "question" a thread. "map" shows the reader's understanding map,
+	// "decisions" the record's decisions, "follow-up" what is open, and "live" the notes of live mode. base is the one
+	// of home and question the reader was on last, which the other views close back to.
+	view: 'home',
+	base: 'home',
 	map: null,
 	mapSaid: '',
 	decisions: null,
 	decisionsKey: false,
-	// The level of the layout on screen, the changes it can lay over the boxes, the boxes the reader opened to get here,
-	// and the commit and change in the form, as typed or picked.
-	// change is '' until the server picks the reader's own work, then the text that asks for the change on screen.
-	layout: {
-		look: null,
-		changes: [],
-		trail: [WHOLE],
-		at: '',
-		change: '',
-		problem: null,
-		openArrows: new Set(),
-		formOpen: false,
-	},
 	ui: freshUi(),
+	home: freshHome(stored, { ...freshUi(), wide: false }),
 	// What is open, with its own open decisions and quotes, the line that says what the last button saved, and the
 	// decisions the reader answered on this visit.
 	followUp: null,
@@ -128,8 +108,9 @@ const state = {
 	hideAsk: stored('ken-hide-ask') === 'yes',
 }
 
-// The page keeps two small things in this browser: whether the reader hid their last request, and the newest note
-// they saw. A browser that keeps nothing shows the page the same way, with nothing hidden and nothing marked new.
+// The page keeps a few small things in this browser: whether the reader hid their last request, the newest note they
+// saw, and the way in and the detail they chose on the home. A browser that keeps nothing shows the page the same
+// way, with nothing hidden, nothing marked new, and the way in ken suggests.
 function stored(name) {
 	try {
 		return localStorage.getItem(name)
@@ -145,7 +126,7 @@ function store(name, value) {
 }
 
 // The open decisions and quotes of the view on screen.
-const uiNow = () => (state.view === 'follow-up' ? state.followUi : state.view === 'live' ? state.liveUi : state.ui)
+const uiNow = () => ({ 'follow-up': state.followUi, live: state.liveUi, home: state.home.ui })[state.view] ?? state.ui
 
 // What the page shows as the question until ken sends the one it wrote for a lens.
 const LENS_TITLES = {
@@ -158,6 +139,8 @@ const LENS_TITLES = {
 	note: 'Go deeper on this note',
 	parts: 'Name the main parts',
 	tour: 'Show me around',
+	change: 'Explain this change',
+	view: 'Show it another way',
 }
 
 // A saved question as the page shows it: the history entry, and the project's HEAD now, to compare with the HEAD it
@@ -235,8 +218,9 @@ async function* linesOf(body) {
 	if (buffer.trim() !== '') yield buffer
 }
 
-// body is a question, {question}, or a lens for ken to write the question from, {lens}.
-async function send(body) {
+// body is a question, {question}, or a lens for ken to write the question from, {lens}. A question opens its thread.
+// onHome names a run the home started: the reader stays on the home, which shows the run and what it made.
+async function send(body, onHome = null) {
 	const question = body.lens ? LENS_TITLES[body.lens.kind] : body.question.trim()
 	if (question === '' || state.running || state.model?.kind !== 'ok') return
 	const { thread } = state.model
@@ -257,22 +241,25 @@ async function send(body) {
 		live: true,
 	}
 	const controller = new AbortController()
-	state.running = { q, controller, started: Date.now() }
-	// A question joins the chat ken talks in now, so the page shows that chat's thread with it at the end.
-	if (state.thread[0]?.thread !== thread) {
-		state.thread = await threadOf(thread)
-		state.ui = freshUi()
+	state.running = { q, controller, started: Date.now(), onHome }
+	let saved = null
+	if (onHome === null) {
+		// A question joins the chat ken talks in now, so the page shows that chat's thread with it at the end.
+		if (state.thread[0]?.thread !== thread) {
+			state.thread = await threadOf(thread)
+			state.ui = freshUi()
+		}
+		state.thread = [...state.thread, q]
+		state.open = picked = q
+		state.menuOpen = false
+		state.view = state.base = 'question'
+		if (!body.lens) $('#question').value = ''
+		resizeBox()
+		// On a phone the keyboard would cover the answer as it arrives.
+		if (!state.ui.wide) $('#question').blur()
 	}
-	state.thread = [...state.thread, q]
-	state.open = picked = q
-	state.menuOpen = false
-	state.view = 'question'
-	if (!body.lens) $('#question').value = ''
-	resizeBox()
-	// On a phone the keyboard would cover the answer as it arrives.
-	if (!state.ui.wide) $('#question').blur()
 	render()
-	$(`#turn-${state.thread.length - 1}`)?.scrollIntoView({ block: 'start' })
+	if (onHome === null) $(`#turn-${state.thread.length - 1}`)?.scrollIntoView({ block: 'start' })
 	try {
 		const response = await fetch('/api/questions', {
 			method: 'POST',
@@ -294,7 +281,7 @@ async function send(body) {
 			if (event.kind === 'saved') {
 				// The topics keep the states they had when the reply came, so a button pressed since does not fold the reply
 				// the reader is reading.
-				const saved = { ...fromView(event.view), topics: q.topics }
+				saved = { ...fromView(event.view), topics: q.topics }
 				state.thread = state.thread.map((each) => (each === q ? saved : each))
 				if (state.open === q) state.open = saved
 			} else {
@@ -314,11 +301,11 @@ async function send(body) {
 		q.typing = ''
 		state.running = null
 		await Promise.all([loadRows(), loadFollowUp()])
-		const saved = state.rows.at(-1)
+		const last = state.rows.at(-1)
 		// A stopped question has no saved line, so it is read back from the history.
-		if (state.thread.includes(q) && controller.signal.aborted && saved?.question === q.question) {
-			await openQuestion(saved.id)
-		}
+		const stopped = controller.signal.aborted && last?.question === q.question
+		if (onHome !== null) await home.ended(onHome, saved ?? (stopped ? { ...q, id: last.id } : q))
+		else if (state.thread.includes(q) && stopped) await openQuestion(last.id)
 		render()
 	}
 }
@@ -396,8 +383,9 @@ function firstLine(question) {
 	return old ? `Go deeper on the ${old[2]} UTC note about ${old[1]}` : first
 }
 
-// The header: the views, and the reader's questions in a menu. On a phone the views go into the menu too, beside the
-// questions, and the menu button carries live mode's mark, so the project's name keeps its room.
+// The header: the views, the reader's questions in a menu, and the one button that opens the "Ask ken" drawer. The
+// brand goes home. On a phone the views go into the menu too, beside the questions, and the menu button carries live
+// mode's mark, so the project's name keeps its room.
 function menuHtml() {
 	const n = state.rows.length
 	const current = (view) => (state.view === view ? ' aria-current="page"' : '')
@@ -406,6 +394,7 @@ function menuHtml() {
 		waiting === 0
 			? ''
 			: `<button class="link" data-act="follow-up" data-key="follow-up"${current('follow-up')}>Waiting on you (${waiting})</button>`
+	const ask = `<button class="quiet-button ask-ken" data-act="ask-open" data-key="ask-open" aria-expanded="${state.view === 'home' && state.home.askOpen}">Ask ken</button>`
 	const look = liveLook(state.liveStatus)
 	const mark = look === 'off' ? '' : `<span class="live-mark is-${look}" aria-hidden="true"></span>`
 	const said = { on: ', on', paused: ', paused', writing: ', writing a note', off: '' }[look]
@@ -413,13 +402,13 @@ function menuHtml() {
 		state.model?.kind === 'ok'
 			? `<button class="link" data-act="live" data-key="live"${current('live')} aria-label="Live${said}">${mark}Live</button>`
 			: ''
-	const views = `<button class="link" data-act="project" data-key="project"${current('project')}>Project</button>${live}<button class="link" data-act="decisions" data-key="decisions"${current('decisions')}>Decisions</button><button class="link" data-act="map" data-key="map"${current('map')}>Your map</button>`
+	const views = `<button class="link" data-act="decisions" data-key="decisions"${current('decisions')}>Decisions</button><button class="link" data-act="map" data-key="map"${current('map')}>Your map</button>${live}${open}`
 	const questions =
 		n === 0
 			? ''
 			: `<button class="link top-wide" data-act="menu" data-key="menu" aria-expanded="${state.menuOpen}">Your questions (${n})</button>`
 	const narrow = `<button class="link top-narrow" data-act="menu" data-key="menu-narrow" aria-expanded="${state.menuOpen}" aria-label="Menu${said ? `, live${said}` : ''}">${mark}Menu</button>`
-	const bar = `<span class="top-views top-wide">${views}</span>${open}${questions}${narrow}`
+	const bar = `<span class="top-views top-wide">${views}</span>${questions}${ask}${narrow}`
 	if (!state.menuOpen) return bar
 	const running = state.running
 		? `<button class="row" data-act="open-running" data-key="menu-running"><span class="row-q">${esc(firstLine(state.running.q.question))}</span><span class="row-meta">Running now</span></button>`
@@ -500,7 +489,6 @@ function movedHtml(q, t) {
 function threadHtml() {
 	if (state.view === 'map') return mapViewHtml(state.map, state.model?.kind === 'ok' && !state.running, state.mapSaid)
 	if (state.view === 'decisions') return decisionsViewHtml(state.decisions, state.decisionsKey)
-	if (state.view === 'project') return projectViewHtml(state.layout, state.model?.kind === 'ok' && !state.running)
 	if (state.view === 'live') {
 		const canAsk = state.model?.kind === 'ok' && !state.running
 		const seen = { seen: state.liveSeen, hideAsk: state.hideAsk }
@@ -513,8 +501,9 @@ function threadHtml() {
 	const q = state.open
 	if (state.problem && !q)
 		return `<div class="notice" role="alert"><h3>ken did not answer</h3><p>${esc(state.problem)}</p></div>`
-	if (!q) return emptyHtml(state.project, state.model?.kind === 'ok', state.named)
-	return `<p class="legend">${LEGEND}</p>${state.thread.map((each, t) => turnHtml(each, t, state.ui)).join('')}`
+	if (!q) return ''
+	const back = '<button class="link" data-act="home" data-key="back-home">Back to the project</button>'
+	return `<p class="back-home">${back}</p><p class="legend">${LEGEND}</p>${state.thread.map((each, t) => turnHtml(each, t, state.ui)).join('')}`
 }
 
 function panelHtml() {
@@ -529,20 +518,56 @@ function panelHtml() {
 	return checksHtml(q, ui, state.thread.at(-1) === q ? null : when(q.askedAt))
 }
 
+// Why no run of ken's model can start now, or null when one can.
+function whyNoRun() {
+	if (state.model?.kind !== 'ok') return 'ken has no model to ask.'
+	return state.running ? "ken's model is busy with another run. Stop it, or wait for it." : null
+}
+
+function renderHome() {
+	const env = {
+		off: whyNoRun(),
+		running: state.running,
+		seconds: state.running ? (Date.now() - state.running.started) / 1000 : 0,
+		model: state.model,
+		rows: state.rows,
+		asked: state.rows.length > 0,
+	}
+	showHome($('#home'), state.home, env, schedule)
+}
+
+// What the reader typed stays where they typed it when the box they type in is drawn again.
+function caretOf(box) {
+	return box?.matches?.('input:not([type]), textarea') ? [box.selectionStart, box.selectionEnd] : null
+}
+
 function render() {
 	hideTip()
 	const ui = state.ui
 	ui.wide = wideQuery.matches
-	const focused = document.activeElement?.dataset?.key
+	const active = document.activeElement
+	const focused = active?.dataset?.key
+	const caret = caretOf(active)
+	const refocus = () => {
+		if (!focused || document.activeElement?.dataset?.key === focused) return
+		const now = document.querySelector(`[data-key="${CSS.escape(focused)}"]`)
+		now?.focus({ preventScroll: true })
+		if (caret && caretOf(now)) now.setSelectionRange(...caret)
+	}
+	const onHome = state.view === 'home'
+	$('#project').innerHTML = state.project ? `<span class="reads">reads </span>${folderHtml(state.project)}` : ''
+	$('#menu').innerHTML = menuHtml()
+	$('#home').hidden = !onHome
+	$('#page').hidden = onHome
+	if (onHome) {
+		renderHome()
+		return refocus()
+	}
 	const q = state.open
 	const page = $('#page')
 	const panel = $('#panel')
 	const scroll = panel.scrollTop
-	page.classList.toggle('first-visit', !q && state.view === 'question')
 	page.classList.toggle('single', !q || state.view !== 'question')
-	page.classList.toggle('wide-view', state.view === 'project')
-	$('#project').innerHTML = state.project ? `<span class="reads">reads </span>${folderHtml(state.project)}` : ''
-	$('#menu').innerHTML = menuHtml()
 	const across = [...document.querySelectorAll('.drawing')].map((box) => box.scrollLeft)
 	const notes = [...document.querySelectorAll('.decide-form')].map((form) => [
 		form.dataset.id,
@@ -579,20 +604,15 @@ function render() {
 	$('#after').innerHTML =
 		state.model?.kind === 'unset'
 			? noModelHtml(state.model, state.rows.length > 0, q !== null)
-			: state.view !== 'question'
-				? ''
-				: q
-					? tucked
-					: emptyAfterHtml(lensHtml('start', pick))
+			: state.view === 'question' && q
+				? tucked
+				: ''
 	for (const input of document.querySelectorAll('.area-form input')) input.value = typed
 	$('#question').placeholder = ui.wide ? 'Ask what changed, why, or how a part works.' : 'Ask what changed, and why.'
-	$('#ask-cost').innerHTML = canAsk
-		? `A question is one run of ken's model, <code>${esc(state.model.name)}</code>. It usually takes about a minute, and the code ken reads goes to that model.`
-		: ''
 	panel.innerHTML = panelHtml()
 	panel.scrollTop = scroll
 	watchTurns()
-	if (focused) document.querySelector(`[data-key="${CSS.escape(focused)}"]`)?.focus({ preventScroll: true })
+	refocus()
 }
 
 // On a wide screen the panel follows the reader down the thread: it shows the checks of the reply most in view. A reply
@@ -653,7 +673,8 @@ function markDescribed() {
 
 function tick() {
 	const clock = $('#working-clock')
-	if (!clock || !state.running || state.open !== state.running.q) return
+	const shown = state.view === 'home' ? state.running?.onHome : state.open === state.running?.q
+	if (!clock || !state.running || !shown) return
 	const tools = state.running.q.steps.filter((step) => step.kind === 'tool').length
 	clock.textContent = `${duration((Date.now() - state.running.started) / 1000)} so far, ${count(tools, 'step', 'steps')}`
 }
@@ -776,13 +797,6 @@ function toggle(set, key) {
 	else set.add(key)
 }
 
-function ask(text) {
-	const box = $('#question')
-	box.value = text
-	resizeBox()
-	box.focus()
-}
-
 async function postMap(signal, turn) {
 	const response = await fetch('/api/map', {
 		method: 'POST',
@@ -824,7 +838,7 @@ async function showMap() {
 }
 
 function closeMap() {
-	state.view = 'question'
+	state.view = state.base
 	render()
 	$('[data-key="map"]')?.focus({ preventScroll: true })
 }
@@ -850,50 +864,9 @@ async function showDecisions(at) {
 }
 
 function closeDecisions() {
-	state.view = 'question'
+	state.view = state.base
 	render()
 	$('[data-key="decisions"]')?.focus({ preventScroll: true })
-}
-
-// The Project view asks the server for one level each time the reader opens a box, goes back up, or picks a commit or
-// a change. A level the server refuses takes the last one off the screen and shows the reason in its place.
-async function loadLayout() {
-	const { trail, at, change } = state.layout
-	const query = new URLSearchParams()
-	if (at.trim() !== '') query.set('at', at.trim())
-	for (const path of trail.at(-1).within) query.append('within', path)
-	if (change !== '') query.set('change', change)
-	try {
-		const response = await fetch(`/api/layout?${query}`)
-		const body = await response.json()
-		if (!response.ok) {
-			state.layout = { ...state.layout, problem: { message: body.message, field: body.field ?? null } }
-		} else {
-			const { look, changes } = body
-			const change = look.change?.asked ?? 'none'
-			if (trail.length === 1 && at.trim() === '') learnParts(look.boxes)
-			state.layout = { ...state.layout, look, changes, change, problem: null, openArrows: new Set() }
-		}
-	} catch (error) {
-		state.layout = { ...state.layout, problem: { message: error.message, field: null } }
-	}
-	render()
-}
-
-// The view opens on where the reader is: their own work laid over the whole project, at the commit checked out now.
-async function showProject() {
-	state.view = 'project'
-	state.menuOpen = false
-	state.layout = { ...state.layout, trail: [WHOLE], at: '', change: '', formOpen: false }
-	render()
-	await loadLayout()
-	window.scrollTo({ top: 0 })
-}
-
-function closeProject() {
-	state.view = 'question'
-	render()
-	$('[data-key="project"]')?.focus({ preventScroll: true })
 }
 
 // A reply about a change shows the project's top level with the change laid over it. ken reads it from git once per
@@ -914,37 +887,6 @@ function loadChangeLooks() {
 	}
 }
 
-// "Show me around" on a level whose parts ken's model named. A tour of the same stops the reader took before opens
-// again with no model, at the first stop they have not seen; else ken's model gives a new one.
-async function startTour(within, name) {
-	const look = await getJson(`/api/layout?${new URLSearchParams(within.map((path) => ['within', path]))}`)
-	const stops = look.look.tour?.map((stop) => stop.name) ?? []
-	const same = (row) =>
-		row.outcome === 'answered' &&
-		row.tour?.within.join('\n') === within.join('\n') &&
-		row.tour.stops.join('\n') === stops.join('\n')
-	const saved = [...state.rows].reverse().find(same)
-	if (!saved) {
-		await send({ lens: { kind: 'tour', within, name } })
-		const t = state.thread.length - 1
-		if (state.thread[t]?.reply?.tour) goOnTour(t)
-		return
-	}
-	state.view = 'question'
-	state.menuOpen = false
-	await openQuestion(saved.id)
-	picked = state.open
-	render()
-	goOnTour(state.thread.indexOf(state.open))
-}
-
-function goOnTour(t) {
-	const q = state.thread[t]
-	const start = tourStart(walkOf(q.reply), q.topics)
-	$(`#turn-${t}`)?.scrollIntoView({ block: 'start' })
-	if (start !== null) walkTo(t, start)
-}
-
 // The reader reached a stop of a tour, or said they know its part: the map learns it, and the stop shows it.
 async function learnStop(t, number, signal) {
 	const q = state.thread[t]
@@ -962,28 +904,12 @@ async function learnStop(t, number, signal) {
 	if (signal === 'know') document.querySelector(`[data-key="walk-${t}-${number}"]`)?.focus({ preventScroll: true })
 }
 
-// A part on a change card opens the Project view at that part, with the same change laid over it.
-async function openChangePart(t, index) {
+// A part on a change card opens the home at that part, with the same change laid over it.
+function openChangePart(t, index) {
 	const q = state.thread[t]
 	const change = q?.reply?.change ?? q?.liveChange
 	const box = change && state.ui.changeLooks.get(changeKey(change))?.boxes?.[index]
-	if (!box) return
-	state.view = 'project'
-	state.menuOpen = false
-	const trail = [WHOLE, { name: box.name, within: box.paths }]
-	state.layout = { ...state.layout, trail, at: '', change: changeKey(change), formOpen: false }
-	render()
-	await loadLayout()
-	window.scrollTo({ top: 0 })
-	$('#pv-level')?.focus({ preventScroll: true })
-}
-
-// The level changes under the reader's focus, so focus goes to the level's heading, which names where they are now.
-async function moveTo(trail) {
-	state.layout = { ...state.layout, trail }
-	await loadLayout()
-	$('#pv-level')?.focus({ preventScroll: true })
-	$('.pv-trail')?.scrollIntoView({ block: 'nearest' })
+	if (box) return home.openAt(box, changeKey(change))
 }
 
 // The Live view reads the server every few seconds, and the header's mark follows whether live mode is on.
@@ -1032,7 +958,7 @@ async function showLive() {
 }
 
 function closeLive() {
-	state.view = 'question'
+	state.view = state.base
 	render()
 	$('[data-key="live"]')?.focus({ preventScroll: true })
 }
@@ -1054,7 +980,7 @@ async function showFollowUp() {
 }
 
 function closeFollowUp() {
-	state.view = 'question'
+	state.view = state.base
 	render()
 	$('[data-key="follow-up"], [data-key="map"]')?.focus({ preventScroll: true })
 }
@@ -1082,38 +1008,13 @@ async function followUpSaved(save, said) {
 	render()
 }
 
+const home = homeActions({ state, render, getJson, post, send, stored, store, fromView })
+
 const actions = {
+	...home.actions,
 	map: () => (state.view === 'map' ? closeMap() : showMap()),
 	decisions: () => (state.view === 'decisions' ? closeDecisions() : showDecisions()),
-	project: () => (state.view === 'project' ? closeProject() : showProject()),
-	'pv-open'(el) {
-		const box = state.layout.look.boxes[Number(el.dataset.index)]
-		return moveTo([...state.layout.trail, { name: box.name, within: box.paths }])
-	},
-	'pv-crumb': (el) => moveTo(state.layout.trail.slice(0, Number(el.dataset.index) + 1)),
 	'cc-open': (el) => openChangePart(Number(el.dataset.turn), Number(el.dataset.index)),
-	// An arrow picked in the picture opens in the list beside it, and focus goes there, where the line now shows.
-	'pv-arrow'(el) {
-		toggle(state.layout.openArrows, Number(el.dataset.index))
-		render()
-		if (el.closest('.pv-picture')) $(`[data-key="pv-arrow-${el.dataset.index}"]`)?.focus({ preventScroll: true })
-	},
-	'pv-all'() {
-		const { look, openArrows } = state.layout
-		const all = openArrows.size === look.arrows.length
-		state.layout = { ...state.layout, openArrows: new Set(all ? [] : look.arrows.map((_, i) => i)) }
-		render()
-	},
-	'pv-name'() {
-		const { trail } = state.layout
-		const name = trail.length > 1 ? trail.at(-1).name : null
-		return send({ lens: { kind: 'parts', within: trail.at(-1).within, name } })
-	},
-	async 'pv-reset'() {
-		state.layout = { ...state.layout, at: '', change: '', formOpen: false }
-		await loadLayout()
-		$('#pv-level')?.focus({ preventScroll: true })
-	},
 	'dv-key'() {
 		state.decisionsKey = !state.decisionsKey
 		render()
@@ -1176,6 +1077,7 @@ const actions = {
 	},
 	async open(el) {
 		state.menuOpen = false
+		state.view = state.base = 'question'
 		await openQuestion(el.dataset.id)
 		picked = state.open
 		render()
@@ -1185,6 +1087,7 @@ const actions = {
 	},
 	async 'open-running'() {
 		state.menuOpen = false
+		state.view = state.base = 'question'
 		const { q } = state.running
 		if (!state.thread.includes(q)) state.thread = [...(await threadOf(q.thread)), q]
 		state.open = picked = q
@@ -1249,18 +1152,14 @@ const actions = {
 		walkTo(t, state.ui.walkAt.get(t) === number ? null : number)
 	},
 	'walk-by': (el) => walkBy(Number(el.dataset.turn), Number(el.dataset.by)),
-	tour(el) {
-		const { trail } = state.layout
-		const inside = state.view === 'project' && el.dataset.level !== 'top' && trail.length > 1
-		return startTour(inside ? trail.at(-1).within : [], inside ? trail.at(-1).name : null)
-	},
 	'tour-know': (el) => learnStop(Number(el.dataset.turn), Number(el.dataset.step), 'know'),
 	added() {
 		state.ui.addedOpen = !state.ui.addedOpen
 		render()
 	},
 	steps(el) {
-		toggle(state.ui.openSteps, Number(el.dataset.turn))
+		if (state.view === 'home') state.home.stepsOpen = !state.home.stepsOpen
+		else toggle(state.ui.openSteps, Number(el.dataset.turn))
 		render()
 	},
 	details() {
@@ -1272,7 +1171,6 @@ const actions = {
 		render()
 		if (state.ui.coverageOpen) $('#coverage-list')?.scrollIntoView({ block: 'nearest' })
 	},
-	example: (el) => ask(el.textContent),
 	again: (el) => send({ question: state.thread[Number(el.dataset.turn)].question }),
 	stop() {
 		state.running?.controller.abort()
@@ -1289,11 +1187,11 @@ document.addEventListener('click', (event) => {
 	else if (state.thread.length > 0) chooseInDrawing(event.target)
 })
 
-// A file's diff is drawn when the reader opens it. The Project view keeps whether its form is open across renders.
+// A file's diff is drawn when the reader opens it. The home keeps whether "Another commit" is open across renders.
 document.addEventListener(
 	'toggle',
 	(event) => {
-		if (event.target.matches?.('.pv-other')) state.layout.formOpen = event.target.open
+		if (event.target.matches?.('.home-other')) state.home.formOpen = event.target.open
 		const file = event.target.dataset?.file
 		if (file === undefined) return
 		const open = state.ui.openFiles
@@ -1305,6 +1203,7 @@ document.addEventListener(
 )
 
 document.addEventListener('keydown', (event) => {
+	if (state.view === 'home' && !state.menuOpen && $('#tip').hidden && home.key(event)) return
 	if ((event.key === 'ArrowLeft' || event.key === 'ArrowRight') && state.view === 'question') {
 		const t = walkTurn()
 		if (t === null) return
@@ -1323,7 +1222,6 @@ document.addEventListener('keydown', (event) => {
 	}
 	if (state.view === 'map') return closeMap()
 	if (state.view === 'decisions') return closeDecisions()
-	if (state.view === 'project') return closeProject()
 	if (state.view === 'live') return closeLive()
 	if (state.view === 'follow-up') return closeFollowUp()
 	if (closePanel()) return
@@ -1360,11 +1258,7 @@ $('#ask').addEventListener('submit', (event) => {
 })
 
 document.addEventListener('submit', (event) => {
-	if (event.target.closest('.pv-form')) {
-		event.preventDefault()
-		void loadLayout()
-		return
-	}
+	if (home.submit(event)) return
 	const form = event.target.closest('.area-form, .change-form, .decide-form')
 	if (!form) return
 	event.preventDefault()
@@ -1386,14 +1280,11 @@ document.addEventListener('submit', (event) => {
 	if (path !== '') void send({ lens: { kind: 'area', path } })
 })
 
-// The commit and the change in the Project view's form are drawn again with the rest, so they are kept here as typed.
-document.addEventListener('input', (event) => {
-	const form = event.target.closest('.pv-form')
-	if (form) state.layout = { ...state.layout, at: form.elements.at.value, change: form.elements.change.value }
-})
+document.addEventListener('input', (event) => home.input(event))
 
 // The lens forms are drawn again with the rest, so the person and the span the reader picked are kept here.
 document.addEventListener('change', (event) => {
+	if (home.change(event)) return
 	const form = event.target.closest('.change-form')
 	if (!form) return
 	state.pick = { author: form.elements.author.value, since: form.elements.since.value }
@@ -1458,7 +1349,7 @@ document.addEventListener('scroll', () => tipFor?.isConnected && showTip(tipFor)
 // back the parts the card keeps lit, which beside a walkthrough are the parts of the step the reader is on.
 let quoteLit = null
 function lightQuote(event) {
-	if (quoteLit) lightPicture(quoteLit, new Set(quoteLit.dataset.lit.split(' ').filter(Boolean).map(Number)))
+	if (quoteLit) atRest(quoteLit)
 	quoteLit = null
 	const quote = event.target.closest?.('.q[data-path]')
 	if (!quote) return
@@ -1483,7 +1374,9 @@ new ResizeObserver(([entry]) => {
 	document.documentElement.style.setProperty('--composer', `${entry.target.offsetHeight}px`)
 }).observe($('#ask'))
 wideQuery.addEventListener('change', render)
-window.addEventListener('resize', () => drawPictures($('#thread')))
+window.addEventListener('resize', () => drawPictures(document.body))
+// The canvas changes width with no change of the window when its scroll bar comes or goes.
+new ResizeObserver(() => drawPictures($('#home-canvas'))).observe($('#home-canvas'))
 darkQuery.addEventListener('change', render)
 setInterval(tick, 1000)
 setInterval(async () => {
@@ -1499,15 +1392,16 @@ try {
 		loadFollowUp(),
 	])
 	state.project = server.project
-	state.named = server.named === true
 	learnParts(server.parts)
 	state.model = server.model
 	if (server.live === true) await loadLive()
 	state.authors = recent.authors
-	const last = state.rows.at(-1)
-	if (last) await openQuestion(last.id)
+	render()
+	await home.start()
 } catch (error) {
-	state.problem = `ken did not answer at this address (${error.message}). Start it again with ken open.`
+	state.home.problem = {
+		message: `ken did not answer at this address (${error.message}). Start it again with ken open.`,
+		field: null,
+	}
 }
 render()
-$(`#turn-${state.thread.length - 1}`)?.scrollIntoView({ block: 'start' })

@@ -349,11 +349,6 @@ html {
 	max-width: calc(44rem + 2 * var(--space-6));
 }
 
-/* The Project view lays its boxes side by side, so it takes a wider column on a wide screen. */
-.page.single.wide-view {
-	max-width: calc(88rem + 2 * var(--space-6));
-}
-
 .chat {
 	display: flex;
 	flex-direction: column;
@@ -364,11 +359,6 @@ html {
 #thread {
 	flex: 1;
 	padding-top: var(--space-5);
-}
-
-/* On the first visit the question box, or the note that there is no model, follows the welcome with no gap. */
-.page.first-visit #thread {
-	flex: none;
 }
 
 .panel {
@@ -395,23 +385,11 @@ html {
 }
 
 .composer-label {
-	display: block;
-	margin-bottom: var(--space-1);
-	font-size: var(--text-note);
-	font-weight: 600;
-}
-
-.page:not(.first-visit) .composer-label {
 	position: absolute;
 	width: 1px;
 	height: 1px;
 	overflow: hidden;
 	clip-path: inset(50%);
-}
-
-.page.first-visit .composer {
-	position: static;
-	border-top: 0;
 }
 
 .composer-row {
@@ -449,16 +427,6 @@ html {
 	min-height: 2.75rem;
 	border-radius: var(--radius-md);
 	padding-inline: var(--space-5);
-}
-
-.composer-hint {
-	margin-top: var(--space-1);
-	color: var(--color-note);
-	font-size: var(--text-note);
-}
-
-.page:not(.first-visit) .composer-hint {
-	display: none;
 }
 
 /* An earlier question, folded to one row */
@@ -1585,60 +1553,6 @@ ul.left-out {
 	color: var(--color-text);
 }
 
-/* First visit */
-.welcome {
-	padding: var(--space-8) 0 var(--space-5);
-}
-
-.welcome h1 {
-	font-size: 2rem;
-	font-weight: 650;
-	line-height: var(--leading-tight);
-	letter-spacing: -0.02em;
-}
-
-.welcome .lead {
-	margin-top: var(--space-4);
-	font-size: var(--text-base);
-}
-
-.welcome-after h2 {
-	margin-top: var(--space-6);
-	font-size: var(--text-md);
-	font-weight: 650;
-}
-
-.starts li {
-	border-bottom: 1px solid var(--color-border);
-}
-
-.starts button {
-	display: block;
-	width: 100%;
-	padding: var(--space-3) 0;
-	border: 0;
-	background: none;
-	color: var(--color-accent);
-	text-align: left;
-	text-decoration: underline;
-	text-decoration-thickness: 1px;
-	text-underline-offset: 0.18em;
-}
-
-.starts button:hover {
-	text-decoration-thickness: 2px;
-}
-
-.limit {
-	margin: var(--space-6) 0 var(--space-7);
-	padding-left: var(--space-4);
-	border-left: 3px solid var(--color-accent);
-}
-
-.limit > * + * {
-	margin-top: var(--space-2);
-}
-
 /* Steps: one plain sentence per thing the agent did, and each answer ken sent back */
 .steps {
 	margin-top: var(--space-3);
@@ -1746,18 +1660,6 @@ ul.left-out {
 	.summary {
 		font-size: 1.0625rem;
 		line-height: 1.55;
-	}
-
-	.composer-hint .keys {
-		display: none;
-	}
-
-	.welcome {
-		padding-top: var(--space-6);
-	}
-
-	.welcome h1 {
-		font-size: 1.625rem;
 	}
 
 	.label-key div,
@@ -1964,22 +1866,19 @@ ul.left-out {
 }
 
 .map-view,
-.decisions-view,
-.project-view {
+.decisions-view {
 	padding: var(--space-7) 0 var(--space-6);
 }
 
 .map-view h1,
-.decisions-view h1,
-.project-view h1 {
+.decisions-view h1 {
 	font-size: 2rem;
 	font-weight: 650;
 	line-height: var(--leading-tight);
 }
 
 .map-view .lead,
-.decisions-view .lead,
-.project-view .lead {
+.decisions-view .lead {
 	margin-top: var(--space-3);
 	max-width: var(--measure);
 }
@@ -2091,14 +1990,12 @@ ul.left-out {
 
 @media (max-width: 1099px) {
 	.map-view,
-	.decisions-view,
-	.project-view {
+	.decisions-view {
 		padding-top: var(--space-5);
 	}
 
 	.map-view h1,
-	.decisions-view h1,
-	.project-view h1 {
+	.decisions-view h1 {
 		font-size: 1.625rem;
 	}
 
@@ -2109,169 +2006,6 @@ ul.left-out {
 	.area-form input {
 		flex: 1 1 9rem;
 	}
-}
-
-/* The Project view: the trail of opened boxes, the form, and the boxes of one level */
-.pv-trail ol {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	gap: var(--space-1) var(--space-2);
-	margin-bottom: var(--space-2);
-	padding: 0;
-	list-style: none;
-	font-size: var(--text-note);
-}
-
-.pv-trail li + li::before {
-	content: "\203A";
-	margin-right: var(--space-2);
-	color: var(--color-note);
-}
-
-.pv-trail [aria-current] {
-	font-weight: 600;
-}
-
-/* Inside a part, the heading carries the part's colour, as its boxes do. */
-.pv-level {
-	display: flex;
-	align-items: center;
-	gap: var(--space-3);
-	font-size: 2rem;
-	font-weight: 700;
-	letter-spacing: -0.02em;
-	line-height: var(--leading-tight);
-}
-
-/* Inside a part, a solid bar in its colour. A hollow square read as a box still to tick. */
-.pv-level:is(.pc-0, .pc-1, .pc-2, .pc-3, .pc-4, .pc-5, .pc-6, .pc-7)::before {
-	content: "";
-	flex: none;
-	align-self: stretch;
-	width: 0.4rem;
-	border-radius: 999px;
-	background: var(--part-line);
-}
-
-.pv-other {
-	margin-top: var(--space-4);
-}
-
-.pv-other-toggle {
-	width: fit-content;
-	min-height: 2.75rem;
-	padding: var(--space-2) 0;
-	color: var(--color-accent);
-	font-size: var(--text-note);
-	font-weight: 600;
-	cursor: pointer;
-}
-
-.pv-other-toggle:hover {
-	text-decoration: underline;
-	text-underline-offset: 0.18em;
-}
-
-.pv-error {
-	max-width: 24rem;
-	color: var(--color-text);
-	font-weight: 600;
-}
-
-.pv-form [aria-invalid="true"] {
-	border: 2px solid var(--color-warn-border);
-}
-
-.pv-form {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: flex-start;
-	gap: var(--space-3);
-	margin-top: var(--space-2);
-	padding: var(--space-4);
-	border: 1px solid var(--color-border);
-	border-radius: var(--radius-md);
-	background: var(--color-card);
-	box-shadow: var(--shadow-sm);
-}
-
-.pv-field {
-	display: flex;
-	flex-direction: column;
-	gap: var(--space-1);
-	min-width: 0;
-	font-size: var(--text-note);
-	font-weight: 600;
-}
-
-.pv-change {
-	flex: 1 1 14rem;
-}
-
-.pv-form input,
-.pv-form select {
-	min-width: 0;
-	min-height: 2.75rem;
-	padding: var(--space-2) var(--space-3);
-	border: 1px solid var(--color-box-border);
-	border-radius: var(--radius-sm);
-	background: var(--color-card);
-	color: var(--color-text);
-	font-size: var(--text-note);
-	font-weight: 400;
-}
-
-.pv-form input {
-	width: 10rem;
-	font-family: var(--font-code);
-}
-
-.pv-form input::placeholder {
-	color: var(--color-note);
-	opacity: 1;
-}
-
-.pv-form .quiet-button {
-	min-height: 2.75rem;
-	margin-top: 1.6rem;
-}
-
-.pv-by {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	gap: var(--space-2) var(--space-4);
-	margin-top: var(--space-3);
-	max-width: var(--measure);
-	color: var(--color-note);
-	font-size: var(--text-note);
-}
-
-.pv-by-line {
-	flex: 1 1 100%;
-}
-
-.pv-stale-line {
-	color: var(--color-text);
-}
-
-.pv-ask {
-	min-height: 2.75rem;
-}
-
-/* Where the reader is: the change laid over the parts, and the commit when it is not the one checked out. */
-.pv-at {
-	margin-top: var(--space-3);
-	max-width: var(--measure);
-}
-
-/* On a narrow screen the boxes stand in one column, and the arrows bend out to its right with their numbers on them.
-   From 760 pixels the boxes are a grid on a dotted canvas, with room between them for the arrows and their verbs.
-   parts-picture.js draws the arrows once the boxes are laid out, and --draw tells it how: 1 for the grid, column for
-   the column. */
-.pv-level-body {
-	margin-top: var(--space-5);
 }
 
 .pv-picture {
@@ -2301,11 +2035,6 @@ ul.left-out {
 	.pv-picture .pv-boxes {
 		grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
 		gap: 7.5rem 9.5rem;
-	}
-
-	/* With no arrows to draw, the boxes need no room between them for lines. */
-	.pv-level-body:not(.has-arrows) .pv-picture .pv-boxes {
-		gap: var(--space-5);
 	}
 
 	.pv-picture .pv-cell {
@@ -2429,9 +2158,7 @@ ul.left-out {
 
 .pv-label.is-open .pv-label-n,
 .pv-label.is-hot .pv-label-n,
-.pv-label:hover .pv-label-n,
-.pv-arrow[aria-expanded="true"] .pv-num,
-.pv-arrow:hover .pv-num {
+.pv-label:hover .pv-label-n {
 	background: var(--color-accent);
 	color: var(--color-card);
 }
@@ -2519,24 +2246,6 @@ button.pv-box:hover {
 	background: var(--part-line);
 }
 
-/* A box that opens says so in the accent colour, as a link does. */
-.pv-inside {
-	color: var(--color-accent);
-	font-size: var(--text-note);
-	font-weight: 600;
-	margin-top: auto;
-	padding-top: var(--space-2);
-}
-
-.pv-inside::after {
-	content: " \2192";
-}
-
-button.pv-box:hover .pv-inside {
-	text-decoration: underline;
-	text-underline-offset: 0.18em;
-}
-
 .pv-job {
 	font-size: var(--text-md);
 	line-height: 1.5;
@@ -2558,109 +2267,13 @@ button.pv-box:hover .pv-inside {
 	font-weight: 600;
 }
 
-.pv-state,
-.pv-touched {
+.pv-state {
 	font-size: var(--text-note);
 	font-weight: 600;
 }
 
-.pv-touched {
-	margin: var(--space-1) 0;
-	padding: var(--space-1) var(--space-2);
-	border-radius: var(--radius-sm);
-	background: var(--color-warn-bg);
-}
-
-.pv-sub {
-	margin-top: var(--space-7);
-	font-size: var(--text-h2);
-	font-weight: 700;
-	letter-spacing: -0.01em;
-	line-height: var(--leading-tight);
-}
-
-.pv-note {
-	margin-top: var(--space-1);
-	max-width: var(--measure);
-	color: var(--color-note);
-	font-size: var(--text-note);
-}
-
-/* The arrows as a list of cards under the picture, two to a row on a wide screen. */
-.pv-arrows {
-	display: grid;
-	grid-template-columns: minmax(0, 1fr);
-	align-items: start;
-	gap: var(--space-2) var(--space-3);
-	margin-top: var(--space-4);
-	padding: 0;
-	list-style: none;
-}
-
-@media (min-width: 1100px) {
-	.pv-arrows {
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-	}
-}
-
-.pv-arrow-item {
-	padding: 0 var(--space-4);
-	border: 1px solid var(--color-border);
-	border-radius: var(--radius-md);
-	background: var(--color-card);
-	box-shadow: var(--shadow-sm);
-}
-
-.pv-arrow-item:has([aria-expanded="true"]) {
-	border-color: var(--color-accent);
-	padding-bottom: var(--space-3);
-}
-
-.pv-arrow {
-	display: flex;
-	align-items: center;
-	gap: var(--space-1) var(--space-3);
-	width: 100%;
-	min-height: 3.25rem;
-	padding: var(--space-2) 0;
-	border: 0;
-	background: none;
-	color: var(--color-text);
-	font: inherit;
-	line-height: 1.8;
-	text-align: left;
-	cursor: pointer;
-}
-
-/* One control opens or closes the line under every arrow. */
-.pv-all {
-	margin-top: var(--space-2);
-	font-size: var(--text-note);
-}
-
-.pv-arrow:focus-visible {
-	outline-width: 2px;
-	outline-offset: 2px;
-}
-
-.pv-arrow-item .q-source {
-	margin-top: var(--space-2);
-}
-
-.pv-more {
-	margin-top: var(--space-5);
-	max-width: var(--measure);
-	color: var(--color-note);
-	font-size: var(--text-note);
-}
-
-.pv-more-toggle {
-	width: fit-content;
-	cursor: pointer;
-}
-
 /* The change card: what a change touched, over the project's top level of parts, at the top of a reply about it. The
-   same picture as the Project view, smaller: the parts the change touched in their colour, the rest faded. */
+   same picture as the home, smaller: the parts the change touched in their colour, the rest faded. */
 .change-card {
 	margin-bottom: var(--space-5);
 	padding: var(--space-5);
@@ -3700,23 +3313,6 @@ q.subject {
 	text-decoration: underline;
 }
 
-/* A tour: the way in from the Project view and the first visit, its stops, and what the map says on each. */
-.pv-tour,
-.welcome-tour {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	gap: var(--space-2) var(--space-4);
-	margin-top: var(--space-4);
-}
-
-.pv-tour-line,
-.welcome-tour-line {
-	flex: 1 1 18rem;
-	color: var(--color-note);
-	font-size: var(--text-note);
-}
-
 .walk-know {
 	display: flex;
 	flex-wrap: wrap;
@@ -3777,7 +3373,7 @@ q.subject {
 }
 
 /* A decision or a topic as a part's box is drawn: its part's colour across the top when it sits in a named part, a
-   firmer edge and shadow than a plain card, so the list reads as the same things the Project view shows. */
+   firmer edge and shadow than a plain card, so the list reads as the same things the home shows. */
 .c-card {
 	--part-fill: var(--color-code-bg);
 	--part-line: var(--color-muted);

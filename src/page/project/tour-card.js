@@ -1,6 +1,6 @@
 // A tour opens on a picture of the level it tours: each part with its stop's number, a mark once the reader reached
 // it, and the stop the reader is on lit. A part opens its stop. Plain code picked the order from the arrows, so the
-// card says once how. The stops sit under the picture, as the steps of a change do, and the picture places the parts as the Project view does.
+// card says once how. The stops sit under the picture, as the steps of a change do, and the picture places the parts as the home does.
 import { count, esc } from '../views/format.js'
 import { partClass } from './part-colours.js'
 import { pictureHtml } from './parts-picture.js'

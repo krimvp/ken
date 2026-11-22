@@ -128,10 +128,11 @@ function crosses(p, q, r, s) {
 // cells are the boxes, each as the HTML inside its list item and the classes of the item. links are the arrows as
 // { from, to, text } box indexes and verb. numbered draws each arrow's number and verb on it, which opens the arrow in
 // the list of arrows; open holds the arrows open there. lit holds the boxes that stay lit when nothing is pointed at,
-// such as the parts of the walkthrough step the reader is on. still keeps the lit boxes lit while the reader points, as
-// beside a walkthrough, where the lit part is always the step the reader is on; it shows only the arrows that touch a
-// lit box, and none while no box is lit.
-export function pictureHtml(cells, links, { numbered, open, lit = new Set(), still = false }) {
+// such as the parts of the walkthrough step the reader is on, and hot the arrows that stay lit with them, when those
+// are not the arrows between two lit boxes. still keeps the lit boxes lit while the reader points, as beside a
+// walkthrough, where the lit part is always the step the reader is on; it shows only the arrows that touch a lit box,
+// and none while no box is lit.
+export function pictureHtml(cells, links, { numbered, open, lit = new Set(), hot = null, still = false }) {
 	const pairs = links.map((link) => [link.from, link.to])
 	const place = placeParts(cells.length, pairs)
 	const column = placeColumn(cells.length, pairs)
@@ -144,7 +145,8 @@ export function pictureHtml(cells, links, { numbered, open, lit = new Set(), sti
 		links.map((link, i) => ({ from: link.from, to: link.to, text: link.text, open: open.has(i) })),
 	)
 	const rest = [...lit].join(' ')
-	return `<div class="pv-picture${lit.size > 0 ? ' is-lit' : ''}" style="--rows:${place.rows};--cols:${place.cols}" data-links="${escAttr(data)}" data-numbered="${numbered}" data-lit="${rest}" data-still="${still}">
+	const hotAtRest = hot === null ? '' : ` data-hot="${[...hot].join(' ')}"`
+	return `<div class="pv-picture${lit.size > 0 ? ' is-lit' : ''}" style="--rows:${place.rows};--cols:${place.cols}" data-links="${escAttr(data)}" data-numbered="${numbered}" data-lit="${rest}"${hotAtRest} data-still="${still}">
 		<ul class="pv-boxes">${items.join('')}</ul>
 	</div>`
 }
@@ -190,7 +192,7 @@ export function drawPictures(root) {
 		picture.prepend(svg)
 		if (picture.dataset.numbered === 'true') placeLabels(picture, links, curves, rects, frame, draw === 'column')
 		if (picture.dataset.still !== 'true') wire(picture, links)
-		lightPicture(picture, restOf(picture))
+		atRest(picture)
 	}
 }
 
@@ -381,9 +383,12 @@ function overlap(a, b) {
 	return x > 0 && y > 0 ? x * y : 0
 }
 
-// The boxes a picture keeps lit when nothing is pointed at.
-function restOf(picture) {
-	return new Set((picture.dataset.lit ?? '').split(' ').filter(Boolean).map(Number))
+const numbers = (text) => new Set((text ?? '').split(' ').filter(Boolean).map(Number))
+
+// Puts back the boxes and arrows a picture keeps lit when nothing is pointed at.
+export function atRest(picture) {
+	const hot = picture.dataset.hot
+	lightPicture(picture, numbers(picture.dataset.lit), hot === undefined ? null : numbers(hot))
 }
 
 // Lights the boxes given and the arrows hot gives, by default those between two of them, or on a still picture those
@@ -420,7 +425,7 @@ function wire(picture, links) {
 		} else if (box >= 0) {
 			const hot = new Set(links.flatMap((link, i) => (link.from === box || link.to === box ? [i] : [])))
 			lightPicture(picture, new Set([box, ...[...hot].flatMap((i) => [links[i].from, links[i].to])]), hot)
-		} else lightPicture(picture, restOf(picture))
+		} else atRest(picture)
 	}
 	picture.addEventListener('pointerover', light)
 	picture.addEventListener('focusin', light)

@@ -1,4 +1,4 @@
-// Each part of the project's top level keeps one colour wherever the page names it: its box in the Project view, the
+// Each part of the project's top level keeps one colour wherever the page names it: its box in the picture on the home, the
 // change card, the list of arrows, and the names under a reply. So a reader who has seen the picture once knows a part
 // by its colour. The colour follows the part's place in the top level. The page learns the top level from the server
 // at start, and again from each top-level look, since naming the parts changes it.

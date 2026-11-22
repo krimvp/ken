@@ -1,6 +1,6 @@
 // A reply about a change opens on a picture of what it touched: the project's top level of parts, each part the change
 // touched marked with its files and lines, and the change's commits. Plain code draws it from git when the page shows
-// the reply, so it needs no quote and cannot be wrong about what changed. A part on it opens the Project view there,
+// the reply, so it needs no quote and cannot be wrong about what changed. A part on it opens the home there,
 // with the same change laid over it. A reply that walks through the change shows its steps beside the picture, and the
 // step the reader is on lights its parts.
 import { count, esc, short } from '../views/format.js'
@@ -11,7 +11,7 @@ import { stepParts, walkHtml } from './walk.js'
 // Commits the card lists before it says how many more there are.
 const SHOWN_COMMITS = 6
 
-// The key the page keeps a change's look under, and the change as the Project view asks for it.
+// The key the page keeps a change's look under, and the change as the home asks the server for it.
 export function changeKey(change) {
 	return `${change.base}..${change.head}`
 }

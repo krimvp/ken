@@ -1,0 +1,1153 @@
+/* The home: the project as a picture, with what ken says about it beside it. On a wide screen the frame fills the
+   window under the header: the toolbar, the canvas and the "Show it another way" bar on the left, and the inspector
+   on the right, each scrolling by itself. Under 1100 pixels they stand in one column and the page scrolls. Every
+   colour comes from tokens.css and the page's own tokens at the top of page.css. */
+.home[hidden],
+.page[hidden],
+.home-inspector[hidden],
+.home-ask[hidden] {
+	display: none;
+}
+
+.home {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) clamp(480px, 44vw, 680px);
+	grid-template-rows: auto minmax(0, 1fr) auto;
+	height: calc(100dvh - var(--top));
+}
+
+/* The brand is the way home. */
+button.brand {
+	padding: 0;
+	border: 0;
+	background: none;
+}
+
+.ask-ken {
+	padding: var(--space-1) var(--space-4);
+	border-radius: 999px;
+	white-space: nowrap;
+}
+
+.back-home {
+	margin-top: var(--space-4);
+	font-size: var(--text-note);
+}
+
+/* The toolbar: two controls, each a group of three buttons with one pressed. */
+.home-toolbar {
+	grid-column: 1 / -1;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-2) var(--space-5);
+	padding: var(--space-2) var(--space-5);
+	border-bottom: 1px solid var(--color-border);
+	background: var(--color-card);
+}
+
+.control {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-1) var(--space-3);
+	min-width: 0;
+}
+
+.control-label {
+	font-size: var(--text-note);
+	font-weight: 650;
+}
+
+.control-note {
+	color: var(--color-note);
+}
+
+.segs {
+	display: flex;
+	gap: 2px;
+	min-width: 0;
+	padding: 3px;
+	border: 1px solid var(--color-box-border);
+	border-radius: var(--radius-md);
+	background: var(--color-code-bg);
+}
+
+.seg {
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	min-width: 0;
+	min-height: 2.75rem;
+	padding: var(--space-1) var(--space-3);
+	border: 1.5px solid transparent;
+	border-radius: 9px;
+	background: none;
+	color: var(--color-note);
+	font-size: var(--text-note);
+	line-height: 1.3;
+	text-align: left;
+}
+
+.seg-text {
+	font-weight: 600;
+	white-space: nowrap;
+}
+
+.seg-fact {
+	max-width: 11.5rem;
+	overflow: hidden;
+	font-size: var(--text-sm);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.seg:hover:not([disabled], [aria-pressed="true"]) {
+	background: var(--color-card);
+	color: var(--color-text);
+}
+
+.seg[aria-pressed="true"] {
+	border-color: var(--color-accent);
+	background: var(--color-card);
+	box-shadow: var(--shadow-sm);
+	color: var(--color-text);
+}
+
+.seg[aria-pressed="true"] .seg-text {
+	color: var(--color-label-text);
+	font-weight: 700;
+}
+
+.seg[disabled] {
+	cursor: default;
+}
+
+/* The canvas: a dotted sheet the picture lies on. Its width, not the window's, decides how the picture is laid out. */
+.home-canvas {
+	grid-column: 1;
+	min-width: 0;
+	overflow: auto;
+	padding: var(--space-4) var(--space-4) var(--space-5);
+	background-color: var(--color-canvas);
+	background-image: radial-gradient(var(--color-dot) 1.2px, transparent 1.4px);
+	background-size: 22px 22px;
+	background-position: 11px 11px;
+	container: canvas / inline-size;
+}
+
+.home-trail ol {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-1) var(--space-2);
+	font-size: var(--text-note);
+}
+
+.home-trail li + li::before {
+	content: "\203A";
+	margin-right: var(--space-2);
+	color: var(--color-note);
+}
+
+.home-trail [aria-current] {
+	font-weight: 600;
+}
+
+.home-level {
+	display: flex;
+	align-items: center;
+	gap: var(--space-3);
+	font-size: 1.375rem;
+	font-weight: 700;
+	letter-spacing: -0.01em;
+	line-height: var(--leading-tight);
+}
+
+/* Inside a part, the heading carries the part's colour as a solid bar, as its boxes do. */
+.home-level:is(.pc-0, .pc-1, .pc-2, .pc-3, .pc-4, .pc-5, .pc-6, .pc-7)::before {
+	content: "";
+	flex: none;
+	align-self: stretch;
+	width: 0.4rem;
+	border-radius: 999px;
+	background: var(--part-line);
+}
+
+.home-why,
+.home-line {
+	margin-top: var(--space-1);
+	max-width: var(--measure);
+	color: var(--color-note);
+	font-size: var(--text-note);
+}
+
+.home-error {
+	color: var(--color-text);
+	font-size: var(--text-note);
+	font-weight: 600;
+}
+
+/* The change picker, and behind one line the commit to look at. */
+.home-picker {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-2) var(--space-4);
+	margin-top: var(--space-3);
+	font-size: var(--text-note);
+}
+
+.home-field {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-2);
+	min-width: 0;
+}
+
+.home-field label {
+	font-weight: 600;
+}
+
+.home-picker select,
+.home-picker input {
+	min-width: 0;
+	max-width: 100%;
+	min-height: 2.5rem;
+	padding: var(--space-1) var(--space-3);
+	border: 1px solid var(--color-box-border);
+	border-radius: var(--radius-sm);
+	background: var(--color-card);
+	color: var(--color-text);
+	font: inherit;
+}
+
+.home-picker select {
+	max-width: 24rem;
+}
+
+.home-picker input {
+	width: 9rem;
+	font-family: var(--font-code);
+}
+
+.home-picker [aria-invalid="true"] {
+	border: 2px solid var(--color-warn-border);
+}
+
+.home-other summary {
+	width: fit-content;
+	color: var(--color-accent);
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.home-other[open] {
+	flex-basis: 100%;
+}
+
+.home-other .home-field {
+	margin-top: var(--space-2);
+}
+
+/* What the marks of a change mean, said once over the picture. */
+.home-key {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-1) var(--space-5);
+	margin-top: var(--space-3);
+	color: var(--color-note);
+	font-size: var(--text-note);
+}
+
+.home-key span {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-2);
+}
+
+.home-key span::before {
+	content: "";
+	width: 0.9rem;
+	height: 0.9rem;
+	border: 2px solid var(--color-warn-border);
+	border-radius: 4px;
+	background: var(--color-card);
+}
+
+.home-key .home-key-faded::before {
+	border: 1px dashed var(--color-muted);
+}
+
+.home-banner {
+	margin-top: var(--space-3);
+	padding: var(--space-2) var(--space-4);
+	border: 1px solid var(--color-accent);
+	border-radius: var(--radius-md);
+	background: var(--color-label-bg);
+	color: var(--color-label-text);
+	font-size: var(--text-note);
+}
+
+.home-loose {
+	margin-top: var(--space-3);
+	max-width: var(--measure);
+	color: var(--color-note);
+	font-size: var(--text-note);
+}
+
+.home-loose summary {
+	width: fit-content;
+	cursor: pointer;
+}
+
+/* The picture in the canvas. The boxes stand in one column with the arrows bent out to its right, as on a phone,
+   until the canvas is wide enough for the grid: parts-picture.js reads --draw to know which. These rules outweigh
+   the ones in page.css that go by the width of the window. */
+.home-picture {
+	margin-top: var(--space-4);
+}
+
+.home .pv-picture {
+	--draw: column;
+	padding: var(--space-2) 5.5rem var(--space-2) 0;
+	border: 0;
+	background: none;
+}
+
+.home .pv-picture .pv-boxes {
+	grid-template-columns: minmax(0, 1fr);
+	gap: var(--space-4);
+}
+
+.home .pv-picture .pv-cell {
+	order: var(--order);
+	grid-row: auto;
+	grid-column: auto;
+}
+
+@container canvas (min-width: 680px) {
+	.home .pv-picture {
+		--draw: 1;
+		padding: var(--space-4) var(--space-2) var(--space-5);
+	}
+
+	.home .pv-picture .pv-boxes {
+		grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
+		gap: 5.5rem 7rem;
+	}
+
+	.home .home-picture:not(.has-arrows) .pv-boxes {
+		gap: var(--space-5);
+	}
+
+	.home .pv-picture .pv-cell {
+		order: 0;
+		grid-row: var(--row);
+		grid-column: var(--col);
+	}
+
+	/* An arrow's verb folds to a narrow column, so it fits between two boxes. */
+	.home .pv-label,
+	.home .pv-label.is-narrow {
+		max-width: 6.75rem;
+	}
+}
+
+.home .pv-box {
+	position: relative;
+	padding: var(--space-3);
+}
+
+.home .pv-job {
+	font-size: var(--text-note);
+	line-height: 1.45;
+}
+
+/* A part the change left alone: no colour, a dashed border, and its words in the note colour. */
+.home .is-faded .pv-box {
+	--part-fill: var(--color-card);
+	--part-ink: var(--color-note);
+	border-style: dashed;
+	border-color: var(--color-box-border);
+	box-shadow: none;
+}
+
+.home .is-faded .pv-name::before {
+	background: var(--color-box-border);
+}
+
+.home .is-faded .pv-job {
+	color: var(--color-note);
+}
+
+/* The part or the step's parts the reader picked: a ring in the accent colour, outside the box's own border. */
+.home .pv-cell.is-chosen .pv-box {
+	outline: 3px solid var(--color-accent);
+	outline-offset: 3px;
+}
+
+.home .pv-box:focus-visible {
+	outline-offset: 6px;
+}
+
+/* A box's stop on the tour, or the steps of the walkthrough that quote its files. */
+.home-badge {
+	position: absolute;
+	top: -0.8rem;
+	right: var(--space-3);
+	padding: 0 0.6em;
+	border: 1px solid var(--color-accent);
+	border-radius: 999px;
+	background: var(--color-label-bg);
+	color: var(--color-label-text);
+	font-size: var(--text-sm);
+	font-weight: 700;
+	line-height: 1.5;
+}
+
+.is-chosen .home-badge {
+	background: var(--color-accent);
+	color: var(--color-card);
+}
+
+.home-touched {
+	font-size: var(--text-note);
+	font-weight: 600;
+}
+
+.home-plus,
+.home-minus {
+	padding: 0 0.35em;
+	border-radius: 4px;
+	font-family: var(--font-code);
+	font-size: var(--text-sm);
+	font-weight: 600;
+}
+
+.home-plus {
+	background: var(--color-add-bg);
+	color: var(--color-add-ink);
+}
+
+.home-minus {
+	background: var(--color-del-bg);
+	color: var(--color-del-ink);
+}
+
+/* A button that starts a run of ken's model: what it does, and under it what the run costs. */
+.run {
+	display: inline-flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-1) var(--space-3);
+}
+
+.run-button,
+.nav-button {
+	display: inline-flex;
+	flex-direction: column;
+	align-items: flex-start;
+	text-align: left;
+	line-height: 1.35;
+}
+
+.run-label {
+	font-size: var(--text-md);
+	font-weight: 700;
+}
+
+.run-cost,
+.nav-way {
+	font-size: var(--text-sm);
+	font-weight: 400;
+}
+
+.run-button[disabled] .run-cost {
+	display: none;
+}
+
+.run-off {
+	flex: 1 1 12rem;
+	color: var(--color-text);
+}
+
+/* "Show it another way", docked under the canvas. */
+.home-redraw {
+	grid-column: 1;
+	padding: var(--space-3) var(--space-5);
+	border-top: 1px solid var(--color-border);
+	background: var(--color-card);
+}
+
+/* The label, the box and the button share one row, and the examples and ken's notes run under it at full width. */
+.redraw-form {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr);
+	align-items: center;
+	column-gap: var(--space-4);
+}
+
+.redraw-body {
+	display: contents;
+}
+
+.redraw-row,
+.redraw-form .home-error {
+	grid-column: 1 / -1;
+}
+
+.redraw-label {
+	font-weight: 700;
+}
+
+.redraw-fold {
+	display: none;
+}
+
+.redraw-ask {
+	display: flex;
+	align-items: stretch;
+	gap: var(--space-3);
+}
+
+.redraw-ask input {
+	flex: 1;
+	min-width: 0;
+	min-height: 2.75rem;
+	padding: var(--space-2) var(--space-4);
+	border: 1px solid var(--color-box-border);
+	border-radius: var(--radius-md);
+	background: var(--color-bg);
+	color: var(--color-text);
+	font: inherit;
+}
+
+.redraw-ask input::placeholder,
+.ask-form textarea::placeholder {
+	color: var(--color-note);
+	opacity: 1;
+}
+
+.redraw-ask .run {
+	flex: none;
+	max-width: 60%;
+}
+
+.redraw-row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-1) var(--space-2);
+	margin-top: var(--space-2);
+	font-size: var(--text-note);
+}
+
+.redraw-said {
+	color: var(--color-note);
+}
+
+.redraw-chip {
+	min-height: 1.875rem;
+	padding: 0 var(--space-3);
+	color: var(--color-text);
+	font-size: var(--text-sm);
+	font-weight: 500;
+}
+
+.note-chip {
+	display: inline-flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: 0 var(--space-3);
+	padding: 2px var(--space-3);
+	border: 1px solid var(--color-warn-border);
+	border-radius: var(--radius-md);
+	background: var(--color-warn-bg);
+}
+
+/* The inspector: its words scroll, and its foot with Back, Next and the legend stays. */
+.home-inspector,
+.home-ask {
+	grid-column: 2;
+	grid-row: 2 / -1;
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	min-height: 0;
+	border-left: 1px solid var(--color-border);
+	background: var(--color-card);
+}
+
+.insp-scroll,
+.ask-scroll {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	padding: var(--space-4) var(--space-5) var(--space-5);
+	overflow-wrap: anywhere;
+}
+
+.insp-scroll > * + * {
+	margin-top: var(--space-3);
+}
+
+.insp-head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-1) var(--space-3);
+	font-size: var(--text-note);
+	font-weight: 600;
+}
+
+.insp-detail {
+	padding: 0 0.6em;
+	border-radius: var(--radius-sm);
+	background: var(--color-label-bg);
+	color: var(--color-label-text);
+}
+
+.insp-head .link {
+	margin-left: auto;
+	font-weight: 400;
+}
+
+.insp-title {
+	width: fit-content;
+	font-size: 1.5rem;
+	font-weight: 700;
+	letter-spacing: -0.015em;
+	line-height: var(--leading-tight);
+}
+
+.insp-title.part-name {
+	white-space: normal;
+}
+
+.insp-lead {
+	font-size: var(--text-base);
+	line-height: 1.55;
+}
+
+.insp-sub {
+	margin-top: var(--space-5);
+	font-size: var(--text-note);
+	font-weight: 700;
+}
+
+.insp-main {
+	display: grid;
+	gap: var(--space-2);
+	justify-items: start;
+}
+
+.insp-stale,
+.insp-known {
+	padding: var(--space-2) var(--space-3);
+	border-radius: var(--radius-sm);
+	background: var(--color-label-bg);
+	color: var(--color-label-text);
+	font-size: var(--text-note);
+}
+
+.insp-stale {
+	display: grid;
+	gap: var(--space-2);
+	justify-items: start;
+	border-left: 3px solid var(--color-warn-border);
+	background: var(--color-warn-bg);
+	color: var(--color-text);
+}
+
+.insp-actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-2);
+	margin-top: var(--space-3);
+}
+
+.insp-more {
+	display: inline;
+}
+
+.insp-more summary {
+	display: inline;
+	color: var(--color-accent);
+	cursor: pointer;
+}
+
+.insp-commits {
+	margin-top: var(--space-1);
+}
+
+.insp-commits li {
+	padding: 2px 0;
+}
+
+/* The parts of a level, one line each: a part's name in its colour, then its job. */
+.insp-parts li {
+	border-top: 1px solid var(--color-border);
+}
+
+.insp-part {
+	display: grid;
+	gap: 2px;
+	justify-items: start;
+	width: 100%;
+	padding: var(--space-2) 0;
+	border: 0;
+	background: none;
+	text-align: left;
+}
+
+.insp-part .part-name {
+	font-weight: 700;
+}
+
+.insp-part:hover .part-name {
+	text-decoration: underline;
+	text-underline-offset: 0.18em;
+}
+
+.insp-part-job {
+	font-size: var(--text-note);
+}
+
+/* A boxed card of what ken read from git, with a tag that says how ken knows it. */
+.fact-card {
+	overflow: hidden;
+	border: 1px solid var(--color-box-border);
+	border-radius: var(--radius-md);
+	background: var(--color-card);
+}
+
+.fact-head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-1) var(--space-3);
+	padding: var(--space-2) var(--space-4);
+	border-bottom: 1px solid var(--color-border);
+	background: var(--color-code-bg);
+	font-size: var(--text-note);
+	font-weight: 700;
+}
+
+.fact-tag {
+	padding: 0 0.6em;
+	border-radius: var(--radius-sm);
+	background: var(--color-add-bg);
+	color: var(--color-add-ink);
+}
+
+.fact-body {
+	padding: var(--space-3) var(--space-4);
+	font-size: var(--text-note);
+}
+
+.fact-body > * + * {
+	margin-top: var(--space-2);
+}
+
+.fact-list {
+	padding-left: 1.1rem;
+	list-style: disc;
+}
+
+.fact-list li + li {
+	margin-top: var(--space-1);
+}
+
+.uses-item + .uses-item {
+	margin-top: var(--space-1);
+}
+
+.uses-row {
+	display: flex;
+	align-items: center;
+	gap: var(--space-3);
+	width: 100%;
+	padding: var(--space-1) 0;
+	border: 0;
+	background: none;
+	line-height: 1.8;
+	text-align: left;
+}
+
+.uses-row[aria-expanded="true"] .pv-num,
+.uses-row:hover .pv-num {
+	background: var(--color-accent);
+}
+
+.uses-item .q-source {
+	border-top: 0;
+	padding-left: 0;
+}
+
+.uses-item .code {
+	border: 1px solid var(--color-border);
+	border-radius: var(--radius-sm);
+	background: var(--color-code-bg);
+}
+
+/* The reading path: every stop or step in order, the one the reader picked open. */
+.path {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	gap: var(--space-2);
+}
+
+.path-step {
+	padding: var(--space-3);
+	border: 1px solid var(--color-border);
+	border-radius: var(--radius-md);
+	scroll-margin: var(--space-3);
+}
+
+.path-step.is-on {
+	border-color: var(--color-accent);
+	box-shadow: 0 0 0 1px var(--color-accent);
+}
+
+.path-head {
+	display: flex;
+	align-items: center;
+	gap: var(--space-3);
+	width: 100%;
+	padding: 0;
+	border: 0;
+	background: none;
+	text-align: left;
+}
+
+.path-n {
+	display: inline-grid;
+	flex: none;
+	place-items: center;
+	width: 1.75rem;
+	height: 1.75rem;
+	border-radius: 50%;
+	background: var(--color-text);
+	color: var(--color-card);
+	font-size: var(--text-sm);
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+}
+
+.path-step.is-on .path-n {
+	background: var(--color-accent);
+}
+
+.path-name {
+	min-width: 0;
+	font-weight: 700;
+}
+
+.path-name.part-name {
+	white-space: normal;
+}
+
+.path-head:hover .path-name {
+	text-decoration: underline;
+	text-underline-offset: 0.18em;
+}
+
+.path-mark {
+	margin-left: auto;
+	color: var(--color-note);
+	font-size: var(--text-note);
+	white-space: nowrap;
+}
+
+.path-body {
+	margin-top: var(--space-2);
+}
+
+.path-body > * + * {
+	margin-top: var(--space-3);
+}
+
+.path-cards .card {
+	margin-top: var(--space-2);
+	padding: var(--space-3);
+}
+
+.path-story {
+	padding: var(--space-3) var(--space-4);
+	border-left: 3px solid var(--color-accent);
+	border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+	background: var(--color-bg);
+}
+
+.path-story .words {
+	margin-top: 0;
+}
+
+.path-story > * + * {
+	margin-top: var(--space-2);
+}
+
+/* A step's diff keeps each line whole and scrolls sideways inside its own box. */
+.path-diff .walk-hunk:first-child {
+	margin-top: 0;
+}
+
+.path-diff .code.diff > code {
+	grid-template-columns: auto auto max-content;
+}
+
+.path-diff .code .lc {
+	padding-left: 0;
+	text-indent: 0;
+	white-space: pre;
+	overflow-wrap: normal;
+}
+
+.insp-foot {
+	padding: var(--space-3) var(--space-5);
+	border-top: 1px solid var(--color-border);
+	background: var(--color-bg);
+}
+
+.insp-nav {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: var(--space-2);
+	margin-bottom: var(--space-2);
+}
+
+.insp-nav > :only-child {
+	grid-column: 1 / -1;
+}
+
+.nav-button {
+	min-width: 0;
+}
+
+.nav-name {
+	max-width: 100%;
+	overflow: hidden;
+	font-size: var(--text-md);
+	font-weight: 700;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.insp-legend {
+	color: var(--color-note);
+	font-size: var(--text-sm);
+	line-height: 1.45;
+}
+
+/* ken's words on a request to show a level another way, and a run that ended with nothing to show. */
+.insp-said {
+	padding: var(--space-3) var(--space-4);
+	border: 1px solid var(--color-accent);
+	border-radius: var(--radius-md);
+	background: var(--color-label-bg);
+}
+
+.insp-said > * + * {
+	margin-top: var(--space-2);
+}
+
+.insp-said .words {
+	margin-top: var(--space-2);
+}
+
+.insp-said-head {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: var(--space-3);
+	font-size: var(--text-note);
+}
+
+.insp-asked {
+	font-weight: 650;
+}
+
+.insp-ended {
+	margin-top: 0;
+	padding: var(--space-4);
+}
+
+.insp-scroll .working {
+	margin-top: var(--space-3);
+}
+
+/* The "Ask ken" drawer, over the inspector. */
+.ask-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-3);
+	padding: var(--space-3) var(--space-5);
+	border-bottom: 1px solid var(--color-border);
+}
+
+.ask-title {
+	font-size: 1.25rem;
+	font-weight: 700;
+}
+
+.ask-rows .row:last-child {
+	border-bottom: 0;
+}
+
+.ask-form {
+	display: grid;
+	gap: var(--space-2);
+	padding: var(--space-3) var(--space-5) var(--space-4);
+	border-top: 1px solid var(--color-border);
+	background: var(--color-bg);
+}
+
+.ask-about {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: var(--space-1) var(--space-3);
+	font-size: var(--text-note);
+}
+
+.ask-label {
+	font-size: var(--text-note);
+	font-weight: 600;
+}
+
+.ask-form textarea {
+	width: 100%;
+	min-height: 5rem;
+	padding: var(--space-2) var(--space-4);
+	border: 1px solid var(--color-box-border);
+	border-radius: var(--radius-md);
+	background: var(--color-card);
+	line-height: 1.5;
+	resize: vertical;
+}
+
+.ask-form .run-button {
+	width: 100%;
+}
+
+/* One column: the toolbar, the picture, "Show it another way" folded to one line, then the inspector. Nothing is
+   pinned, and each control scrolls sideways inside itself before the page ever would. */
+@media (max-width: 1099px) {
+	.home {
+		display: block;
+		height: auto;
+	}
+
+	.home-toolbar {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr);
+		padding: var(--space-2) var(--gutter);
+	}
+
+	.control {
+		display: grid;
+		grid-template-columns: 3.75rem minmax(0, 1fr);
+	}
+
+	.control-note {
+		grid-column: 2;
+	}
+
+	.segs {
+		overflow-x: auto;
+	}
+
+	.seg {
+		flex: 1 0 auto;
+		padding: var(--space-1) var(--space-2);
+	}
+
+	.seg-fact {
+		max-width: 8.5rem;
+	}
+
+	.home-canvas {
+		overflow: visible;
+		padding: var(--space-3) var(--gutter) var(--space-4);
+	}
+
+	.home-redraw {
+		padding: var(--space-3) var(--gutter);
+	}
+
+	.redraw-form,
+	.redraw-body {
+		display: block;
+	}
+
+	.redraw-top {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: var(--space-3);
+	}
+
+	.redraw-fold {
+		display: inline;
+	}
+
+	.redraw-body {
+		margin-top: var(--space-2);
+	}
+
+	.redraw-form:not(.is-open) .redraw-body {
+		display: none;
+	}
+
+	.redraw-ask {
+		flex-direction: column;
+	}
+
+	.redraw-ask .run {
+		max-width: none;
+	}
+
+	.home-inspector {
+		border-top: 1px solid var(--color-border);
+		border-left: 0;
+	}
+
+	.insp-scroll {
+		overflow: visible;
+		padding: var(--space-4) var(--gutter);
+	}
+
+	.insp-title {
+		scroll-margin-top: calc(var(--top) + var(--space-6));
+	}
+
+	.path-step {
+		scroll-margin-top: calc(var(--top) + var(--space-2));
+	}
+
+	.insp-foot {
+		padding: var(--space-3) var(--gutter);
+	}
+
+	/* The drawer covers the page under the header, so the question box is not lost under the inspector. */
+	.home-ask {
+		position: fixed;
+		inset: var(--top) 0 0 0;
+		z-index: 4;
+		border-left: 0;
+	}
+
+	.ask-head,
+	.ask-form {
+		padding-inline: var(--gutter);
+	}
+
+	.ask-scroll {
+		padding-inline: var(--gutter);
+	}
+}

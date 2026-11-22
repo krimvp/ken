@@ -184,16 +184,36 @@ export function knowPartHtml(q, t, step) {
 	return `<p class="walk-know">${said}<button class="quiet-button" data-act="tour-know" data-turn="${t}" data-step="${step.number}" data-key="tour-know-${t}-${step.number}">I know this part</button></p>`
 }
 
-// The cards that prove a step, for the panel. Their quotes open in place, so the panel keeps the step.
-export function stepCardsHtml(q, t, step, ui) {
-	const rows = {
+// How a reply's cards draw their quote rows where no panel shows a quote: each opens in place.
+function rowsInPlace(q, ui) {
+	return {
 		ui: { ...ui, wide: false },
 		commits: manyCommits(q),
 		head: q.head,
 		copies: copiesOf(q),
 		change: q.reply.change,
 	}
+}
+
+// The cards that prove a step, for the panel and the home. Their quotes open in place, so the step stays in view.
+export function stepCardsHtml(q, t, step, ui) {
+	const rows = rowsInPlace(q, ui)
 	return step.cards.map(({ card, j }) => cardHtml(card, t, j, rows)).join('')
+}
+
+// A reply's words and the cards that belong to no step, in the order the model gave them, for the home: no chips,
+// no map buttons, and no checks. t names the reply in the keys of its cards.
+export function storyHtml(q, t, ui) {
+	const rows = rowsInPlace(q, ui)
+	return q.reply.items
+		.map((item, j) =>
+			item.kind === 'words'
+				? wordsHtml(item.text)
+				: item.kind === 'card' && item.step === undefined
+					? cardHtml(item.card, t, j, rows)
+					: '',
+		)
+		.join('')
 }
 
 // The model writes plain text: paragraphs, now and then a list or a block of code. Each becomes its own element, and
@@ -258,7 +278,7 @@ export function arrowItem(arrow) {
 }
 
 // A level of the project's parts that the model named: each part and its job, then each arrow with the lines it rests
-// on. The Project view shows the same level as boxes.
+// on. The home shows the same level as boxes.
 function layoutCardHtml(layout, key, rows) {
 	const where =
 		layout.within.length === 0 ? 'the whole project' : list(layout.within.map((p) => `<code>${esc(p)}</code>`))
@@ -269,7 +289,7 @@ function layoutCardHtml(layout, key, rows) {
 				`<li><p class="card-text">${prose(arrowItem(arrow).text)}</p>${quoteRows(arrow.quotes, `${key}a${n}`, rows)}</li>`,
 		)
 		.join('')
-	return `<p class="card-text"><span class="card-kind">Parts</span> The parts of ${where}, as ken's model named them. ken keeps them for the Project view.</p>
+	return `<p class="card-text"><span class="card-kind">Parts</span> The parts of ${where}, as ken's model named them. ken draws the picture of the project from them.</p>
 		<ul class="layout-parts">${parts}</ul>
 		${arrows === '' ? '' : `<ul class="layout-arrows">${arrows}</ul>`}`
 }
