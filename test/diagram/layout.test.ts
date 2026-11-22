@@ -10,6 +10,7 @@ const { root } = buildRepository([
 		files: {
 			'src/server/serve.ts':
 				"import { answer } from '../agent/answer.ts'\nexport const port = 80\nexport const restored = 1\n// the answers come from\n// ../agent/answer.ts\n",
+			'src/server/paths.h': '#define ANSWER "../agent/answer.ts"\n',
 			'src/agent/answer.ts': "import { save } from '../store/save.ts'\nexport function answer() {}\n",
 			'src/store/save.ts': 'export function save() {}\n',
 			'README.md': '# demo\n',
@@ -54,6 +55,15 @@ test('a layout whose arrow quotes an import line in its from part naming its to 
 		checked.layout.arrows.map((each) => [each.from, each.text, each.to, each.quotes[0]?.startLine]),
 		[['Server', 'asks', 'Chat engine', 1]],
 	)
+})
+
+test('a C preprocessor line such as #define is code, so an arrow may quote it', async () => {
+	const define = { path: 'src/server/paths.h', commit: 'HEAD', text: '#define ANSWER "../agent/answer.ts"' }
+	const checked = await checkLayout(repo, draft({ arrows: [{ ...arrow, quotes: [define] }] }), {
+		where: 'The layout',
+		needsAbout: false,
+	})
+	assert.ok(checked.kind === 'ok', JSON.stringify(checked))
 })
 
 test('each broken rule refuses the layout and names the problem', async () => {
