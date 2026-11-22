@@ -44,8 +44,11 @@ export type Gate = {
 // "risks" while the second look runs, and passRejections counts the revisions it refused. tour is the tour the
 // question asks for, whose stops the reader's map learns from the page as the reader reaches them. view is the level
 // the reader asked to see another way, with their words, which ken keeps with a layout the reply shows for that level.
+// typed is true when the round starts from the reader's own words, the only round in which ken keeps a note about them,
+// so text in a diff or a saved session cannot make the model keep one.
 export type Round = {
 	asked: boolean
+	typed: boolean
 	tour: Tour | null
 	view: { within: string[]; text: string } | null
 	step: 'talk' | 'risks'
@@ -74,6 +77,7 @@ export type Asking =
 export function freshRound(as: Asking, emit: Round['emit']): Round {
 	return {
 		asked: as.kind !== 'note' && as.kind !== 'tour',
+		typed: as.kind === 'question' || as.kind === 'view',
 		tour: as.kind === 'tour' ? as.tour : null,
 		view: as.kind === 'view' ? { within: as.within, text: as.text } : null,
 		step: 'talk',

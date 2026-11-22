@@ -2,9 +2,10 @@
 // already know. It goes to the reader's own notes, never to the project record, and the reader sees it and can remove it.
 import type { Tool } from 'aigent/plugin'
 import type { ReaderNotes } from '../../map/index.ts'
+import type { Round } from '../reply/show-tool.ts'
 import { readArgs, refuse, reply } from './tool-edge.ts'
 
-export function rememberTool(notes: ReaderNotes): Tool {
+export function rememberTool(notes: ReaderNotes, round: () => Round): Tool {
 	return {
 		name: 'remember',
 		description:
@@ -22,6 +23,7 @@ export function rememberTool(notes: ReaderNotes): Tool {
 			additionalProperties: false,
 		},
 		async execute(args) {
+			if (!round().typed) return refuse('ken keeps a note only when the reader asks in their own words.')
 			const kept = await notes.add(readArgs(args, 'remember').text('note'), new Date())
 			if (kept.kind === 'refused') return refuse(kept.problem)
 			return reply(

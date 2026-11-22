@@ -114,7 +114,7 @@ export async function startChat(options: {
 					diffTool(repo, elsewhere),
 					recordTool(store, repo),
 					...sessionTools(sessions),
-					...(reader ? [rememberTool(reader.notes)] : []),
+					...(reader ? [rememberTool(reader.notes, () => round)] : []),
 					showTool(gate, () => round),
 					reviseTool(gate, () => round),
 				].map(withTurnsLeft),
