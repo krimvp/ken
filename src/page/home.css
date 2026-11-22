@@ -316,6 +316,11 @@ button.brand {
 	background: none;
 }
 
+/* With no arrows to bend out, the column of boxes takes the whole width. */
+.home .home-picture:not(.has-arrows) .pv-picture {
+	padding-right: 0;
+}
+
 .home .pv-picture .pv-boxes {
 	grid-template-columns: minmax(0, 1fr);
 	gap: var(--space-4);
@@ -348,10 +353,14 @@ button.brand {
 		grid-column: var(--col);
 	}
 
-	/* An arrow's verb folds to a narrow column, so it fits between two boxes. */
-	.home .pv-label,
+	/* An arrow's verb folds to a narrow column, so it fits between two boxes, and a long word breaks inside it. */
+	.home .pv-label {
+		max-width: 8.5rem;
+	}
+
 	.home .pv-label.is-narrow {
-		max-width: 6.75rem;
+		max-width: 7.25rem;
+		overflow-wrap: break-word;
 	}
 }
 
