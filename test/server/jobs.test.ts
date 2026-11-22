@@ -128,6 +128,16 @@ test("ken explains each part by itself in tour order; a part the reader presses 
 		'ken took the parts in tour order, one at a time',
 	)
 
+	const looking = await json(server, '/api/jobs', { looking: { brief: 'part::Command', within: [] } })
+	assert.deepEqual(
+		looking.jobs.map((job: Job & { rank: number }) => [job.key, job.rank]),
+		[
+			['explain:part::Core', 4],
+			['explain:part::Command', 2],
+		],
+		'the part whose brief the reader opened is nearer than the rest of the level behind the drawer',
+	)
+
 	const pressed = await ask(server, { lens: { kind: 'explain', within: [], part: 'Command' } })
 	assert.match(pressed.find((line) => line.kind === 'asked').question, /^Explain Command, a part of this project/)
 	assert.equal(pressed.at(-1).kind, 'saved')

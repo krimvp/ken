@@ -145,6 +145,10 @@ export function questionDesk(
 				say(line)
 			}
 			await run(chat, asked.text, signal, sent, asked.as)
+			// A run can end without making its thing, such as a brief whose every point was sent back.
+			if (work.layer !== null && !signal.aborted && !(await plan.fresh(job.key))) {
+				throw new Error("ken's model ran, but made nothing that passed ken's checks.")
+			}
 		},
 		fresh: async ({ key, work }) => work.kind === 'ask' && work.layer !== null && (await plan.fresh(key)),
 		rankOf: ({ concept, work }) =>

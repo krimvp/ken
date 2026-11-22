@@ -7,6 +7,13 @@ import { count, esc, prose } from '../views/format.js'
 
 // What the run that names the parts costs the reader, said before it starts and while it runs.
 const NAMING_TAKES = 'a few minutes'
+// The job of the server's queue that names the parts of the top level.
+const NAMING_JOB = 'parts:'
+
+const jobLineClock = (job) => {
+	const acts = job.state.actions === 1 ? '1 action' : `${job.state.actions} actions`
+	return `<span class="k-job-clock k-num" data-since="${job.state.startedAt}">${Math.round((Date.now() - job.state.startedAt) / 1000)} s so far</span>, ${acts}`
+}
 const SHOWN_LANGUAGES = 4
 const SHOWN_ENTRIES = 4
 const DAY = 86_400_000
@@ -77,13 +84,23 @@ const endedLine = (ended) =>
 		? ' You stopped the last run.'
 		: ` The last run named nothing${ended.error ? `: ${esc(ended.error)}` : '.'}`
 
-// What ken does next, by the state of the run that names the parts.
+// What ken does next, by the state of the run that names the parts: one the reader pressed, or the job ken started by
+// itself when the project was first opened.
 function nextHtml({ look, env, home }) {
 	const run = env.running?.onHome
+	const reading = '<b>ken is reading the project to name its main parts and draw how it works.</b>'
 	if (run?.kind === 'name') {
 		const tools = env.running.q.steps.filter((step) => step.kind === 'tool').length
-		const by = run.auto ? ' ken started this by itself, since you opened the project for the first time.' : ''
-		return `<div class="k-first-next is-running" role="status"><span class="k-spin" aria-hidden="true"></span><p><b>ken is reading the project to name its main parts and draw how it works.</b> That takes ${NAMING_TAKES}. <span class="k-clock k-num">${Math.round(env.seconds)} s so far, ${count(tools, 'action', 'actions')}</span>.${by} You can use the pages meanwhile.</p><button class="k-btn is-quiet" data-act="stop" data-key="first-stop">Stop</button></div>`
+		return `<div class="k-first-next is-running" role="status"><span class="k-spin" aria-hidden="true"></span><p>${reading} That takes ${NAMING_TAKES}. <span class="k-clock k-num">${Math.round(env.seconds)} s so far, ${count(tools, 'action', 'actions')}</span>. You can use the pages meanwhile.</p><button class="k-btn is-quiet" data-act="stop" data-key="first-stop">Stop</button></div>`
+	}
+	const job = env.jobs?.find((each) => each.key === NAMING_JOB && ['waiting', 'running'].includes(each.state.kind))
+	if (job) {
+		const stop = `<button class="k-btn is-quiet" data-act="job-stop" data-job="${NAMING_JOB}" data-key="first-stop">Stop</button>`
+		const when =
+			job.state.kind === 'running'
+				? `That takes ${NAMING_TAKES}. ${jobLineClock(job)}.`
+				: `It starts when the run ahead of it ends.`
+		return `<div class="k-first-next is-running" role="status"><span class="k-spin" aria-hidden="true"></span><p>${reading} ${when} ken started this by itself, since you opened the project for the first time. You can use the pages meanwhile.</p>${stop}</div>`
 	}
 	if (env.model?.kind !== 'ok') {
 		const example = env.model?.example
