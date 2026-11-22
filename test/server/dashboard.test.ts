@@ -247,6 +247,54 @@ test('a level the reader asks to see another way is stored with their own words 
 	const { look } = await json(server, '/api/layout?within=src')
 	assert.deepEqual(names(look), ['Front', 'Store'])
 	assert.equal(look.named.asked, words)
+	const [row] = (await json(server, '/api/questions')).questions
+	assert.deepEqual(row.view, { within: ['src'], asked: words, drew: 'parts' })
+})
+
+test('a level the reader asks to see as a flow is answered with a diagram, which the reply keeps with their words and its row says it drew', async () => {
+	const { root } = buildRepository([
+		{
+			message: 'feat: start',
+			files: {
+				'src/server/serve.ts': "import { answer } from '../agent/answer.ts'\nexport const reply = answer()\n",
+				'src/agent/answer.ts': 'export function answer() {\n\treturn 42\n}\n',
+			},
+		},
+	])
+	const quote = (path: string, text: string) => ({ path, commit: 'HEAD', text })
+	const diagram = {
+		kind: 'sequence',
+		title: 'One request from the server to the answer',
+		label: 'inferred',
+		participants: [{ name: 'Server' }, { name: 'Agent' }],
+		messages: [
+			{
+				from: 'Server',
+				to: 'Agent',
+				text: 'asks for an answer',
+				quotes: [quote('src/server/serve.ts', 'export const reply = answer()')],
+			},
+			{ from: 'Agent', to: 'Server', text: 'returns 42', quotes: [quote('src/agent/answer.ts', '\treturn 42')] },
+		],
+	}
+	const model = await scriptedModel([
+		{ tool: 'ken__show', text: 'The server asks the agent, which answers.', args: { diagrams: [diagram] } },
+		{ text: '' },
+	])
+	const server = await openKen(root, readerHome(), model.baseUrl)
+	const asked = 'Follow one request through the code'
+
+	const lines = await ask(server, { lens: { kind: 'view', text: asked, within: [], name: null } })
+	const replied = lines.find((line) => line.kind === 'replied')
+	const cards = replied.reply.items.filter((item: { kind: string }) => item.kind === 'card')
+	assert.deepEqual(
+		cards.map((item: { card: { kind: string } }) => item.card.kind),
+		['diagram'],
+		'the diagram passed its check',
+	)
+	assert.deepEqual(replied.reply.view, { within: [], asked })
+	const [row] = (await json(server, '/api/questions')).questions
+	assert.deepEqual(row.view, { within: [], asked, drew: 'diagram' })
 })
 
 test('a note the model keeps when the reader says how they want things shown is listed for the reader and starts each later question, until the reader removes it', async () => {

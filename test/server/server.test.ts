@@ -216,6 +216,7 @@ test('a question streams its steps, the words and the cards in order, a diagram 
 			tour: null,
 			change: { base, head },
 			steps: 0,
+			view: null,
 		},
 	])
 	const reopened = await json(later, `/api/questions/${saved.entry.id}`)
