@@ -100,6 +100,23 @@ export function gitRepository(root: string, options: { alternate?: string } = {}
 			return { kind: 'ok', commits: parseLog(run.stdout) }
 		},
 
+		async lastCommitBy(head, email, signal) {
+			// git matches the author as "Name <email>", so the brackets keep a longer email from matching.
+			const args = [
+				'log',
+				'-1',
+				'-z',
+				'--fixed-strings',
+				'--regexp-ignore-case',
+				`--author=<${email}>`,
+				LOG_FORMAT,
+				head,
+			]
+			const run = await git(args, signal)
+			if (run.kind === 'failed') throw new Error(`git log failed on a resolved commit: ${run.stderr}`)
+			return run.kind === 'ok' ? (parseLog(run.stdout)[0] ?? null) : null
+		},
+
 		async message(commit, signal) {
 			const run = await git(['log', '-1', '--no-color', '--format=%B', commit], signal)
 			if (run.kind === 'too-large') return tooLarge

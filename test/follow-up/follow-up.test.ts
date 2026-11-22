@@ -292,3 +292,25 @@ test("the spans for catching up start at the reader's last question when it was 
 		'the last question was asked at a commit this history does not have, as after a rebase',
 	)
 })
+
+test("the span since the reader's own last commit finds a commit that came in through a merge, with their email in any case", async () => {
+	const decoy = { name: 'Not Ada', email: `x${OWNER.email}` }
+	const { root, hashes } = buildRepository([
+		{ message: 'feat: start', files: { 'a.txt': 'a\n' } },
+		{ message: 'feat: b', files: { 'b.txt': 'b\n' }, author: COLLABORATOR },
+		{
+			message: 'feat: c',
+			files: { 'c.txt': 'c\n' },
+			author: { ...OWNER, email: OWNER.email.toUpperCase() },
+			parent: 0,
+		},
+		{ message: 'Merge c', files: {}, author: COLLABORATOR, parent: 1, merge: 2 },
+		{ message: 'feat: d', files: { 'd.txt': 'd\n' }, author: decoy },
+	])
+	const [, , own, , head] = hashes
+	const choices = await sinceChoices(gitRepository(root), [], new Date('2026-11-16T12:00:00Z'))
+	assert.deepEqual(
+		choices.map(({ anchor, choice }) => [anchor, choice.change]),
+		[['commit', `${own}..${head}`]],
+	)
+})

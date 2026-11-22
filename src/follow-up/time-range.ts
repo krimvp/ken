@@ -85,9 +85,6 @@ export type Landed = { choice: SinceChoice; anchor: Anchor; landed: string; shor
 export type Anchor = 'question' | 'commit' | 'days'
 
 const SPANS_DAYS = [7, 30, 90]
-// shortcut: the reader's last commit is looked for among this many of the newest commits on HEAD's main line. Walk
-// further if a reader ever misses one.
-const MAX_WALK = 200
 
 // The spans that hold at least one commit, in this order: since the reader's last question, since their own last
 // commit, then the last 7, 30 and 90 days, without a span that holds the same commits as one before it. asked is the
@@ -117,11 +114,8 @@ export async function sinceChoices(
 
 	const question = await lastAskedBefore(repo, asked, head, signal)
 	if (question) await since('question', 'your last question to ken', question.askedAt, question.head)
-	const [email, line] = await Promise.all([repo.userEmail(signal), repo.mainLine(head, MAX_WALK, signal)])
-	const own =
-		email === null || line.kind !== 'ok'
-			? undefined
-			: line.commits.find((commit) => commit.email.toLowerCase() === email.toLowerCase())
+	const email = await repo.userEmail(signal)
+	const own = email === null ? null : await repo.lastCommitBy(head, email, signal)
 	if (own && own.hash !== head) await since('commit', 'your last commit', own.date, own.hash)
 	const bases = new Set(spans.map((span) => span.base))
 	for (const days of SPANS_DAYS) {

@@ -78,6 +78,9 @@ export interface Repository {
 	// The email of the person who runs ken in this repository, from git config. Null when none is set.
 	userEmail(signal?: AbortSignal): Promise<string | null>
 	log(range: Range, signal?: AbortSignal): Promise<{ kind: 'ok'; commits: Commit[] } | TooLarge>
+	// The newest commit head reaches whose author has this email, whatever its case. Merged branches count. Null when
+	// there is none.
+	lastCommitBy(head: CommitHash, email: string, signal?: AbortSignal): Promise<Commit | null>
 	// The whole message of one commit as its author wrote it: the subject, then the body.
 	message(commit: CommitHash, signal?: AbortSignal): Promise<{ kind: 'ok'; text: string } | TooLarge>
 	// The newest commits on head's main line, newest first: head, its first parent, that one's first parent, and so on.
