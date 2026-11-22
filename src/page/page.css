@@ -3313,3 +3313,38 @@ q.subject {
 		padding: 0 var(--space-1) var(--space-2);
 	}
 }
+
+/* A button that starts a run of ken's model: what it does, and under it what the run costs. */
+.run {
+	display: inline-flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-1) var(--space-3);
+}
+
+.run-button {
+	display: inline-flex;
+	flex-direction: column;
+	align-items: flex-start;
+	text-align: left;
+	line-height: 1.35;
+}
+
+.run-label {
+	font-size: var(--text-md);
+	font-weight: 700;
+}
+
+.run-cost {
+	font-size: var(--text-sm);
+	font-weight: 400;
+}
+
+.run-button[disabled] .run-cost {
+	display: none;
+}
+
+.run-off {
+	flex: 1 1 12rem;
+	color: var(--color-text);
+}

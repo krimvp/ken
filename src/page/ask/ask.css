@@ -1,0 +1,73 @@
+/* The "Ask ken" drawer: it opens on the right like a brief, and covers the page on a phone. */
+.k-ask-title {
+	flex: 1;
+	margin: 0;
+	font-size: 20px;
+}
+
+.k-ask-body {
+	display: grid;
+	align-content: start;
+	gap: 12px;
+}
+
+.k-ask-sugs,
+.k-ask-rows {
+	display: grid;
+	gap: 6px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.k .k-ask-sug,
+.k .k-ask-row {
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+	width: 100%;
+	min-height: 44px;
+	padding: 10px 12px;
+	border-radius: 14px;
+	background: var(--k-sunk);
+	text-align: left;
+}
+
+.k .k-ask-sug:hover,
+.k .k-ask-row:hover {
+	box-shadow: inset 0 0 0 2px var(--k-ink);
+}
+
+.k .k-ask-sug > span,
+.k .k-ask-row {
+	display: grid;
+	gap: 2px;
+}
+
+.k .k-ask-row > span,
+.k .k-ask-sug > span > span {
+	color: var(--k-muted);
+	font-size: 14px;
+}
+
+.k-ask-form {
+	display: grid;
+	gap: 8px;
+	margin-top: 8px;
+}
+
+.k-ask-form textarea {
+	min-height: 96px;
+	padding: 10px 12px;
+	border: 1px solid var(--k-line);
+	border-radius: 12px;
+	background: var(--k-surface);
+	color: var(--k-ink);
+	font: inherit;
+	resize: vertical;
+}
+
+.k-ask-earlier {
+	justify-self: start;
+	min-height: 44px;
+}

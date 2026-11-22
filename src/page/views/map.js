@@ -1,8 +1,8 @@
 // The reader's understanding map on the page: the line under an answer that says which topics its buttons update, the
-// line that says ken hid the cards of a topic the reader knows, and the "Your map" view. ken works out each topic's state from the map
+// line that says ken hid the cards of a topic the reader knows. ken works out each topic's state from the map
 // file and the code at HEAD; the page only shows it.
 import { partClass } from '../project/part-colours.js'
-import { day, esc, list, RUN_COST, WHO, withCost } from './format.js'
+import { day, esc, list, RUN_COST, WHO } from './format.js'
 
 // A map line holds a day and no time: "on 16 Nov", or "earlier today". Its twin is onDay in src/follow-up/when.ts.
 export function onDay(date) {
@@ -13,20 +13,6 @@ export function onDay(date) {
 function sinceDay(date) {
 	const said = day(date)
 	return said === 'today' ? 'earlier today' : said
-}
-
-const DEPTH = {
-	'heard-of': 'You have heard of it.',
-	'can-follow': 'You can follow it.',
-	'could-change': 'You could change it.',
-}
-const EVIDENCE = {
-	asked: 'You asked about it',
-	read: 'You said an answer was too much',
-	said: 'You said you know this',
-	wrote: 'You wrote it by hand',
-	forgot: 'You said you do not know it any more',
-	toured: 'You met it on a tour of the project',
 }
 
 export function linesText(lines) {
@@ -99,65 +85,6 @@ export function mapBarHtml(q, t, ui, running) {
 		<p>Tell ken how well you know ${named} now.</p>
 		<p class="map-buttons-line">${button('know', 'I know it', 'Later replies hide its cards until its code changes.')} <span aria-hidden="true">·</span> ${button('too-much', 'Too much detail', 'The next reply on it is shorter.')} <span aria-hidden="true">·</span> ${button('deeper', 'Go deeper', `Asks for more detail. ${RUN_COST}`, running)}</p>
 		${said}
-	</section>`
-}
-
-const STATE = {
-	'never-met': 'Not met yet',
-	met: 'Not understood yet',
-	unchanged: 'Unchanged since you understood it',
-	changed: 'Changed since you understood it',
-	'long-ago': 'Understood a while ago',
-}
-
-// Each topic has the buttons that fit its state: a changed one those of "Waiting on you", an understood one a way to
-// say the reader no longer knows it, and one not understood yet "I know this".
-function topicHtml(t, canAsk) {
-	const how =
-		t.kind === 'never-met' ? '' : `${DEPTH[t.entry.depth]} ${EVIDENCE[t.entry.evidence]} ${onDay(t.entry.date)}.`
-	const changed = t.changed?.length > 0
-	const lines = changed ? `<p class="t-lines">Changed: ${linesText(t.changed)}</p>` : ''
-	const topic = esc(t.topic)
-	const button = (act, text) =>
-		`<button class="quiet-button" data-act="${act}" data-topic="${topic}" data-key="${act}-${topic}">${text}</button>`
-	const understood = t.kind === 'unchanged' || t.kind === 'changed' || t.kind === 'long-ago'
-	// The button that runs ken's model comes last, so its cost ends the row.
-	const buttons = [
-		...(changed ? [button('map-topic-know', 'I know this change')] : []),
-		...(understood ? [button('map-topic-forgot', 'I do not know this any more')] : []),
-		...(understood ? [] : [button('map-topic-know', 'I know this')]),
-		...(changed && canAsk ? [withCost(button('explain-topic', 'Explain what changed'))] : []),
-	]
-	return `<li class="t-row c-card t-${t.kind} ${partClass(t.topic)}">
-		<p class="t-head"><span class="t-name part-name ${partClass(t.topic)}">${topic}</span> <span class="t-state">${STATE[t.kind]}</span></p>
-		<p class="t-how small">${how}</p>
-		${lines}
-		<div class="map-buttons">${buttons.join('')}</div>
-	</li>`
-}
-
-// The "Your map" view: every topic the reader has met, the newest first, then the ones they have not, and the file.
-// said is the line that says what the last button saved.
-export function mapViewHtml(map, canAsk, said) {
-	if (!map) return '<section class="map-view"><h1>Your map</h1><p class="muted">Reading your map.</p></section>'
-	const met = map.states.filter((t) => t.kind !== 'never-met')
-	met.sort((a, b) => (a.entry.date < b.entry.date ? 1 : a.entry.date > b.entry.date ? -1 : 0))
-	const unmet = map.states.filter((t) => t.kind === 'never-met')
-	const problems =
-		map.problems.length === 0
-			? ''
-			: `<div class="notice" role="status"><h3>ken skipped ${map.problems.length === 1 ? 'a line' : `${map.problems.length} lines`}</h3><ul>${map.problems.map((p) => `<li>${esc(p)}</li>`).join('')}</ul></div>`
-	return `<section class="map-view">
-		<h1>Your map</h1>
-		<p class="lead">What ken thinks you understand in this project, topic by topic. When a topic's code changes, ken says so here, whoever changed it.</p>
-		${said ? `<p class="map-said" role="status">${esc(said)}</p>` : ''}
-		${met.length === 0 ? '<p class="t-empty">You have not met any topic yet. Ask how a part of the project works, then press "I know this" under the answer.</p>' : `<ul class="t-list">${met.map((t) => topicHtml(t, canAsk)).join('')}</ul>`}
-		${unmet.length === 0 ? '' : `<p class="t-unmet"><strong>Not met yet:</strong> ${list(unmet.map((t) => esc(t.topic)))}.</p>`}
-		${problems}
-		<details class="map-foot small">
-			<summary class="map-foot-toggle">Where ken keeps your map</summary>
-			<p class="map-foot-text muted">The map is a plain file on this computer, outside the project: <code>${esc(map.file)}</code>. Each button adds a line to it, and you can add one by hand: ken reads the newest line for each topic. Run <code>ken map</code> in a terminal to see each topic's id and an example line.</p>
-		</details>
 	</section>`
 }
 

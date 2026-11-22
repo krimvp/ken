@@ -3,13 +3,24 @@
 // it. A layer changes what the block says under its name, never where it stands. Nothing a block says rests on
 // colour alone: a level is a mark and its words, a change is a count, and a block that steps back says why.
 import { partId } from '../brief/concept-id.js'
-import { isFile, stateLine } from '../home/canvas/part-box.js'
 import { KNOWN, levelLabel } from '../level/level-state.js'
 import { icon, levelMark, partIcon } from '../shell/icons.js'
 import { count, esc, prose } from '../views/format.js'
 
 // A block is a file where git lists the level and the box holds that one file. A part ken's model named is a part,
 // also when one file is all it holds.
+// A box that is one file and nothing else.
+const isFile = (box) => box.files === 1 && box.paths.length === 1 && box.paths[0].split('/').at(-1) === box.name
+
+// At the commit checked out now, a named part says whether it changed since ken's model named it. At an older commit,
+// every block says whether it was different then from now.
+function stateLine(box, look) {
+	if (box.state === 'gone') return '<span class="k-blk-state">Not there at this commit</span>'
+	if (box.state !== 'changed') return ''
+	const said = look.at === look.head ? "Changed since ken's model named these parts" : 'Different then from now'
+	return `<span class="k-blk-state">${said}</span>`
+}
+
 export const isFileBlock = (box, look) => !look.named && isFile(box)
 
 // The icon of a block: the part's own, or a file or a folder where nobody named the parts.
@@ -62,7 +73,7 @@ export function blockHtml(box, i, at, view) {
 		: file
 			? `<span class="k-mono">${esc(box.paths[0])}</span>`
 			: `${count(box.files, 'file', 'files')} in ${esc(box.paths.slice(0, 2).join(', '))}${box.paths.length > 2 ? ` and ${box.paths.length - 2} more` : ''}`
-	const state = stateLine(box, look).replace('pv-state', 'k-blk-state')
+	const state = stateLine(box, look)
 	const known = KNOWN.indexOf(box.knows.level) / (KNOWN.length - 1)
 	const inside = box.opens
 		? `<button class="k-blk-in" data-act="arch-inside" data-index="${i}" data-key="blk-in-${i}" aria-label="Go inside ${esc(box.name)}" title="Go inside">${icon('inside')}</button>`

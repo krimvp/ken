@@ -31,6 +31,11 @@ export function railHtml({ on, askOpen, settingsOpen }) {
 		</div>`
 }
 
+// On a phone the rail holds the five pages along the foot, and "Ask ken" and the settings move up into the bar.
+export function barActsHtml({ askOpen, settingsOpen }) {
+	return `<button class="k-icon-btn" data-act="ask-open" data-key="bar-ask" aria-label="Ask ken" aria-expanded="${askOpen}">${icon('ask')}</button><button class="k-icon-btn" data-act="settings" data-key="bar-settings" aria-label="Settings" aria-expanded="${settingsOpen}">${icon('settings')}</button>`
+}
+
 export function barTitle({ page, view, project }) {
 	if (OVER_NAMES[view]) return OVER_NAMES[view]
 	return page === 'home' ? (project ?? 'ken') : PAGE_NAMES[page]

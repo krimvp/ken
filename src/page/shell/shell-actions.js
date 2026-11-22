@@ -4,12 +4,11 @@
 // view from before the pages: Processes the drawn pictures, Changes the home with "Catch up" and "Review a change",
 // and You the reader's map.
 import { partId, readConcept } from '../brief/concept-id.js'
-import { askDrawerHtml } from '../home/inspector/ask-drawer.js'
 import { learnParts } from '../project/part-colours.js'
 import { startPageHtml } from '../start/start.js'
 import { fill } from './fill.js'
 import { readPlace, writePlace } from './place.js'
-import { barTitle, findConcepts, foundHtml, railHtml, settingsHtml } from './shell.js'
+import { barActsHtml, barTitle, findConcepts, foundHtml, railHtml, settingsHtml } from './shell.js'
 
 const narrow = matchMedia('(max-width: 760px)')
 
@@ -155,7 +154,7 @@ export function shellActions(app) {
 		const { home } = state
 		fill(
 			$('#rail'),
-			railHtml({ on: over ? null : shell.page, askOpen: home.askOpen, settingsOpen: shell.settingsOpen }),
+			railHtml({ on: over ? null : shell.page, askOpen: state.ask.open, settingsOpen: shell.settingsOpen }),
 		)
 		const title = barTitle({ page: shell.page, view: state.view, project: state.project?.name })
 		// A narrow window has no room for the whole sentence in the box. Its label says it all the same.
@@ -201,9 +200,8 @@ export function shellActions(app) {
 		const own = home.reader?.file ? home.reader.file.slice(0, home.reader.file.lastIndexOf('/')) : null
 		fill(settings, shell.settingsOpen ? settingsHtml(shell.prefs, { project: state.project?.folder, own }) : '')
 
-		const ask = $('#home-ask')
-		ask.hidden = !home.askOpen
-		if (fill(ask, home.askOpen ? askDrawerHtml(home, env) : '') && home.askOpen) $('#ask-text').value = home.askText
+		fill($('#bar-acts'), barActsHtml({ askOpen: state.ask.open, settingsOpen: shell.settingsOpen }))
+		app.ask.draw(env)
 
 		app.brief.draw(env)
 		address()
@@ -222,6 +220,16 @@ export function shellActions(app) {
 		state.chg.tab = 'changes'
 		render()
 		await app.chg.enter(item.go.change ?? null)
+		render()
+	}
+
+	// A tab of the Changes page: what waits on the reader with the decisions, or live mode.
+	async function goTab(tab) {
+		state.chg.tab = tab
+		state.view = state.base = 'home'
+		if (shell.page !== 'changes') return goPage('changes')
+		render()
+		await app.chg.enter()
 		render()
 	}
 
@@ -245,7 +253,7 @@ export function shellActions(app) {
 		settings() {
 			shell.settingsOpen = !shell.settingsOpen
 			render()
-			$(shell.settingsOpen ? '#settings-title' : '[data-key="settings"]')?.focus()
+			$(shell.settingsOpen ? '#settings-title' : '[data-key="settings"], [data-key="bar-settings"]')?.focus()
 		},
 		'pref-text'(el) {
 			app.prefs.setText(el.dataset.text)
@@ -314,7 +322,7 @@ export function shellActions(app) {
 		const { brief, home } = state
 		if (closeSettings()) return true
 		if (shell.page === 'you' && app.you.closeFix()) return true
-		if (home.askOpen) return Boolean(app.home.actions['ask-close']()) || true
+		if (app.ask.close()) return true
 		if (brief.fixing) return Boolean(app.brief.actions['brief-fix']()) || true
 		if (app.arch.closeDraw()) return true
 		if (app.brief.close()) return true
@@ -336,6 +344,7 @@ export function shellActions(app) {
 		start,
 		back,
 		goPage,
+		goTab,
 		draw,
 		reread,
 		input,
