@@ -143,6 +143,18 @@ test("ken suggests catching up on what landed since the reader's own last commit
 	assert.match(wayIn.why, /\b1 commit\b/)
 })
 
+test('the review fact names a GitHub merge by its pull request number, not by the branch it came from', async () => {
+	const { root } = buildRepository([
+		{ message: 'feat: start', files: { 'src/a/x.ts': 'x\n' } },
+		{ message: 'feat: y', files: { 'src/a/y.ts': 'y\n' }, parent: 0 },
+		{ message: 'Merge pull request #107 from someone/a-long-branch-name', files: {}, parent: 0, merge: 1 },
+	])
+	const server = await openKen(root, readerHome())
+	const { review } = (await json(server, '/api/layout')).wayIn.facts
+	assert.ok(review.includes('pull request #107'), review)
+	assert.ok(!review.includes('someone'), review)
+})
+
 test('on a branch ahead of main ken suggests review, and says which branch and how many commits', async () => {
 	const { root } = buildRepository([{ message: 'feat: start', files: { 'src/a/x.ts': 'x\n' } }])
 	execFileSync('git', ['checkout', '--quiet', '-b', 'feature-x'], { cwd: root })

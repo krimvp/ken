@@ -74,6 +74,8 @@ async function newestOnMainLine(repo: Repository, head: Change['range']['head'])
 	const merge = commits.find((commit) => commit.parents.length > 1)
 	const newest = merge ?? commits[0]
 	if (!newest) return null
+	const pull = merge && /^Merge pull request (#\d+) from \S+$/.exec(merge.subject)
+	if (pull) return `Newest merge: pull request ${pull[1]}`
 	const subject =
 		newest.subject.length > SUBJECT_CHARS ? `${newest.subject.slice(0, SUBJECT_CHARS - 3)}...` : newest.subject
 	return `Newest ${merge ? 'merge' : 'commit'}: ${subject}`
