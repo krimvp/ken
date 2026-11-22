@@ -12,7 +12,10 @@ export type Turn =
 	  ) & { held?: Promise<unknown> })
 	| { hang: () => void }
 
-export type ChatRequest = { messages: { role: string; content: unknown }[] }
+export type ChatRequest = {
+	messages: { role: string; content: unknown }[]
+	tools: { function: { name: string; parameters: { properties: Record<string, unknown> } } }[]
+}
 
 // Each reply reports this usage, so a test can check the sum over a question.
 export const USAGE_PER_REPLY = { prompt_tokens: 100, completion_tokens: 10 }

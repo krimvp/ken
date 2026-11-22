@@ -72,6 +72,17 @@ const HOW_LABELS = {
 export const howLabel = (crossing) => HOW_LABELS[crossing.how] ?? crossing.text
 
 const hasLanes = (thing) => thing?.kind === 'store' && thing.topics.length > 0
+// An event names its bus at an end, or belongs to the only bus with its topic. When two buses carry the same
+// topic, a direct event between parts gives no evidence for choosing one.
+export function eventBus(things, crossing) {
+	if (crossing.kind !== 'event') return null
+	const buses = things.filter(hasLanes)
+	const end = buses.find((bus) => bus.id === crossing.from || bus.id === crossing.to)
+	if (end) return end
+	const matches = buses.filter((bus) => bus.topics.includes(crossing.topic))
+	return matches.length === 1 ? matches[0] : null
+}
+
 const meets = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
 
 // Things that share a name prefix, or a store none of the others use, fold into one block per frame.
@@ -240,13 +251,7 @@ function placedOf(views, folded, { framesShareRows, wrap, narrow }) {
 		else if (!solos.has(thing.frame)) seconds.set(thing.id, firsts.get(thing.part))
 	}
 
-	// The bus an event travels on: the store with lanes at one of its ends, or the one that lists its topic.
-	const buses = drawn.things.filter(hasLanes)
-	const busOf = (crossing) => {
-		if (crossing.kind !== 'event') return null
-		const end = [crossing.from, crossing.to].map((id) => thingOf.get(id)).find(hasLanes)
-		return end ?? buses.find((bus) => bus.topics.includes(crossing.topic)) ?? null
-	}
+	const busOf = (crossing) => eventBus(drawn.things, crossing)
 	// The things a thing meets: the other end of each of its lines, and for a bus every thing on it.
 	const metOf = (thing) =>
 		drawn.crossings.flatMap((c) => {

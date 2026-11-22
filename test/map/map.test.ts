@@ -167,6 +167,13 @@ test('ken keeps a reader note on one line, once whatever its case and spaces, re
 	const read = await texts()
 	assert.deepEqual([read.length, read[0], read.at(-1)], [12, 'Note 2.', 'Note 13.'])
 
+	await notes.add('Note 1.', NOW, 'reader')
+	const promoted = (await notes.read()).at(-1)
+	assert.equal(promoted?.text, 'Note 1.', 'a note outside the latest twelve becomes active again')
+	await notes.remove(promoted?.id ?? '', NOW)
+	for (const note of await notes.read()) await notes.remove(note.id, NOW)
+	assert.ok(!(await texts()).includes('Note 1.'), 'removing the promoted note removes its earlier copy too')
+
 	await notes.add('Show the tests\r\nfirst,\u2028 then   the code.', NOW)
 	assert.equal(
 		(await texts()).at(-1),

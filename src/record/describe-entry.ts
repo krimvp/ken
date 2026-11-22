@@ -2,7 +2,7 @@ import type { VerifiedQuote } from '../checks/index.ts'
 import { diagramElements } from '../diagram/index.ts'
 import type { Repository } from '../repo/index.ts'
 import { decisionWork } from './decision-work.ts'
-import type { Decision, RecordEntry } from './entry.ts'
+import type { Decision, Note, RecordEntry, Topic } from './entry.ts'
 import type { RecordRead } from './file-record-store.ts'
 import { noteFreshness } from './note-freshness.ts'
 
@@ -98,17 +98,19 @@ export async function describeEntry(
 				lines.push('note: none')
 				break
 			}
-			const freshness = await noteFreshness(repo, entry, note, signal)
-			const state =
-				freshness.kind === 'fresh'
-					? 'fresh: the quoted code is unchanged at HEAD'
-					: `stale: the quoted code changed at HEAD in ${freshness.changed.join(', ')}`
-			lines.push(`note ${note.id}, ${state}:`, note.text)
+			lines.push(await checkedNote(repo, entry, note, signal))
 			break
 		}
-		case 'note':
-			lines.push(`code hash ${entry.codeHash}`, entry.text)
+		case 'note': {
+			const topic = record.entries.find((other) => other.id === entry.topic)
+			lines.push(
+				`code hash ${entry.codeHash}`,
+				topic?.kind === 'topic'
+					? await checkedNote(repo, topic, entry, signal)
+					: `The topic is missing. ken cannot check whether this note still holds.\n${entry.text}`,
+			)
 			break
+		}
 		case 'layout':
 			lines.push(`named at ${entry.drawnAt}`)
 			for (const part of entry.parts) {
@@ -122,6 +124,15 @@ export async function describeEntry(
 			return entry satisfies never
 	}
 	return lines.join('\n')
+}
+
+async function checkedNote(repo: Repository, topic: Topic, note: Note & { id: string }, signal?: AbortSignal) {
+	const freshness = await noteFreshness(repo, topic, note, signal)
+	const state =
+		freshness.kind === 'fresh'
+			? 'fresh: the quoted code is unchanged at HEAD'
+			: `stale: the quoted code changed at HEAD in ${freshness.changed.join(', ')}`
+	return `note ${note.id}, ${state}:\n${note.text}`
 }
 
 // Which of the two kinds of recorded decision this is, so a reader can tell a logged one from a quoted message.

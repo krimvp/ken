@@ -126,6 +126,7 @@ export function shellActions(app) {
 		state.view = state.base = 'home'
 		Object.assign(home, { trail: place.trail, change: place.change, selected: null, shown: null, at: '' })
 		if (place.brief !== brief.id) {
+			if (place.brief) app.briefs.reopen(place.brief)
 			const at = brief.trail.findIndex((step) => step.id === place.brief)
 			const step = { id: place.brief, name: readConcept(place.brief ?? '')?.name ?? '' }
 			Object.assign(brief, {
@@ -244,6 +245,7 @@ export function shellActions(app) {
 	// "Start here" and its chips go where the server says: a part to read opens as a brief on the canvas, and a
 	// change opens on the Changes page with that change laid over the parts.
 	async function follow(item, opener) {
+		if (item.kind === 'decision') return goTab('decisions')
 		if (item.go.way === 'learn') {
 			await goPage('architecture')
 			return item.go.part ? app.brief.show(partId([], item.go.part), { opener }) : null
@@ -301,6 +303,7 @@ export function shellActions(app) {
 		},
 		'pref-text'(el) {
 			app.prefs.setText(el.dataset.text)
+			state.arch.format = null
 			render()
 		},
 		'pref-theme'(el) {

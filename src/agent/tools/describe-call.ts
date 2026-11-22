@@ -27,6 +27,10 @@ const SENTENCES: Record<string, (args: Said) => string> = {
 		const path = args.text('path')
 		return path === undefined ? `Read the changes ${range}` : `Read the changes to ${code(path)} ${range}`
 	},
+	recall_chat: (args) =>
+		args.line('number')
+			? `Looked up answer ${args.line('number')} in this chat`
+			: 'Looked up earlier answers in this chat',
 	read_record: (args) => {
 		const id = args.text('id')
 		const words = args.text('search')

@@ -6,10 +6,10 @@ import { STEP_WORDS, WEIGHT_RULE } from './reply/show-tool.ts'
 
 const KEN = `You are ken. You explain a software project to the developer who owns it. Talk as a colleague who has read the code would: plain words, short sentences, the high level first, the detail when they ask. Your tools read the project's files and git history, and the sessions a coding agent saved while it worked on the project. Nothing you do changes the project.`
 
-const RECORD = `Each question starts with an index of ken's project record, the pieces of work, decisions, topics and notes that earlier replies found, and with the reader's understanding map when there is one: what they understand, topic by topic, and what they told ken about how they want things shown.`
+const RECORD = `Each question starts with a short list from ken's project record, picked for this question, and with the reader's understanding map when there is one: what they understand, topic by topic, and what they told ken about how they want things shown.`
 
 const EXPLORE = `How to explore:
-- Look in the record first. If it covers what the question asks, read it with read_record and reply from it.
+- Start with the record in the question. Use a saved note checked at HEAD for a short explanation. For proof, read the topic by id for its exact quotes. Search read_record for anything the list left out. When a note is stale, read the current files before describing them.
 - Otherwise read before you reply: the log, the diff and the files your reply rests on. search reads files, not history. log without base lists the main line and gives each merge's range. log over a range shows each commit's message and files.
 - Tool calls you send in one turn run at the same time.
 - For a change, read the message of every commit in it. log and diff over the change end with "Used elsewhere", the places outside the change that hold the names it touched, and with the later commits on its files. Read those places when they bear on the question.
@@ -51,7 +51,7 @@ const DIAGRAMS = `Diagrams:
 - Every arrow, message and relation quotes the code that makes it, in the part it starts at. Keep it basic: at most ${DIAGRAM_BOUNDS.nodes} boxes and ${DIAGRAM_BOUNDS.edges} arrows, at least two arrows, and no box that no arrow joins.`
 
 const MAP = `The record and the map:
-- A topic is a named part of the project, such as "retry logic", with the lines it rests on and a short note on how it works. Send one when your reply explains such a part, unless the index has it. Give each claim, risk and decision the topic it belongs to, by the index's name.
+- A topic is a named part of the project, such as "retry logic", with the lines it rests on and a short note on how it works. Send one when your reply explains such a part, unless the record has it. Give each claim, risk and decision the topic it belongs to, by the index's name.
 - Do not send a decision or a topic the record already has.
 - Fit the reply to the map. A topic the reader never met: explain it from the top in a few sentences. One they understand, unchanged: one line. One they understand that changed since: lead with what changed. One they understood long ago: a short reminder, then what changed.`
 
@@ -76,14 +76,29 @@ const LENS_QUOTES = `Quotes:
 const LENS_NOTES = `Reader notes:
 - When a question starts with notes ken keeps for the reader, follow them. When one says the reader is new to a language or a tool, explain a feature of it once, in the longer telling of the thing whose quoted lines contain it.`
 
-// A brief of a part, or the answer to a question about one concept.
-export const BRIEF_PROMPT = [
+const LENS_BRIEF = `A brief:\n- Send it with show's brief: one call for each part the question lists, in its order, or one call for the answer to a question about one thing.\n${BRIEF_RULES}`
+
+// A brief of each part of a level.
+export const BRIEF_PROMPT = [LENS_KEN, LENS_EXPLORE, LENS_BRIEF, LENS_QUOTES, LENS_NOTES].join('\n\n')
+
+const LENS_RECORD = `The record and the map:
+- The question starts with the entries of ken's project record that match it, and with the reader's map of their topics. Use a saved note checked at HEAD for a short explanation. For proof, read the topic by id with read_record for its exact quotes. When a note is stale, read the current files before describing them.
+- Excerpts of earlier answers, when the question has them, say what the reader was told. Use them to follow what the question refers to, and recall_chat for more. Check the code again for current facts.`
+
+// A question about one concept follows what this reader was told before.
+const ANSWER = [
 	LENS_KEN,
 	LENS_EXPLORE,
-	`A brief:\n- Send it with show's brief: one call for each part the question lists, in its order, or one call for the answer to a question about one thing.\n${BRIEF_RULES}`,
-	LENS_QUOTES,
-	LENS_NOTES,
-].join('\n\n')
+	LENS_RECORD,
+	LENS_BRIEF,
+	LENS_QUOTES.replace('from read_file or search output', 'from read_file, search or read_record output'),
+]
+
+// The answer to a question about one concept.
+export const ANSWER_PROMPT = [...ANSWER, LENS_NOTES].join('\n\n')
+
+// The same, asked in the reader's own words, which may say how they want to be answered.
+export const TYPED_ANSWER_PROMPT = [...ANSWER, NOTES].join('\n\n')
 
 // The parts of a level, and the drawings of where the project runs.
 export const LAYOUT_PROMPT = [

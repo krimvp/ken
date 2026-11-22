@@ -367,7 +367,7 @@ export function explainQuestion(level: ExplainLevel): LensQuestion {
 			...(uses.length > 0 ? [`- How the parts use each other: ${uses.join('; ')}.`] : []),
 			'',
 			`Read the code at HEAD (${level.head}) first. For each part, find what its user calls and follow that call to its end: what comes in, each step in order, and what goes out. Then send one show call for each part above, in that order, with brief: the part's number and what follows.`,
-			PICTURES,
+			BRIEF_STYLE,
 			'line: one sentence on what the part does for whoever uses it. Start with what it does, not with the part that uses it.',
 			`points: ${bounds.fewestPoints} to ${bounds.points} things to know, the ones a maintainer would tell a newcomer first. The first is the main path through the part: what comes in, the steps it takes, and what goes out. The others are what the part refuses, what it keeps, and the one choice in its design. ${pointRule(bounds)}`,
 			...pointRules(level),
@@ -387,7 +387,14 @@ export function explainQuestion(level: ExplainLevel): LensQuestion {
 export type AnswerAbout = {
 	asked: string
 	head: string
-	about: { kind: string; name: string; line: string; paths: string[]; told: string[] }
+	about: {
+		kind: string
+		name: string
+		line: string
+		paths: string[]
+		told: string[]
+		knows: { why: string; since: number } | null
+	}
 	bounds: ExplainLevel['bounds']
 	drawings: Record<string, string>
 }
@@ -400,10 +407,14 @@ export function answerQuestion(question: AnswerAbout): LensQuestion {
 			question.asked,
 			LIST_SAID,
 			`- You ask this about the ${about.kind} ${about.name}${places}${about.line ? `: ${about.line}` : '.'}`,
+			...(about.knows
+				? [`- Your map: ${about.knows.why}${about.knows.since ? ' The code has changed since you looked.' : ''}`]
+				: []),
 			...(about.told.length > 0 ? [`- Its brief already says: ${about.told.join(' ')}`] : []),
 			'',
 			`Read the code at HEAD (${question.head}) that decides the answer. Then answer with one show call, with brief: number 1 and what follows.`,
-			PICTURES,
+			BRIEF_STYLE,
+			"Start at the depth the question asks for. Use the reader's map to decide which terms need an introduction. Opening a part or its code alone does not show understanding.",
 			'line: the answer in one sentence.',
 			`points: ${bounds.fewestPoints} to ${bounds.points} things to know that make up the answer, in the order they happen when the answer is a run of events. ${pointRule(bounds)}`,
 			...pointRules(question),
@@ -418,8 +429,8 @@ export function answerQuestion(question: AnswerAbout): LensQuestion {
 }
 
 // What every brief is told, whoever asks for it, so a part's brief and an answer read alike.
-const PICTURES =
-	'I think in pictures. I read a brief beside a picture of the parts: each thing to know is a short line with a small drawing, and I open the longer telling when I want words. Write short, literal words: the short word, the active verb, the name the code uses. No figure of speech.'
+const BRIEF_STYLE =
+	"Follow the reader's choice of pictures and words. Each point needs a short line, a drawing and a fuller explanation, so the reader can change how much they see. Use short, literal words and the names the code uses."
 
 const pointRule = (bounds: ExplainLevel['bounds']) =>
 	`One idea each. Give each a line of at most ${bounds.lineWords} words that is a whole sentence; more, one sentence that says it in full; long, two or three sentences; a drawing; and quotes.`

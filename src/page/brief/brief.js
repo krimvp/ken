@@ -164,17 +164,24 @@ function pointHtml(point, i, ui) {
 	</li>`
 }
 
-// What stands in place of the things to know while ken's model has said nothing of the concept.
-function unexplainedHtml(brief, env, ui) {
+// The reader can ask for a first explanation or update one whose evidence changed.
+function explainHtml(brief, env, ui) {
 	const run = env.running?.onHome
 	if (run?.kind === 'explain' && run.concept === brief.id) return workingHtml(run, env)
 	const what = brief.kind === 'question' ? 'answered this' : 'explained this'
 	if (!brief.explain) {
 		return `<div class="k-unexplained"><p>ken's model has not ${what} yet.</p></div>`
 	}
-	const does = brief.kind === 'question' ? 'Ask ken to answer it' : 'Ask ken to explain it'
+	const status = brief.staleFiles
+		? `ken could not match the saved quotes to the current code in ${brief.staleFiles.join(', ')}.`
+		: `ken's model has not ${what} yet. What is here comes from git.`
+	const does = brief.staleFiles
+		? 'Update this brief'
+		: brief.kind === 'question'
+			? 'Ask ken to answer it'
+			: 'Ask ken to explain it'
 	return `<div class="k-unexplained">
-		<p>ken's model has not ${what} yet. What is here comes from git.</p>
+		<p>${esc(status)}</p>
 		<button class="k-btn is-big k-run-btn" data-act="brief-explain" data-key="brief-explain"${env.off ? ' disabled' : ''}><span>${does}</span><small>${RUN_COST}</small></button>
 		${env.off ? `<p class="k-muted">${esc(env.off)}</p>` : ''}
 		${ui.problem ? `<p class="k-ask-problem" role="alert">${esc(ui.problem)}</p>` : ''}
@@ -237,6 +244,7 @@ function mainHtml(brief, { ui, env, prefs, look, views, inner, runtime }) {
 			<span class="k-seg k-text-seg" role="group" aria-label="How much text">${texts.join('')}</span>
 		</div>
 		<h2 class="k-brief-name" id="brief-name" tabindex="-1"><span class="k-sw"></span><span>${prose(brief.name)}</span></h2>
+		${brief.staleFiles ? explainHtml(brief, env, ui) : ''}
 		<p class="k-brief-line">${prose(brief.line)}</p>
 		${brief.note ? `<p class="k-brief-note"><span class="k-eyebrow">What the record says it means</span>${prose(brief.note)}</p>` : ''}
 		${about}
@@ -247,7 +255,7 @@ function mainHtml(brief, { ui, env, prefs, look, views, inner, runtime }) {
 				: pictureHtml(brief, look)
 		}
 		${brief.html ?? ''}
-		${brief.explained ? '' : unexplainedHtml(brief, env, ui)}
+		${brief.explained || brief.staleFiles ? '' : explainHtml(brief, env, ui)}
 		${fromGitHtml(brief, inner)}
 		${points}
 		${steps}
@@ -320,7 +328,7 @@ function questionsHtml(brief, { ui, env }) {
 		${working}
 		<form class="k-askbox" id="brief-ask-form" autocomplete="off">
 			<label class="k-eyebrow" for="brief-ask-text">Ask your own</label>
-			<div><input id="brief-ask-text" name="text" data-key="brief-ask-text" maxlength="300" placeholder="A question about ${esc(brief.name)}" /><button class="k-btn" type="submit" data-key="brief-ask-send"${env.off ? ' disabled' : ''}>Ask ken</button></div>
+			<div><input id="brief-ask-text" name="text" data-key="brief-ask-text" maxlength="4000" placeholder="A question about ${esc(brief.name)}" /><button class="k-btn" type="submit" data-key="brief-ask-send"${env.off ? ' disabled' : ''}>Ask ken</button></div>
 			<p class="k-muted">${env.off ? esc(env.off) : RUN_COST}</p>
 			${ui.problem ? `<p class="k-ask-problem" role="alert">${esc(ui.problem)}</p>` : ''}
 		</form>`

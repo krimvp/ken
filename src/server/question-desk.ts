@@ -47,8 +47,6 @@ const MAX_QUESTION_CHARS = 4000
 const MAX_TOPICS = 20
 // How much of a note's words the next question about it quotes back.
 const NOTE_CHARS = 400
-// A question about a concept is one line the page lists under the concept.
-const ASKED_CHARS = 300
 
 // One row in the page's list of questions. cards counts the checked cards of the reply, calls the decisions the model
 // wants the reader to decide, and risks its risks. hunks is null when the reply was not about a range of commits.
@@ -250,7 +248,8 @@ export function questionDesk(
 
 	// In the order the answer names them. A topic the record no longer has is left out.
 	async function topicsOf(names: string[]): Promise<TopicState[]> {
-		const { states } = await map.read(new Date())
+		if (names.length === 0) return []
+		const { states } = await map.read(new Date(), undefined, { names })
 		return names.flatMap((name) => states.find((state) => sameName(state.topic, name)) ?? [])
 	}
 
@@ -447,28 +446,34 @@ export function questionDesk(
 		if (kind === 'answer') {
 			const said = fieldOf(lens, 'text')
 			const text = typeof said === 'string' ? oneLine(said) : ''
-			if (text === '' || text.length > ASKED_CHARS) {
-				return { kind: 'refused', problem: `Ask the question in 1 to ${ASKED_CHARS} characters.` }
+			if (text === '' || text.length > MAX_QUESTION_CHARS) {
+				return { kind: 'refused', problem: `Ask the question in 1 to ${MAX_QUESTION_CHARS} characters.` }
 			}
 			const concept = fieldOf(lens, 'concept')
 			const about = typeof concept === 'string' ? await concepts.brief(concept, new Date()) : null
 			const head = await headNow()
 			if (!about || head === null) return { kind: 'refused', problem: 'ken has no such concept here to ask about.' }
-			const paths = about.kind === 'part' ? (about.deeper?.within.split(',') ?? []) : []
+			// A brief whose quotes changed points at the changed files, so the answer reads them again.
+			const paths = about.staleFiles ?? about.deeper?.within.split(',') ?? []
 			const asked = answerQuestion({
 				asked: text,
 				head,
 				about: {
 					kind: about.kind,
 					name: about.name,
-					line: about.line,
+					knows: about.knows,
+					line: about.staleFiles ? '' : about.line,
 					paths,
-					told: about.points.map((point) => point.line),
+					told: about.staleFiles ? [] : about.points.map((point) => point.line),
 				},
 				bounds: BRIEF_BOUNDS,
 				drawings: DRAWINGS,
 			})
-			return { kind: 'ok', text: asked.text, as: { kind: 'answer', concept: about.id, text, paths } }
+			return {
+				kind: 'ok',
+				text: asked.text,
+				as: { kind: 'answer', concept: about.id, text, paths, typed: fieldOf(lens, 'typed') === true },
+			}
 		}
 		if (kind === 'change') {
 			const asked = fieldOf(lens, 'change')

@@ -1,5 +1,5 @@
 import { onDay } from '../../follow-up/index.ts'
-import { kenHome } from '../../history/index.ts'
+import { type History, kenHome, openHistory } from '../../history/index.ts'
 import { type Knows, LEVELS, lookAtLayout, readLayoutAsk } from '../../layout/index.ts'
 import {
 	type MapRead,
@@ -48,22 +48,31 @@ export async function printMap(directory: string, json: boolean): Promise<number
 export async function mapOf(
 	directory: string,
 ): Promise<
-	| { kind: 'ok'; map: UnderstandingMap; notes: ReaderNotes; prefs: ReaderPrefs; root: string }
+	| { kind: 'ok'; map: UnderstandingMap; notes: ReaderNotes; prefs: ReaderPrefs; history: History; root: string }
 	| { kind: 'refused'; message: string }
 > {
 	const found = await findRoot(directory)
 	if (found.kind !== 'ok') return { kind: 'refused', message: `${directory} is not inside a git repository.` }
 	const repo = gitRepository(found.root)
 	const home = kenHome(process.env)
-	const [opened, notes, prefs] = await Promise.all([
-		openMap(home, repo, fileRecordStore(found.root, repo)),
+	const record = fileRecordStore(found.root, repo)
+	const [opened, notes, prefs, history] = await Promise.all([
+		openMap(home, repo, record),
 		openNotes(home, repo),
 		openPrefs(home, repo),
+		openHistory(home, repo, record),
 	])
-	if (opened.kind !== 'ok' || notes.kind !== 'ok' || prefs.kind !== 'ok') {
+	if (opened.kind !== 'ok' || notes.kind !== 'ok' || prefs.kind !== 'ok' || history.kind !== 'ok') {
 		return { kind: 'refused', message: `${found.root} has no commits yet.` }
 	}
-	return { kind: 'ok', map: opened.map, notes: notes.notes, prefs: prefs.prefs, root: found.root }
+	return {
+		kind: 'ok',
+		map: opened.map,
+		notes: notes.notes,
+		prefs: prefs.prefs,
+		history: history.history,
+		root: found.root,
+	}
 }
 
 function mapText(file: string, { states }: MapRead): string {
