@@ -100,7 +100,6 @@ const model = await scriptedModel([
 	brief(4, 'Runs the core the way the command does.', {
 		points: [point({ line: 'The test calls run.', file: 'test/run.test.ts', quoted: 'run()' })],
 	}),
-	{ text: 'That is the whole project.' },
 	// Later, the reader asks for the store alone.
 	brief(1, 'Holds the one function that saves.', {
 		points: [
@@ -221,7 +220,11 @@ test('a thing to know that quotes only a comment goes back to the model, and one
 		brief(1, 'Runs the work.', {
 			points: [point({ line: 'The core runs the work.', file: 'src/core/run.ts', quoted })],
 		})
-	const scripted = await scriptedModel([told(comment), told(`${comment}\nexport function run() {`), { text: '' }])
+	const scripted = await scriptedModel([
+		told(comment),
+		told(`${comment}\nexport function run() {`),
+		{ text: 'A turn that only closes the run.' },
+	])
 	const again = await openKen(root, readerHome(), scripted.baseUrl)
 	const said = await ask(again, { lens: { kind: 'explain', within: [], part: 'Core' } })
 
@@ -236,6 +239,7 @@ test('a thing to know that quotes only a comment goes back to the model, and one
 		[`${comment}\nexport function run() {`],
 		'the reader sees the one point that quotes code',
 	)
+	assert.equal(scripted.requests.length, 2, 'a brief with a point sent back is asked for again, then the run ends')
 })
 
 test('briefs the model sends in one turn reach the reader in the order of the parts, each followed by its own things to know and terms', async () => {
@@ -279,7 +283,6 @@ test('asked to explain the whole level once one part is explained, the model is 
 		brief(1, 'Runs the work.', {
 			points: [point({ line: 'The core runs the work.', file: 'src/core/run.ts', quoted: 'export function run() {' })],
 		}),
-		{ text: '' },
 		{ text: '' },
 	])
 	const again = await openKen(root, readerHome(), scripted.baseUrl)

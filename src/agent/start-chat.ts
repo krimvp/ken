@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { createSession, type RunResult } from 'aigent'
-import type { Tool } from 'aigent/plugin'
+import type { Tool, ToolOutcome } from 'aigent/plugin'
 import { followedNames, usedElsewhere } from '../checks/index.ts'
 import type { ReaderNotes, ReaderPrefs, UnderstandingMap } from '../map/index.ts'
 import { fileRecordStore } from '../record/index.ts'
@@ -149,6 +149,7 @@ export async function startChat(options: {
 		// A turn that shows cards again after ken sent one back mostly says so: "sending it again without them". Its words
 		// wait. A later turn that writes words makes them a step; else they are the reply's, before that turn's cards.
 		let sentBackBefore = 0
+		let endedOnShow = false
 		let retry: { text: string; at: number } | null = null
 		const settleRetry = (as: 'step' | 'reply') => {
 			if (!retry) return
@@ -183,7 +184,14 @@ export async function startChat(options: {
 					if (filed.kind === 'item') current.items.push(filed.item)
 					events.push(filed)
 				}
+				const passed = current.sentBack === sentBackBefore && calls.every(({ outcome }) => accepted(outcome))
 				sentBackBefore = current.sentBack
+				// A brief's question says to write nothing after the briefs, so once each has passed, the turn that would
+				// only close the run is not asked for. aigent ends a run at a stop that comes as its turn ends.
+				if (showOnly && passed && current.step === 'talk' && briefsDone(current)) {
+					endedOnShow = true
+					stops.talk.abort()
+				}
 				// aigent stops the first step at its turns; the second look has fewer, so ken stops it.
 				if (current.step === 'risks' && turnsEnded >= STEPS.risks.turns) stops.risks.abort()
 			}
@@ -203,7 +211,9 @@ export async function startChat(options: {
 				.catch((error: unknown): RunResult => ({ stop: 'error', message: String(error), turns: 0 }))
 		const talk = async () => {
 			if (as.kind === 'change') events.push(await changeNamed(repo, as.range, signal))
-			const result = await prompt(`${index}${known}\n\nThe question: ${question}`, stops.talk)
+			const ran = await prompt(`${index}${known}\n\nThe question: ${question}`, stops.talk)
+			const result: RunResult =
+				endedOnShow && ran.stop === 'aborted' ? { stop: 'done', text: '', turns: ran.turns } : ran
 			settleRetry('reply')
 			let secondLook: Cost | null = null
 			const { scope } = current
@@ -261,6 +271,18 @@ export async function startChat(options: {
 	}
 
 	return { kind: 'ok', chat: { root: found.root, thread: randomUUID(), ask, close: () => session.close() } }
+}
+
+function accepted(outcome: ToolOutcome): boolean {
+	return outcome.kind === 'ran' && !outcome.result.isError
+}
+
+// Every brief the question asks for has been shown: one for each part of a tour, or the one that answers a question.
+function briefsDone(round: Round): boolean {
+	const wanted = round.tour ? round.tour.stops.length : round.answers ? 1 : 0
+	if (wanted === 0) return false
+	const shown = new Set(round.items.flatMap((item) => (item.kind === 'step' ? [item.number] : [])))
+	return Array.from({ length: wanted }, (_, at) => at + 1).every((number) => shown.has(number))
 }
 
 function riskItem(risk: Round['held'][number]): Extract<Item, { kind: 'card' }> {

@@ -128,7 +128,6 @@ const model = await scriptedModel([
 	step(2, 'The core runs the work.', 'src/core/run.ts', 'export function run() {'),
 	step(3, 'The command starts everything.', 'src/cli/main.ts', 'run()'),
 	step(4, 'The tests run the core.', 'test/run.test.ts', 'run()'),
-	{ text: 'That is the whole project.' },
 	{
 		tool: 'ken__show',
 		text: 'The core now waits before it saves.',
