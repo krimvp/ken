@@ -163,3 +163,58 @@ test('in its world the project is in the middle, people above, and each crossing
 	}
 	assert.ok(worldLayout(DEMO.world, DEMO_PARTS).lines.length === DEMO.world.crossings.length)
 })
+
+const {
+	viewsOffered,
+	viewOn,
+}: {
+	viewsOffered: (home: object) => string[]
+	viewOn: (arch: { view: string | null }, offered: string[]) => string
+} = await import(path.join(PAGE, 'arch-views/switch.js'))
+
+test('the switch offers only the drawings the level has, and opens on "Where it runs"', () => {
+	const top = (views: object | null) => ({ trail: [{ within: [] }], look: { views } })
+	assert.deepEqual(viewsOffered(top(null)), [])
+	assert.deepEqual(viewsOffered(top({ world: null, runtime: null })), [])
+	assert.deepEqual(viewsOffered(top({ world: DEMO.world, runtime: null })), ['world', 'parts'])
+	const both = viewsOffered(top(DEMO))
+	assert.deepEqual(both, ['world', 'runtime', 'parts'])
+	const inside = { trail: [{ within: [] }, { within: ['src'] }], look: { views: DEMO } }
+	assert.deepEqual(viewsOffered(inside), [], 'below the top level only the parts are drawn')
+	assert.equal(viewOn({ view: null }, both), 'runtime')
+	assert.equal(viewOn({ view: 'world' }, both), 'world', "the reader's last choice is kept")
+	assert.equal(viewOn({ view: 'runtime' }, ['world', 'parts']), 'world', 'a choice the level lacks falls back')
+})
+
+const { briefHtml }: { briefHtml: (ui: object, found: object, ctx: object) => string } = await import(
+	path.join(PAGE, 'brief/brief.js')
+)
+
+test("a bus's brief lists each topic with who publishes it and who picks it up", () => {
+	const brief = {
+		id: 'store:bus',
+		kind: 'store',
+		name: 'Event bus',
+		line: 'Carries the events.',
+		minutes: 1,
+		points: [],
+		terms: [],
+		quotes: [],
+		questions: [],
+		decisions: [],
+		explained: true,
+		trust: '',
+		sideways: { uses: [], usedBy: [], processes: [] },
+		topics: ['order.placed', 'payments.dead-letter'],
+		gaps: ['no reader of payments.dead-letter in the repository'],
+	}
+	const ui = { id: brief.id, on: null, trail: [{ id: brief.id, name: brief.name }], openQuotes: new Set() }
+	const ctx = { home: {}, prefs: { text: 'pictures' }, env: {}, look: null, inner: null, views: SHOP }
+	const html = briefHtml(ui, { kind: 'ok', brief }, ctx)
+	const topic = (name: string) => html.slice(html.indexOf(`<code>${name}</code>`)).split('</li>')[0] ?? ''
+	assert.match(topic('order.placed'), /Publishes: orders<\/span>/)
+	assert.match(topic('order.placed'), /Picks up: payments<\/span>/)
+	assert.match(topic('payments.dead-letter'), /Publishes: payments<\/span>/)
+	assert.match(topic('payments.dead-letter'), /Picks up: <em>none drawn<\/em>/)
+	assert.match(html, /no reader of payments\.dead-letter in the repository/)
+})

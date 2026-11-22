@@ -44,6 +44,9 @@ const KIND_WORDS = {
 	term: 'Term',
 	question: 'Question',
 	decision: 'Decision',
+	frame: 'Where it runs',
+	store: 'Store',
+	outside: 'Outside',
 }
 
 // The concepts that hold every word the reader typed, those that hold them in the name first.

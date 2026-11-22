@@ -12,6 +12,14 @@ import { icon, KIND_ICONS, levelMark } from '../shell/icons.js'
 import { count, esc, lineSpan, prose, quoteBody, RUN_COST } from '../views/format.js'
 import { readConcept } from './concept-id.js'
 import { drawingHtml } from './drawings.js'
+import {
+	isViewKind,
+	viewDeeperCount,
+	viewDeeperHtml,
+	viewKindHtml,
+	viewMainHtml,
+	viewSidewaysHtml,
+} from './view-kinds.js'
 
 export const TEXTS = { pictures: 'Pictures first', balanced: 'Balanced', words: 'More words' }
 const TEXT_ICONS = { pictures: 'pictures', balanced: 'balanced', words: 'words' }
@@ -56,7 +64,11 @@ export function colourOf(brief) {
 const waysCount = (brief) => ({
 	sideways: byPart(brief.sideways.uses).length + byPart(brief.sideways.usedBy).length + brief.sideways.processes.length,
 	questions: brief.questions.length + brief.decisions.length,
-	deeper: brief.deeper ? (brief.deeper.parts ?? brief.deeper.files) : 0,
+	deeper: isViewKind(brief.kind)
+		? viewDeeperCount(brief)
+		: brief.deeper
+			? (brief.deeper.parts ?? brief.deeper.files)
+			: 0,
 })
 
 // A row that opens another brief.
@@ -171,7 +183,7 @@ function workingHtml(run, env) {
 	return `<div class="k-unexplained" role="status"><p><span class="k-spin" aria-hidden="true"></span> <b>${DOING[run.kind][1]}.</b></p><p class="k-muted k-num k-clock">${Math.round(env.seconds)} s so far, ${count(tools, 'action', 'actions')}</p>${newest ? `<p class="k-muted k-working-step">${prose(newest)}</p>` : ''}<button class="k-link" data-act="stop" data-key="brief-stop">Stop</button></div>`
 }
 
-function mainHtml(brief, { ui, env, prefs, look }) {
+function mainHtml(brief, { ui, env, prefs, look, views }) {
 	const texts = Object.entries(TEXTS).map(
 		([text, name]) =>
 			`<button data-act="pref-text" data-text="${text}" data-key="brief-text-${text}" aria-pressed="${prefs.text === text}" aria-label="${name}" title="${name}">${icon(TEXT_ICONS[text])}<span>${name}</span></button>`,
@@ -201,7 +213,7 @@ function mainHtml(brief, { ui, env, prefs, look }) {
 	const why = brief.why ? `<h3 class="k-eyebrow">Why</h3><p class="k-why">${prose(brief.why)}</p>` : ''
 	const lines =
 		brief.quotes?.length > 0
-			? `<h3 class="k-eyebrow">${brief.quotes.length === 1 ? 'The lines it rests on' : `The ${brief.quotes.length} quotes it rests on`}</h3><div class="k-quotes">${quotesHtml(brief.quotes)}</div>`
+			? `<h3 class="k-eyebrow">${isViewKind(brief.kind) ? 'ken found this in' : brief.quotes.length === 1 ? 'The lines it rests on' : `The ${brief.quotes.length} quotes it rests on`}</h3><div class="k-quotes">${quotesHtml(brief.quotes)}</div>`
 			: ''
 	const terms =
 		brief.terms.length === 0
@@ -212,16 +224,18 @@ function mainHtml(brief, { ui, env, prefs, look }) {
 							`<button class="k-chip" data-act="brief-open" data-concept="${esc(term.id)}" data-key="brief-term-${i}">${icon('term')}${esc(term.name)}</button>`,
 					)
 					.join('')}</div>`
-	const kind = icon(KIND_ICONS[brief.kind] ?? 'term')
+	const kind = isViewKind(brief.kind)
+		? viewKindHtml(brief.kind)
+		: `<span class="k-kind">${icon(KIND_ICONS[brief.kind] ?? 'term')}${KINDS[brief.kind] ?? 'Concept'}</span>`
 	return `<div class="k-brief-top">
-			<span class="k-kind">${kind}${KINDS[brief.kind] ?? 'Concept'}</span>
+			${kind}
 			<span class="k-min">${icon('clock')}<span class="k-num">${brief.minutes}</span> min</span>
 			<span class="k-seg k-text-seg" role="group" aria-label="How much text">${texts.join('')}</span>
 		</div>
 		<h2 class="k-brief-name" id="brief-name" tabindex="-1"><span class="k-sw"></span><span>${prose(brief.name)}</span></h2>
 		<p class="k-brief-line">${prose(brief.line)}</p>
 		${about}
-		${pictureHtml(brief, look)}
+		${isViewKind(brief.kind) ? viewMainHtml(brief, views) : pictureHtml(brief, look)}
 		${brief.explained ? '' : unexplainedHtml(brief, env, ui)}
 		${points}
 		${steps}
@@ -368,13 +382,21 @@ export function briefHtml(ui, found, ctx) {
 		return `${head}<div class="k-brief-body" id="brief-scroll"><h2 class="k-brief-name" id="brief-name" tabindex="-1">Not here</h2><p class="k-none" role="alert">${esc(found.message)}</p></div>`
 	}
 	const { brief } = found
+	const back = `${backHtml}${icon('left')}The brief</button>`
+	const view = isViewKind(brief.kind)
 	const body =
 		ui.on === 'sideways'
-			? sidewaysHtml(brief)
+			? view
+				? viewSidewaysHtml(brief, back)
+				: sidewaysHtml(brief)
 			: ui.on === 'questions'
 				? questionsHtml(brief, { ui, env: ctx.env })
 				: ui.on === 'deeper'
-					? deeperHtml(brief, ctx.inner)
-					: mainHtml(brief, { ui, env: ctx.env, prefs: ctx.prefs, look: ctx.look })
-	return `${head}<div class="k-brief-body text-${ctx.prefs.text} ${colourOf(brief) || 'is-plain'}" id="brief-scroll">${body}</div>${footHtml(brief, ctx.home, ui)}`
+					? view
+						? viewDeeperHtml(brief, back)
+						: deeperHtml(brief, ctx.inner)
+					: mainHtml(brief, { ui, env: ctx.env, prefs: ctx.prefs, look: ctx.look, views: ctx.views })
+	// A frame, a store, an outside thing or a crossing is no part, so it takes no part's colour.
+	const colour = view ? '' : colourOf(brief)
+	return `${head}<div class="k-brief-body text-${ctx.prefs.text} ${colour || 'is-plain'}${view ? ' is-view' : ''}" id="brief-scroll">${body}</div>${footHtml(brief, ctx.home, ui)}`
 }

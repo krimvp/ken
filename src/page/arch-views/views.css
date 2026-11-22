@@ -545,6 +545,10 @@
 	position: absolute;
 	top: -17px;
 	right: 14px;
+	max-width: calc(100% - 28px);
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
 	display: flex;
 	align-items: center;
 	gap: 5px;
@@ -973,6 +977,11 @@
 
 .k-mm.k-mm-out {
 	fill: var(--rt-edge);
+}
+
+/* A frame, a store, an outside thing or a crossing has no part's colour, so its brief shows no swatch. */
+.k-brief-body.is-view .k-brief-name .k-sw {
+	display: none;
 }
 
 /* The topics of a bus in its brief. */
