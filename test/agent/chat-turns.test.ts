@@ -62,3 +62,79 @@ test('a model that keeps exploring is told near the end how many turns are left,
 	)
 	assert.deepEqual(answered.events.at(-1), { kind: 'done', outcome: 'answered' })
 })
+
+test('a follow-up keeps the answer and its sources, and can recall an older answer without replaying file reads', async () => {
+	const sourceOnly = 'THIS_LINE_WAS_READ_BUT_NEVER_SHOWN'
+	const { root, hashes } = buildRepository([
+		{ message: 'feat: start', files: { 'src/retry.ts': sourceOnly } },
+		{ message: 'feat: retry', files: { 'src/retry.ts': `export const TIMES = 3\n${sourceOnly}\n` } },
+	])
+	const model = await scriptedModel([
+		READ,
+		{ ...SHOW, args: { ...SHOW.args, scope: { base: hashes[0], head: hashes[1] } } },
+		{ text: '' },
+		{ text: 'The retry limit belongs to the caller.' },
+		{ text: 'Configuration is loaded on startup.' },
+		{ text: 'A worker applies the configuration.' },
+		{ tool: 'ken__recall_chat', args: { search: 'Retries run three times' } },
+		{ text: 'Earlier we discussed the retry count.' },
+	])
+	const started = await startChat({
+		directory: root,
+		model: { model: 'scripted', baseUrl: model.baseUrl, apiKeyEnv: KEY_ENV },
+		env: {},
+	})
+	if (started.kind !== 'ok') throw new Error(started.message)
+	try {
+		for (const question of [
+			'What limits retries?',
+			'Who sets that?',
+			'When is config loaded?',
+			'What uses it?',
+			'What was the first limit?',
+		]) {
+			const events: ChatEvent[] = []
+			for await (const event of started.chat.ask(question)) events.push(event)
+			assert.deepEqual(events.at(-1), { kind: 'done', outcome: 'answered' })
+		}
+	} finally {
+		await started.chat.close()
+	}
+	const followUp = JSON.stringify(model.requests[3]?.messages)
+	assert.doesNotMatch(followUp, new RegExp(sourceOnly))
+	assert.match(followUp, /Retries run three times/)
+	assert.match(followUp, /src\/retry\.ts/)
+	for (const hash of hashes) assert.ok(followUp.includes(hash), 'the exact change can be opened again')
+	const later = JSON.stringify(model.requests[6]?.messages)
+	assert.doesNotMatch(later, /Retries run three times/)
+	assert.match(toolResults(model.requests[7]).at(-1) ?? '', /What limits retries\?/)
+	assert.equal(model.requests.length, 8, 'keeping a reply takes no model call')
+})
+
+test('asking for a brief loads only its card form and the next free question can show a checked claim', async () => {
+	const model = await scriptedModel([{ text: 'First brief.' }, { text: 'Next brief.' }, SHOW, { text: '' }])
+	const started = await startChat({
+		directory: root,
+		model: { model: 'scripted', baseUrl: model.baseUrl, apiKeyEnv: KEY_ENV },
+		env: {},
+	})
+	if (started.kind !== 'ok') throw new Error(started.message)
+	const collect = async (stream: AsyncIterable<ChatEvent>) => {
+		const events: ChatEvent[] = []
+		for await (const event of stream) events.push(event)
+		return events
+	}
+	const fields = (request: ChatRequest | undefined) =>
+		Object.keys(request?.tools.find((tool) => tool.function.name === 'ken__show')?.function.parameters.properties ?? {})
+	try {
+		await collect(started.chat.ask('A brief', undefined, { kind: 'answer', concept: 'Retry', text: 'How many?' }))
+		await collect(started.chat.ask('A tour', undefined, { kind: 'explain', tour: { within: [], stops: [] } }))
+		const full = await collect(started.chat.ask('Show me the retry count.'))
+		assert.deepEqual(fields(model.requests[0]), ['brief'])
+		assert.deepEqual(fields(model.requests[1]), ['brief', 'step', 'claims'])
+		assert.ok(fields(model.requests[2]).includes('claims'))
+		assert.ok(replyIn(full).items.some((item) => item.kind === 'card' && item.card.kind === 'claim'))
+	} finally {
+		await started.chat.close()
+	}
+})

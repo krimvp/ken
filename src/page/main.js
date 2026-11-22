@@ -1274,7 +1274,7 @@ $('#ask').addEventListener('submit', (event) => {
 
 document.addEventListener('submit', (event) => {
 	if (brief.submit(event) || procs.submit(event) || chg.submit(event)) return
-	if (ask.submit(event)) return
+	if (ask.submit(event) || you.submit(event)) return
 	if (level.submit(event)) {
 		// A request sent from the canvas's tool closes the tool, so the canvas shows the run.
 		if (event.target.id === 'redraw-form' && state.home.redraw.problem === null && state.arch.drawOpen) {
@@ -1306,7 +1306,7 @@ document.addEventListener('submit', (event) => {
 
 document.addEventListener(
 	'input',
-	(event) => shell.input(event) || chg.input(event) || ask.input(event) || level.input(event),
+	(event) => shell.input(event) || chg.input(event) || ask.input(event) || you.input(event) || level.input(event),
 )
 document.addEventListener('mousedown', (event) => level.press(event))
 window.addEventListener('popstate', () => shell.back(showReply))

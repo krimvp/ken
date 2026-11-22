@@ -26,6 +26,7 @@ export const freshArch = () => ({
 	// The drawing the reader chose last ("world", "runtime" or "parts"), whether the key is open, whether a crowded
 	// frame of "Where it runs" is folded, and what the last run to draw them left to say.
 	view: null,
+	format: null,
 	keyOpen: false,
 	folded: true,
 	viewsProblem: null,
@@ -84,7 +85,14 @@ export function archActions(app) {
 		const before = switched ? gliders(page) : new Map()
 		arch.shown = view
 		const topViews = state.shell.top?.look?.views ?? null
-		const drawn = fill(page, architectureHtml({ home, arch, env, brief: state.brief.id, column, topViews }))
+		const reading = page.querySelector('.k-arch-reading')
+		const scroll = reading?.scrollTop ?? 0
+		const drawn = fill(
+			page,
+			architectureHtml({ home, arch, env, brief: state.brief.id, column, topViews, text: state.shell.prefs.text }),
+		)
+		const readAfter = page.querySelector('.k-arch-reading')
+		if (readAfter && reading?.dataset.level === readAfter.dataset.level) readAfter.scrollTop = scroll
 		if (drawn && arch.drawOpen) {
 			const box = page.querySelector('#redraw-text')
 			if (box && box.value !== home.redraw.text) box.value = home.redraw.text
@@ -170,6 +178,12 @@ export function archActions(app) {
 	}
 
 	const actions = {
+		'arch-format'(el) {
+			arch.format = el.dataset.format
+			arch.keyOpen = false
+			render()
+			page.querySelector('[data-key="arch-format"]')?.focus()
+		},
 		'arch-view': (el) => showView(el.dataset.view),
 		'arch-view-pick': pickPart,
 		'arch-key'() {

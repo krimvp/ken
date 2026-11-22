@@ -1,6 +1,5 @@
-// The briefs the page has read from GET /api/brief, by the id of their concept. A brief is read once and kept until
-// ken's model has run or ken wrote a line about the reader: then a brief is read again when it is next shown, and the
-// one the page has stays on screen until the new one is here.
+// The briefs the page has read from GET /api/brief, by concept. Opening one checks it again in case the code changed.
+// The last copy stays on screen while its replacement loads.
 
 // A brief the page makes itself, with what it has and nothing for the rest. trust says where its words come from.
 export const pageBrief = (id, kind, name, line, trust) => ({
@@ -78,14 +77,22 @@ export function briefStore(app) {
 
 	// A brief the page made itself, such as a step of a change with its diff. The server has none to read again.
 	function put(id, brief) {
+		newest.delete(id)
 		kept.set(id, { kind: 'ok', brief })
 	}
 
 	// A read in flight is marked too, since it may have left before the change it must show.
+	function reopen(id) {
+		const have = kept.get(id)
+		if (!have || have.brief?.local) return
+		newest.delete(id)
+		kept.set(id, { ...have, old: true })
+	}
+
 	function forget() {
-		for (const [id, have] of kept) kept.set(id, { ...have, old: !have.brief?.local })
+		for (const id of kept.keys()) reopen(id)
 		listed = null
 	}
 
-	return { get, put, concepts, forget, lookAt }
+	return { get, put, concepts, reopen, forget, lookAt }
 }

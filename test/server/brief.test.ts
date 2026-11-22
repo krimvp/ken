@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
+import { writeFileSync } from 'node:fs'
+import path from 'node:path'
 import { test } from 'node:test'
 import { fileRecordStore } from '../../src/record/index.ts'
 import { gitRepository } from '../../src/repo/index.ts'
@@ -348,4 +351,23 @@ test("ken's model explains a term when asked, and its answer is the term's brief
 		['It takes what the core made.', 'Find it in src/store/db.ts.'],
 		"the model's things to know come first, then where the code uses it",
 	)
+})
+
+test('an old term note and its line numbers stay out of a brief when the quoted code is gone', async () => {
+	const file = 'src/term.ts'
+	const { root } = buildRepository([{ message: 'add timeout', files: { [file]: 'const timeout = 5\n' } }])
+	const record = fileRecordStore(root, gitRepository(root))
+	const topic = await record.append([
+		{ kind: 'topic', name: 'timeout', quotes: [{ path: file, commit: 'HEAD', text: 'const timeout = 5' }] },
+	])
+	if (topic.kind !== 'appended' || !topic.entries[0]) assert.fail('the topic must be saved before the note')
+	await record.append([{ kind: 'note', topic: topic.entries[0].entry.id, text: 'Waits five seconds.' }])
+	const server = await openKen(root, readerHome())
+	const read = () => json(server, '/api/brief?concept=term:timeout')
+	assert.equal((await read()).note, 'Waits five seconds.')
+	writeFileSync(path.join(root, file), 'const timeout = 25\n')
+	execFileSync('git', ['-c', 'commit.gpgsign=false', 'commit', '-qm', 'wait longer', '--', file], { cwd: root })
+	const brief = await read()
+	assert.deepEqual(brief.staleFiles, [file])
+	assert.deepEqual([brief.note, brief.points, brief.usedIn], [undefined, [], []])
 })

@@ -714,3 +714,29 @@ test('"Ask ken to name these parts" sends the folder split to the model, and the
 	assert.equal(look.named.about, layout.about, 'the picture says what the level is, in the words the model gave')
 	assert.equal(look.named.asked, null, 'nobody asked for another way to show it')
 })
+
+test('a new visit can look up an earlier answer with its date and commit, without sending it on a fresh question', async () => {
+	const home = tempFolder('ken-recall-')
+	const project = buildRepository([{ message: 'feat: retry delay', files: { 'retry.ts': 'wait(100)\n' } }])
+	const earlier = 'Retries had a fixed delay between attempts.'
+	const model = await scriptedModel([{ text: earlier }])
+	const first = await open(home, model.baseUrl, project.root)
+	const saved = (await ask(first, 'How did we pace retries?')).at(-1).view.entry
+	const returning = await scriptedModel([
+		{ text: 'Hello again.' },
+		{ tool: 'ken__recall_chat', args: { search: 'pace retries' } },
+		{ text: 'We discussed the delay.' },
+	])
+	execFileSync(
+		'git',
+		['-c', 'commit.gpgsign=false', 'commit', '--quiet', '--allow-empty', '-m', 'feat: change the project'],
+		{ cwd: project.root },
+	)
+	const next = await open(home, returning.baseUrl, project.root)
+	await ask(next, 'Hello.')
+	await ask(next, 'What did we discuss about pace retries last visit?')
+	assert.ok(!JSON.stringify(returning.requests[0]?.messages).includes(earlier))
+	const result = toolResults(returning.requests[2]).at(-1) ?? ''
+	for (const field of [earlier, saved.id, saved.askedAt, project.hashes[0] ?? 'unknown commit'])
+		assert.ok(result.includes(field), result)
+})

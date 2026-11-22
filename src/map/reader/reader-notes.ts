@@ -7,7 +7,7 @@ import { appendFile, mkdir, readFile } from 'node:fs/promises'
 import path from 'node:path'
 import type { Repository } from '../../repo/index.ts'
 
-export type ReaderNote = { id: string; text: string; at: string }
+export type ReaderNote = { id: string; text: string; at: string; by?: 'reader' }
 
 type Line = { kind: 'note'; note: ReaderNote } | { kind: 'removes'; id: string }
 
@@ -19,9 +19,12 @@ export type ReaderNotes = {
 	file: string
 	// The notes that are not removed, oldest first, at most the newest 12.
 	read(): Promise<ReaderNote[]>
-	// Keeps one more note, and answers with the notes as read does. A text the notes already hold, case and spaces
-	// aside, adds nothing.
-	add(text: string, now: Date): Promise<{ kind: 'kept'; notes: ReaderNote[] } | { kind: 'refused'; problem: string }>
+	// Keeps a note in the latest twelve. Adding an older note again brings it back with the same id.
+	add(
+		text: string,
+		now: Date,
+		by?: 'reader',
+	): Promise<{ kind: 'kept'; notes: ReaderNote[] } | { kind: 'refused'; problem: string }>
 	remove(id: string, now: Date): Promise<ReaderNote[]>
 }
 
@@ -36,12 +39,16 @@ export async function openNotes(
 
 	async function kept(): Promise<ReaderNote[]> {
 		const text = await readFile(file, 'utf8').catch(emptyWhenMissing)
-		let notes: ReaderNote[] = []
+		const notes = new Map<string, ReaderNote>()
 		for (const line of text.split('\n').flatMap((each) => parseLine(each) ?? [])) {
-			if (line.kind === 'note') notes.push(line.note)
-			else notes = notes.filter((note) => note.id !== line.id)
+			if (line.kind === 'removes') notes.delete(line.id)
+			else {
+				// Keeping an older note again moves it to the end of the twelve the model sees.
+				notes.delete(line.note.id)
+				notes.set(line.note.id, line.note)
+			}
 		}
-		return notes
+		return [...notes.values()]
 	}
 
 	async function append(line: object) {
@@ -58,13 +65,21 @@ export async function openNotes(
 		notes: {
 			file,
 			read,
-			async add(text, now) {
+			async add(text, now, by) {
 				const said = oneLine(text)
 				if (!isNote(said)) {
 					return { kind: 'refused', problem: `A note is one line of 1 to ${NOTE_CHARS} characters.` }
 				}
-				if (!(await kept()).some((note) => sameWords(note.text, said))) {
-					await append({ id: randomUUID().slice(0, 8), text: said, at: now.toISOString() })
+				const all = await kept()
+				const index = all.findIndex((note) => sameWords(note.text, said))
+				const earlier = all[index]
+				if (!earlier || index < all.length - MAX_READ || (by === 'reader' && earlier.by !== by)) {
+					await append({
+						id: earlier?.id ?? randomUUID().slice(0, 8),
+						text: said,
+						at: now.toISOString(),
+						by: by ?? earlier?.by,
+					})
 				}
 				return { kind: 'kept', notes: await read() }
 			},
@@ -100,7 +115,8 @@ function parseLine(line: string): Line | null {
 	const [id, text, at, removes] = ['id', 'text', 'at', 'removes'].map((name) => Reflect.get(value, name))
 	if (typeof removes === 'string') return { kind: 'removes', id: removes }
 	if (typeof id !== 'string' || id === '' || typeof text !== 'string' || typeof at !== 'string') return null
-	return isNote(oneLine(text)) ? { kind: 'note', note: { id, text: oneLine(text), at } } : null
+	const by = Reflect.get(value, 'by') === 'reader' ? { by: 'reader' as const } : {}
+	return isNote(oneLine(text)) ? { kind: 'note', note: { id, text: oneLine(text), at, ...by } } : null
 }
 
 function emptyWhenMissing(error: unknown): string {

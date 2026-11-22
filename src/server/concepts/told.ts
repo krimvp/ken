@@ -3,16 +3,28 @@
 // too, as a paragraph and a card or two for each stop, and reads here as a brief of what it kept.
 import type { Claim, Drawing, Item, Reply } from '../../agent/index.ts'
 import type { HistoryEntry } from '../../history/index.ts'
-import { sameName } from '../../record/index.ts'
+import { sameName, topicCode } from '../../record/index.ts'
+import type { CommitHash, Repository } from '../../repo/index.ts'
 import { questionId } from './concept.ts'
 
-export type BriefQuote = { path: string; commit: string; startLine: number; endLine: number; text: string }
+export type BriefQuote = { path: string; commit: CommitHash; startLine: number; endLine: number; text: string }
 
 // A thing to know as the page gets it: line in at most ten words, more in one sentence, long in two or three.
 export type BriefPoint = { line: string; more: string; long: string; drawing: Drawing; quotes: BriefQuote[] }
 
 // line is the brief's own one line, null when the reply kept none for it. terms are names of topics in the record.
 export type Told = { line: string | null; points: BriefPoint[]; terms: string[]; questions: string[] }
+
+// Quotes already checked at this commit still match. A tour can quote the same line in more than one point.
+export async function staleFiles(repo: Repository, head: CommitHash | undefined, quotes: BriefQuote[]) {
+	const older = new Map<string, BriefQuote>()
+	for (const quote of quotes) {
+		if (quote.commit !== head) older.set(JSON.stringify([quote.path, quote.text]), quote)
+	}
+	if (older.size === 0) return undefined
+	const { gone } = await topicCode(repo, { quotes: [...older.values()] }, undefined, head)
+	return gone.length ? [...new Set(gone.flatMap((quote) => quote.path ?? []))] : undefined
+}
 
 type Answered = Extract<HistoryEntry, { outcome: 'answered' }>
 
