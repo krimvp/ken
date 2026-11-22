@@ -3,7 +3,7 @@
 // as solid lines and events as dashed ones, a ring where a line crosses a frame, and a dashed note where the
 // repository says nothing) and "In its world" (the project as one block, with the people and systems around it). A
 // part keeps its colour and its icon in every view. Every block, frame label, line label and lane mark opens a brief.
-import { partId } from '../brief/concept-id.js'
+import { partId, readConcept } from '../brief/concept-id.js'
 import { KNOWN, levelLabel } from '../level/level-state.js'
 import { icon, levelMark, partIcon } from '../shell/icons.js'
 import { esc } from '../views/format.js'
@@ -73,16 +73,15 @@ function footOf(box, view) {
 	return `${mark}<span class="k-rt-words">${esc(levelLabel(home, box.knows.level))}</span>`
 }
 
-// The container a part runs in alone, as a tab on the part: its name where it says more than the part's, and its
-// copies.
-function tagHtml(frame, part, view) {
-	const named = frame.name.toLowerCase() === part.toLowerCase() ? '' : frame.name
-	const words = [named, copiesOf(frame)].filter(Boolean).join(', ') || FRAME_NAMES[frame.kind] || 'Frame'
+// The container a part runs in alone, as a chip in the part's corner that opens its brief: its mark and its copies.
+function tagHtml(frame, view) {
+	const words = copiesOf(frame) ? `<span>${esc(copiesOf(frame))}</span>` : ''
 	const id = `frame:${frame.id}`
-	return `<button class="k-rt-tag" data-act="brief-open" data-concept="${esc(id)}" data-key="frame-${esc(frame.id)}" aria-pressed="${view.brief === id}" aria-label="${esc(`${FRAME_NAMES[frame.kind] ?? 'Frame'}: ${frame.name}${frame.copies ? `, ${copiesOf(frame)}` : ''}`)}">${mark(frame.kind)}<span>${esc(words)}</span></button>`
+	return `<button class="k-rt-tag" data-act="brief-open" data-concept="${esc(id)}" data-key="frame-${esc(frame.id)}" aria-pressed="${view.brief === id}" aria-label="${esc(`${FRAME_NAMES[frame.kind] ?? 'Frame'}: ${frame.name}${frame.copies ? `, ${copiesOf(frame)}` : ''}`)}">${mark(frame.kind)}${words}</button>`
 }
 
-// A part as a bold block, in its colour: the second place of a part drawn twice is dashed.
+// A part as a bold block, in its colour. A container that runs it alone names the block, and the part's name goes
+// under it: "payments", then "Event workers". The second place of a part drawn twice is small and dashed.
 function partHtml(placed, view) {
 	const name = placed.thing.part
 	const box = view.boxes.get(name)
@@ -94,6 +93,7 @@ function partHtml(placed, view) {
 		'k-rt-part',
 		view.colour(name),
 		placed.second ? 'is-second' : '',
+		placed.solo ? 'is-solo' : '',
 		view.brief === id ? 'is-picked' : '',
 		quiet ? 'is-quiet' : '',
 		box ? `knows-${box.knows.level}` : '',
@@ -102,16 +102,24 @@ function partHtml(placed, view) {
 		stops.length > 0
 			? `<span class="k-beads">${stops.map((n) => `<span class="k-bead k-num"><span class="visually-hidden">Stop </span>${n}</span>`).join('')}</span>`
 			: ''
-	const solo = placed.solo ? tagHtml(placed.solo, name, view) : ''
-
+	const title = placed.solo && placed.solo.name.toLowerCase() !== name.toLowerCase() ? placed.solo.name : name
+	const under = title === name ? '' : `<span class="k-rt-runs">${esc(name)}</span>`
+	const foot = placed.second ? `<span>Also runs here</span>` : footOf(box, view)
+	const index = box ? view.home.look.boxes.indexOf(box) : -1
+	const inside =
+		box?.opens && !placed.second
+			? `<button class="k-blk-in" data-act="arch-inside" data-index="${index}" data-key="rt-in-${esc(placed.id)}" aria-label="Go inside ${esc(name)}" title="Go inside">${icon('inside')}</button>`
+			: ''
 	const known = box ? KNOWN.indexOf(box.knows.level) / (KNOWN.length - 1) : 0
 	return `<div class="${classes.filter(Boolean).join(' ')}" style="${px(placed)};--known:${known}" data-glide="part:${esc(name)}${placed.second ? ':2' : ''}">
 		<button class="k-rt-face" data-act="arch-view-pick" data-name="${esc(name)}" data-concept="${esc(id)}" data-key="rt-${esc(placed.id)}" aria-pressed="${view.brief === id}">
-			<span class="k-rt-head"><span class="k-blk-icon">${icon(partIcon(name))}</span><span class="k-rt-name">${esc(name)}</span></span>
+			<span class="k-rt-head"><span class="k-blk-icon">${icon(partIcon(name))}</span><span class="k-rt-name">${esc(title)}</span></span>
+			${under}
 			${beads}
-			<span class="k-rt-foot">${placed.second ? `${mark('runs')}<span>Also runs here</span>` : footOf(box, view)}</span>
+			<span class="k-rt-foot">${foot}</span>
 		</button>
-		${solo}
+		${placed.solo ? tagHtml(placed.solo, view) : ''}
+		${inside}
 	</div>`
 }
 
@@ -132,10 +140,10 @@ function busHtml(placed, view, layout) {
 		.filter((lane) => lane.bus === bus.id)
 		.map(
 			(lane) =>
-				`<span class="k-rt-lane" style="top:${lane.y - placed.y - 13}px"></span><span class="k-rt-topic k-mono" style="left:${lane.x - placed.x}px;top:${lane.y - placed.y}px">${esc(lane.topic)}</span>`,
+				`<span class="k-rt-lane" style="top:${lane.y - placed.y - 10}px"></span><span class="k-rt-topic k-mono" style="left:${lane.x - placed.x}px;top:${lane.y - placed.y}px">${esc(lane.topic)}</span>`,
 		)
 	return `<div class="k-rt-bus${view.brief === id ? ' is-picked' : ''}" style="${px(placed)}">
-		<button class="k-rt-bus-head" data-act="brief-open" data-concept="${esc(id)}" data-key="rt-${esc(placed.id)}" aria-pressed="${view.brief === id}">${mark('bus')}<b>${esc(bus.name)}</b><span class="k-rt-bus-kind">${esc(bus.store === 'bus' ? 'event bus' : bus.store)}, ${bus.topics.length} ${bus.topics.length === 1 ? 'topic' : 'topics'}</span></button>
+		<button class="k-rt-bus-head" data-act="brief-open" data-concept="${esc(id)}" data-key="rt-${esc(placed.id)}" aria-pressed="${view.brief === id}">${mark('bus')}<b>${esc(bus.name)}</b><span class="k-rt-bus-kind">${bus.topics.length} ${bus.topics.length === 1 ? 'topic' : 'topics'}</span></button>
 		<span class="k-rt-legend" aria-hidden="true"><i class="k-rt-dot"></i>publishes <i class="k-rt-ring"></i>picks up later</span>
 		${lanes.join('')}
 	</div>`
@@ -205,10 +213,6 @@ export function runtimeHtml(views, layout, view) {
 		if (kind === 'outside') return outsideHtml(placed, outsideOf.get(placed.id), view)
 		return placed.thing.topics?.length > 0 ? busHtml(placed, view, layout) : storeHtml(placed, view)
 	})
-	const notes = layout.notes.map(
-		(note) =>
-			`<p class="k-rt-note" style="${px(note)}"><span class="visually-hidden">Not in the repository: </span>${esc(note.text)}</p>`,
-	)
 	const lines = []
 	const over = []
 	const labels = []
@@ -228,16 +232,19 @@ export function runtimeHtml(views, layout, view) {
 		if (line.inside) {
 			over.push(`<path class="${cls}" d="M${line.inside.x} ${line.inside.y1}V${line.inside.y2}"/>`)
 		}
-		if (line.label) {
-			const c = line.crossing
-			const from = view.nameOf(c.from)
-			const to = view.nameOf(c.to)
-			const said =
-				c.kind === 'call' ? `${from} calls ${to}: ${c.text}, ${howLabel(c)}` : `${from} sends ${c.topic} to ${to}`
-			labels.push(
-				`<button class="k-rt-label is-${line.kind}${picked ? ' is-picked' : ''}${on ? ' is-lit' : ''}" style="${px(line.label)}" data-act="brief-open" data-concept="crossing:${esc(c.id)}" data-key="line-${esc(c.id)}" aria-pressed="${picked}" aria-label="${esc(said)}">${line.words.map(esc).join('<br>')}</button>`,
-			)
-		}
+		if (line.kind !== 'call' && line.kind !== 'event') continue
+		const c = line.crossing
+		const from = view.nameOf(c.from)
+		const to = view.nameOf(c.to)
+		const said =
+			c.kind === 'call' ? `${from} calls ${to}: ${c.text}, ${howLabel(c)}` : `${from} sends ${c.topic} to ${to}`
+		// A line inside one place has no label: a round handle in its middle, seen on a hover or a focus, opens it.
+		const mid = line.label ? null : middleOf(line.points)
+		const shape = mid ? 'k-rt-knob' : 'k-rt-label'
+		const place = mid ? px({ x: mid.x - 13, y: mid.y - 13, w: 26, h: 26 }) : px(line.label)
+		labels.push(
+			`<button class="${shape} is-${line.kind}${picked ? ' is-picked' : ''}${on ? ' is-lit' : ''}" style="${place}" data-act="brief-open" data-concept="crossing:${esc(c.id)}" data-ends="${esc(`${c.from} ${c.to}`)}" data-key="line-${esc(c.id)}" aria-pressed="${picked}" aria-label="${esc(said)}">${line.words.map(esc).join('<br>')}</button>`,
+		)
 	}
 	const marks = layout.marks.map((m) => {
 		const picked = view.brief === `crossing:${m.crossing}`
@@ -252,7 +259,63 @@ export function runtimeHtml(views, layout, view) {
 	})
 	const svg = (cls, body) =>
 		`<svg class="k-wires ${cls}" width="${layout.width}" height="${layout.height}" viewBox="0 0 ${layout.width} ${layout.height}" aria-hidden="true">${ARROWS}${body}</svg>`
-	return `${frames.join('')}${svg('k-rt-lines', lines.join(''))}${notes.join('')}${things.join('')}${svg('k-rt-over', over.join(''))}${marks.join('')}${labels.join('')}`
+	return `${frames.join('')}${svg('k-rt-lines', lines.join(''))}${things.join('')}${svg('k-rt-over', over.join(''))}${marks.join('')}${labels.join('')}`
+}
+
+// The point halfway along a line.
+function middleOf(points) {
+	const pieces = points.slice(1).map((p, k) => Math.abs(p.x - points[k].x) + Math.abs(p.y - points[k].y))
+	let left = pieces.reduce((sum, n) => sum + n, 0) / 2
+	for (const [k, n] of pieces.entries()) {
+		if (left <= n) {
+			const t = n === 0 ? 0 : left / n
+			return {
+				x: points[k].x + (points[k + 1].x - points[k].x) * t,
+				y: points[k].y + (points[k + 1].y - points[k].y) * t,
+			}
+		}
+		left -= n
+	}
+	return points[0]
+}
+
+// "Where it runs" in small, for a brief: the frames as outlines, the things as blocks in their colours, the lines,
+// and what the brief is about lit, as the reader saw it on the canvas. Nothing when the drawing does not hold it.
+export function runtimePictureHtml(layout, id, colour) {
+	const concept = readConcept(id)
+	if (!concept) return ''
+	const ends = (line) =>
+		line.kind === 'stem' ? [line.thing, line.bus] : line.kind === 'tie' ? [] : [line.crossing.from, line.crossing.to]
+	const lines = new Set(
+		concept.kind === 'crossing' ? layout.lines.filter((line) => line.crossings?.includes(concept.name)) : [],
+	)
+	const things = new Set(
+		layout.things
+			.filter((placed) =>
+				concept.kind === 'part'
+					? concept.within.length === 0 && placed.thing.part === concept.name
+					: concept.kind === 'frame'
+						? placed.solo?.id === concept.name
+						: placed.id === concept.name || [...lines].some((line) => ends(line).includes(placed.id)),
+			)
+			.map((placed) => placed.id),
+	)
+	const frame = concept.kind === 'frame' ? layout.frames.find((f) => f.id === concept.name) : null
+	if (!frame && things.size === 0) return ''
+	const frames = layout.frames
+		.toSorted((a, b) => a.depth - b.depth)
+		.map(
+			(f) =>
+				`<rect class="k-rtp-frame${DASHED.includes(f.frame.kind) ? ' is-dashed' : ''}${f === frame ? ' is-lit' : ''}" x="${f.x}" y="${f.y}" width="${f.w}" height="${f.h}" rx="18"/>`,
+		)
+	const paths = layout.lines.map(
+		(line) => `<path class="k-rtp-line${lines.has(line) ? ' is-lit' : ''}" d="${pathOf(line.points)}"/>`,
+	)
+	const blocks = layout.things.map((placed) => {
+		const part = placed.thing.kind === 'part' ? colour(placed.thing.part) : 'is-other'
+		return `<rect class="k-rtp-thing ${part}${things.has(placed.id) ? ' is-lit' : ''}" x="${placed.x}" y="${placed.y}" width="${placed.w}" height="${placed.h}" rx="16"/>`
+	})
+	return `<div class="k-pic k-rt-pic" aria-hidden="true"><svg viewBox="0 0 ${layout.width} ${layout.height}">${frames.join('')}${paths.join('')}${blocks.join('')}</svg></div>`
 }
 
 // The project as one block with its parts as tiles, its people and systems around it, and a labelled line for each

@@ -4,6 +4,8 @@
 // always in the same place: what ken thinks the reader knows of it with "Not right", and the three ways on,
 // Sideways, Questions and Deeper. The setting for text decides how much stands under each line. A concept ken's
 // model has not explained yet still opens, with what git says of it and one button for the rest.
+
+import { runtimePicture } from '../arch-views/switch.js'
 import { KNOWN, levelLabel } from '../level/level-state.js'
 import { DOING } from '../level/runs.js'
 import { partClass, partOfFile } from '../project/part-colours.js'
@@ -19,6 +21,7 @@ import {
 	viewKindHtml,
 	viewMainHtml,
 	viewSidewaysHtml,
+	withEnds,
 } from './view-kinds.js'
 
 export const TEXTS = { pictures: 'Pictures first', balanced: 'Balanced', words: 'More words' }
@@ -184,7 +187,7 @@ function workingHtml(run, env) {
 	return `<div class="k-unexplained" role="status"><p><span class="k-spin" aria-hidden="true"></span> <b>${DOING[run.kind][1]}.</b></p><p class="k-muted k-num k-clock">${Math.round(env.seconds)} s so far, ${count(tools, 'action', 'actions')}</p>${newest ? `<p class="k-muted k-working-step">${prose(newest)}</p>` : ''}<button class="k-link" data-act="stop" data-key="brief-stop">Stop</button></div>`
 }
 
-function mainHtml(brief, { ui, env, prefs, look, views, inner }) {
+function mainHtml(brief, { ui, env, prefs, look, views, inner, runtime }) {
 	const texts = Object.entries(TEXTS).map(
 		([text, name]) =>
 			`<button data-act="pref-text" data-text="${text}" data-key="brief-text-${text}" aria-pressed="${prefs.text === text}">${name}</button>`,
@@ -237,7 +240,12 @@ function mainHtml(brief, { ui, env, prefs, look, views, inner }) {
 		<p class="k-brief-line">${prose(brief.line)}</p>
 		${brief.note ? `<p class="k-brief-note"><span class="k-eyebrow">What the record says it means</span>${prose(brief.note)}</p>` : ''}
 		${about}
-		${isViewKind(brief.kind) ? viewMainHtml(brief, views) : pictureHtml(brief, look)}
+		${
+			// Opened from "Where it runs", the picture is that drawing in small, with the brief's own thing lit.
+			isViewKind(brief.kind) || (runtime && brief.kind === 'part')
+				? `${runtimePicture(views, brief.id, partClass) || pictureHtml(brief, look)}${isViewKind(brief.kind) ? viewMainHtml(brief, views) : ''}`
+				: pictureHtml(brief, look)
+		}
 		${brief.html ?? ''}
 		${brief.explained ? '' : unexplainedHtml(brief, env, ui)}
 		${fromGitHtml(brief, inner)}
@@ -408,7 +416,7 @@ export function briefHtml(ui, found, ctx) {
 	if (found.kind === 'none') {
 		return `${head}<div class="k-brief-body" id="brief-scroll"><h2 class="k-brief-name" id="brief-name" tabindex="-1">Not here</h2><p class="k-none" role="alert">${esc(found.message)}</p></div>`
 	}
-	const { brief } = found
+	const brief = withEnds(found.brief, ctx.views)
 	const back = `${backHtml}${icon('left')}The brief</button>`
 	const view = isViewKind(brief.kind)
 	const body =
@@ -422,7 +430,7 @@ export function briefHtml(ui, found, ctx) {
 					? view
 						? viewDeeperHtml(brief, back)
 						: deeperHtml(brief, ctx.inner)
-					: mainHtml(brief, { ui, env: ctx.env, prefs: ctx.prefs, look: ctx.look, views: ctx.views, inner: ctx.inner })
+					: mainHtml(brief, { ...ctx, ui })
 	// A frame, a store, an outside thing or a crossing is no part, so it takes no part's colour.
 	const colour = view ? '' : colourOf(brief)
 	return `${head}<div class="k-brief-body text-${ctx.prefs.text} ${colour || 'is-plain'}${view ? ' is-view' : ''}" id="brief-scroll">${body}</div>${footHtml(brief, ctx.home, ui)}`

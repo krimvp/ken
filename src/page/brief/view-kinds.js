@@ -6,7 +6,7 @@ import { mark } from '../arch-views/drawing.js'
 import { partClass } from '../project/part-colours.js'
 import { icon } from '../shell/icons.js'
 import { esc, prose } from '../views/format.js'
-import { readConcept } from './concept-id.js'
+import { partId, readConcept } from './concept-id.js'
 
 export const VIEW_KINDS = { frame: 'Frame', store: 'Store', outside: 'Outside', crossing: 'Crossing' }
 const ICONS = { frame: 'runs', store: 'store', outside: 'outside', crossing: 'bus' }
@@ -54,6 +54,23 @@ function topicsHtml(brief, views) {
 		return `<li><code>${esc(topic)}</code><span class="k-topic-who"><i class="k-rt-dot" aria-hidden="true"></i>Publishes: ${who(send)}</span><span class="k-topic-who"><i class="k-rt-ring" aria-hidden="true"></i>Picks up: ${who(take)}</span></li>`
 	})
 	return `<h3 class="k-eyebrow">${brief.topics.length} ${brief.topics.length === 1 ? 'topic' : 'topics'}</h3><ul class="k-topics">${rows.join('')}</ul>`
+}
+
+// A crossing has its two ends beside it: what it comes in from and what it goes out to, from the drawing.
+export function withEnds(brief, views) {
+	if (brief.kind !== 'crossing' || brief.sideways.uses.length + brief.sideways.usedBy.length > 0) return brief
+	const id = readConcept(brief.id)?.name
+	const crossing = views?.runtime?.crossings.find((c) => c.id === id)
+	const thing = (thingId) => views.runtime.things.find((t) => t.id === thingId)
+	const rowOf = (thingId) => {
+		const end = thing(thingId)
+		if (!end) return []
+		if (end.kind === 'part') return [{ id: partId([], end.part), name: end.part, verb: crossing.text }]
+		const name = end.kind === 'store' ? end.name : (views.world?.outside.find((o) => o.id === end.id)?.name ?? end.id)
+		return [{ id: `${end.kind}:${end.id}`, name, verb: crossing.text }]
+	}
+	if (!crossing) return brief
+	return { ...brief, sideways: { ...brief.sideways, usedBy: rowOf(crossing.from), uses: rowOf(crossing.to) } }
 }
 
 export const viewDeeperCount = (brief) => (brief.inside?.length ?? 0) + (brief.parts?.length ?? 0)

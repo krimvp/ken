@@ -5,11 +5,19 @@
 // label, and a ring where it crosses a frame's edge.
 
 // How far a line keeps from a block, and the costs that shape a route.
-const CLEAR = 18
+const CLEAR = 26
 const BEND = 60
 const FRAME_EDGE = 40
-const ALONG = 2.5
+const ALONG = 6
+// Two lines that share even a short stretch read as one line that forks.
+const SHARE = 200
 const ACROSS = 14
+// A line that meets another at a point where that one bends or ends reads as one line with it.
+const MEET = 60
+// A line that runs on a frame's edge reads as part of the frame.
+const ON_EDGE = 4
+// Two lines nearer than this run in one lane.
+const CLOSE = 10
 const SIDES = ['top', 'right', 'bottom', 'left']
 const NORMAL = { top: [0, -1], right: [1, 0], bottom: [0, 1], left: [-1, 0] }
 // Directions on the grid: 0 right, 1 down, 2 left, 3 up.
@@ -144,6 +152,9 @@ function routeAll(blocks, frames, items) {
 		ys.push(end.stub.y)
 	}
 	const grid = { xs: axisOf(xs), ys: axisOf(ys) }
+	// Lines a few units apart read as one: each coordinate knows the others that close to it.
+	const closeTo = (axis) => axis.map((v, k) => axis.flatMap((u, m) => (m !== k && Math.abs(u - v) < CLOSE ? [m] : [])))
+	grid.near = { xs: closeTo(grid.xs), ys: closeTo(grid.ys) }
 	const nx = grid.xs.length
 	const ny = grid.ys.length
 	const blocked = new Uint8Array(nx * ny)
@@ -152,13 +163,20 @@ function routeAll(blocks, frames, items) {
 			if (blocks.some((r) => inside(r, grid.xs[i], grid.ys[j], CLEAR - 0.5))) blocked[j * nx + i] = 1
 		}
 	}
-	// How many lines already run along each step of the grid, across and down.
-	const used = { h: new Uint8Array(nx * ny), v: new Uint8Array(nx * ny) }
-	return items.map((_, k) => {
-		const route = search(grid, blocked, used, frames, ends[k])
-		markUsed(grid, used, route.points)
-		return route
-	})
+	// How many lines already run along each step of the grid, across and down, and which points they pass.
+	const used = { h: new Uint8Array(nx * ny), v: new Uint8Array(nx * ny), at: new Uint8Array(nx * ny) }
+	// The shortest lines go first, so a long line goes around them rather than taking the way they need.
+	const reach = ({ ask }) => {
+		const [a, b] = [ask.from.rect, ask.to.rect]
+		return Math.abs(a.x + a.w / 2 - b.x - b.w / 2) + Math.abs(a.y + a.h / 2 - b.y - b.h / 2)
+	}
+	const order = items.map((_, k) => k).sort((p, q) => reach(items[p]) - reach(items[q]))
+	const routes = []
+	for (const k of order) {
+		routes[k] = search(grid, blocked, used, frames, ends[k])
+		markUsed(grid, used, routes[k].path)
+	}
+	return routes
 }
 
 function endsOf(spec) {
@@ -184,6 +202,16 @@ function crossesFrame(frames, x1, y1, x2, y2) {
 		}
 	}
 	return count
+}
+
+// Whether a step runs along the edge of a frame.
+function onFrameEdge(frames, x1, y1, x2, y2) {
+	const near = (a, b) => Math.abs(a - b) < CLEAR / 2
+	return frames.some((f) =>
+		y1 === y2
+			? (near(y1, f.y) || near(y1, f.y + f.h)) && Math.max(x1, x2) > f.x && Math.min(x1, x2) < f.x + f.w
+			: (near(x1, f.x) || near(x1, f.x + f.w)) && Math.max(y1, y2) > f.y && Math.min(y1, y2) < f.y + f.h,
+	)
 }
 
 function search(grid, blocked, used, frames, ends) {
@@ -246,10 +274,17 @@ function search(grid, blocked, used, frames, ends) {
 			const next = nj * nx + ni
 			if (blocked[next] && !goals.has(next)) continue
 			const length = Math.abs(xs[ni] - xs[i]) + Math.abs(ys[nj] - ys[j])
-			const lane = d % 2 === 0 ? used.h[Math.min(node, next)] : used.v[Math.min(node, next)]
+			const lane = Number(
+				d % 2 === 0
+					? used.h[Math.min(node, next)] || grid.near.ys[j].some((k) => used.h[k * nx + Math.min(i, ni)])
+					: used.v[Math.min(node, next)] || grid.near.xs[i].some((k) => used.v[Math.min(j, nj) * nx + k]),
+			)
 			const perpendicular = d % 2 === 0 ? used.v[next] : used.h[next]
-			let step = length * (1 + ALONG * lane) + (d === dir ? 0 : BEND) + (perpendicular ? ACROSS : 0)
+			const meets = used.at[next] && !perpendicular && !lane ? MEET : 0
+			let step =
+				length * (1 + ALONG * lane) + SHARE * lane + (d === dir ? 0 : BEND) + (perpendicular ? ACROSS : 0) + meets
 			step += FRAME_EDGE * crossesFrame(frames, xs[i], ys[j], xs[ni], ys[nj])
+			if (onFrameEdge(frames, xs[i], ys[j], xs[ni], ys[nj])) step += length * ON_EDGE
 			const nextState = next * 4 + d
 			if (here + step < cost[nextState]) {
 				cost[nextState] = here + step
@@ -271,7 +306,7 @@ function search(grid, blocked, used, frames, ends) {
 	path.reverse()
 	const goal = finish.get(found)
 	const points = simplify([start.port, ...path, goal.end.port])
-	return { points, fromSide: start.side, toSide: goal.end.side }
+	return { points, path, fromSide: start.side, toSide: goal.end.side }
 }
 
 // No route on the grid: a straight line between the two nearest ports.
@@ -283,7 +318,7 @@ function straight(ends) {
 			if (!best || d < best.d) best = { d, a, b }
 		}
 	}
-	return { points: [best.a.port, best.b.port], fromSide: best.a.side, toSide: best.b.side }
+	return { points: [best.a.port, best.b.port], path: [], fromSide: best.a.side, toSide: best.b.side }
 }
 
 function simplify(points) {
@@ -311,6 +346,8 @@ function markUsed(grid, used, points) {
 		if (ia < 0 || ja < 0 || ib < 0 || jb < 0) continue
 		if (ja === jb) for (let i = Math.min(ia, ib); i < Math.max(ia, ib); i++) used.h[ja * nx + i] = 1
 		if (ia === ib) for (let j = Math.min(ja, jb); j < Math.max(ja, jb); j++) used.v[j * nx + ia] = 1
+		used.at[ja * nx + ia] = 1
+		used.at[jb * nx + ib] = 1
 	}
 }
 
@@ -373,7 +410,7 @@ function placeLabel(points, size, blocks, placed) {
 	for (let k = 1; k < points.length; k++) {
 		const [a, b] = [points[k - 1], points[k]]
 		const piece = Math.abs(b.x - a.x) + Math.abs(b.y - a.y)
-		for (const t of [0.5, 0.3, 0.7, 0.15, 0.85]) {
+		for (const t of [0.5, 0.4, 0.6, 0.3, 0.7, 0.2, 0.8, 0.1, 0.9]) {
 			const x = a.x + (b.x - a.x) * t
 			const y = a.y + (b.y - a.y) * t
 			const rect = { x: x - size.w / 2, y: y - size.h / 2, w: size.w, h: size.h }

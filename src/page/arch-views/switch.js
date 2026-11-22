@@ -3,7 +3,7 @@
 // the card offers one run of ken's model to draw them. This module also lays out the drawing on show, once per
 // drawing and fold, and says which lines a process lights.
 import { esc } from '../views/format.js'
-import { mark, runtimeHtml, worldHtml } from './drawing.js'
+import { mark, runtimeHtml, runtimePictureHtml, worldHtml } from './drawing.js'
 import { runtimeLayout } from './runtime-layout.js'
 import { worldLayout } from './world-layout.js'
 
@@ -13,10 +13,11 @@ export const VIEWS_RUN = ['Drawing where it runs', "ken's model is drawing where
 export const VIEW_NAMES = { world: 'In its world', runtime: 'Where it runs', parts: 'How the code is split' }
 const VIEW_ICONS = { world: 'world', runtime: 'runs', parts: null }
 
-// The views the level on the canvas has, in the switch's order. Below the top level only the parts are drawn.
-export function viewsOffered(home) {
-	const views = home.look?.views
-	if (home.trail.length > 1 || !views) return []
+// The views the switch offers, in its order: the top level's drawings, given as top. Below the top level only the
+// parts are drawn, and the others take the reader back up.
+export function viewsOffered(home, top = null) {
+	const views = home.trail.length > 1 ? top : home.look?.views
+	if (!views) return []
 	const offered = [views.world ? 'world' : null, views.runtime ? 'runtime' : null].filter(Boolean)
 	return offered.length === 0 ? [] : [...offered, 'parts']
 }
@@ -81,7 +82,7 @@ const KEY_SHAPES = [
 	[
 		'<span class="k-key-part is-second"></span><span class="k-key-tie"></span>',
 		'The same part again',
-		'Dashed where it runs a second time. Dots tie the two places when one frame holds the other.',
+		'Small and dashed where it runs a second time. Dots tie the two places when one frame holds the other.',
 	],
 	[
 		'<svg viewBox="0 0 40 30"><path d="M3 6v18c0 2.500 7.500 4 17 4s17-1.500 17-4V6"/><ellipse cx="20" cy="6" rx="17" ry="4"/></svg>',
@@ -111,12 +112,7 @@ const KEY_SHAPES = [
 	[
 		'<svg viewBox="0 0 48 16"><path class="k-key-call" d="M2 8H46"/><circle cx="24" cy="8" r="5" class="k-key-ring"/></svg>',
 		'A crossing',
-		"A ring where a line passes a frame's edge.",
-	],
-	[
-		'<span class="k-key-note">?</span>',
-		'Not in the repository',
-		'A dashed note where the repository does not say. ken marks it and does not guess.',
+		"A ring where a line passes a frame's edge. Only these lines say how: a call inside one place does not.",
 	],
 ]
 
@@ -160,17 +156,21 @@ const runtimes = new WeakMap()
 const worlds = new WeakMap()
 
 // The layout of a drawing, made once for each drawing and fold.
-function laidOut(views, on, folded, parts) {
+function laidOut(views, on, folded, parts, narrow = false) {
 	if (on === 'world') {
 		if (!worlds.has(views)) worlds.set(views, worldLayout(views.world, parts))
 		return worlds.get(views)
 	}
 	const kept = runtimes.get(views) ?? {}
-	const key = folded ? 'folded' : 'open'
-	kept[key] ??= runtimeLayout(views, { folded })
+	const key = `${folded ? 'folded' : 'open'}${narrow ? ', narrow' : ''}`
+	kept[key] ??= runtimeLayout(views, { folded, narrow })
 	runtimes.set(views, kept)
 	return kept[key]
 }
+
+// "Where it runs" in small with id lit, for the brief of id.
+export const runtimePicture = (views, id, colour) =>
+	views?.runtime ? runtimePictureHtml(laidOut(views, 'runtime', false, []), id, colour) : ''
 
 // The crossings a process lights on "Where it runs": those between the parts of two steps in a row.
 function litOf(runtime, stopsByName) {
@@ -191,10 +191,10 @@ function litOf(runtime, stopsByName) {
 
 // view is what drawing.js needs, with stops by part name. The answer is the drawing's HTML, the box it fills, and
 // the rects of its small map.
-export function viewDrawing({ home, arch, on, view, projectName }) {
+export function viewDrawing({ home, arch, on, view, projectName, column }) {
 	const views = home.look.views
 	const parts = home.look.boxes.map((box) => box.name)
-	const layout = laidOut(views, on, arch.folded, parts)
+	const layout = laidOut(views, on, arch.folded, parts, column)
 	const thingOf = new Map((views.runtime?.things ?? []).map((t) => [t.id, t]))
 	const outsideOf = new Map((views.world?.outside ?? []).map((o) => [o.id, o]))
 	view.outsideName = (id) => outsideOf.get(id)?.name ?? id
@@ -216,9 +216,5 @@ export function viewDrawing({ home, arch, on, view, projectName }) {
 						cls: r.thing.kind === 'part' ? view.colour(r.thing.part) : 'k-mm-out',
 					})),
 				]
-	// The middle of the parts, where the camera looks when the drawing is too big to read whole.
-	const blocks = on === 'world' ? [layout.project] : layout.things.filter((r) => r.thing.kind === 'part')
-	const mid = (key, size) => blocks.reduce((sum, r) => sum + r[key] + r[size] / 2, 0) / Math.max(blocks.length, 1)
-	const focus = { x: Math.round(mid('x', 'w')), y: Math.round(mid('y', 'h')) }
-	return { html, world: { x: 0, y: 0, w: layout.width, h: layout.height }, rects, focus }
+	return { html, world: { x: 0, y: 0, w: layout.width, h: layout.height }, rects }
 }
