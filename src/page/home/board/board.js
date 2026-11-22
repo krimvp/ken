@@ -2,10 +2,11 @@
 // ranked from what the reader looked at and from git, and "What ken recorded lately", the newest lines of the file
 // ken keeps on the reader's machine. A card leads with the thing itself: what landed in a part, the parts a change
 // touches, a part's job. Each has one button that says where it opens, and only the first is filled.
+
+import { DETAILS } from '../../level/level-state.js'
 import { partClass } from '../../project/part-colours.js'
 import { count, day, esc, prose } from '../../views/format.js'
 import { plusMinus } from '../canvas/part-box.js'
-import { DETAILS } from '../state/home-state.js'
 import { miniPictureHtml } from './mini-picture.js'
 
 const SHOWN_NEXT = 4

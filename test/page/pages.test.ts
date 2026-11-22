@@ -34,10 +34,10 @@ const { processStops }: { processStops: (diagram: object, boxes: object[]) => { 
 	await import(path.join(PAGE, 'architecture/layers.js'))
 type Home = { trail: Step[]; change: string; look: object | null; changes: object[] }
 const { freshHome }: { freshHome: (stored: () => null, ui: object) => Home } = await import(
-	path.join(PAGE, 'home/state/home-state.js')
+	path.join(PAGE, 'level/level-state.js')
 )
 const { homeLoads }: { homeLoads: (app: object) => { refresh: () => Promise<void> } } = await import(
-	path.join(PAGE, 'home/state/loads.js')
+	path.join(PAGE, 'level/loads.js')
 )
 const { briefHtml }: { briefHtml: (ui: object, found: Found, ctx: object) => string } = await import(
 	path.join(PAGE, 'brief/brief.js')

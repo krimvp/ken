@@ -1,7 +1,7 @@
 // The home's state: one level of the project at a time, the way in the reader took, the detail in use, what they
 // picked in the picture, and what ken recorded of them. The names of the three ways in, the three details and the
 // order of the five levels of what ken thinks the reader knows are kept here, once.
-import { partClass } from '../../project/part-colours.js'
+import { partClass } from '../project/part-colours.js'
 
 export const WAYS = { learn: 'Learn the project', 'catch-up': 'Catch up', review: 'Review a change' }
 export const DETAILS = { big: 'Big picture', how: 'How it works', code: 'In the code' }

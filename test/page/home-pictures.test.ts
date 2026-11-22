@@ -19,7 +19,7 @@ const {
 }: {
 	contentOf: (look: object, rows: object[], replies?: Replies, shown?: string | null) => Content
 	picturesOf: (look: object, rows: object[], replies?: Replies) => Picture[]
-} = await import(path.join(HOME, 'state/content.js'))
+} = await import(path.join(HOME, '../level/content.js'))
 const { inspectorHtml }: { inspectorHtml: (home: object, env: object) => string } = await import(
 	path.join(HOME, 'inspector/inspector.js')
 )
@@ -27,7 +27,7 @@ const { canvasHtml }: { canvasHtml: (home: object, rows: object[]) => string } =
 	path.join(HOME, 'canvas/canvas.js')
 )
 const { freshHome }: { freshHome: (stored: () => null, ui: object) => object } = await import(
-	path.join(HOME, 'state/home-state.js')
+	path.join(HOME, '../level/level-state.js')
 )
 
 // What a reader sees of a piece of the page: its words in order, with the markup taken out.

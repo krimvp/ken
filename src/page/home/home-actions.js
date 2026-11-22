@@ -1,14 +1,14 @@
 // What the reader can do on the home: every button, form and key of it. The state these act on is in state/, which
 // also reads the level from the server and holds the runs of ken's model the home starts.
 import { numberAt } from '../draw-diagrams.js'
+import { firstUnseen, pathOf, placeOf, shownDetail, stoodOn } from '../level/content.js'
+import { FIRST_DETAIL, WHOLE } from '../level/level-state.js'
+import { homeLoads } from '../level/loads.js'
+import { homeRuns } from '../level/runs.js'
+import { homeSeen } from '../level/seen.js'
 import { stepParts, stopTopics } from '../project/walk.js'
 import { boardActions } from './board/board-actions.js'
 import { askedQuestion } from './inspector/ask-drawer.js'
-import { firstUnseen, pathOf, placeOf, shownDetail, stoodOn } from './state/content.js'
-import { FIRST_DETAIL, WHOLE } from './state/home-state.js'
-import { homeLoads } from './state/loads.js'
-import { homeRuns } from './state/runs.js'
-import { homeSeen } from './state/seen.js'
 
 // app is the page: its state, render, the calls to the server, send, which asks ken's model a question, and the two
 // small stores of this browser.

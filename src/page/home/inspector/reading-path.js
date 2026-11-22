@@ -3,13 +3,14 @@
 // the reader picked is open, with its cards and what the reader can do next, and the others show their title and, at
 // "How it works", their words. So picking a box in the picture and picking a line here are the same act. A drawn
 // picture has a path too: the boxes and arrows of its diagram, under the numbers the drawing shows.
+
+import { diagramPath, firstUnseen, pathOf, placeOf, shownDetail, stepFiles } from '../../level/content.js'
+import { colourOf, levelLabel } from '../../level/level-state.js'
 import { cardPaths, cardQuotes, stepDiffHtml, stepWords } from '../../project/walk.js'
 import { count, esc, isSession, label, pathList, prose, quoteBody, RUN_COST, runButton } from '../../views/format.js'
 import { stepCardsHtml, storyHtml, wordsHtml } from '../../views/reply.js'
 import { arrowListHtml } from '../canvas/arrow-list.js'
 import { pathsLine, plusMinus } from '../canvas/part-box.js'
-import { diagramPath, firstUnseen, pathOf, placeOf, shownDetail, stepFiles } from '../state/content.js'
-import { colourOf, levelLabel } from '../state/home-state.js'
 
 // The two tags a boxed card can carry. Plain code read the facts of the first from git. The second holds words of
 // ken's model, each resting on quoted lines that ken found in git.

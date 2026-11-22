@@ -5,7 +5,7 @@
 // like the page it stands for. On a first visit "Start here" is the project in two sentences and the path through
 // the pages.
 import { partId } from '../brief/concept-id.js'
-import { KNOWN, levelLabel } from '../home/state/home-state.js'
+import { KNOWN, levelLabel } from '../level/level-state.js'
 import { partClass } from '../project/part-colours.js'
 import { placeParts } from '../project/parts-picture.js'
 import { icon, KIND_ICONS, levelMark } from '../shell/icons.js'
@@ -129,7 +129,7 @@ function conceptsHtml(look, concepts, home) {
 }
 
 // A process as a line through its stops, each in the colour of its part.
-function routeHtml(stops) {
+export function routeHtml(stops) {
 	if (stops.length === 0) return `<span class="k-route is-plain">${icon('processes')}</span>`
 	const [w, h] = [128, 40]
 	const at = (i) => ({ x: 8 + (i * (w - 16)) / Math.max(stops.length - 1, 1), y: i % 2 === 0 ? 10 : 30 })

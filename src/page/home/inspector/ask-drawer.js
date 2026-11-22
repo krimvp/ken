@@ -2,9 +2,10 @@
 // reply opens as a thread, as every question does. With a part selected the question is about that part, unless the
 // reader drops it. Behind one line are the questions ken writes itself from a folder, a person or a span of time.
 // Over the box are the reader's newest replies, each a way back to its thread.
+
+import { colourOf } from '../../level/level-state.js'
 import { esc, runButton, when } from '../../views/format.js'
 import { lensHtml } from '../../views/map.js'
-import { colourOf } from '../state/home-state.js'
 
 const SHOWN_QUESTIONS = 5
 

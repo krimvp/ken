@@ -2,8 +2,9 @@
 // the picture did to it. The box fills from the bottom as far as ken thinks the reader knows the part, and says the
 // level in words beside a meter, so the level never rests on colour alone. A part new to the reader is dashed and
 // empty. A part that commits touched since the reader looked says how many.
+
+import { KNOWN, levelLabel } from '../../level/level-state.js'
 import { count, esc, pathList, prose } from '../../views/format.js'
-import { KNOWN, levelLabel } from '../state/home-state.js'
 
 // Paths a box lists before it says how many more it holds.
 const SHOWN_PATHS = 3

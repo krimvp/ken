@@ -3,10 +3,11 @@
 // each part opens at the detail the server says for this reader. A detail the reader picks stays for every part until
 // they pick "ken picks" again. On a level of folders the control waits: there is nothing finer to show until the
 // parts have names.
+
+import { shownDetail } from '../../level/content.js'
+import { DETAILS, WAYS } from '../../level/level-state.js'
 import { count, esc, prose } from '../../views/format.js'
 import { changeName } from '../canvas/canvas.js'
-import { shownDetail } from '../state/content.js'
-import { DETAILS, WAYS } from '../state/home-state.js'
 import { miniPictureHtml } from './mini-picture.js'
 
 const reviewItem = (look) => look.next.items.find((item) => item.kind === 'review')

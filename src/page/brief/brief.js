@@ -4,8 +4,8 @@
 // always in the same place: what ken thinks the reader knows of it with "Not right", and the three ways on,
 // Sideways, Questions and Deeper. The setting for text decides how much stands under each line. A concept ken's
 // model has not explained yet still opens, with what git says of it and one button for the rest.
-import { KNOWN, levelLabel } from '../home/state/home-state.js'
-import { DOING } from '../home/state/runs.js'
+import { KNOWN, levelLabel } from '../level/level-state.js'
+import { DOING } from '../level/runs.js'
 import { partClass, partOfFile } from '../project/part-colours.js'
 import { placeParts } from '../project/parts-picture.js'
 import { icon, KIND_ICONS, levelMark } from '../shell/icons.js'

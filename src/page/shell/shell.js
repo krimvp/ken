@@ -1,7 +1,7 @@
 // The frame of ken's page: a rail on the left with a page for each job, a bar on top with the page's name and the
 // search, and a panel for the settings. Under 760 pixels the rail lies along the foot as icons.
 import { TEXTS } from '../brief/brief.js'
-import { levelLabel } from '../home/state/home-state.js'
+import { levelLabel } from '../level/level-state.js'
 import { partClass, partOfFile } from '../project/part-colours.js'
 import { esc, prose } from '../views/format.js'
 import { icon, KIND_ICONS, LOGO, levelMark } from './icons.js'

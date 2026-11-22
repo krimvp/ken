@@ -3,7 +3,7 @@
 // a step of a change after five. A send that fails is dropped without a word: it must never block or slow the page.
 // A brief open in its drawer counts as read the same way, on any page. When ken wrote a line, the home reads the
 // level and the record again, so the box's fill moves with no reload.
-import { cardPaths, stopTopics } from '../../project/walk.js'
+import { cardPaths, stopTopics } from '../project/walk.js'
 import { pathOf, placeOf, shownDetail, stepFiles, stoodOn } from './content.js'
 
 const READ_MS = 10_000

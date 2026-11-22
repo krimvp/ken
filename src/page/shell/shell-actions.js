@@ -5,14 +5,14 @@
 // and You the reader's map.
 import { partId, readConcept } from '../brief/concept-id.js'
 import { askDrawerHtml } from '../home/inspector/ask-drawer.js'
-import { WAYS, WHOLE } from '../home/state/home-state.js'
+import { WAYS, WHOLE } from '../level/level-state.js'
 import { learnParts } from '../project/part-colours.js'
 import { startPageHtml } from '../start/start.js'
 import { fill } from './fill.js'
 import { readPlace, writePlace } from './place.js'
 import { barTitle, findConcepts, foundHtml, railHtml, settingsHtml } from './shell.js'
 
-const OLDER = ['processes', 'changes', 'you']
+const OLDER = ['changes', 'you']
 const narrow = matchMedia('(max-width: 760px)')
 
 // What the frame holds: the page, the top level of the project for the Home page, what search can find, what the
@@ -84,18 +84,13 @@ export function shellActions(app) {
 		const { home } = state
 		if (page === 'home') return loadTop()
 		if (page === 'architecture') return app.arch.enter()
+		if (page === 'processes') return app.procs.enter()
 		if (page === 'you') return app.showMap()
-		Object.assign(home, { selected: null, opened: page === 'changes', why: null })
-		if (page === 'processes') {
-			home.trail = [WHOLE]
-			await loads.enter('learn')
-			home.shown = home.pictures[1]?.id ?? null
-		} else {
-			const kept = Object.keys(WAYS).find((way) => way === app.stored('ken-way-in'))
-			const way = [home.wayIn, kept, home.suggestion?.suggested].find((each) => each && each !== 'learn')
-			home.trail = [WHOLE]
-			await loads.enter(way ?? 'catch-up')
-		}
+		Object.assign(home, { selected: null, opened: true, why: null })
+		const kept = Object.keys(WAYS).find((way) => way === app.stored('ken-way-in'))
+		const way = [home.wayIn, kept, home.suggestion?.suggested].find((each) => each && each !== 'learn')
+		home.trail = [WHOLE]
+		await loads.enter(way ?? 'catch-up')
 		await loads.settle()
 	}
 
@@ -178,9 +173,12 @@ export function shellActions(app) {
 		const asks = narrow.matches ? 'Find' : 'Find a part, a process or a term'
 		if ($('#search-text').placeholder !== asks) $('#search-text').placeholder = asks
 		if ($('#bar-title').textContent !== title) $('#bar-title').textContent = title
-		const [start, canvas] = [$('#pg-home'), $('#pg-arch')]
+		const [start, canvas, procs] = [$('#pg-home'), $('#pg-arch'), $('#pg-proc')]
 		start.hidden = older || shell.page !== 'home'
 		canvas.hidden = older || shell.page !== 'architecture'
+		procs.hidden = older || shell.page !== 'processes'
+		if (procs.hidden) fill(procs, '')
+		else app.procs.draw(env)
 		$('#pg-old').hidden = !older
 		if (start.hidden) fill(start, '')
 		else {

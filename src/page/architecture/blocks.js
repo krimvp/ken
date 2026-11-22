@@ -4,7 +4,7 @@
 // colour alone: a level is a mark and its words, a change is a count, and a block that steps back says why.
 import { partId } from '../brief/concept-id.js'
 import { isFile, stateLine } from '../home/canvas/part-box.js'
-import { KNOWN, levelLabel } from '../home/state/home-state.js'
+import { KNOWN, levelLabel } from '../level/level-state.js'
 import { icon, levelMark, partIcon } from '../shell/icons.js'
 import { count, esc, prose } from '../views/format.js'
 

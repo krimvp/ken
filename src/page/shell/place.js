@@ -3,14 +3,14 @@
 // function reads a place from an address and one writes it. An address from before the pages, "#way=...", opens the
 // nearest place there is now. The views from before the pages keep their own fields in the address, as they were.
 import { partId } from '../brief/concept-id.js'
-import { readAddress, readReply, writeAddress } from '../home/state/address.js'
-import { WHOLE } from '../home/state/home-state.js'
+import { readAddress, readReply, writeAddress } from '../level/address.js'
+import { WHOLE } from '../level/level-state.js'
 
 export const PAGES = ['home', 'architecture', 'processes', 'changes', 'you']
 export const LAYERS = ['processes', 'changes', 'know']
 const WAYS_ON = ['sideways', 'questions', 'deeper']
 // The pages that still show a view from before the pages, with what that view keeps in the address.
-const OLDER = ['processes', 'changes']
+const OLDER = ['changes']
 
 const inField = (part) => [part.name, ...part.within].join('\n')
 
@@ -74,7 +74,7 @@ function fromOlder(hash) {
 	const older = readAddress(hash)
 	if (!older) return { ...START, older: null }
 	if (older.wayIn !== 'learn') return { ...START, page: 'changes', older }
-	if (older.shown !== null) return { ...START, page: 'processes', older }
+	if (older.shown !== null) return { ...START, page: 'processes', older: null }
 	const picked = older.selected?.kind === 'part' ? older.selected.name : null
 	return {
 		...START,

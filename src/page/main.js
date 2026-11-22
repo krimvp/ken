@@ -8,10 +8,11 @@ import { briefStore } from './brief/briefs.js'
 import { fillDrawings, markPart, numberAt } from './draw-diagrams.js'
 import { homeActions } from './home/home-actions.js'
 import { clearHome, drawCanvas, showHome } from './home/home-view.js'
-import { readReply, replyAddress } from './home/state/address.js'
-import { freshHome } from './home/state/home-state.js'
-import { DOING } from './home/state/runs.js'
+import { readReply, replyAddress } from './level/address.js'
+import { freshHome } from './level/level-state.js'
+import { DOING } from './level/runs.js'
 import { liveLook, liveViewHtml } from './live/live-view.js'
+import { freshProcesses, processActions } from './processes/process-actions.js'
 import { changeKey } from './project/change-card.js'
 import { learnParts } from './project/part-colours.js'
 import { atRest, drawPictures, lightPicture } from './project/parts-picture.js'
@@ -67,6 +68,7 @@ const state = {
 	shell: null,
 	arch: freshArch(),
 	brief: freshBrief(),
+	procs: freshProcesses(),
 	project: null,
 	model: null,
 	rows: [],
@@ -335,6 +337,7 @@ async function send(body, onHome = null) {
 		const made = saved ?? (stopped ? { ...q, id: last.id } : q)
 		await shell.reread()
 		if (onHome?.kind === 'explain' || onHome?.kind === 'answer') await brief.ended(onHome, made)
+		else if (onHome?.kind === 'draw') await procs.ended(made)
 		else if (onHome !== null) await home.ended(onHome, made)
 		else if (state.thread.includes(q) && stopped) await openQuestion(last.id)
 		state.running = null
@@ -1091,6 +1094,8 @@ const brief = briefActions(app)
 app.brief = brief
 const arch = archActions(app)
 app.arch = arch
+const procs = processActions(app)
+app.procs = procs
 const shell = shellActions(app)
 app.shell = shell
 
@@ -1110,6 +1115,7 @@ const actions = {
 	...shell.actions,
 	...arch.actions,
 	...brief.actions,
+	...procs.actions,
 	map: () => (state.view === 'map' ? closeMap() : showMap()),
 	decisions: () => (state.view === 'decisions' ? closeDecisions() : showDecisions()),
 	'cc-open': (el) => openChangePart(Number(el.dataset.turn), Number(el.dataset.index)),
@@ -1363,7 +1369,7 @@ $('#ask').addEventListener('submit', (event) => {
 })
 
 document.addEventListener('submit', (event) => {
-	if (brief.submit(event)) return
+	if (brief.submit(event) || procs.submit(event)) return
 	if (home.submit(event)) {
 		// A request sent from the canvas's tool closes the tool, so the canvas shows the run.
 		if (event.target.id === 'redraw-form' && state.home.redraw.problem === null && state.arch.drawOpen) {

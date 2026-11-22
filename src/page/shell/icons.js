@@ -1,7 +1,7 @@
 // The drawn icons of the page, as inline SVG, and the mark for what ken thinks the reader knows: four bars that grow,
 // filled as far as the level, with a tick when the reader said they know it. The same mark stands for a level on every
 // page, so the reader learns it once. No icon comes from the network.
-import { KNOWN } from '../home/state/home-state.js'
+import { KNOWN } from '../level/level-state.js'
 
 const PATHS = {
 	home: '<path d="M4 11l8-7 8 7v8a1 1 0 0 1-1 1h-4v-6h-6v6H5a1 1 0 0 1-1-1z"/>',

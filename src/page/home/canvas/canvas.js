@@ -3,11 +3,12 @@
 // nobody named them. The chosen detail decides what each box says under its name: its job, or its paths at "In the
 // code". A change marks the parts it touched and fades the rest. A box is a button that selects its part. When ken
 // drew the level another way because the reader asked, a row of tabs offers each drawn picture in place of the parts.
+
+import { diagramOf, pathOf, placeOf, shownDetail, stepFiles } from '../../level/content.js'
+import { colourOf, projectName } from '../../level/level-state.js'
 import { pictureHtml } from '../../project/parts-picture.js'
 import { stepParts } from '../../project/walk.js'
 import { count, esc, label, list, pathList, prose } from '../../views/format.js'
-import { diagramOf, pathOf, placeOf, shownDetail, stepFiles } from '../state/content.js'
-import { colourOf, projectName } from '../state/home-state.js'
 import { arrowListHtml } from './arrow-list.js'
 import { boxHtml, isFile } from './part-box.js'
 

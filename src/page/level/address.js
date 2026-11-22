@@ -2,7 +2,7 @@
 // level before, and a reload keeps the place. A place is { wayIn, detail, trail, change, at, shown, selected }, the
 // same fields the home's state holds. One function reads a place from an address and one writes it, and nothing else
 // knows the form. A reply open as a thread has an address too, so a reload opens it again.
-import { DETAILS, WAYS, WHOLE } from './home-state.js'
+import { DETAILS, WAYS, WHOLE } from './level-state.js'
 
 const PICKS = ['part', 'step', 'element']
 

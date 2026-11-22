@@ -5,6 +5,11 @@
 // model's, and a boxed card holds what plain code read from git or lines ken found there. While a run of ken's model
 // started from the home is under way, the panel shows that run in place of what it will fill, and when a run ends
 // with nothing to show, it says so. The code calls the column the inspector.
+
+import { besideCanvas, diagramOf, firstUnseen, pathOf, placeOf, shownDetail } from '../../level/content.js'
+import { colourOf, DETAILS, levelName } from '../../level/level-state.js'
+import { diffKey } from '../../level/loads.js'
+import { DOING, isThere, levelOf } from '../../level/runs.js'
 import { stepDiffHtml } from '../../project/walk.js'
 import { count, day, esc, list, pathList, prose, runButton, short } from '../../views/format.js'
 import { LEGEND, storyHtml } from '../../views/reply.js'
@@ -12,10 +17,6 @@ import { noModelHtml, workingHtml } from '../../views/states.js'
 import { boardHtml } from '../board/board.js'
 import { changeName } from '../canvas/canvas.js'
 import { stateLine } from '../canvas/part-box.js'
-import { besideCanvas, diagramOf, firstUnseen, pathOf, placeOf, shownDetail } from '../state/content.js'
-import { colourOf, DETAILS, levelName } from '../state/home-state.js'
-import { diffKey } from '../state/loads.js'
-import { DOING, isThere, levelOf } from '../state/runs.js'
 import {
 	asksHtml,
 	elementNoun,

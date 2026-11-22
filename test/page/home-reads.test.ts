@@ -18,9 +18,9 @@ type Loads = {
 	back: () => Promise<void>
 }
 const { freshHome }: { freshHome: (stored: () => null, ui: object) => Home } = await import(
-	path.join(HOME, 'state/home-state.js')
+	path.join(HOME, '../level/level-state.js')
 )
-const { homeLoads }: { homeLoads: (app: object) => Loads } = await import(path.join(HOME, 'state/loads.js'))
+const { homeLoads }: { homeLoads: (app: object) => Loads } = await import(path.join(HOME, '../level/loads.js'))
 const { inspectorHtml }: { inspectorHtml: (home: object, env: object) => string } = await import(
 	path.join(HOME, 'inspector/inspector.js')
 )

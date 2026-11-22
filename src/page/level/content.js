@@ -6,7 +6,7 @@
 // diagram ken's model drew because the reader asked to see it another way: a drawn picture, shown in place of the
 // parts when the reader picks it. The reading path is what the home walks through at "How it works" and "In the
 // code": the stops of a tour, the steps of a walkthrough, or the numbered boxes and arrows of a drawn picture.
-import { walkOf } from '../../project/walk.js'
+import { walkOf } from '../project/walk.js'
 
 // Whether two lists, such as the paths of two levels, hold the same things in the same order.
 export const sameList = (a, b) => a.length === b.length && a.every((each, i) => each === b[i])

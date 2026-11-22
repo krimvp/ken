@@ -1,8 +1,8 @@
 // What the home reads from the server: the level on screen, ken's notes about the reader, and the saved replies the
 // level's content names. The server reads the level from git on every move.
-import { learnParts } from '../../project/part-colours.js'
+import { learnParts } from '../project/part-colours.js'
 import { contentOf, picturesOf, repliesOf, sameList, shownDetail } from './content.js'
-import { FIRST_DETAIL } from './home-state.js'
+import { FIRST_DETAIL } from './level-state.js'
 
 // The server gives the diff of this many files at a time.
 const DIFF_PATHS = 10

@@ -1,8 +1,9 @@
 // The arrows of a level as sentences, under the numbers the picture shows on them: "Tests runs scenarios through Eval
 // harness". The picture can only fit a few words on an arrow, and on a phone only its number, so this list says each
 // one in full. A row opens the line of code its arrow rests on.
+
+import { colourOf } from '../../level/level-state.js'
 import { esc, quoteBody } from '../../views/format.js'
-import { colourOf } from '../state/home-state.js'
 
 // name limits the list to the arrows that start or end at one part, and null lists them all. open shows every
 // arrow's line, where the reader came for the code. where names the copy, so two on one page keep their own keys.

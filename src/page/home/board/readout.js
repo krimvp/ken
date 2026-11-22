@@ -2,9 +2,10 @@
 // "Not right" opens the five levels to pick from, and "Open" goes to the part where ken would open it. The box is the
 // one the reader picked, else the one they last pointed at or moved to. With none, the line says what the fill means.
 // ken says "thinks" of everything it worked out from what the reader looked at: only the reader says they know a part.
+
+import { DETAILS, KNOWN } from '../../level/level-state.js'
 import { esc } from '../../views/format.js'
 import { sinceLooked } from '../canvas/part-box.js'
-import { DETAILS, KNOWN } from '../state/home-state.js'
 
 const THINKS = {
 	new: (name) => `ken thinks ${name} is new to you.`,

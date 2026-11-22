@@ -4,9 +4,9 @@
 // its own blocks, and then into files, and a breadcrumb says how deep they are. The layers lay a second reading over
 // the same blocks, and one tool asks ken's model to draw the level another way.
 import { arrowId, partId, processId } from '../brief/concept-id.js'
-import { diagramOf } from '../home/state/content.js'
-import { colourOf, projectName } from '../home/state/home-state.js'
-import { DOING } from '../home/state/runs.js'
+import { diagramOf } from '../level/content.js'
+import { colourOf, projectName } from '../level/level-state.js'
+import { DOING } from '../level/runs.js'
 import { icon, partIcon } from '../shell/icons.js'
 import { count, esc, pathList, prose, RUN_COST } from '../views/format.js'
 import { blockHtml } from './blocks.js'

@@ -17,7 +17,7 @@ const {
 	contentOf,
 }: {
 	contentOf: (look: object, rows: object[], replies?: Replies, shown?: string | null) => Content
-} = await import(path.join(HOME, 'state/content.js'))
+} = await import(path.join(HOME, '../level/content.js'))
 const { inspectorHtml }: { inspectorHtml: (home: object, env: object) => string } = await import(
 	path.join(HOME, 'inspector/inspector.js')
 )
@@ -37,7 +37,7 @@ type Home = {
 	ended: { kind: string; level?: string } | null
 }
 const { freshHome }: { freshHome: (stored: () => null, ui: object) => Home } = await import(
-	path.join(HOME, 'state/home-state.js')
+	path.join(HOME, '../level/level-state.js')
 )
 type Answer = { ok: boolean; body: object }
 type Loads = {
@@ -45,12 +45,12 @@ type Loads = {
 	loadDiff: () => Promise<void>
 	refresh: () => Promise<void>
 }
-const { homeLoads }: { homeLoads: (app: object) => Loads } = await import(path.join(HOME, 'state/loads.js'))
+const { homeLoads }: { homeLoads: (app: object) => Loads } = await import(path.join(HOME, '../level/loads.js'))
 const {
 	homeRuns,
 }: {
 	homeRuns: (app: object, loads: Loads, stepTo: () => void) => { ended: (started: object, q: object) => Promise<void> }
-} = await import(path.join(HOME, 'state/runs.js'))
+} = await import(path.join(HOME, '../level/runs.js'))
 
 // A command that runs the core, a core that saves to a store, and a test of the core. The second commit touches only
 // the store, and the last one, the change the reader reviews, makes the core wait and the store keep, and says so in a
@@ -307,7 +307,7 @@ test('a change nobody asked ken about still says what git knows: its commits, th
 })
 
 const address: { writeAddress: (place: object) => string; readAddress: (hash: string) => object | null } = await import(
-	path.join(HOME, 'state/address.js')
+	path.join(HOME, '../level/address.js')
 )
 
 test('the address of a place on the home reads back as the same place, and an address that names none reads as none', () => {
@@ -427,7 +427,7 @@ test('a run is judged against the level it started on: a reader who looked insid
 })
 
 type Seen = { did: string; paths: string[]; after: number; change?: { base: string; head: string } } | null
-const { onScreen }: { onScreen: (home: object) => Seen } = await import(path.join(HOME, 'state/seen.js'))
+const { onScreen }: { onScreen: (home: object) => Seen } = await import(path.join(HOME, '../level/seen.js'))
 const { readoutHtml }: { readoutHtml: (home: object) => string } = await import(path.join(HOME, 'board/readout.js'))
 
 test('what the page tells ken follows what stays on screen: a tour stop is read after ten seconds, its quoted files are code after five, a step or a part of a change is that change, and a part at the big picture is only opened', async () => {

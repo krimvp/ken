@@ -1,8 +1,9 @@
 // What the reader can do on the board: go where a card of "Next for you" or the readout's "Open" leads, correct what
 // ken thinks they know of a part, and take back a line ken recorded. Pointing at a box, or moving to it, shows it in
 // the readout line, and pointing at a card or a recorded line outlines its boxes in the picture.
+
+import { DETAILS, FIRST_DETAIL } from '../../level/level-state.js'
 import { showReadout } from '../home-view.js'
-import { DETAILS, FIRST_DETAIL } from '../state/home-state.js'
 
 // Why ken opens a part at the detail it does, by what it thinks the reader knows of it.
 const BECAUSE = {
