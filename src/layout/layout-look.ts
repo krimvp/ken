@@ -83,7 +83,7 @@ type Stored = Extract<RecordEntry, { kind: 'layout' }>
 // loose names what sits in the scope at the commit asked and in no box, such as a folder HEAD no longer has or one the
 // model left out of its parts. Of a change, files counts the changed files in the level's scope and outside names
 // those no box holds. commits are its commits, newest first, without merges, since the commits a merge brings are
-// listed themselves. It lists at most MAX_COMMITS, and moreCommits counts the rest.
+// listed themselves. Uncommitted work has none: it ends at ken's snapshot, which is no commit of the project. It lists at most MAX_COMMITS, and moreCommits counts the rest.
 export type LayoutLook = {
 	at: CommitHash
 	head: CommitHash
@@ -118,7 +118,7 @@ export async function lookAtLayout(
 	const places = level.boxes.flatMap((box) => box.paths)
 	const [diff, commits, mapRead] = await Promise.all([
 		ask.change && changedFiles(repo, ask.change.range, signal),
-		ask.change && landedCommits(repo, ask.change.range, signal),
+		ask.change && (ask.change.kind === 'uncommitted' ? [] : landedCommits(repo, ask.change.range, signal)),
 		sources.map.read(now, signal),
 	])
 	const topics = read.current.flatMap((entry) => (entry.kind === 'topic' ? [entry] : []))

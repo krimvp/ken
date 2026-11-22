@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict'
+import { writeFileSync } from 'node:fs'
+import path from 'node:path'
 import { test } from 'node:test'
 import { buildRepository, type FixtureCommit } from '../fixtures/build-repository.ts'
 import { ask, call, json, openKen, readerHome } from '../fixtures/ken-server.ts'
@@ -48,6 +50,15 @@ test('a change laid over the picture lists its commits newest first without the 
 		[2, []],
 		'the changed doc is outside src, so it is neither counted nor named there',
 	)
+})
+
+test("uncommitted work laid over the picture has no commits, since ken's snapshot of it is no commit of the project", async () => {
+	const { root } = buildRepository([{ message: 'feat: start', files: { 'src/a.ts': 'a\n' } }])
+	const server = await openKen(root, readerHome())
+	writeFileSync(path.join(root, 'src/a.ts'), 'a\nb\n')
+
+	const { look } = await json(server, layoutOf('uncommitted'))
+	assert.deepEqual([look.change.commits, look.change.moreCommits, look.change.files], [[], 0, 1])
 })
 
 test('a change with more commits or more files in a box than the page lists says how many it left out', async () => {
