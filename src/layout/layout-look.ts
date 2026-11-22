@@ -118,7 +118,7 @@ export async function lookAtLayout(
 	const places = level.boxes.flatMap((box) => box.paths)
 	const [diff, commits, mapRead] = await Promise.all([
 		ask.change && changedFiles(repo, ask.change.range, signal),
-		ask.change && (ask.change.kind === 'uncommitted' ? [] : landedCommits(repo, ask.change.range, signal)),
+		ask.change && (ask.change.kind === 'uncommitted' ? NO_COMMITS : landedCommits(repo, ask.change.range, signal)),
 		sources.map.read(now, signal),
 	])
 	const topics = read.current.flatMap((entry) => (entry.kind === 'topic' ? [entry] : []))
@@ -142,8 +142,8 @@ export async function lookAtLayout(
 					...ask.change,
 					files: inScope.length,
 					outside: inScope.filter((file) => !places.some((place) => under(file, place))),
-					commits: commits.slice(0, MAX_COMMITS),
-					moreCommits: Math.max(0, commits.length - MAX_COMMITS),
+					commits: commits.commits,
+					moreCommits: commits.more,
 				}
 			: null
 	const tour = level.named ? tourOrder(boxes.filter((box) => box.state !== 'gone')) : null
@@ -319,14 +319,16 @@ async function changedFiles(repo: Repository, range: Range, signal?: AbortSignal
 	return diff.files
 }
 
-async function landedCommits(repo: Repository, range: Range, signal?: AbortSignal): Promise<LandedCommit[]> {
-	const logged = await repo.log(range, signal)
-	if (logged.kind !== 'ok') {
-		throw new Error(`The change ${range.base}..${range.head} has too many commits for ken to lay out.`)
-	}
-	return logged.commits
-		.filter((commit) => commit.parents.length < 2)
-		.map(({ hash, subject, author, date }) => ({ hash, subject, author, date }))
+type Landed = { commits: LandedCommit[]; more: number }
+
+const NO_COMMITS: Landed = { commits: [], more: 0 }
+
+// A range git cannot list even without file names shows no commits rather than no layout.
+async function landedCommits(repo: Repository, range: Range, signal?: AbortSignal): Promise<Landed> {
+	const listed = await repo.commitsIn(range, MAX_COMMITS, signal)
+	if (listed.kind !== 'ok') return NO_COMMITS
+	const commits = listed.commits.map(({ hash, subject, author, date }) => ({ hash, subject, author, date }))
+	return { commits, more: listed.more }
 }
 
 function touchedIn(paths: string[], diff: FileDiff[]): Touched | null {
