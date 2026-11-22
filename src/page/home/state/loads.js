@@ -139,16 +139,12 @@ export function homeLoads({ state, render, read, fromView, stored }) {
 	async function enter(wayIn) {
 		const home = state.home
 		const kept = stored(`ken-detail-${wayIn}`)
-		Object.assign(home, {
-			wayIn,
-			at: '',
-			shown: null,
-			selected: null,
-			detail: Object.keys(DETAILS).find((detail) => detail === kept) ?? FIRST_DETAIL[wayIn],
-			change: wayIn === 'review' ? '' : 'none',
-		})
+		Object.assign(home, { wayIn, at: '', shown: null, selected: null, change: wayIn === 'review' ? '' : 'none' })
 		if (wayIn === 'catch-up') home.change = home.changes.find((choice) => choice.kind === 'since')?.change ?? 'none'
 		if (!(await loadLayout())) return
+		// The detail of the way in comes with its level, so the panel does not show the old level at the new detail
+		// while the server reads.
+		home.detail = Object.keys(DETAILS).find((detail) => detail === kept) ?? FIRST_DETAIL[wayIn]
 		if (wayIn === 'review' && !home.problem && !home.look.change) {
 			const newest = home.changes.find((choice) => choice.kind === 'merge' || choice.kind === 'commit')
 			if (newest) {
