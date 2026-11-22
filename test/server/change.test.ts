@@ -133,12 +133,20 @@ test('a change asked as a span of time is the commits since then, a span with no
 	assert.deepEqual([replied.reply.change.base, replied.reply.change.head], [second, third])
 })
 
-test('the diff of a change comes from git for the files asked, as hunks with their line numbers, cut after 400 changed lines', async () => {
+test('the diff of a change comes from git for the files asked, as hunks with their line numbers, cut after 400 changed lines, and names the asked files that are binary', async () => {
 	const { root, hashes } = buildRepository([
-		{ message: 'feat: start', files: { 'src/a.ts': 'one\ntwo\nthree\n', 'src/b.ts': 'b\n', 'src/big.ts': 'top\n' } },
+		{
+			message: 'feat: start',
+			files: { 'src/a.ts': 'one\ntwo\nthree\n', 'src/b.ts': 'b\n', 'src/big.ts': 'top\n', 'src/same.ts': 's\n' },
+		},
 		{
 			message: 'feat: more',
-			files: { 'src/a.ts': 'one\n2\nthree\n', 'src/b.ts': 'b\nbee\n', 'src/big.ts': `top\n${lines(500)}` },
+			files: {
+				'src/a.ts': 'one\n2\nthree\n',
+				'src/b.ts': 'b\nbee\n',
+				'src/big.ts': `top\n${lines(500)}`,
+				'logo.png': new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0, 1, 2]),
+			},
 		},
 	])
 	const server = await openKen(root, readerHome())
@@ -155,7 +163,12 @@ test('the diff of a change comes from git for the files asked, as hunks with the
 			},
 		],
 		cut: false,
+		binary: [],
+		tooLarge: false,
 	})
+
+	const why = await json(server, diffOf(['logo.png', 'src/same.ts']))
+	assert.deepEqual(why, { hunks: [], cut: false, binary: ['logo.png'], tooLarge: false }, 'src/same.ts did not change')
 
 	const big = await json(server, diffOf(['src/b.ts', 'src/big.ts']))
 	const changed = big.hunks.flatMap((each: { hunk: { lines: string[] } }) =>
