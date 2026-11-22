@@ -78,7 +78,13 @@ export function changeActions(app) {
 		const older = chg.tab === 'changes' ? '' : app.older.html(chg.tab)
 		const waiting = app.older.waiting()
 		const live = app.older.live()
-		fill(page, changesPageHtml({ home: state.home, chg, env, timeline: state.shell.timeline, waiting, live, older }))
+		const drawn = fill(
+			page,
+			changesPageHtml({ home: state.home, chg, env, timeline: state.shell.timeline, waiting, live, older }),
+		)
+		// A timeline wider than the screen opens at its newest days, where the span ends.
+		const wrap = page.querySelector('#chg-timeline')
+		if (drawn && wrap && !chg.drag) wrap.scrollLeft = wrap.scrollWidth
 	}
 
 	const lookNow = () => state.home.look

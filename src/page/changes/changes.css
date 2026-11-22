@@ -494,4 +494,9 @@
 	.k-chg-older {
 		padding: 16px;
 	}
+
+	/* The chart keeps its labels at their size, and scrolls sideways inside its card. */
+	.k-tl {
+		min-width: 1000px;
+	}
 }
