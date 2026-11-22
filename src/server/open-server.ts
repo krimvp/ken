@@ -204,7 +204,7 @@ export async function openServer(options: {
 			if (request.socket.destroyed) stop.abort()
 			response.writeHead(200, { ...HEADERS, 'content-type': 'application/x-ndjson; charset=utf-8' })
 			response.flushHeaders()
-			await desk.ask(model.chat, question.text, stop.signal, (line) => writeLine(response, line), asked.tour)
+			await desk.ask(model.chat, question.text, stop.signal, (line) => writeLine(response, line), asked.as)
 			return response.end()
 		}
 		const file = request.method === 'GET' ? files.get(url.pathname) : undefined

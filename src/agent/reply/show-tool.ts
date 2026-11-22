@@ -57,13 +57,23 @@ export type Round = {
 	emit: (event: ChatEvent) => void
 }
 
-export function freshRound(asked: boolean, emit: Round['emit'], tour: Tour | null = null): Round {
+// How a question is asked, which decides what its round starts with. question: the reader typed it, or a lens wrote
+// it. note: ken writes by itself in live mode, which tells the reader's map nothing. tour: a tour of a named level,
+// which tells the map nothing either, since the page marks each stop as the reader reaches it. change: a question
+// about one change that plain code picked, so the reply is about that range whether or not the model sends a scope.
+export type Asking =
+	| { kind: 'question' }
+	| { kind: 'note' }
+	| { kind: 'tour'; tour: Tour }
+	| { kind: 'change'; range: Range }
+
+export function freshRound(as: Asking, emit: Round['emit']): Round {
 	return {
-		asked,
-		tour,
+		asked: as.kind === 'question' || as.kind === 'change',
+		tour: as.kind === 'tour' ? as.tour : null,
 		step: 'talk',
 		passRejections: 0,
-		scope: null,
+		scope: as.kind === 'change' ? { range: as.range, work: null, hunks: null } : null,
 		items: [],
 		pending: [],
 		held: [],
@@ -221,9 +231,7 @@ async function setScope(gate: Gate, current: Round, raw: JsonObject, signal: Abo
 		return same ? null : `This reply is about ${now}. One reply explains one change: leave out scope.`
 	}
 	current.scope = { range, work: null, hunks: null }
-	// The page draws the change over the project's parts at the top of the reply as soon as it knows the range.
-	const log = await gate.sources.repo.log(range, signal)
-	current.emit({ kind: 'change', base: range.base, head: range.head, commits: log.kind === 'ok' ? log.commits : [] })
+	current.emit(await changeNamed(gate.sources.repo, range, signal))
 	// A risk shown in the same turn, before the scope came, is about the change too.
 	if (current.asked && current.step === 'talk') {
 		const risks = current.pending.flatMap((item) =>
@@ -233,6 +241,12 @@ async function setScope(gate: Gate, current: Round, raw: JsonObject, signal: Abo
 		current.held.push(...risks)
 	}
 	return null
+}
+
+// The page draws the change over the project's parts at the top of the reply as soon as it knows the range.
+export async function changeNamed(repo: Repository, range: Range, signal?: AbortSignal): Promise<ChatEvent> {
+	const log = await repo.log(range, signal)
+	return { kind: 'change', base: range.base, head: range.head, commits: log.kind === 'ok' ? log.commits : [] }
 }
 
 export function contextOf(gate: Gate, current: Round): CardContext {

@@ -12,9 +12,9 @@ import { readerIndex } from './reader-index.ts'
 import { quotesOf } from './reply/check-card.ts'
 import { fileTurn } from './reply/file-turn.ts'
 import { endReply } from './reply/record-reply.ts'
-import type { Item, Tour } from './reply/reply.ts'
+import type { Item } from './reply/reply.ts'
 import { laterCommits, laterText, MAX_PASS_REJECTIONS, reviseTool, riskPassQuestion } from './reply/risk-pass.ts'
-import { freshRound, type Round, showTool } from './reply/show-tool.ts'
+import { type Asking, changeNamed, freshRound, type Round, showTool } from './reply/show-tool.ts'
 import { SYSTEM_PROMPT } from './system-prompt.ts'
 import { describeCall } from './tools/describe-call.ts'
 import { diffTool } from './tools/diff-tool.ts'
@@ -27,14 +27,10 @@ export type Chat = {
 	root: string
 	// This chat's thread. A new Chat is a new thread: its model remembers what was asked of this one alone.
 	thread: string
-	// One question at a time. Breaking out of the loop early stops the question. as 'note' is a note ken writes by
-	// itself in live mode, which tells the reader's map nothing. A tour tells it nothing either: the page marks each stop
-	// as the reader reaches it.
+	// One question at a time. Breaking out of the loop early stops the question. as says how it is asked: see Asking.
 	ask(question: string, signal?: AbortSignal, as?: Asking): AsyncGenerator<ChatEvent>
 	close(): Promise<void>
 }
-
-export type Asking = 'question' | 'note' | { tour: Tour }
 
 const PLUGIN = 'ken'
 // Each step of a question has its own turns, counted from 0, and a notice when few are left: a model that runs out of
@@ -76,7 +72,7 @@ export async function startChat(options: {
 	const sessions = projectSessions(found.root, options.env)
 	// The record reads the project alone, so its gate refuses a quote of a snapshot whatever reaches it.
 	const store = fileRecordStore(found.root, project, sessions)
-	let round: Round = freshRound(false, () => {})
+	let round: Round = freshRound({ kind: 'note' }, () => {})
 	let turnsEnded = 0
 	const withTurnsLeft = (tool: Tool): Tool => ({
 		...tool,
@@ -127,9 +123,13 @@ export async function startChat(options: {
 		systemPrompt: SYSTEM_PROMPT,
 	})
 
-	async function* ask(question: string, signal?: AbortSignal, as: Asking = 'question'): AsyncGenerator<ChatEvent> {
+	async function* ask(
+		question: string,
+		signal?: AbortSignal,
+		as: Asking = { kind: 'question' },
+	): AsyncGenerator<ChatEvent> {
 		const events = eventQueue()
-		const current = freshRound(as === 'question', events.push, typeof as === 'object' ? as.tour : null)
+		const current = freshRound(as, events.push)
 		round = current
 		turnsEnded = 0
 		shown.clear()
@@ -196,6 +196,7 @@ export async function startChat(options: {
 				.prompt(text, { signal: signal ? AbortSignal.any([signal, own.signal]) : own.signal })
 				.catch((error: unknown): RunResult => ({ stop: 'error', message: String(error), turns: 0 }))
 		const talk = async () => {
+			if (as.kind === 'change') events.push(await changeNamed(repo, as.range, signal))
 			const result = await prompt(`${index}${reader}\n\nThe question: ${question}`, stops.talk)
 			settleRetry('reply')
 			let secondLook: Cost | null = null

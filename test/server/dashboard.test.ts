@@ -7,7 +7,7 @@ import { fileRecordStore } from '../../src/record/index.ts'
 import { gitRepository } from '../../src/repo/index.ts'
 import { buildRepository } from '../fixtures/build-repository.ts'
 import { ask, call, json, openKen, readerHome } from '../fixtures/ken-server.ts'
-import { scriptedModel } from '../fixtures/scripted-model.ts'
+import { scriptedModel, type Turn } from '../fixtures/scripted-model.ts'
 
 const names = (look: { boxes: { name: string }[] }) => look.boxes.map((box) => box.name)
 
@@ -127,4 +127,52 @@ test('on a branch ahead of main ken suggests review, and says which branch and h
 	assert.equal(wayIn.suggested, 'review')
 	assert.match(wayIn.why, /feature-x.*\b2 commits\b/)
 	assert.equal(wayIn.facts.review, '2 commits on feature-x')
+})
+
+test('a walk asked through the change lens is about that change though the model names none: the reply and its row carry the range and the steps, and a change with nothing in it never reaches the model', async () => {
+	const retry = (body: string) => `export function retry() {\n${body}}\n`
+	const { root, hashes } = buildRepository([
+		{ message: 'feat: start', files: { 'src/retry.ts': retry('\tattempt()\n') } },
+		{ message: 'feat: wait between attempts', files: { 'src/retry.ts': retry('\tattempt()\n\tsleep(100)\n') } },
+	])
+	const [base = '', head = ''] = hashes
+	const step = (number: number, text: string, line: string): Turn => ({
+		tool: 'ken__show',
+		args: {
+			step: { number, text },
+			claims: [
+				{
+					text: 'retry.ts holds it.',
+					label: 'inferred',
+					quotes: [{ path: 'src/retry.ts', commit: 'HEAD', text: line }],
+				},
+			],
+		},
+	})
+	const model = await scriptedModel([
+		step(1, 'Each attempt now sleeps.', '\tsleep(100)'),
+		step(2, 'The attempt itself is as it was.', '\tattempt()'),
+		{ text: '' },
+	])
+	const server = await openKen(root, readerHome(), model.baseUrl)
+
+	const nothing = await call(server, '/api/questions', {
+		lens: { kind: 'change', change: 'uncommitted', want: 'story' },
+	})
+	assert.equal(nothing.status, 422, nothing.text)
+
+	const lines = await ask(server, { lens: { kind: 'change', change: `${base}..${head}`, want: 'walk' } })
+	const [title, ...forAgent] = lines[0].question.split('\n')
+	assert.ok(title.includes('feat: wait between attempts'), `the question names the change by its subject: ${title}`)
+	assert.ok(forAgent.join(' ').includes(`${base.slice(0, 7)} to ${head.slice(0, 7)}`), 'the agent is told the range')
+	const kinds = lines.map((line) => line.kind)
+	assert.ok(
+		kinds.includes('change') && kinds.indexOf('change') < kinds.indexOf('item'),
+		'the page learns the range first',
+	)
+	const replied = lines.find((line) => line.kind === 'replied')
+	assert.deepEqual([replied.reply.change.base, replied.reply.change.head], [base, head])
+
+	const [row] = (await json(server, '/api/questions')).questions
+	assert.deepEqual([row.change, row.steps], [{ base, head }, 2])
 })
