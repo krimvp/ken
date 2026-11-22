@@ -148,7 +148,8 @@ export function conceptReads(layout: LayoutSources, history: History) {
 				),
 				processes: through.map(({ id: process, name, steps }) => ({ id: processId(process), name, steps })),
 			},
-			deeper: { within: box.paths.join(','), parts: inside, files: box.files },
+			// Sorted, as a level's own paths are, so the page asks for the level inside by the same text.
+			deeper: { within: box.paths.toSorted().join(','), parts: inside, files: box.files },
 			knows: box.knows,
 		}
 	}

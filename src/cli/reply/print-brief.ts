@@ -30,19 +30,26 @@ export function briefPrinter(paint: Paint, other: (item: Item) => string) {
 		const mine = item.kind === 'card' && open !== null && item.step === open.number ? open : null
 		const lines = mine && item.kind === 'card' ? cardLines(item.card, mine) : null
 		if (lines) return lines.join('\n')
+		// A thing to know that ken sent back and the model fixed comes after its brief closed. It prints alone.
+		const late = item.kind === 'card' && item.step !== undefined && item.card.kind === 'claim' && item.card.claim.point
+		if (late && item.kind === 'card') {
+			const more = cardLines(item.card, null) ?? []
+			return [...end(), paint('bold', `Brief ${item.step}, one more thing to know`), ...more].join('\n')
+		}
 		return [...end(), other(item)].join('\n')
 	}
 
-	function cardLines(card: Card, brief: Open): string[] | null {
+	// brief is the open brief the card belongs to, null for a thing to know that comes after its brief closed.
+	function cardLines(card: Card, brief: Open | null): string[] | null {
 		const quotes = (card.kind === 'claim' ? card.claim.quotes : card.kind === 'topic' ? card.topic.quotes : [])
 			.flatMap((quote) => formatQuote(quote, paint))
 			.map((line) => `  ${line}`)
 		if (card.kind === 'claim' && card.claim.point) {
 			const { line, long, drawing } = card.claim.point
-			brief.points += 1
+			if (brief) brief.points += 1
 			const drawn = drawingText(drawing)
 			return [
-				paint('bold', `  ${brief.points}. ${line}`),
+				paint('bold', `  ${brief ? `${brief.points}.` : '-'} ${line}`),
 				...(drawn ? [paint('dim', `     ${drawn}`)] : []),
 				`     ${card.claim.text}`,
 				...(long === card.claim.text ? [] : [`     ${long}`]),
@@ -50,7 +57,7 @@ export function briefPrinter(paint: Paint, other: (item: Item) => string) {
 				...quotes,
 			]
 		}
-		if (card.kind !== 'topic') return null
+		if (card.kind !== 'topic' || !brief) return null
 		const head = brief.terms ? [] : [paint('bold', '  Terms')]
 		brief.terms = true
 		return [...head, `    ${card.topic.name}: ${card.topic.note}`, ...quotes]

@@ -228,3 +228,39 @@ test('a thing to know that quotes only a comment goes back to the model, and one
 		'the reader sees the one point that quotes code',
 	)
 })
+
+test('briefs the model sends in one turn reach the reader in the order of the parts, each followed by its own things to know and terms', async () => {
+	const first = {
+		number: 1,
+		line: 'Runs the work.',
+		points: [
+			point({ line: 'The core runs the work.', file: 'src/core/run.ts', quoted: 'export function run() {' }),
+			point({ line: 'The core saves at the end.', file: 'src/core/run.ts', quoted: '\tsave()' }),
+		],
+		terms: [term('run', 'One piece of work, start to end.', 'src/core/run.ts', 'export function run() {')],
+	}
+	const second = {
+		number: 2,
+		line: 'Keeps what the core hands it.',
+		points: [
+			point({ line: 'The store takes one call.', file: 'src/store/db.ts', quoted: 'export function save() {}' }),
+		],
+	}
+	const scripted = await scriptedModel([
+		{
+			calls: [
+				{ tool: 'ken__show', args: { brief: first } },
+				{ tool: 'ken__show', args: { brief: second } },
+			],
+		},
+		{ text: '' },
+	])
+	const again = await openKen(root, readerHome(), scripted.baseUrl)
+	const said = await ask(again, { lens: { kind: 'explain', within: [], part: null } })
+	const items: { kind: string; number?: number; step?: number; card?: { kind: string } }[] =
+		said.at(-1).view.entry.reply.items
+	assert.deepEqual(
+		items.map((item) => (item.kind === 'step' ? `brief ${item.number}` : `${item.card?.kind} of ${item.step}`)),
+		['brief 1', 'claim of 1', 'claim of 1', 'topic of 1', 'brief 2', 'claim of 2'],
+	)
+})
