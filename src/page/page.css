@@ -661,48 +661,59 @@ html {
 	cursor: pointer;
 }
 
-/* Mermaid writes its own styles under the drawing's id, so these start from #thread to win. A message label sits on a
+/* Mermaid writes its own styles under the drawing's id, so these start from #thread or #home to win. A message label sits on a
    box in the colour of the card (see backLabels), so no lifeline runs through its text. The three kinds share one look:
    square boxes, 1 pixel borders, thin lines, and no grid inside a table. */
 /* The part of the drawing whose quotes the panel shows. */
-#thread .drawing svg .is-open :is(rect, polygon, path),
-#thread .drawing svg rect.is-open {
+:is(#thread, #home) .drawing svg .is-open :is(rect, polygon, path),
+:is(#thread, #home) .drawing svg rect.is-open {
 	stroke: var(--color-focus);
 	stroke-width: 3px;
 }
 
-#thread .drawing svg .is-open :is(span, p, text, tspan),
-#thread .drawing svg text.is-open {
+:is(#thread, #home) .drawing svg .is-open :is(span, p, text, tspan),
+:is(#thread, #home) .drawing svg text.is-open {
 	font-weight: 700;
 }
 
-#thread .drawing svg :is(.edgeLabel, .relationshipLabel).is-open :is(span, p) {
+:is(#thread, #home) .drawing svg :is(.edgeLabel, .relationshipLabel).is-open :is(span, p) {
 	outline: 2px solid var(--color-focus);
 }
 
-#thread .drawing svg .label-back {
+:is(#thread, #home) .drawing svg .label-back {
 	fill: var(--color-canvas);
 }
 
-#thread .drawing svg :is(rect.actor, .node rect) {
+/* A message label is one box per line, so its mark fills them and draws no line between its lines. */
+:is(#thread, #home) .drawing svg .label-back.is-open {
+	fill: var(--color-accent);
+	stroke: var(--color-accent);
+	stroke-linejoin: round;
+}
+
+:is(#thread, #home) .drawing svg text.messageText.is-open {
+	fill: var(--color-card);
+}
+
+:is(#thread, #home) .drawing svg :is(rect.actor, .node rect) {
 	rx: 10px;
 	ry: 10px;
 }
 
-#thread .drawing svg :is(rect.actor, .node rect, .node .outer-path path) {
+:is(#thread, #home) .drawing svg :is(rect.actor, .node rect, .node .outer-path path) {
 	stroke-width: 1.5px;
 	filter: drop-shadow(0 1px 1.5px rgb(20 26 40 / 0.1));
 }
 
-#thread .drawing svg .actor-line {
+:is(#thread, #home) .drawing svg .actor-line {
 	stroke-width: 1px;
 }
 
-#thread .drawing svg :is(.row-rect-odd, .row-rect-even) path {
+:is(#thread, #home) .drawing svg :is(.row-rect-odd, .row-rect-even) path {
 	stroke: none;
 }
 
-#thread .drawing svg .divider path {
+:is(#thread, #home) .drawing svg .divider path {
 	stroke: var(--color-border);
 }
 

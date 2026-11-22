@@ -2,7 +2,7 @@
 // what ken says about it beside it (src/page/home). A question opens as a thread: the words on the left, and on the
 // right the panel with what ken checked. Under 1100 pixels the panel goes away and the same things open in place. The
 // page talks only to the server that sent it.
-import { fillDrawings, markPart } from './draw-diagrams.js'
+import { fillDrawings, markPart, numberAt } from './draw-diagrams.js'
 import { freshHome, homeActions } from './home/home-actions.js'
 import { showHome } from './home/home-view.js'
 import { liveLook, liveViewHtml } from './live/live-view.js'
@@ -695,25 +695,20 @@ function choose(key, quote) {
 	if (!same) $(`#panel-q${quote}`)?.scrollIntoView({ block: 'nearest' })
 }
 
-// A box or an arrow in a drawing does what the first quote row of its numbered row does. Every label in a drawing
-// starts with its element's number, so the smallest part of the drawing around the click that holds one label names it.
+// A box or an arrow in a drawing does what the first quote row of its numbered row does.
 function chooseInDrawing(target) {
-	const box = target.closest('.drawing')
-	for (let el = target; box && el !== box; el = el.parentElement) {
-		if ((el.textContent.match(/\d+\. /g) ?? []).length > 1) return
-		const number = Number(el.textContent.trim().match(/^(\d+)\. /)?.[1])
-		if (!number) continue
-		const id = box.dataset.diagram
-		const key = elementKey(id, number)
-		const element = itemsOf(state.thread).find((each) => each.key === key)?.item
-		if (element?.quotes.length > 0) {
-			if (state.ui.wide) return choose(key, 0)
-			state.ui.openParts.add(id)
-			state.ui.openQuotes.add(`${key}-q0`)
-			render()
-		}
-		return $(`#item-${key}`)?.scrollIntoView({ block: 'nearest' })
+	const number = numberAt(target)
+	if (number === null) return
+	const id = target.closest('.drawing').dataset.diagram
+	const key = elementKey(id, number)
+	const element = itemsOf(state.thread).find((each) => each.key === key)?.item
+	if (element?.quotes.length > 0) {
+		if (state.ui.wide) return choose(key, 0)
+		state.ui.openParts.add(id)
+		state.ui.openQuotes.add(`${key}-q0`)
+		render()
 	}
+	$(`#item-${key}`)?.scrollIntoView({ block: 'nearest' })
 }
 
 // The panel when the reader is on a step of a walkthrough: the step's own words, the changed lines it is about as a

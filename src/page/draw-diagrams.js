@@ -261,19 +261,46 @@ function backLabels(svg) {
 	}
 }
 
+// The number a label starts with, or 0. A message label of a sequence diagram is one text per line with a box behind
+// each, and only its first line carries the number, which may stand alone on it.
+const LABEL_LINE = 'text.messageText, .label-back'
+function numberOf(el) {
+	return Number(el.textContent.trim().match(/^(\d+)\.(?:\s|$)/)?.[1] ?? 0)
+}
+
+// The number of the box or arrow a click in a drawing landed on, or null. Every label in a drawing starts with its
+// element's number, so the smallest part of the drawing around the click that holds one label names it. A click on a
+// later line of a message label asks the lines before it.
+export function numberAt(target) {
+	const box = target.closest('.drawing')
+	const line = target.matches?.('.label-back') ? target.nextElementSibling : target.closest('text.messageText')
+	for (let el = line; el?.matches(LABEL_LINE); el = el.previousElementSibling) {
+		if (numberOf(el)) return numberOf(el)
+	}
+	for (let el = target; box && el !== box; el = el.parentElement) {
+		if ((el.textContent.match(/\d+\. /g) ?? []).length > 1) return null
+		if (numberOf(el)) return numberOf(el)
+	}
+	return null
+}
+
 // Marks the part of a drawing whose quotes the panel shows. Every label in a drawing starts with its part's number, so
-// the innermost label that does names it: a box or an entity is its node, an arrow its label, a message its line of
-// text and the box behind it.
+// the innermost label that does names it: a box or an entity is its node, an arrow its label, a message every line of
+// its text and the box behind each.
 export function markPart(root, index, number) {
 	const box = root.querySelector(`.drawing[data-diagram="${index}"]`)
-	const starts = (el) => el.textContent.trim().startsWith(`${number}. `)
-	const label = [...(box?.querySelectorAll('text, span, p') ?? [])].find(
+	const starts = (el) => numberOf(el) === Number(number)
+	const label = [...(box?.querySelectorAll('text, tspan, span, p') ?? [])].find(
 		(el) => starts(el) && ![...el.children].some(starts),
 	)
 	if (!label) return
 	if (label.matches('text.messageText')) {
-		label.classList.add('is-open')
-		label.previousElementSibling?.classList.add('is-open')
+		for (let el = label; el?.matches(LABEL_LINE); el = el.nextElementSibling) {
+			if (el !== label && numberOf(el)) break
+			if (!el.matches('text')) continue
+			el.classList.add('is-open')
+			el.previousElementSibling?.classList.add('is-open')
+		}
 		return
 	}
 	;(label.closest('g.node, g.edgeLabel, g.relationshipLabel') ?? label.closest('g'))?.classList.add('is-open')
