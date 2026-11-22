@@ -137,4 +137,8 @@ test('a reader who follows a job gets what it said so far; stopping stops their 
 	queue.stop('mine', 'unfollow')
 	await settle()
 	assert.deepEqual(queue.view().find((job) => job.key === 'mine')?.state, { kind: 'failed', why: 'You stopped it.' })
+	queue.want(ask('holder'), 'ken')
+	queue.want(ask('queued'), 'ken')
+	queue.stop('queued', 'stop')
+	assert.equal(queue.want(ask('queued'), 'ken'), null, 'ken does not queue again what the reader stopped before it ran')
 })

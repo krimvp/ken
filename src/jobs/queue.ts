@@ -241,6 +241,8 @@ export function jobQueue<W, L>(deps: QueueDeps<W, L>) {
 			job.asked = false
 			return pump()
 		}
+		// The reader said no to it, so ken does not queue it again by itself.
+		if (job.from === 'ken') tried.add(job.key)
 		if (job.state.kind === 'running') return job.stop?.abort('stopped')
 		job.state = { kind: 'failed', why: STOPPED }
 		finish(job)
