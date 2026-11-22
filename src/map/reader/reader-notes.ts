@@ -5,7 +5,7 @@
 import { randomUUID } from 'node:crypto'
 import { appendFile, mkdir, readFile } from 'node:fs/promises'
 import path from 'node:path'
-import type { Repository } from '../repo/index.ts'
+import type { Repository } from '../../repo/index.ts'
 
 export type ReaderNote = { id: string; text: string; at: string }
 

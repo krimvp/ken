@@ -1,8 +1,9 @@
-/* The home: the project as a picture, with what ken says about it beside it. From 1200 pixels the frame fills the
-   window under the header: the toolbar, then the canvas over the "Show it another way" bar on the left, and the panel
-   on the right. The canvas and the panel each scroll by themselves, so the bar never lies over the picture. Under
-   1200 pixels they stand in one column and the page scrolls. Every colour comes from tokens.css and the page's own
-   tokens at the top of page.css. */
+/* The home is a board: the project as a picture, with what the reader should look at next beside it. From 1200 pixels
+   the frame fills the window under the header: the strip, then on the left the canvas over the readout line and the
+   "Show it another way" bar, and on the right the Detail control over the column that is the board's own or the
+   reading panel. The canvas and the column each scroll by themselves, so the page never does. Under 1200 pixels they
+   stand in one column and the page scrolls. Every colour comes from tokens.css and the page's own tokens at the top of
+   page.css. */
 .home[hidden],
 .page[hidden],
 .home-inspector[hidden],
@@ -13,8 +14,8 @@
 
 .home {
 	display: grid;
-	grid-template-columns: minmax(0, 1fr) clamp(480px, 44vw, 680px);
-	grid-template-rows: auto minmax(0, 1fr) auto;
+	grid-template-columns: minmax(0, 62fr) minmax(0, 38fr);
+	grid-template-rows: auto auto minmax(0, 1fr) auto auto;
 	height: calc(100dvh - var(--top));
 }
 
@@ -48,15 +49,38 @@ button.brand {
 	font-size: var(--text-note);
 }
 
-/* The toolbar: two controls, each a group of three buttons with one pressed. */
+/* The strip: what the level is in one sentence, then the three ways in, each a button that leads with a count. */
 .home-toolbar {
 	grid-column: 1 / -1;
 	display: flex;
 	flex-wrap: wrap;
-	align-items: flex-start;
+	align-items: center;
+	justify-content: space-between;
 	gap: var(--space-1) var(--space-5);
 	padding: var(--space-1) var(--space-4);
 	border-bottom: 1px solid var(--color-border);
+	background: var(--color-card);
+}
+
+/* Three lines of the sentence are as tall as a way in, so the strip is as tall whichever way is in use. */
+.strip-about {
+	flex: 1 1 24rem;
+	min-width: 0;
+	max-width: 46rem;
+	font-size: var(--text-sm);
+	line-height: 1.35;
+}
+
+/* The Detail control heads the column it decides: how deep the cards and the panel under it open. */
+.home-detail {
+	grid-column: 2;
+	grid-row: 2;
+	display: flex;
+	align-items: center;
+	min-width: 0;
+	padding: var(--space-1) var(--space-4);
+	border-bottom: 1px solid var(--color-border);
+	border-left: 1px solid var(--color-border);
 	background: var(--color-card);
 }
 
@@ -114,11 +138,46 @@ button.brand {
 }
 
 .seg-fact {
-	max-width: 13rem;
-	overflow: hidden;
 	font-size: var(--text-sm);
-	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+/* A way in: its name over its count, and for a change to review the small picture of the boxes it touched. */
+.seg-way {
+	flex-direction: row;
+	align-items: center;
+	gap: var(--space-3);
+}
+
+.seg-words {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+
+.seg-n {
+	margin-right: 0.2em;
+	color: var(--color-text);
+	font-size: var(--text-count);
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+	line-height: 1.1;
+}
+
+/* A level's boxes, small: the ones a card or a way in is about are filled. */
+.mini-picture {
+	flex: none;
+}
+
+.mini-picture rect {
+	fill: var(--color-card);
+	stroke: var(--color-edge);
+	stroke-width: 1;
+}
+
+.mini-picture rect.is-on {
+	fill: var(--color-accent);
+	stroke: var(--color-accent);
 }
 
 .seg:hover:not([disabled], [aria-pressed="true"]) {
@@ -153,10 +212,22 @@ button.brand {
 	font-weight: 400;
 }
 
+.home-detail .seg {
+	min-height: 2rem;
+	padding: 2px var(--space-2);
+}
+
+/* While ken picks, the detail it picked for what is open carries a line under its name. */
+.seg.is-used .seg-text {
+	box-shadow: 0 2px 0 var(--color-accent);
+	color: var(--color-text);
+}
+
 /* The canvas: a dotted sheet the picture lies on. Its width, not the window's, decides how the picture is laid out. */
 .home-canvas {
 	position: relative;
 	grid-column: 1;
+	grid-row: 2 / 4;
 	min-width: 0;
 	overflow: auto;
 	padding: var(--space-3) var(--space-4) var(--space-2);
@@ -181,18 +252,30 @@ button.brand {
 	color: var(--color-note);
 }
 
-.home-trail [aria-current] {
-	font-weight: 600;
+.home-trail li {
+	display: flex;
+	align-items: center;
 }
 
+/* The level on screen is the page's heading, in the line of the trail. A part the reader picked stands after it. */
 .home-level {
 	display: flex;
 	align-items: center;
-	gap: var(--space-3);
-	font-size: 1.375rem;
+	gap: var(--space-2);
+	font-size: var(--text-level);
 	font-weight: 700;
 	letter-spacing: -0.01em;
 	line-height: var(--leading-tight);
+}
+
+.home-level .link {
+	font-size: inherit;
+	font-weight: 600;
+}
+
+.home-picked {
+	font-size: var(--text-level);
+	font-weight: 700;
 }
 
 /* Inside a part, the heading carries the part's colour as a solid bar, as its boxes do. */
@@ -544,7 +627,7 @@ button.brand {
 @container canvas (min-width: 680px) {
 	.home .pv-picture {
 		--draw: 1;
-		padding: var(--space-4) var(--space-1) var(--space-2);
+		padding: var(--space-3) var(--space-1) var(--space-2);
 	}
 
 	/* An arrow around the outside of the picture bends over the top row or under the bottom one. */
@@ -558,8 +641,9 @@ button.brand {
 
 	/* The gap between two columns holds an arrow's words folded to a narrow column, over the arrow's line. */
 	.home .pv-picture .pv-boxes {
+		--row-gap: 3.25rem;
 		grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
-		gap: 4.25rem 8rem;
+		gap: var(--row-gap) 6.5rem;
 	}
 
 	.home .home-picture:not(.has-arrows) .pv-boxes {
@@ -577,19 +661,103 @@ button.brand {
 	}
 
 	.home .pv-label.is-narrow {
-		max-width: 7.25rem;
+		max-width: 6rem;
 		overflow-wrap: break-word;
 	}
 }
 
-.home .pv-box {
-	position: relative;
-	padding: var(--space-3);
+/* A box fills from the bottom as far as ken thinks the reader knows its part: a quarter for each level above "New to
+   you". The level also stands in words beside a meter, so the fill is never the only sign. */
+/* The boxes of a row are as tall as each other, so their fills can be compared. */
+.home .pv-picture .pv-cell {
+	align-self: stretch;
 }
 
-.home .pv-job {
+.home .pv-box {
+	--part-ink-l: var(--part-ink-on-fill-l);
+	position: relative;
+	gap: 2px;
+	padding: var(--space-2) var(--space-3);
+	background: linear-gradient(
+		to top,
+		var(--know-fill) calc(var(--known, 0) * 100%),
+		var(--color-card) calc(var(--known, 0) * 100%)
+	);
+}
+
+/* A part new to the reader: a dashed edge and nothing filled. */
+.home .pv-box.knows-new {
+	border-style: dashed;
+	border-color: var(--color-edge);
+	box-shadow: none;
+}
+
+.home .pv-name {
 	font-size: var(--text-note);
-	line-height: 1.45;
+	line-height: 1.3;
+}
+
+.home .pv-job,
+.home .pv-box .pv-paths {
+	align-self: start;
+	font-size: var(--text-sm);
+	line-height: 1.4;
+}
+
+/* The foot of a box, held to its bottom edge: the level in words beside its meter, and the commits since. */
+.pv-foot {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 2px var(--space-2);
+	margin-top: auto;
+	padding-top: 2px;
+}
+
+.pv-know {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-2);
+	font-size: var(--text-sm);
+	font-weight: 650;
+}
+
+.know-meter {
+	display: inline-flex;
+	gap: 2px;
+}
+
+.know-meter i {
+	width: 7px;
+	height: 12px;
+	border: 1.5px solid var(--color-edge);
+	border-radius: var(--radius-xs);
+}
+
+.know-meter i.is-on {
+	border-color: var(--color-accent);
+	background: var(--color-accent);
+}
+
+/* Commits landed in the part since the reader looked: the amber of a warning, a mark, and the count in words. In a
+   narrow box the words wrap inside their own edge. */
+.pv-since {
+	padding: 0 0.4em;
+	border: 1px solid var(--color-warn-border);
+	border-radius: var(--radius-sm);
+	background: var(--color-warn-bg);
+	color: var(--color-text);
+	font-size: var(--text-sm);
+	font-weight: 650;
+}
+
+.pv-since::before {
+	content: "";
+	display: inline-block;
+	margin-right: 0.35em;
+	border: 0.32em solid transparent;
+	border-top: 0;
+	border-bottom: 0.55em solid var(--color-warn-border);
 }
 
 /* A part says its job, or at "In the code" its paths. The one it does not say lies under the other, unseen, so the
@@ -597,6 +765,8 @@ button.brand {
 .pv-says {
 	display: grid;
 	grid-template-columns: minmax(0, 1fr);
+	font-size: var(--text-sm);
+	line-height: 1.4;
 }
 
 .pv-says > *,
@@ -618,12 +788,47 @@ button.brand {
 	visibility: hidden;
 }
 
-/* A part the change left alone: no colour, a dashed border, and its words in the note colour. */
+/* Side by side the canvas has a height of its own, so the picture of a level with named parts takes all of it. The
+   rows share the room, up to a height a box still reads at, and each box shows the lines of its job that fit: fitJobs
+   in part-box.js counts them. In one column a box is as tall as its words. */
+@media (min-width: 1200px) {
+	.home-canvas {
+		display: flex;
+		flex-direction: column;
+	}
+
+	.home-picture.is-named,
+	.home-picture.is-named .pv-picture {
+		display: flex;
+		flex: 1 0 auto;
+		flex-direction: column;
+	}
+
+	.home-picture.is-named .pv-boxes {
+		flex: 1 0 auto;
+		grid-auto-rows: minmax(min-content, 1fr);
+		max-height: calc(var(--rows) * 17rem + (var(--rows) - 1) * var(--row-gap));
+	}
+
+	.home-picture.is-named .pv-says {
+		flex: 1 1 0;
+		min-height: 2.8em;
+		overflow: hidden;
+	}
+
+	.home-picture.is-named :is(.pv-job, .pv-paths) {
+		display: -webkit-box;
+		overflow: hidden;
+		-webkit-box-orient: vertical;
+		-webkit-line-clamp: var(--lines, 2);
+	}
+}
+
+/* A part the change left alone: no colour, no shadow, and its words in the note colour. Its edge still says whether
+   the part is new to the reader. */
 .home .is-faded .pv-box {
 	--part-fill: var(--color-card);
 	--part-ink: var(--color-note);
-	border-style: dashed;
-	border-color: var(--color-box-border);
 	box-shadow: none;
 }
 
@@ -635,11 +840,17 @@ button.brand {
 	color: var(--color-note);
 }
 
-/* Three marks that never stand in for each other. The part the reader picked has a ring in the accent colour,
-   outside its own border. A part the change touched has an amber edge and its counts, whatever is picked or pointed
-   at. A part lit because an arrow joins it to the picked one keeps its own colour and gets nothing more. */
+/* Marks that never stand in for each other. The part the reader picked has a ring in the accent colour, outside its
+   own border. A part a card or a recorded line is about has a dashed ring while the reader points at that card. A
+   part the change touched has an amber edge and its counts, whatever is picked or pointed at. A part lit because an
+   arrow joins it to the picked one keeps its own colour and gets nothing more. */
 .home .pv-cell.is-chosen .pv-box {
 	outline: 3px solid var(--color-accent);
+	outline-offset: 3px;
+}
+
+.home .pv-cell.is-outlined:not(.is-chosen) .pv-box {
+	outline: 2px dashed var(--color-accent);
 	outline-offset: 3px;
 }
 
@@ -725,6 +936,94 @@ button.brand {
 /* "Show it another way", docked under the canvas: the box and the button in one row, and under the box what a run
    costs. The examples and the notes ken keeps open under that while the reader types in the box, or when they ask
    for them. */
+/* The readout line, under the picture: what ken thinks the reader knows of one box, why, and its two presses. */
+.home-readout {
+	position: relative;
+	grid-column: 1;
+	display: flex;
+	align-items: center;
+	gap: var(--space-2) var(--space-4);
+	min-height: 4rem;
+	padding: var(--space-2) var(--space-4);
+	border-top: 1px solid var(--color-border);
+	background: var(--color-card);
+	font-size: var(--text-note);
+	line-height: 1.4;
+}
+
+.readout-line {
+	flex: 1;
+	min-width: 0;
+}
+
+.readout-line .pv-since {
+	display: inline-block;
+	font-size: inherit;
+	white-space: nowrap;
+}
+
+/* Side by side the line is as tall with a box as without, and with the five levels open: three lines of words. A
+   line that grew would move the boxes over it from under the pointer that is on one of them. */
+@media (min-width: 1200px) {
+	.home-readout {
+		height: 4.5rem;
+		padding-block: var(--space-1);
+	}
+
+	.readout-line {
+		display: -webkit-box;
+		overflow: hidden;
+		-webkit-box-orient: vertical;
+		-webkit-line-clamp: 3;
+	}
+}
+
+.readout-acts {
+	display: flex;
+	flex: none;
+	gap: var(--space-2);
+}
+
+/* The five levels lie over the foot of the canvas when they need a second row, so the picture does not move. */
+.readout-fix {
+	position: absolute;
+	right: 0;
+	bottom: 0;
+	left: 0;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-1) var(--space-2);
+	min-height: 100%;
+	padding: var(--space-2) var(--space-4);
+	border-top: 1px solid var(--color-border);
+	background: var(--color-card);
+	box-shadow: var(--shadow-up);
+}
+
+.readout-ask {
+	font-weight: 650;
+}
+
+.readout-fix .chip {
+	min-height: 2rem;
+	padding: 0 var(--space-3);
+	color: var(--color-text);
+	font-weight: 500;
+}
+
+/* The level ken holds now is marked with a tick as well as its edge. */
+.readout-fix .chip[aria-pressed="true"] {
+	border-color: var(--color-accent);
+	font-weight: 700;
+}
+
+.readout-fix .chip[aria-pressed="true"]::before {
+	content: "\2713";
+	margin-right: 0.35em;
+	color: var(--color-accent);
+}
+
 .home-redraw {
 	grid-column: 1;
 	max-height: 50vh;
@@ -869,11 +1168,19 @@ button.brand {
 	background: var(--color-warn-bg);
 }
 
-/* The panel beside the picture: its words scroll, and Back and Next stay at its foot. */
+/* The column beside the picture: its words scroll, and Back and Next stay at its foot. The drawer lies over the
+   Detail control too. */
+.home-ask {
+	grid-row: 2 / -1;
+}
+
+.home-inspector {
+	grid-row: 3 / -1;
+}
+
 .home-inspector,
 .home-ask {
 	grid-column: 2;
-	grid-row: 2 / -1;
 	display: flex;
 	flex-direction: column;
 	min-width: 0;
@@ -896,6 +1203,200 @@ button.brand {
 
 .insp-scroll > * + * {
 	margin-top: var(--space-3);
+}
+
+/* The board's own column: "Next for you" and what ken recorded, each a card on the page's ground. */
+.insp-scroll.board {
+	padding: var(--space-2) var(--space-3);
+	background: var(--color-bg);
+}
+
+.board-body {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-2);
+}
+
+.board-panel {
+	padding: var(--space-2) var(--space-3);
+	border: 1px solid var(--color-border);
+	border-radius: var(--radius-md);
+	background: var(--color-card);
+}
+
+.board-head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: 0 var(--space-3);
+}
+
+.board-title {
+	font-size: var(--text-md);
+	font-weight: 700;
+}
+
+.board-note,
+.board-foot,
+.board-empty {
+	color: var(--color-note);
+	font-size: var(--text-sm);
+}
+
+.board-empty {
+	margin-top: var(--space-2);
+}
+
+.board-foot {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-1) var(--space-4);
+	margin-top: var(--space-2);
+}
+
+.board-file {
+	border-bottom: 1px dotted var(--color-note);
+	cursor: help;
+}
+
+/* A card of "Next for you": what to do beside the small picture of its boxes, the thing itself, and under them why
+   ken ranked it beside the one button. In a narrow column the button goes under the words. */
+.next-list {
+	display: grid;
+	gap: var(--space-2);
+	margin-top: var(--space-2);
+}
+
+.next-card {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-end;
+	gap: 2px var(--space-3);
+	padding: 6px var(--space-3);
+	border: 1px solid var(--color-box-border);
+	border-radius: var(--radius-md);
+}
+
+.next-card:hover,
+.next-card:focus-within {
+	border-color: var(--color-accent);
+}
+
+.next-top {
+	display: flex;
+	flex: 1 1 100%;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-3);
+}
+
+.next-title {
+	font-size: var(--text-note);
+	font-weight: 700;
+	line-height: 1.3;
+}
+
+.next-lead {
+	flex: 1 1 100%;
+	font-size: var(--text-sm);
+	line-height: 1.4;
+}
+
+.next-landed {
+	color: var(--color-text);
+	white-space: nowrap;
+}
+
+.next-parts {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: 2px var(--space-1);
+}
+
+.next-why {
+	flex: 1 1 12rem;
+	min-width: 0;
+	color: var(--color-note);
+	font-size: var(--text-sm);
+	line-height: 1.4;
+}
+
+.next-card :is(.primary, .quiet-button) {
+	flex: none;
+	margin-left: auto;
+	padding: var(--space-1) var(--space-3);
+	font-size: var(--text-sm);
+	white-space: nowrap;
+}
+
+/* What ken recorded, newest first: the day, the line, and the press that takes it back, which shows while the line
+   is pointed at or has the keyboard. A screen with no pointer shows it always. */
+.recorded-list {
+	margin-top: var(--space-1);
+	font-size: var(--text-sm);
+}
+
+.recorded-line {
+	display: grid;
+	grid-template-columns: 4.25rem minmax(0, 1fr) auto;
+	align-items: baseline;
+	gap: var(--space-2);
+	padding: 2px 0;
+}
+
+.recorded-line + .recorded-line {
+	border-top: 1px solid var(--color-border);
+}
+
+.recorded-day {
+	color: var(--color-note);
+}
+
+.recorded-undo {
+	font-size: var(--text-sm);
+	opacity: 0;
+}
+
+.recorded-line:hover .recorded-undo,
+.recorded-undo:focus-visible {
+	opacity: 1;
+}
+
+@media (hover: none) {
+	.recorded-undo {
+		opacity: 1;
+	}
+}
+
+/* The one line over the reading panel: why ken opened it this way, and the way back to the board. It stays at the
+   top edge while the panel scrolls under it: over the panel's own padding, so no word shows above it. */
+.insp-why {
+	position: sticky;
+	top: calc(-1 * var(--space-3));
+	z-index: 2;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: var(--space-1) var(--space-3);
+	margin-inline: calc(-1 * var(--space-5));
+	padding: var(--space-2) var(--space-5);
+	border-bottom: 1px solid var(--color-border);
+	background: var(--color-label-bg);
+	color: var(--color-label-text);
+	font-size: var(--text-sm);
+	line-height: 1.4;
+}
+
+.insp-scroll > .insp-why:first-child {
+	margin-top: calc(-1 * var(--space-3));
+}
+
+.insp-why .link {
+	margin-left: auto;
+	font-weight: 600;
+	white-space: nowrap;
 }
 
 /* Who wrote what, said once at the top of the panel. */
@@ -1146,12 +1647,12 @@ button.brand {
 	align-items: start;
 }
 
-/* The stop the reader picked comes to the top of the panel, whole, with a little room over it. */
+/* The stop the reader picked comes to the top of the panel, whole, under the line that stays there. */
 .path-step {
 	padding: var(--space-3);
 	border: 1px solid var(--color-border);
 	border-radius: var(--radius-md);
-	scroll-margin-top: var(--space-3);
+	scroll-margin-top: 4.5rem;
 }
 
 .path-step.is-on {
@@ -1414,16 +1915,64 @@ button.brand {
 		padding: var(--space-2) var(--gutter);
 	}
 
-	/* Each control shows its three choices side by side at equal width, so none is off the screen. */
+	/* Each control shows its choices side by side at equal width, so none is off the screen. */
 	.control {
 		display: grid;
 		grid-template-columns: minmax(0, 1fr);
+		width: 100%;
 	}
 
 	.segs {
 		display: grid;
 		grid-template-columns: repeat(3, minmax(0, 1fr));
 		overflow-x: auto;
+	}
+
+	.home-detail {
+		border-top: 1px solid var(--color-border);
+		border-left: 0;
+		padding: var(--space-2) var(--gutter);
+	}
+
+	.home-detail .segs {
+		grid-template-columns: repeat(4, minmax(0, 1fr));
+	}
+
+	/* A way in is its name over its count: the small picture has no room on a narrow tab. */
+	.seg-way {
+		flex-direction: column;
+		align-items: stretch;
+	}
+
+	.seg-way .mini-picture {
+		display: none;
+	}
+
+	.home-readout {
+		flex-wrap: wrap;
+		padding: var(--space-2) var(--gutter);
+	}
+
+	/* In one column the page scrolls, so the five levels take the room they need. */
+	.readout-fix {
+		position: static;
+		padding: 0;
+		border: 0;
+		box-shadow: none;
+	}
+
+	.insp-why {
+		position: static;
+		margin-inline: calc(-1 * var(--gutter));
+		padding-inline: var(--gutter);
+	}
+
+	.readout-line {
+		flex-basis: 100%;
+	}
+
+	.insp-scroll.board {
+		padding: var(--space-3) var(--gutter);
 	}
 
 	.seg {

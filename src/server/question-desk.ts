@@ -1,18 +1,21 @@
 import { randomUUID } from 'node:crypto'
 import {
 	type Asking,
+	BRIEF_BOUNDS,
 	type CardKind,
 	type Chat,
 	type ChatEvent,
+	DRAWINGS,
 	firstWords,
 	type Item,
 	type Reply,
-	TOUR_WORDS,
 	WANTS,
 	type Want,
 } from '../agent/index.ts'
 import { DIAGRAM_BOUNDS, drawn, LAYOUT_BOUNDS } from '../diagram/index.ts'
 import {
+	answerQuestion,
+	explainQuestion,
 	type LensFacts,
 	onDay,
 	openItems,
@@ -20,31 +23,41 @@ import {
 	personLens,
 	rangeLens,
 	topicQuestion,
-	tourQuestion,
 	viewQuestion,
 } from '../follow-up/index.ts'
 import { entryFrom, type History, type HistoryEntry, whyNoNote } from '../history/index.ts'
-import { type Change, type LayoutSources, lookAtLayout, readLayoutAsk } from '../layout/index.ts'
+import {
+	type Change,
+	type LayoutSources,
+	lookAtLayout,
+	pullRequestOf,
+	readLayoutAsk,
+	tourOrder,
+} from '../layout/index.ts'
 import { type About, holdsSnapshot } from '../live/index.ts'
 import { areaQuestion, catchUpQuestion, deeperQuestion, type TopicState, type UnderstandingMap } from '../map/index.ts'
 import { type RecordStore, sameName } from '../record/index.ts'
 import { parsePath, type Repository } from '../repo/index.ts'
-import { pullRequestOf } from './way-in.ts'
+import type { conceptReads } from './concepts/brief.ts'
+import { partId, questionId } from './concepts/concept.ts'
 
 const MAX_QUESTION_CHARS = 4000
 const MAX_TOPICS = 20
 // How much of a note's words the next question about it quotes back.
 const NOTE_CHARS = 400
+// A question about a concept is one line the page lists under the concept.
+const ASKED_CHARS = 300
 
 // One row in the page's list of questions. cards counts the checked cards of the reply, calls the decisions the model
 // wants the reader to decide, and risks its risks. hunks is null when the reply was not about a range of commits.
-// thread groups the rows the page shows as one thread. tour names the level and the stops of a tour, so the page can
-// open a tour it has already instead of asking again. change is the change the reply is about and steps the number of
+// thread groups the rows the page shows as one thread. tour names the level and the parts a reply explains as briefs,
+// so the page can open what it has already instead of asking again. change is the change the reply is about and steps the number of
 // steps it walks through. want says the reader asked for the story of that change or a walk through it, so the page
 // opens the stored one again and never takes a later reply about the same commits for it. snapshot is true when the
 // change ends at a commit of ken's own snapshot store, which is uncommitted work and no range to look at again. view is there
 // when the reader asked to see a level another way, and drew says what the reply drew for it: the parts again, a
-// diagram, since a flow or the data is not a grouping of parts, or nothing.
+// diagram, since a flow or the data is not a grouping of parts, or nothing. brief is the id of the concept whose brief
+// the reply wrote: the question it answers, or the one part it explains, and null for any other reply.
 export type QuestionRow = {
 	id: string
 	question: string
@@ -60,17 +73,20 @@ export type QuestionRow = {
 	want: Want | null
 	steps: number
 	view: { within: string[]; asked: string; drew: 'parts' | 'diagram' | 'nothing' } | null
+	brief: string | null
 }
 
 // An entry from the history, its diagrams with their drawings. head is the project's HEAD now, which the page
 // compares with the entry's own. topics holds the state of each topic the reply names for this reader now, from the
 // understanding map; the page folds the cards of a topic whose state is "unchanged" into one line. noNote says why a
-// live note has no reply, and is null otherwise.
+// live note has no reply, and is null otherwise. brief is as on a row, so the page can open the brief a run wrote as
+// soon as the run is saved.
 export type QuestionView = {
 	entry: HistoryEntry
 	head: string | null
 	topics: TopicState[]
 	noNote: string | null
+	brief: string | null
 }
 
 // What live mode's notes cost: how many there are and the tokens they took.
@@ -96,6 +112,7 @@ export function questionDesk(
 	repo: Repository,
 	map: UnderstandingMap,
 	layout: LayoutSources,
+	concepts: ReturnType<typeof conceptReads>,
 ) {
 	let running: { stop: AbortSignal; done: Promise<void> } | null = null
 	let questions = 0
@@ -222,10 +239,11 @@ export function questionDesk(
 	async function viewOf(entry: HistoryEntry): Promise<QuestionView> {
 		const head = await headNow()
 		if (entry.outcome !== 'answered') {
-			return { entry, head, topics: [], noNote: entry.about ? whyNoNote(entry) : null }
+			return { entry, head, topics: [], noNote: entry.about ? whyNoNote(entry) : null, brief: null }
 		}
 		const shown = { ...entry, reply: drawnReply(entry.reply) }
-		return { entry: shown, head, topics: await topicsOf(entry.reply.topics), noNote: null }
+		const topics = await topicsOf(entry.reply.topics)
+		return { entry: shown, head, topics, noNote: null, brief: briefOf(entry.reply) }
 	}
 
 	// In the order the answer names them. A topic the record no longer has is left out.
@@ -242,7 +260,7 @@ export function questionDesk(
 				const { id, question, askedAt, thread, outcome } = entry
 				const row = { id, question, askedAt, thread, outcome }
 				if (entry.outcome !== 'answered') {
-					const none = { hunks: null, tour: null, change: null, want: null, steps: 0, view: null }
+					const none = { hunks: null, tour: null, change: null, want: null, steps: 0, view: null, brief: null }
 					return { ...row, cards: 0, calls: 0, risks: 0, ...none }
 				}
 				const { items, change, tour, view, want } = entry.reply
@@ -263,6 +281,7 @@ export function questionDesk(
 					want: want ?? (change && steps > 0 ? 'walk' : null),
 					steps,
 					view: view ? { ...view, drew: has('layout') ? 'parts' : has('diagram') ? 'diagram' : 'nothing' } : null,
+					brief: briefOf(entry.reply),
 				}
 			}),
 		)
@@ -297,9 +316,10 @@ export function questionDesk(
 
 	// The page sends a question, or a lens for ken to write the question from: catch up, an area, "Go deeper" on the
 	// topics of an answer, which also tells the map the reader needs more on them, a person, a time range, "Explain
-	// what changed" on a topic of the open list, one change, or another way to show a level. "empty" is a lens whose
-	// list holds nothing to explain. as is there when the question is asked in a way of its own: a tour, a change plain
-	// code picked, or a level to show another way.
+	// what changed" on a topic of the open list, one change, another way to show a level, the brief of a part or of
+	// every part of a level, or a question about one concept. "empty" is a lens whose list holds nothing to explain. as
+	// is there when the question is asked in a way of its own: parts to explain, a question to answer as a brief, a
+	// change plain code picked, or a level to show another way.
 	async function questionOf(
 		body: unknown,
 	): Promise<{ kind: 'ok' | 'empty'; text: string; as?: Asking } | { kind: 'refused'; problem: string }> {
@@ -368,24 +388,53 @@ export function questionDesk(
 				as: { kind: 'view', within: level.within, text },
 			}
 		}
-		if (kind === 'tour') {
-			const within = fieldOf(lens, 'within')
-			const ask = await readLayoutAsk(layout, { within: Array.isArray(within) ? within.map(String) : [] }, new Date())
-			if (ask.kind !== 'ok') return { kind: 'refused', problem: ask.message }
-			const look = await lookAtLayout(layout, ask.ask, new Date())
-			if (!look.tour) {
-				return { kind: 'refused', problem: "ken's model has not named the parts here yet. Name them first." }
+		if (kind === 'explain') {
+			const read = await levelOf(lens)
+			if (read.kind !== 'ok') return read
+			const { level } = read
+			const part = fieldOf(lens, 'part') ?? null
+			// The order a tour took: the order the parts were named in, with tests and upkeep last.
+			const order = tourOrder(level.boxes.filter((box) => box.state !== 'gone'))
+			const stops = part === null ? order : order.filter((stop) => stop.name === part)
+			if (stops.length === 0) {
+				const problem = part === null ? 'There is no part here to explain.' : `There is no part "${String(part)}" here.`
+				return { kind: 'refused', problem }
 			}
-			const name = fieldOf(lens, 'name')
-			const stops = look.tour.map(({ name, job, paths }) => ({ name, job, paths }))
-			const text = tourQuestion({
-				name: typeof name === 'string' ? oneLine(name).slice(0, 80) || null : null,
-				head: look.head,
-				words: TOUR_WORDS,
-				stops,
-				arrows: look.arrows,
+			const text = explainQuestion({
+				name: level.name,
+				head: level.head,
+				parts: stops,
+				beside: order.filter((stop) => !stops.includes(stop)),
+				arrows: level.arrows,
+				bounds: BRIEF_BOUNDS,
+				drawings: DRAWINGS,
 			}).text
-			return { kind: 'ok', text, as: { kind: 'tour', tour: { within: ask.ask.within, stops } } }
+			return { kind: 'ok', text, as: { kind: 'explain', tour: { within: level.within, stops } } }
+		}
+		if (kind === 'answer') {
+			const said = fieldOf(lens, 'text')
+			const text = typeof said === 'string' ? oneLine(said) : ''
+			if (text === '' || text.length > ASKED_CHARS) {
+				return { kind: 'refused', problem: `Ask the question in 1 to ${ASKED_CHARS} characters.` }
+			}
+			const concept = fieldOf(lens, 'concept')
+			const about = typeof concept === 'string' ? await concepts.brief(concept, new Date()) : null
+			const head = await headNow()
+			if (!about || head === null) return { kind: 'refused', problem: 'ken has no such concept here to ask about.' }
+			const asked = answerQuestion({
+				asked: text,
+				head,
+				about: {
+					kind: about.kind,
+					name: about.name,
+					line: about.line,
+					paths: about.kind === 'part' ? (about.deeper?.within.split(',') ?? []) : [],
+					told: about.points.map((point) => point.line),
+				},
+				bounds: BRIEF_BOUNDS,
+				drawings: DRAWINGS,
+			})
+			return { kind: 'ok', text: asked.text, as: { kind: 'answer', concept: about.id, text } }
 		}
 		if (kind === 'change') {
 			const asked = fieldOf(lens, 'change')
@@ -425,7 +474,7 @@ export function questionDesk(
 			return {
 				kind: 'refused',
 				problem:
-					'Send a question, or a lens: catch-up, area with a path, change, deeper, parts, person, range, topic, tour, view or note.',
+					'Send a question, or a lens: answer, catch-up, area with a path, change, deeper, explain, parts, person, range, topic, view or note.',
 			}
 		}
 		await map.learn('deeper', names, new Date())
@@ -522,6 +571,13 @@ function changeLines(change: Change, want: Want): string[] {
 				]),
 		`Before you say how something was before the change, read the code at ${short(base)}. A commit message can describe a state the code never had.`,
 	]
+}
+
+// The concept whose brief a reply wrote: the question it answers, or the part it explains when it explains one.
+function briefOf(reply: Reply): string | null {
+	if (reply.answers) return questionId(reply.answers.concept, reply.answers.text)
+	const [only, ...more] = reply.tour?.stops ?? []
+	return reply.tour && only && more.length === 0 ? partId(reply.tour.within, only.name) : null
 }
 
 // A diagram card leaves ken with its drawing.

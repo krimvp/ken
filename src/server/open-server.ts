@@ -6,11 +6,12 @@ import {
 	type ChangeChoice,
 	changeChoices,
 	type LayoutAsk,
+	LEVELS,
 	lookAtLayout,
 	pictureBefore,
 	readLayoutAsk,
 } from '../layout/index.ts'
-import type { MapSignal } from '../map/index.ts'
+import { type MapSignal, prefsOf, TEXT_PREFS } from '../map/index.ts'
 import { MERMAID_FILE, PAGE_FOLDER } from '../page/index.ts'
 import { OUTCOMES } from '../record/index.ts'
 import { type Hunk, parsePath } from '../repo/index.ts'
@@ -19,6 +20,9 @@ import { refusal } from './http/guard-request.ts'
 import { type PageFile, readPageFiles } from './http/page-files.ts'
 import { openProject } from './ken-project.ts'
 import { fieldOf, type QuestionLine } from './question-desk.ts'
+import { readLooked } from './reader/read-looked.ts'
+import { lastVisit, readerView } from './reader/reader-view.ts'
+import { TIMELINE_DAYS, timelineOf } from './timeline.ts'
 import { suggestWayIn } from './way-in.ts'
 
 // model is the name of the model the page asks, or null when none is set and the page can only show earlier answers.
@@ -54,7 +58,8 @@ export async function openServer(options: {
 	const opened = await openProject(options)
 	if (opened.kind !== 'ok') return opened
 	const { project } = opened
-	const { root, shown, repo, history, record, map, readerNotes, layout, model, desk, live } = project
+	const { root, shown, repo, history, record, map, readerNotes, seen, prefs, layout, model, desk, live } = project
+	const reads = project.concepts
 	if (options.live && !live) {
 		await project.close()
 		return {
@@ -67,17 +72,24 @@ export async function openServer(options: {
 	let port = 0
 
 	// What landed since the reader last looked leads the changes the page offers, so catching up is one pick away.
+	// levels are the words for what ken thinks the reader knows of a box, weakest first.
 	async function layoutView(ask: LayoutAsk) {
 		const now = new Date()
 		// A note ken wrote by itself in live mode is not a question the reader asked.
 		const questions = (await history.list()).filter((entry) => entry.about === undefined)
+		const visit = lastVisit((await seen.read()).lines, now)
 		const [look, since, choices] = await Promise.all([
 			lookAtLayout(layout, ask, now),
-			sinceChoices(repo, questions, now),
+			sinceChoices(repo, questions, visit, now),
 			changeChoices(layout),
 		])
 		const changes: ChangeChoice[] = [...since.map((each) => each.choice), ...choices]
-		return { look, changes, wayIn: await suggestWayIn(layout, { history, questions, spans: since }, now) }
+		// The way in is suggested from the top level at HEAD, which is often the level asked.
+		const { own } = ask
+		const isTop = ask.within.length === 0 && ask.change === null && ask.at === look.head
+		const top = isTop ? look : await lookAtLayout(layout, { at: look.head, within: [], change: null, own }, now)
+		const wayIn = await suggestWayIn(layout, { history, questions, visit, spans: since, own, top }, now)
+		return { look, changes, wayIn, levels: LEVELS }
 	}
 
 	async function route(request: IncomingMessage, response: ServerResponse) {
@@ -97,7 +109,8 @@ export async function openServer(options: {
 			const look = top.kind === 'ok' ? await lookAtLayout(layout, top.ask, new Date()) : null
 			const parts = look?.boxes.map(({ name, paths }) => ({ name, paths })) ?? []
 			const named = Boolean(look?.named)
-			return sendJson(response, 200, { project: shown, model: state, live: live?.on() ?? false, parts, named })
+			const on = live?.on() ?? false
+			return sendJson(response, 200, { project: shown, name: project.name, model: state, live: on, parts, named })
 		}
 		if (where === 'GET /api/questions') return sendJson(response, 200, { questions: await desk.rows() })
 		if (where === 'GET /api/live') {
@@ -125,6 +138,29 @@ export async function openServer(options: {
 			const states = await map.learn(signal.signal, signal.topics, new Date())
 			return sendJson(response, 200, { states })
 		}
+		if (where === 'POST /api/seen') {
+			const body = await readJson(request)
+			const looked = body.kind === 'ok' ? await readLooked(layout.repo, body.value) : body
+			if (looked.kind === 'refused') return sendJson(response, 400, { message: looked.problem })
+			const added =
+				looked.kind === 'undo'
+					? await seen.undo(looked.at, looked.head, new Date())
+					: await seen.add(looked.looked, looked.head, new Date())
+			if (added === 'missing') return sendJson(response, 400, { message: 'ken wrote no line at that moment.' })
+			return sendJson(response, 200, { written: added === 'written' })
+		}
+		if (where === 'GET /api/reader') {
+			const now = new Date()
+			const top = await readLayoutAsk(layout, { change: 'none' }, now)
+			const [look, looked, mapped, read] = await Promise.all([
+				top.kind === 'ok' ? lookAtLayout(layout, top.ask, now) : null,
+				seen.read(),
+				map.read(now),
+				record.read(),
+			])
+			const topics = read.current.flatMap((entry) => (entry.kind === 'topic' ? [entry] : []))
+			return sendJson(response, 200, readerView(seen.file, looked, mapped, topics, look?.boxes ?? [], now))
+		}
 		if (where === 'GET /api/notes') return sendJson(response, 200, { notes: await readerNotes.read() })
 		if (where === 'POST /api/notes') {
 			const body = await readJson(request)
@@ -145,6 +181,40 @@ export async function openServer(options: {
 			const ask = await readLayoutAsk(layout, raw, new Date())
 			if (ask.kind !== 'ok') return sendJson(response, 400, { message: ask.message, field: ask.field })
 			return sendJson(response, 200, await layoutView(ask.ask))
+		}
+		if (where === 'GET /api/brief') {
+			const brief = await reads.brief(url.searchParams.get('concept') ?? '', new Date())
+			if (!brief) return sendJson(response, 404, { message: 'ken has no such concept in this project.' })
+			return sendJson(response, 200, brief)
+		}
+		if (where === 'GET /api/concepts') return sendJson(response, 200, await reads.concepts(new Date()))
+		if (where === 'GET /api/processes') {
+			const found = await reads.processes(url.searchParams.getAll('within'), new Date())
+			if (!found) return sendJson(response, 400, { message: 'Send within: the paths of a level of this project.' })
+			return sendJson(response, 200, found)
+		}
+		if (where === 'GET /api/timeline') {
+			const { fewest, most, unasked } = TIMELINE_DAYS
+			const days = Number(url.searchParams.get('days') ?? unasked)
+			if (!Number.isInteger(days) || days < fewest || days > most) {
+				return sendJson(response, 400, { message: `Send days: a whole number from ${fewest} to ${most}.` })
+			}
+			const now = new Date()
+			const landed = await timelineOf(repo, days, now)
+			if (landed.kind !== 'ok') {
+				return sendJson(response, 400, { message: 'That span holds too many commits to read. Ask for fewer days.' })
+			}
+			return sendJson(response, 200, {
+				days: landed.days,
+				lastVisit: lastVisit((await seen.read()).lines, now)?.at ?? null,
+			})
+		}
+		if (where === 'GET /api/prefs') return sendJson(response, 200, await prefs.read())
+		if (where === 'POST /api/prefs') {
+			const body = await readJson(request)
+			const chosen = body.kind === 'ok' ? prefsOf(body.value) : null
+			if (!chosen) return sendJson(response, 400, { message: `Send text: one of ${TEXT_PREFS.join(', ')}.` })
+			return sendJson(response, 200, await prefs.write(chosen))
 		}
 		if (where === 'GET /api/change/diff') {
 			const paths = url.searchParams.getAll('path').map(parsePath)

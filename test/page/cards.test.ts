@@ -8,7 +8,7 @@ import { verifyGitQuote } from '../../src/checks/index.ts'
 import { drawn } from '../../src/diagram/index.ts'
 import { lookAtLayout, readLayoutAsk } from '../../src/layout/index.ts'
 import { openSnapshots } from '../../src/live/index.ts'
-import { openMap } from '../../src/map/index.ts'
+import { openMap, openSeen } from '../../src/map/index.ts'
 import { fileRecordStore } from '../../src/record/index.ts'
 import { gitRepository } from '../../src/repo/index.ts'
 import { buildRepository } from '../fixtures/build-repository.ts'
@@ -135,9 +135,10 @@ test('a reply about a change opens on the change card, before the words: the par
 	after(() => rmSync(home, { recursive: true, force: true }))
 	const repo = gitRepository(project)
 	const record = fileRecordStore(project, repo)
-	const opened = await openMap(home, repo, record)
-	if (opened.kind !== 'ok') assert.fail('the fixture has commits')
-	const sources = { root: project, repo, snapshots: await openSnapshots(home, repo, project), record, map: opened.map }
+	const [opened, looked] = await Promise.all([openMap(home, repo, record), openSeen(home, repo)])
+	if (opened.kind !== 'ok' || looked.kind !== 'ok') assert.fail('the fixture has commits')
+	const snapshots = await openSnapshots(home, repo, project)
+	const sources = { root: project, repo, snapshots, record, map: opened.map, seen: looked.seen }
 	const asked = await readLayoutAsk(sources, { within: ['src'], change: `${base}..${head}` }, new Date())
 	if (asked.kind !== 'ok') assert.fail(asked.message)
 	const look = await lookAtLayout(sources, asked.ask, new Date())

@@ -1,9 +1,8 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
-import { after, test } from 'node:test'
+import { test } from 'node:test'
 import {
 	type LayoutLook,
 	type LayoutSources,
@@ -11,24 +10,10 @@ import {
 	type RawAsk,
 	readLayoutAsk,
 } from '../../src/layout/index.ts'
-import { openSnapshots } from '../../src/live/index.ts'
-import { openMap } from '../../src/map/index.ts'
-import { fileRecordStore } from '../../src/record/index.ts'
-import { gitRepository } from '../../src/repo/index.ts'
 import { buildRepository } from '../fixtures/build-repository.ts'
+import { sourcesFor } from '../fixtures/layout-sources.ts'
 
 const NOW = new Date('2026-11-17T10:00:00Z')
-
-async function sourcesFor(root: string): Promise<LayoutSources> {
-	const home = mkdtempSync(path.join(tmpdir(), 'ken-home-'))
-	after(() => rmSync(home, { recursive: true, force: true }))
-	const store = await openSnapshots(home, gitRepository(root), root)
-	const repo = gitRepository(root, { alternate: store.objects })
-	const record = fileRecordStore(root, repo)
-	const opened = await openMap(home, repo, record)
-	if (opened.kind !== 'ok') assert.fail('the fixture has commits')
-	return { root, repo, snapshots: store, record, map: opened.map }
-}
 
 async function look(sources: LayoutSources, raw: RawAsk): Promise<LayoutLook> {
 	const read = await readLayoutAsk(sources, raw, NOW)

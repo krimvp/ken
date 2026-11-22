@@ -157,7 +157,7 @@ export type PartsLevel = {
 	name: string | null
 	within: string[]
 	head: string
-	bounds: { fewest: number; parts: number; arrows: number; about: number }
+	bounds: { fewest: number; parts: number; arrows: number; about: number; flows: number; flow: number }
 	boxes: { name: string; paths: string[]; files: number; job: string | null; state: 'same' | 'changed' | 'gone' }[]
 	named: { drawnAt: string; added: string[] } | null
 	loose: string[]
@@ -254,42 +254,124 @@ function layoutRules(level: PartsLevel): string[] {
 		`Add at most ${bounds.arrows} arrows for which part uses which. Show the relation that matters when the code runs: one part calls the other, launches it as its own process, or reads its files. When a part launches another, quote the lines that launch it, down to the one that names its file. Use an import of types only when nothing stronger joins the two parts.`,
 		'Give each arrow a short verb said from the part it starts at, so that the start part, the verb and the end part read as a sentence, such as "Server runs questions in Chat engine". A part that launches another "runs" or "launches" it. Never a passive verb such as "is used by". The verb says only what the quoted lines show: a line that imports a list shows "reads", not "runs".',
 		'Each arrow quotes lines of code from a file of the part it starts at that name a folder or file of the part it ends at. A comment does not count. Leave out an arrow you cannot quote that way.',
+		`Set the field flows to at most ${bounds.flows} processes here that a diagram of steps would show better than the parts do, each as a short request of at most ${bounds.flow} characters, such as "How an order is paid". Name only what you read in the code, and leave the field out when there is none.`,
 	]
 }
 
-// "Show me around" on a named level. Plain code picked the stops and their order, so the model explains each part in
-// that order and does not choose. name is what the reader calls the level, or null for the whole project. words is the
-// most words a step may have.
-export type TourLevel = {
+// "Ask ken to explain it" on a part, and on a whole level. Plain code picked the parts and their order, so the model
+// explains each in that order and does not choose. name is what the reader calls the level, or null for the whole
+// project. parts are the ones to explain, and beside the ones of the level it leaves out, which the model reads to
+// say how the parts connect. bounds and drawings are what show checks a brief against, so the model can pass first
+// time.
+export type ExplainLevel = {
 	name: string | null
 	head: string
-	words: number
-	stops: { name: string; job: string; paths: string[] }[]
+	parts: { name: string; job: string; paths: string[] }[]
+	beside: { name: string; job: string }[]
 	arrows: { from: string; to: string; text: string }[]
+	bounds: {
+		lineWords: number
+		fewestPoints: number
+		points: number
+		terms: number
+		meansWords: number
+		fewestQuestions: number
+		questions: number
+		label: number
+	}
+	drawings: Record<string, string>
 }
 
-export function tourQuestion(level: TourLevel): LensQuestion {
-	const { stops, arrows } = level
+export function explainQuestion(level: ExplainLevel): LensQuestion {
+	const { parts, beside, arrows, bounds } = level
 	const where = level.name ?? 'this project'
-	const stop = (each: TourLevel['stops'][number], k: number) =>
-		`- Stop ${k + 1}, ${each.name} (${each.paths.join(', ')})${each.job ? `: ${each.job}` : ''}`
+	const [only] = parts
+	const one = parts.length === 1 && only !== undefined && beside.length > 0 ? only : null
+	const part = (each: ExplainLevel['parts'][number], k: number) =>
+		`- Part ${k + 1}, ${each.name} (${each.paths.join(', ')})${each.job ? `: ${each.job}` : ''}`
 	const uses = arrows.map((arrow) => `${arrow.from} ${arrow.text} ${arrow.to}`)
+	const others = beside.map((each) => `${each.name}${each.job ? ` (${each.job})` : ''}`)
 	return {
 		text: [
-			`Show me around ${where}`,
+			one ? `Explain ${one.name}, a part of ${where}` : `Explain the parts of ${where}`,
 			LIST_SAID,
-			...stops.map(stop),
+			...parts.map(part),
+			...(others.length > 0 ? [`- Beside ${one ? 'it' : 'them'}: ${others.join('; ')}.`] : []),
 			...(uses.length > 0 ? [`- How the parts use each other: ${uses.join('; ')}.`] : []),
 			'',
-			`I am new to ${where}. Walk me through it as a tour of ${stops.length} stops, one stop per part, in the order above: the order the parts were named in, with tests and upkeep last. Read the code at HEAD (${level.head}) first.`,
-			`Then send one show call per stop, in order, with step: the stop's number and its text. I can read each part's job above, so do not say it again. Tell me the main path through the part, from what comes in to what goes out, and the one choice in its design a maintainer would explain. Use four sentences and ${level.words} words at most.`,
-			'Say how two parts connect in the words of the arrows, such as "Tests runs scenarios through Eval harness". Never use the order of the tour for it, such as "the next stop": I may open a stop on its own.',
-			'With each step send one or two claims that quote code where the work happens: the loop, the dispatch, the table, or the entry function with its body. Not a comment, and not a signature alone. ken sends back a claim that quotes only comments. A claim says only what its quoted lines show. Name the file or function in the claim, not in the step.',
-			'Write nothing before the first stop, and one sentence after the last at most.',
+			`Read the code at HEAD (${level.head}) first. For each part, find what its user calls and follow that call to its end: what comes in, each step in order, and what goes out. Then send one show call for each part above, in that order, with brief: the part's number and what follows.`,
+			PICTURES,
+			'line: one sentence on what the part does for whoever uses it.',
+			`points: ${bounds.fewestPoints} to ${bounds.points} things to know, the ones a maintainer would tell a newcomer first. The first is the main path through the part: what comes in, the steps it takes, and what goes out. The others are what the part refuses, what it keeps, and the one choice in its design. ${pointRule(bounds)}`,
+			...pointRules(level),
+			`terms: up to ${bounds.terms} words a maintainer says when they talk about this part, which a newcomer has to learn: a thing the code names, such as a step, a kind of plugin or a kind of file. Take the word from the project's glossary or README when it has one. Not the name of one constant or one helper function. ${termRule(bounds)} Leave out the names of the parts.`,
+			`questions: ${bounds.fewestQuestions} or ${bounds.questions} questions I would ask next about the part, one sentence each, that the code can answer: what happens when something fails, why it is built this way, what a change would break.`,
+			'Say how two parts connect in the words of the arrows, such as "Tests runs scenarios through Eval harness". Never use the order of the list for it, such as "the next part": I open each brief on its own.',
+			...LAST_RULES,
+			'ken adds each part to the record as a topic itself, so send no topics. Write nothing outside the briefs.',
 		].join('\n'),
 		empty: false,
 	}
 }
+
+// A question about one concept, pressed or typed in its brief. about is the concept as its brief names it: what kind
+// of thing it is, its name, its one line, the paths it holds when it is a part, and the lines its brief already tells,
+// so the answer does not say them again.
+export type AnswerAbout = {
+	asked: string
+	head: string
+	about: { kind: string; name: string; line: string; paths: string[]; told: string[] }
+	bounds: ExplainLevel['bounds']
+	drawings: Record<string, string>
+}
+
+export function answerQuestion(question: AnswerAbout): LensQuestion {
+	const { about, bounds } = question
+	const places = about.paths.length > 0 ? ` (${about.paths.join(', ')})` : ''
+	return {
+		text: [
+			question.asked,
+			LIST_SAID,
+			`- You ask this about the ${about.kind} ${about.name}${places}${about.line ? `: ${about.line}` : '.'}`,
+			...(about.told.length > 0 ? [`- Its brief already says: ${about.told.join(' ')}`] : []),
+			'',
+			`Read the code at HEAD (${question.head}) that decides the answer. Then answer with one show call, with brief: number 1 and what follows.`,
+			PICTURES,
+			'line: the answer in one sentence.',
+			`points: ${bounds.fewestPoints} to ${bounds.points} things to know that make up the answer, in the order they happen when the answer is a run of events. ${pointRule(bounds)}`,
+			...pointRules(question),
+			`terms: only a word the answer uses that a newcomer would not know, three at most. ${termRule(bounds)}`,
+			'Send no questions. Do not say again what the brief already says.',
+			'If the code does not decide the answer, say so in line, and send as points what the code does show.',
+			...LAST_RULES,
+			'Send no topics. Write nothing outside the brief.',
+		].join('\n'),
+		empty: false,
+	}
+}
+
+// What every brief is told, whoever asks for it, so a part's brief and an answer read alike.
+const PICTURES =
+	'I think in pictures. I read a brief beside a picture of the parts: each thing to know is a short line with a small drawing, and I open the longer telling when I want words. Write short, literal words: the short word, the active verb, the name the code uses. No figure of speech.'
+
+const pointRule = (bounds: ExplainLevel['bounds']) =>
+	`One idea each. Give each a line of at most ${bounds.lineWords} words that is a whole sentence; more, one sentence that says it in full; long, two or three sentences; a drawing; and quotes.`
+
+function pointRules({ bounds, drawings }: Pick<ExplainLevel, 'bounds' | 'drawings'>): string[] {
+	const kinds = Object.entries(drawings).map(([kind, shows]) => `${kind} (${shows})`)
+	return [
+		'A point says only what its quoted lines show. Quote code where the work happens: the loop, the check, the table, or the function with its body. Not a comment, and not a signature alone: ken sends back a point that quotes only comments. Give each quote its path. Name a file or a function in more or long, never in line.',
+		`drawing: pick the kind that shows the point: ${kinds.join('; ')}. Give count for steps and loop, lit for steps, and a label of at most ${bounds.label} characters when one word helps. Pick dot when no kind fits. Never change what a point says so that a drawing fits it.`,
+	]
+}
+
+const termRule = (bounds: ExplainLevel['bounds']) =>
+	`Give each its name as the code spells it, means: what it means in at most ${bounds.meansWords} words, and quote: one line where the code uses it.`
+
+const LAST_RULES = [
+	'Never write that I understand, know or have learned something. Say what the code does.',
+	'If ken sends a point or a term back, fix it and send it again alone, in a brief with the same number.',
+]
 
 export function sinceWords(since: Since): string {
 	if (since.kind === 'days') return since.days === 1 ? 'in the last day' : `in the last ${since.days} days`

@@ -31,12 +31,12 @@ export const MODULES: Record<string, Module> = {
 		packages: [],
 	},
 	map: {
-		job: 'The understanding map: what this reader understands, topic by topic, and the notes on how they want things shown, kept outside the project.',
+		job: 'The understanding map: what this reader understands, topic by topic, the notes on how they want things shown, how much text they want, and the lines on what they looked at, kept outside the project.',
 		imports: ['record', 'repo'],
 		packages: [],
 	},
 	'follow-up': {
-		job: 'What is open for the owner, and the lenses on a person and on a time range, from the record, the map and git.',
+		job: 'What is open for the owner, the lenses on a person and on a time range, and the questions ken writes for its model about a level, a part or one concept, from the record, the map and git.',
 		imports: ['map', 'record', 'repo'],
 		packages: [],
 	},
@@ -46,12 +46,12 @@ export const MODULES: Record<string, Module> = {
 		packages: [],
 	},
 	layout: {
-		job: "The project's layout at a commit: a few boxes per level, the parts ken's model named or else the folders, which of them changed or are gone, what a change touched, and what the reader's map says about each.",
+		job: "The project's layout at a commit: a few boxes per level, the parts ken's model named or else the folders, which of them changed or are gone, what a change touched, what ken thinks the reader knows of each, and what they should look at next.",
 		imports: ['follow-up', 'live', 'map', 'record', 'repo'],
 		packages: [],
 	},
 	agent: {
-		job: 'Runs a chat with a model that explores the project and its saved sessions with read-only tools, and replies in its own words with cards whose quotes passed the check.',
+		job: 'Runs a chat with a model that explores the project and its saved sessions with read-only tools, and replies in its own words with cards and briefs whose quotes passed the check.',
 		imports: ['repo', 'checks', 'diagram', 'live', 'map', 'record', 'transcripts'],
 		packages: ['aigent'],
 	},
@@ -61,12 +61,12 @@ export const MODULES: Record<string, Module> = {
 		packages: [],
 	},
 	page: {
-		job: "The page in the browser: plain HTML, CSS and JavaScript that shows the picture of the project's parts as its home, and a thread of replies, their steps and their checked cards.",
+		job: "The page in the browser: plain HTML, CSS and JavaScript with a rail of pages, a canvas of the project's parts, a brief for each concept, and a thread of replies, their steps and their checked cards.",
 		imports: [],
 		packages: ['mermaid'],
 	},
 	server: {
-		job: 'Serves the page on 127.0.0.1, runs the questions it sends and the notes of live mode one model call at a time.',
+		job: 'Serves the page on 127.0.0.1, builds the brief of each concept from what ken holds, runs the questions the page sends and the notes of live mode one model call at a time, and writes down what the page says the reader looked at.',
 		imports: [
 			'agent',
 			'diagram',

@@ -3,13 +3,13 @@
 // the reader picked is open, with its cards and what the reader can do next, and the others show their title and, at
 // "How it works", their words. So picking a box in the picture and picking a line here are the same act. A drawn
 // picture has a path too: the boxes and arrows of its diagram, under the numbers the drawing shows.
-import { cardPaths, cardQuotes, stepDiffHtml, stepWords, stopTopics } from '../../project/walk.js'
+import { cardPaths, cardQuotes, stepDiffHtml, stepWords } from '../../project/walk.js'
 import { count, esc, isSession, label, pathList, prose, quoteBody, RUN_COST, runButton } from '../../views/format.js'
 import { stepCardsHtml, storyHtml, wordsHtml } from '../../views/reply.js'
 import { arrowListHtml } from '../canvas/arrow-list.js'
-import { pathsLine, plusMinus } from '../canvas/canvas.js'
-import { diagramPath, firstUnseen, pathOf, placeOf, shownDetail, stepFiles, stoodOn } from '../state/content.js'
-import { colourOf } from '../state/home-state.js'
+import { pathsLine, plusMinus } from '../canvas/part-box.js'
+import { diagramPath, firstUnseen, pathOf, placeOf, shownDetail, stepFiles } from '../state/content.js'
+import { colourOf, levelLabel } from '../state/home-state.js'
 
 // The two tags a boxed card can carry. Plain code read the facts of the first from git. The second holds words of
 // ken's model, each resting on quoted lines that ken found in git.
@@ -48,20 +48,20 @@ export function lookInside(box) {
 	return `<button class="quiet-button look-inside" data-act="home-open" data-key="home-open"><span class="look-name">Look inside ${esc(box.name)}</span><span class="look-says">${inside}</span></button>`
 }
 
+// A part the reader said they know, with no commit there since, shows one line in place of its words.
+export function isKnown(box) {
+	return box.knows.level === 'said' && !box.knows.stale
+}
+
 export function knownFold(name) {
 	return `<p class="insp-known">You said you know this part. Nothing in it changed since. <button class="link" data-act="home-unfold" data-name="${esc(name)}" data-key="home-unfold">Show it anyway</button></p>`
 }
 
-// What the reader's map says of a stop's part, and the button that says they know it. A part ken keeps no topic for
-// has neither: the map cannot hold it.
-function knowHtml(box, names) {
-	const stood = stoodOn(box, names)
-	if (stood === 'none') return ''
-	if (stood === 'known') return `<span class="small">Your map says you know ${esc(box.name)}.</span>`
+// The button that says the reader knows a stop's part, or the line that says they said so.
+function knowHtml(box) {
+	if (box.knows.level === 'said') return `<span class="small">You said you know ${esc(box.name)}.</span>`
 	return '<button class="quiet-button" data-act="home-know" data-key="home-know">I know this part</button>'
 }
-
-const SEEN = { none: '', new: '', met: 'Seen', known: 'You know it' }
 
 export function filesHtml(files, more = 0) {
 	const rows = files.map((file) => `<li><code>${esc(file.path)}</code> ${plusMinus(file)}</li>`)
@@ -107,26 +107,24 @@ function cardsOnce(step) {
 function stopHtml(step, k, on, ctx) {
 	const { home, detail, q } = ctx
 	const box = home.look.boxes.find((each) => each.name === step.part)
-	const names = stopTopics(step)
-	const stood = stoodOn(box, names)
 	const text = step.text === null ? prose(box.job ?? '') : prose(step.text)
 	const head = headHtml(
 		k,
 		on,
 		k + 1,
 		`<span class="path-name part-name ${colourOf(home)(step.part)}">${esc(step.part)}</span>`,
-		SEEN[stood] === '' ? '' : `<span class="path-mark">${SEEN[stood]}</span>`,
+		box.knows.level === 'new' ? '' : `<span class="path-mark">${esc(levelLabel(home, box.knows.level))}</span>`,
 	)
 	if (!on) {
 		return `${head}<div class="path-body">${detail === 'how' ? `<p>${text}</p>` : `<p class="small">${pathsLine(box)}</p>`}</div>`
 	}
-	if (stood === 'known' && !home.unfolded.has(step.part))
+	if (isKnown(box) && !home.unfolded.has(step.part))
 		return `${head}<div class="path-body">${knownFold(step.part)}</div>`
 	if (detail === 'how') {
 		return `${head}<div class="path-body">
 				<p>${text}</p>
 				${usesHtml(home, step.part, { level: 4 })}
-				<p class="insp-actions"><button class="quiet-button" data-act="detail" data-detail="code" data-key="to-code">Show its code</button>${lookInside(box)}${knowHtml(box, names)}</p>
+				<p class="insp-actions"><button class="quiet-button" data-act="detail" data-detail="code" data-key="to-code">Show its code</button>${lookInside(box)}${knowHtml(box)}</p>
 			</div>`
 	}
 	const cards =
@@ -137,7 +135,7 @@ function stopHtml(step, k, on, ctx) {
 			<p class="small">${pathsLine(box)}</p>
 			${cards}
 			${usesHtml(home, step.part, { open: true, level: 4 })}
-			<p class="insp-actions">${lookInside(box)}${knowHtml(box, names)}</p>
+			<p class="insp-actions">${lookInside(box)}${knowHtml(box)}</p>
 		</div>`
 }
 
@@ -382,7 +380,7 @@ export function pathView(home, off) {
 	if (tour && !stored) {
 		lead =
 			look.at === look.head
-				? `${runButton({ act: 'run-tour', key: 'run-tour', text: 'Show me around', primary: true }, off)}
+				? `${runButton({ act: 'run-explain', key: 'run-explain', text: 'Ask ken to explain these parts', primary: true }, off)}
 					<p class="small muted">Until then each part shows its job and its paths, as the picture does.</p>`
 				: `<p class="small muted">ken's model reads the code that is checked out, so it cannot explain this older commit.</p>`
 	}

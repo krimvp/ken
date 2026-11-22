@@ -23,7 +23,7 @@ function loadMermaid() {
 }
 
 function dark() {
-	return matchMedia('(prefers-color-scheme: dark)').matches
+	return document.documentElement.dataset.theme === 'dark'
 }
 
 // Mermaid's base theme takes plain colours, so each token is read as the browser resolved it for the current theme.
