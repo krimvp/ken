@@ -90,7 +90,7 @@ const SPANS_DAYS = [7, 30, 90]
 const MAX_WALK = 200
 
 // The spans that hold at least one commit, in this order: since the reader's last question, since their own last
-// commit, then the last 7, 30 and 90 days, without a span that holds the same commits as a shorter one. asked is the
+// commit, then the last 7, 30 and 90 days, without a span that holds the same commits as one before it. asked is the
 // reader's questions, oldest first.
 export async function sinceChoices(
 	repo: Repository,
@@ -123,7 +123,7 @@ export async function sinceChoices(
 			? undefined
 			: line.commits.find((commit) => commit.email.toLowerCase() === email.toLowerCase())
 	if (own && own.hash !== head) await since('commit', 'your last commit', own.date, own.hash)
-	const bases = new Set<CommitHash>()
+	const bases = new Set(spans.map((span) => span.base))
 	for (const days of SPANS_DAYS) {
 		const range = await timeRange(repo, { kind: 'days', days }, now, signal)
 		if (range.kind !== 'ok' || bases.has(range.range.base)) continue

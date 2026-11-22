@@ -245,7 +245,7 @@ function contentOf(entry: Extract<RecordEntry, { kind: 'decision' }>) {
 	return content
 }
 
-test("the spans for catching up start at the reader's last question when it was at an older commit, and at their own last commit, then the last days, each with the commits it holds, and a span with the same commits as a shorter one is left out", async () => {
+test("the spans for catching up start at the reader's last question when it was at an older commit, and at their own last commit, then the last days, each with the commits it holds, and a span with the same commits as one before it is left out", async () => {
 	const { repo, commit } = setUp()
 	const now = new Date('2026-11-16T12:00:00Z')
 	assert.deepEqual(await sinceChoices(repo, [], now), [], 'nothing landed after the one old commit')
@@ -271,9 +271,8 @@ test("the spans for catching up start at the reader's last question when it was 
 			[`${asked}..${head}`, 3],
 			[`${own}..${head}`, 2],
 			[`${week}..${head}`, 1],
-			[`${asked}..${head}`, 3],
 		],
-		'the last question, the last commit, 7 days and 30 days; 90 days holds what 30 days holds',
+		'the last question, the last commit and 7 days; 30 and 90 days hold what the last question holds',
 	)
 	assert.ok(choices.every(({ choice }) => choice.name.includes(String(choice.commits))))
 

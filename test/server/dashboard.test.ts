@@ -83,9 +83,9 @@ test("what landed since the reader's last commit leads the changes the layout of
 		{ kind: 'since', change: `${hashes[0]}..${head}`, commits: 1 },
 	)
 	assert.deepEqual(
-		(await kinds()).slice(0, 3),
-		['since', 'since', 'uncommitted'],
-		'since the last commit and the last 7 days come before the changes the layout offered already',
+		(await kinds()).slice(0, 2),
+		['since', 'uncommitted'],
+		'since the last commit comes before the changes the layout offered already, and the last 7 days, which hold the same commit, are left out',
 	)
 	const { look } = await json(server, `/api/layout?change=${encodeURIComponent(changes[0].change)}`)
 	assert.equal(look.change.files, 1)
