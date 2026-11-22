@@ -53,6 +53,28 @@ test('a change laid over the picture lists its commits newest first without the 
 	)
 })
 
+test('a file moved from one box to another counts in both, each listing it by the path it has there', async () => {
+	const moved = 'export const x = 1\nexport const y = 2\n'
+	const { root, hashes } = buildRepository([
+		{
+			message: 'feat: start',
+			files: { 'src/a/x.ts': moved, 'src/a/w.ts': 'w\n', 'src/b.ts': 'b\n', 'lib/y.ts': 'y\n' },
+		},
+		{ message: 'refactor: move x', files: { 'src/a/x.ts': null, 'lib/x.ts': moved } },
+	])
+	const server = await openKen(root, readerHome())
+	const change = `${hashes[0]}..${hashes[1]}`
+
+	const { look } = await json(server, layoutOf(change))
+	const pathsIn = (name: string) =>
+		look.boxes
+			.find((box: { name: string }) => box.name === name)
+			.touched?.paths.map((each: { path: string }) => each.path)
+	assert.deepEqual([pathsIn('src'), pathsIn('lib')], [['src/a/x.ts'], ['lib/x.ts']])
+	const inside = (await json(server, layoutOf(change, 'src'))).look
+	assert.deepEqual([inside.change.files, inside.change.outside], [1, []], 'src lost the file, and its box a holds it')
+})
+
 test("uncommitted work laid over the picture has no commits, since ken's snapshot of it is no commit of the project", async () => {
 	const { root } = buildRepository([{ message: 'feat: start', files: { 'src/a.ts': 'a\n' } }])
 	const server = await openKen(root, readerHome())
@@ -133,12 +155,20 @@ test('a change asked as a span of time is the commits since then, a span with no
 	assert.deepEqual([replied.reply.change.base, replied.reply.change.head], [second, third])
 })
 
-test('the diff of a change comes from git for the files asked, as hunks with their line numbers, cut after 400 changed lines', async () => {
+test('the diff of a change comes from git for the files asked, as hunks with their line numbers, cut after 400 changed lines, and names the asked files that are binary', async () => {
 	const { root, hashes } = buildRepository([
-		{ message: 'feat: start', files: { 'src/a.ts': 'one\ntwo\nthree\n', 'src/b.ts': 'b\n', 'src/big.ts': 'top\n' } },
+		{
+			message: 'feat: start',
+			files: { 'src/a.ts': 'one\ntwo\nthree\n', 'src/b.ts': 'b\n', 'src/big.ts': 'top\n', 'src/same.ts': 's\n' },
+		},
 		{
 			message: 'feat: more',
-			files: { 'src/a.ts': 'one\n2\nthree\n', 'src/b.ts': 'b\nbee\n', 'src/big.ts': `top\n${lines(500)}` },
+			files: {
+				'src/a.ts': 'one\n2\nthree\n',
+				'src/b.ts': 'b\nbee\n',
+				'src/big.ts': `top\n${lines(500)}`,
+				'logo.png': new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0, 1, 2]),
+			},
 		},
 	])
 	const server = await openKen(root, readerHome())
@@ -155,7 +185,12 @@ test('the diff of a change comes from git for the files asked, as hunks with the
 			},
 		],
 		cut: false,
+		binary: [],
+		tooLarge: false,
 	})
+
+	const why = await json(server, diffOf(['logo.png', 'src/same.ts']))
+	assert.deepEqual(why, { hunks: [], cut: false, binary: ['logo.png'], tooLarge: false }, 'src/same.ts did not change')
 
 	const big = await json(server, diffOf(['src/b.ts', 'src/big.ts']))
 	const changed = big.hunks.flatMap((each: { hunk: { lines: string[] } }) =>

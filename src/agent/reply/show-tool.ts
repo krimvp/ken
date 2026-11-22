@@ -167,6 +167,7 @@ export function showTool(gate: Gate, round: () => Round): Tool {
 					current.tour &&
 					step &&
 					draft.kind === 'claim' &&
+					draft.draft.quotes.length > 0 &&
 					draft.draft.quotes.every(({ text }) => onlyComments(text))
 				) {
 					problems.push(

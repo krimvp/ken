@@ -105,7 +105,16 @@ async function spanOf(
 	now: Date,
 	signal?: AbortSignal,
 ): Promise<{ kind: 'ok'; change: Change } | { kind: 'refused'; message: string }> {
-	const since = sinceOf(text.slice(SINCE.length), undefined)
+	const asked = text.slice(SINCE.length).trim()
+	// The page offers the span since the reader's last question as a range, so here the text names it only when typed.
+	if (asked === 'question') {
+		return {
+			kind: 'refused',
+			message:
+				'The layout takes no span since:question. Name a day such as since:2026-11-01, or days such as since:14d.',
+		}
+	}
+	const since = sinceOf(asked, undefined)
 	if (since.kind !== 'ok') return { kind: 'refused', message: since.problem }
 	const span = await timeRange(repo, since.since, now, signal)
 	if (span.kind !== 'ok') return { kind: 'refused', message: span.problem }

@@ -143,7 +143,7 @@ test("ken suggests catching up on what landed since the reader's own last commit
 	assert.match(wayIn.why, /\b1 commit\b/)
 })
 
-test("when the reader's last question was asked at a commit the history no longer holds, ken does not claim that nothing landed since they looked", async () => {
+test("when the reader's last question was asked at a commit the history no longer holds, ken suggests learning and still counts what landed in the last days", async () => {
 	const bo = { name: 'Bo Other', email: 'bo@example.com' }
 	const { root } = buildRepository([{ message: 'feat: start', files: { 'src/a/x.ts': 'x\n' }, author: bo }])
 	const model = await scriptedModel([{ text: 'It holds x.' }])
@@ -155,8 +155,8 @@ test("when the reader's last question was asked at a commit the history no longe
 
 	const { wayIn } = await json(server, '/api/layout')
 	assert.equal(wayIn.suggested, 'learn')
+	assert.equal(wayIn.facts.learn, '1 folder')
 	assert.match(wayIn.facts['catch-up'], /^1 commit /, 'a commit did land in the last days')
-	assert.doesNotMatch(wayIn.why, /nothing landed/i)
 })
 
 test('a GitHub merge is named by its pull request number, not by the branch it came from, in the review fact and in a question about it', async () => {
@@ -268,6 +268,18 @@ test('a row says which lens asked it: the story of a change, a later question ab
 	const committed = { base, head, snapshot: false }
 	assert.deepEqual([rows[0]?.change, rows[1]?.change], [committed, committed], 'both are about the same commits')
 	assert.deepEqual([rows[2]?.change.base, rows[2]?.change.snapshot], [head, true])
+
+	// A rebase that drops the asked commits leaves a head that neither the project nor ken's store holds.
+	const git = (...args: string[]) => execFileSync('git', args, { cwd: root, stdio: 'ignore' })
+	git('reset', '--quiet', '--hard', base)
+	git('reflog', 'expire', '--expire=now', '--all')
+	git('gc', '--quiet', '--prune=now')
+	const after: typeof rows = (await json(server, '/api/questions')).questions
+	assert.deepEqual(
+		after.map((row) => row.change.snapshot),
+		[false, false, true],
+		'a commit gone from the project is not a snapshot',
+	)
 })
 
 test('a level the reader asks to see another way is stored with their own words when the model draws it again, and the layout then shows the new parts and those words', async () => {

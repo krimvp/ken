@@ -214,9 +214,10 @@ function namesPart(text: string, paths: string[]): boolean {
 	})
 }
 
-// By plain text, with no parser: a line whose trimmed start opens a comment in a common language. C's #include and
-// #import are code.
-const COMMENT = /^(\/\/|\/\*|\*|--|;|#(?!\s*(include|import)\b))/
+// By plain text, with no parser: a line whose trimmed start opens a comment in a common language. C's preprocessor
+// lines, such as #include and #define, and Rust's attributes, #[ and #![, start with # and are code.
+const COMMENT =
+	/^(\/\/|\/\*|\*|--|;|#(?!\s*(include|import|define|undef|if|ifdef|ifndef|else|elif|endif|pragma)\b|!?\[))/
 
 export function onlyComments(text: string): boolean {
 	return text

@@ -1,5 +1,5 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
-import { changedHunks, MODEL_EXAMPLE, type ModelFlags } from '../agent/index.ts'
+import { MODEL_EXAMPLE, type ModelFlags } from '../agent/index.ts'
 import { layoutDraft } from '../diagram/index.ts'
 import { authorsOf, decide, openItems, sinceChoices, timeRange } from '../follow-up/index.ts'
 import {
@@ -13,7 +13,7 @@ import {
 import type { MapSignal } from '../map/index.ts'
 import { MERMAID_FILE, PAGE_FOLDER } from '../page/index.ts'
 import { OUTCOMES } from '../record/index.ts'
-import { parsePath } from '../repo/index.ts'
+import { type Hunk, parsePath } from '../repo/index.ts'
 import { decisionRows } from './decision-list.ts'
 import { refusal } from './http/guard-request.ts'
 import { type PageFile, readPageFiles } from './http/page-files.ts'
@@ -157,9 +157,17 @@ export async function openServer(options: {
 			const { change } = ask.ask
 			if (!change) return sendJson(response, 400, { message: 'Name the change to show the diff of.' })
 			const wanted = new Set<string>(paths.flatMap((each) => (each.kind === 'ok' ? [each.path] : [])))
-			const hunks = await changedHunks(layout.repo, change.range, new AbortController().signal)
-			const asked = hunks.filter((each) => wanted.has(each.path))
-			return sendJson(response, 200, cutAt(asked, DIFF_LINES))
+			const diff = await layout.repo.diff(change.range)
+			if (diff.kind !== 'ok') return sendJson(response, 200, { hunks: [], cut: false, binary: [], tooLarge: true })
+			// A moved file is asked by either of its paths, as the box that lost it and the box that got it list it.
+			const asked = diff.files.filter((file) => wanted.has(file.path) || wanted.has(file.oldPath))
+			const hunks = asked.flatMap((file) =>
+				file.kind === 'text' ? file.hunks.map((hunk) => ({ path: file.path, oldPath: file.oldPath, hunk })) : [],
+			)
+			const binary = asked.flatMap((file) =>
+				file.kind === 'binary' ? [file.path, file.oldPath].filter((each) => wanted.has(each)) : [],
+			)
+			return sendJson(response, 200, { ...cutAt(hunks, DIFF_LINES), binary: [...new Set(binary)], tooLarge: false })
 		}
 		if (where === 'POST /api/layout/back') {
 			const body = await readJson(request)
@@ -294,7 +302,7 @@ async function readJson(
 	}
 }
 
-type ChangedHunk = Awaited<ReturnType<typeof changedHunks>>[number]
+type ChangedHunk = { path: string; oldPath: string; hunk: Hunk }
 
 // The hunks up to most changed lines, in the shape a walkthrough step's hunks have. The hunk that passes the limit
 // keeps the lines that fit and counts them again, and cut says the diff goes on.
@@ -313,9 +321,9 @@ function cutAt(hunks: ChangedHunk[], most: number): { hunks: ChangedHunk[]; cut:
 			kept.push(each)
 			continue
 		}
-		const count = (sign: string) => lines.filter((line) => !line.startsWith(sign) && !line.startsWith('\\')).length
+		const allBut = (sign: string) => lines.filter((line) => !line.startsWith(sign) && !line.startsWith('\\')).length
 		if (lines.some(changed)) {
-			kept.push({ ...each, hunk: { ...each.hunk, lines, oldLength: count('+'), newLength: count('-') } })
+			kept.push({ ...each, hunk: { ...each.hunk, lines, oldLength: allBut('+'), newLength: allBut('-') } })
 		}
 		return { hunks: kept, cut: true }
 	}

@@ -4,7 +4,7 @@
 // to no model; the agent writes the note.
 export { type LastAsk, lastAsk, type NowBlock, nowBlock } from './now-block.ts'
 export { observe } from './observe.ts'
-export { openSnapshots, type Snapshot, type SnapshotStore, takeSnapshot } from './snapshot.ts'
+export { holdsSnapshot, openSnapshots, type Snapshot, type SnapshotStore, takeSnapshot } from './snapshot.ts'
 export {
 	type About,
 	type Observation,

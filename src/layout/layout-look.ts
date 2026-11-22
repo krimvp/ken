@@ -133,15 +133,15 @@ export async function lookAtLayout(
 		}
 	})
 	// Inside a part, the change is what it did to that part: a file changed elsewhere is not this level's to count.
-	const inScope = (diff ?? [])
-		.map((file) => file.path)
-		.filter((file) => ask.within.length === 0 || ask.within.some((place) => under(file, place)))
+	const inScope = (diff ?? []).filter((file) => ask.within.length === 0 || pathIn(file, ask.within) !== null)
 	const change =
 		ask.change && commits
 			? {
 					...ask.change,
 					files: inScope.length,
-					outside: inScope.filter((file) => !places.some((place) => under(file, place))),
+					outside: inScope.flatMap((file) =>
+						pathIn(file, places) === null ? [pathIn(file, ask.within) ?? file.path] : [],
+					),
 					commits: commits.commits,
 					moreCommits: commits.more,
 				}
@@ -332,13 +332,13 @@ async function landedCommits(repo: Repository, range: Range, signal?: AbortSigna
 }
 
 function touchedIn(paths: string[], diff: FileDiff[]): Touched | null {
-	const files = diff
-		.filter((file) => paths.some((place) => under(file.path, place)))
-		.map((file) => {
-			const lines = file.kind === 'text' ? file.hunks.flatMap((hunk) => hunk.lines) : []
-			const count = (sign: string) => lines.filter((line) => line.startsWith(sign)).length
-			return { path: file.path, added: count('+'), removed: count('-') }
-		})
+	const files = diff.flatMap((file) => {
+		const path = pathIn(file, paths)
+		if (path === null) return []
+		const lines = file.kind === 'text' ? file.hunks.flatMap((hunk) => hunk.lines) : []
+		const count = (sign: string) => lines.filter((line) => line.startsWith(sign)).length
+		return [{ path, added: count('+'), removed: count('-') }]
+	})
 	if (files.length === 0) return null
 	return {
 		files: files.length,
@@ -347,4 +347,9 @@ function touchedIn(paths: string[], diff: FileDiff[]): Touched | null {
 		paths: files.slice(0, MAX_PATHS),
 		morePaths: Math.max(0, files.length - MAX_PATHS),
 	}
+}
+
+// A moved file was in the place it left and is in the place it went to, so it counts in both, by the path it has there.
+function pathIn(file: FileDiff, places: string[]): string | null {
+	return [file.path, file.oldPath].find((each) => places.some((place) => under(each, place))) ?? null
 }
