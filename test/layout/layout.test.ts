@@ -408,6 +408,7 @@ test('a named part opens to the level named for its paths, or to the folders ins
 	)
 	const engine = box(await look(sources, {}), 'Engine')
 	assert.ok(engine?.opens)
+	assert.equal(engine.inside, null, 'the box says nobody named the parts inside it, before the reader opens it')
 
 	const folders = await look(sources, { within: engine.paths })
 	assert.equal(folders.named, null)
@@ -431,5 +432,11 @@ test('a named part opens to the level named for its paths, or to the folders ins
 			['Runner', 'runs'],
 			['Checker', 'checks'],
 		],
+	)
+	const whole = await look(sources, {})
+	assert.deepEqual(
+		[box(whole, 'Engine')?.inside, box(whole, 'Page')?.inside],
+		[2, null],
+		'and then how many parts are named inside it',
 	)
 })

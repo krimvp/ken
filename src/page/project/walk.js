@@ -51,21 +51,24 @@ export function tourStart(steps, states) {
 
 const STOP_SAID = { new: '', met: 'Seen', known: 'You know this part' }
 
+// The quotes a card rests on.
+export function cardQuotes(card) {
+	return card.kind === 'claim'
+		? card.claim.quotes
+		: card.kind === 'risk'
+			? card.risk.quotes
+			: card.kind === 'decision'
+				? [...card.decision.quotes, ...(card.decision.reason?.quotes ?? [])]
+				: card.kind === 'topic'
+					? card.topic.quotes
+					: card.kind === 'withdrawn'
+						? card.withdrawn.proof
+						: []
+}
+
 // The file paths a card quotes. A quote of a session or a commit message names no file.
 export function cardPaths(card) {
-	const quotes =
-		card.kind === 'claim'
-			? card.claim.quotes
-			: card.kind === 'risk'
-				? card.risk.quotes
-				: card.kind === 'decision'
-					? [...card.decision.quotes, ...(card.decision.reason?.quotes ?? [])]
-					: card.kind === 'topic'
-						? card.topic.quotes
-						: card.kind === 'withdrawn'
-							? card.withdrawn.proof
-							: []
-	return quotes.flatMap((quote) => (isSession(quote) || quote.path === null ? [] : [quote.path]))
+	return cardQuotes(card).flatMap((quote) => (isSession(quote) || quote.path === null ? [] : [quote.path]))
 }
 
 // The box of the level that holds the file, or -1: a box holds a file when one of its paths is the file or a folder

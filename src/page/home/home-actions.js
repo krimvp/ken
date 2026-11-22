@@ -204,10 +204,18 @@ export function homeActions(app) {
 			Object.assign(state.home, { shown: el.dataset.id || null, selected: null })
 			return settle()
 		},
-		'home-tour'() {
+		// The tour opens at the stop its button names, and the keyboard goes there with it.
+		'home-tour'(el) {
+			state.home.detail = 'how'
+			return stepTo(Number(el.dataset.index), true)
+		},
+		// The end of a reading path: the big picture of the level or the change again, with nothing picked.
+		async 'home-done'() {
 			const home = state.home
-			home.detail = 'how'
-			return stepTo(firstUnseen(home.look, pathOf(home.look, home.content)))
+			home.detail = 'big'
+			store(`ken-detail-${home.wayIn}`, 'big')
+			await select(null)
+			toPicture()
 		},
 		'home-open'() {
 			const box = boxNamed(state.home.selected.name)

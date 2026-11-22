@@ -62,8 +62,14 @@ function levelView(home, off) {
 			: ''
 	let tour = ''
 	if (content.tour) {
+		// A reader who has seen some stops goes on at the first they have not, and is told which, with the way to stop 1.
 		const start = firstUnseen(look, path)
-		tour = `<div class="insp-main"><button class="primary" data-act="home-tour" data-key="home-tour">${start === 0 ? 'Start the tour' : `Go on with the tour at stop ${start + 1}`}</button></div>`
+		const button = (k, body, kind = 'primary nav-button') =>
+			`<button class="${kind}" data-act="home-tour" data-index="${k}" data-key="home-tour-${k}">${body}</button>`
+		tour =
+			start === 0
+				? `<div class="insp-main">${button(0, 'Start the tour', 'primary')}</div>`
+				: `<div class="insp-main insp-actions">${button(start, `<span class="nav-name">Go on with the tour</span><span class="nav-way">Stop ${start + 1} of ${path.length}: ${esc(path[start].part)}</span>`)}${button(0, 'Start again at stop 1', 'link')}</div>`
 	} else if (path.length > 0 && here) {
 		tour = `<div class="insp-main">${runButton({ act: 'run-tour', key: 'run-tour', text: 'Show me around', primary: true }, off)}
 			<p class="small muted">ken's model shows you the ${path.length} parts in turn, with their code, starting at ${esc(path[0].part)}. The order is the one ken's model named the parts in, with tests and upkeep last.</p></div>`
@@ -280,12 +286,13 @@ function drawnView(home) {
 	if (shownDetail(home) !== 'big') return { title, ...elementsView(home, diagram) }
 	const element = diagram.elements[placeOf(diagram.elements, home.selected)]
 	const told = besideCanvas(q, true)
-	const words =
-		home.said?.q.id === q.id
-			? ''
-			: told.reply.items.length === 0
-				? `<p class="muted">ken's model drew this picture and said nothing more.</p>`
-				: `<h3 class="insp-sub">What ken's model said when it drew this</h3>${storyHtml(told, 'drawn', home.ui)}`
+	// While ken's answer to the request shows over this, it says these words and opens the full reply itself.
+	const answered = home.said?.q.id === q.id
+	const words = answered
+		? ''
+		: told.reply.items.length === 0
+			? `<p class="muted">ken's model drew this picture and said nothing more.</p>`
+			: `<h3 class="insp-sub">What ken's model said when it drew this</h3>${storyHtml(told, 'drawn', home.ui)}`
 	const noun = element ? elementNoun(diagram, element) : ''
 	return {
 		where: element ? `${noun.replace(/^./, (c) => c.toUpperCase())} ${element.number}` : '',
@@ -293,7 +300,7 @@ function drawnView(home) {
 		title,
 		body: `${pickedElementHtml(home, diagram)}${words}
 			<p class="insp-actions"><button class="quiet-button" data-act="detail" data-detail="how" data-key="to-how">Read it in order</button><button class="quiet-button" data-act="detail" data-detail="code" data-key="to-all-code">Show its code</button></p>
-			<p><button class="link" data-act="open" data-id="${esc(q.id)}" data-key="drawn-open">Open the full reply</button></p>`,
+			${answered ? '' : `<p><button class="link" data-act="open" data-id="${esc(q.id)}" data-key="drawn-open">Open the full reply</button></p>`}`,
 	}
 }
 
@@ -441,8 +448,14 @@ export function inspectorHtml(home, env) {
 	// While the server reads the level again for another change or commit, the panel still shows the one before. It
 	// cannot be pressed or reached by the keyboard then, so a stop of the old path is not picked into the new one.
 	const closed = home.reading ? ' inert' : ''
+	// The line on who wrote what shows once the panel holds words of ken's model: a part's job, a story, a picture.
+	const { look, content } = home
+	const told =
+		look.named || content.kind === 'drawn' || content.story?.q || content.walk?.q || home.said
+			? `<p class="insp-legend">${LEGEND}</p>`
+			: ''
 	return `<div class="insp-scroll" id="insp-scroll"${closed}>
-			<p class="insp-legend">${LEGEND}</p>
+			${told}
 			<p class="insp-head"><span class="insp-detail">${DETAILS[shownDetail(home)]}</span>${view.where ? `<span class="insp-where">${view.where}</span>` : ''}${clear}<button class="link insp-up" data-act="home-up" data-key="home-up">Back to the picture</button></p>
 			<h2 class="insp-title ${view.titleClass ?? ''}" id="insp-title" data-key="insp-title" tabindex="-1">${view.title}</h2>
 			${notices}

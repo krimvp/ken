@@ -48,12 +48,14 @@ const MAX_COMMITS = 50
 const MAX_PATHS = 20
 
 // job is the model's one line on a part it named, null for a folder. files counts the files under the box at HEAD for
-// a folder and at the commit asked for a part. opens is false for a box of one file, which has no level inside. state
-// compares the box at an older commit with HEAD, and a named part at HEAD with the commit it was named at. touched is
-// null when no change is asked or this one leaves the box alone.
+// a folder and at the commit asked for a part. opens is false for a box of one file, which has no level inside. inside
+// is how many parts ken's model named for the level inside the box, or null when nobody named them, so the page can
+// say what opening the box shows. state compares the box at an older commit with HEAD, and a named part at HEAD with
+// the commit it was named at. touched is null when no change is asked or this one leaves the box alone.
 export type LookBox = Seed & {
 	job: string | null
 	opens: boolean
+	inside: number | null
 	state: 'same' | 'changed' | 'gone'
 	touched: Touched | null
 	topics: BoxTopic[]
@@ -124,9 +126,11 @@ export async function lookAtLayout(
 	const topics = read.current.flatMap((entry) => (entry.kind === 'topic' ? [entry] : []))
 	const boxes: LookBox[] = level.boxes.map((box) => {
 		const marks = boxTopics(box.paths, topics, mapRead.states)
+		const within = versionsOf(read.entries, box.paths.toSorted())
 		return {
 			...box,
 			opens: box.files > 1,
+			inside: within.length > 0 ? newest(within).parts.length : null,
 			touched: diff && touchedIn(box.paths, diff),
 			topics: marks,
 			map: boxMap(marks),

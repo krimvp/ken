@@ -3,7 +3,7 @@
 // the reader picked is open, with its cards and what the reader can do next, and the others show their title and, at
 // "How it works", their words. So picking a box in the picture and picking a line here are the same act. A drawn
 // picture has a path too: the boxes and arrows of its diagram, under the numbers the drawing shows.
-import { cardPaths, stepDiffHtml, stepWords, stopTopics } from '../../project/walk.js'
+import { cardPaths, cardQuotes, stepDiffHtml, stepWords, stopTopics } from '../../project/walk.js'
 import { count, esc, isSession, label, pathList, prose, quoteBody, RUN_COST, runButton } from '../../views/format.js'
 import { stepCardsHtml, storyHtml, wordsHtml } from '../../views/reply.js'
 import { arrowListHtml } from '../canvas/arrow-list.js'
@@ -37,11 +37,15 @@ export function usesHtml(home, name, { open = false, level = 3 } = {}) {
 	)
 }
 
-// The way into a part's own level, for a part that has one.
+// The way into a part's own level, for a part that has one. Its second line says what is inside before the reader
+// goes there: the parts ken's model named, or the files as git lists them.
 export function lookInside(box) {
-	return box.opens
-		? `<button class="quiet-button" data-act="home-open" data-key="home-open">Look inside ${esc(box.name)}</button>`
-		: ''
+	if (!box.opens) return ''
+	const inside =
+		box.inside === null
+			? `${count(box.files, 'file', 'files')}, as git lists them. ken's model has not named the parts inside.`
+			: `${count(box.inside, 'part', 'parts')}, named by ken's model.`
+	return `<button class="quiet-button look-inside" data-act="home-open" data-key="home-open"><span class="look-name">Look inside ${esc(box.name)}</span><span class="look-says">${inside}</span></button>`
 }
 
 // "You said you know this part", in place of a part's words until the reader asks for them.
@@ -83,6 +87,26 @@ function headHtml(k, on, number, title, mark = '') {
 		</button></h3>`
 }
 
+// The cards of a stop without a topic card that only quotes lines a card before it shows already.
+function cardsOnce(step) {
+	const shown = []
+	const repeats = (quote) =>
+		shown.some(
+			(each) =>
+				!isSession(quote) &&
+				each.path === quote.path &&
+				each.startLine <= quote.startLine &&
+				each.endLine >= quote.endLine,
+		)
+	const cards = step.cards.filter(({ card }) => {
+		const quotes = cardQuotes(card)
+		const again = card.kind === 'topic' && quotes.every(repeats)
+		shown.push(...quotes.filter((quote) => !isSession(quote)))
+		return !again
+	})
+	return { ...step, cards }
+}
+
 function stopHtml(step, k, on, ctx) {
 	const { home, detail, q } = ctx
 	const box = home.look.boxes.find((each) => each.name === step.part)
@@ -110,7 +134,7 @@ function stopHtml(step, k, on, ctx) {
 	}
 	const cards =
 		step.cards.length > 0
-			? `<div class="path-cards">${stepCardsHtml(q, 'tour', step, home.ui)}</div>`
+			? `<div class="path-cards">${stepCardsHtml(q, 'tour', cardsOnce(step), home.ui)}</div>`
 			: `<p class="small muted">${q ? "ken's model quoted no code at this stop." : "ken's model has not explained this part yet, so it has no quoted lines."}</p>`
 	return `${head}<div class="path-body">
 			<p class="small">${pathsLine(box)}</p>
@@ -214,7 +238,8 @@ export function outsideHtml(look) {
 const WAY = { tour: ['stop', 'Stop'], walk: ['step', 'Step'] }
 
 // Back and Next, each with the name of what it goes to, and one line on the keys that do the same. With nothing
-// picked, one button starts the path, on a tour at the first stop the reader has not seen.
+// picked, one button starts the path, on a tour at the first stop the reader has not seen. The last stop has an end:
+// it says so, and goes back to the big picture.
 function navHtml(path, at, titles, start) {
 	if (path.length === 0) return ''
 	const button = (k, kind, way) =>
@@ -227,7 +252,9 @@ function navHtml(path, at, titles, start) {
 	}
 	const back = at > 0 ? button(at - 1, 'quiet-button', `Back to ${start.word} ${number(at - 1)}`) : '<span></span>'
 	const next =
-		at < path.length - 1 ? button(at + 1, 'primary', `Next, ${start.word} ${number(at + 1)}`) : '<span></span>'
+		at < path.length - 1
+			? button(at + 1, 'primary', `Next, ${start.word} ${number(at + 1)}`)
+			: `<button class="primary nav-button" data-act="home-done" data-key="home-nav-done"><span class="nav-way">That was the last ${start.word}.</span><span class="nav-name">Back to the big picture</span></button>`
 	return `<div class="insp-nav">${back}${next}</div>${keys}`
 }
 
