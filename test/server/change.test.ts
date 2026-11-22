@@ -53,6 +53,28 @@ test('a change laid over the picture lists its commits newest first without the 
 	)
 })
 
+test('a file moved from one box to another counts in both, each listing it by the path it has there', async () => {
+	const moved = 'export const x = 1\nexport const y = 2\n'
+	const { root, hashes } = buildRepository([
+		{
+			message: 'feat: start',
+			files: { 'src/a/x.ts': moved, 'src/a/w.ts': 'w\n', 'src/b.ts': 'b\n', 'lib/y.ts': 'y\n' },
+		},
+		{ message: 'refactor: move x', files: { 'src/a/x.ts': null, 'lib/x.ts': moved } },
+	])
+	const server = await openKen(root, readerHome())
+	const change = `${hashes[0]}..${hashes[1]}`
+
+	const { look } = await json(server, layoutOf(change))
+	const pathsIn = (name: string) =>
+		look.boxes
+			.find((box: { name: string }) => box.name === name)
+			.touched?.paths.map((each: { path: string }) => each.path)
+	assert.deepEqual([pathsIn('src'), pathsIn('lib')], [['src/a/x.ts'], ['lib/x.ts']])
+	const inside = (await json(server, layoutOf(change, 'src'))).look
+	assert.deepEqual([inside.change.files, inside.change.outside], [1, []], 'src lost the file, and its box a holds it')
+})
+
 test("uncommitted work laid over the picture has no commits, since ken's snapshot of it is no commit of the project", async () => {
 	const { root } = buildRepository([{ message: 'feat: start', files: { 'src/a.ts': 'a\n' } }])
 	const server = await openKen(root, readerHome())
