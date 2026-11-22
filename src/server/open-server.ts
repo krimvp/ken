@@ -1,6 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { MODEL_EXAMPLE, type ModelFlags } from '../agent/index.ts'
 import { layoutDraft } from '../diagram/index.ts'
+import { readFirstLook, sizeOf } from '../first-look/index.ts'
 import { authorsOf, decide, openItems, sinceChoices, timeRange } from '../follow-up/index.ts'
 import {
 	type ChangeChoice,
@@ -14,7 +15,7 @@ import {
 import { type MapSignal, prefsOf, TEXT_PREFS } from '../map/index.ts'
 import { MERMAID_FILE, PAGE_FOLDER } from '../page/index.ts'
 import { OUTCOMES } from '../record/index.ts'
-import { type Hunk, parsePath } from '../repo/index.ts'
+import { type CommitHash, type Hunk, parsePath } from '../repo/index.ts'
 import { decisionRows } from './decision-list.ts'
 import { refusal } from './http/guard-request.ts'
 import { type PageFile, readPageFiles } from './http/page-files.ts'
@@ -70,6 +71,12 @@ export async function openServer(options: {
 	const openNow = async () => openItems(repo, await record.read(), (await map.read(new Date())).states)
 	const files = await readPageFiles(PAGE_FOLDER, { '/mermaid.min.js': MERMAID_FILE })
 	let port = 0
+	// What plain code says of the project is read once for each HEAD, as every level and Home ask for it.
+	let firstLook: { head: CommitHash; read: ReturnType<typeof readFirstLook> } | null = null
+	function firstLookAt(head: CommitHash) {
+		if (firstLook?.head !== head) firstLook = { head, read: readFirstLook(repo, head, new Date()) }
+		return firstLook.read
+	}
 
 	// What landed since the reader last looked leads the changes the page offers, so catching up is one pick away.
 	// levels are the words for what ken thinks the reader knows of a box, weakest first.
@@ -88,14 +95,17 @@ export async function openServer(options: {
 		const { own } = ask
 		const isTop = ask.within.length === 0 && ask.change === null && ask.at === look.head
 		const top = isTop ? look : await lookAtLayout(layout, { at: look.head, within: [], change: null, own }, now)
-		const [wayIn, told] = await Promise.all([
+		const [wayIn, told, { sizes }] = await Promise.all([
 			suggestWayIn(layout, { history, questions, visit, spans: since, own, top }, now),
 			reads.levelTold(look),
+			firstLookAt(look.head),
 		])
 		// How many parts ken's model explained, and for a part that is one file, its lines and what the model said of it.
+		// size is the lines under a box and the recent commits that touched them, at HEAD only.
 		const boxes = look.boxes.map((box) => {
 			const file = told.files.find((each) => each.name === box.name)
-			return file ? { ...box, lines: file.lines, told: file.line } : box
+			const size = look.at === look.head ? sizeOf(sizes, box.paths) : null
+			return file ? { ...box, size, lines: file.lines, told: file.line } : { ...box, size }
 		})
 		return { look: { ...look, boxes, explained: told.explained.length }, changes, wayIn, levels: LEVELS }
 	}
@@ -119,6 +129,11 @@ export async function openServer(options: {
 			const named = Boolean(look?.named)
 			const on = live?.on() ?? false
 			return sendJson(response, 200, { project: shown, name: project.name, model: state, live: on, parts, named })
+		}
+		if (where === 'GET /api/first-look') {
+			const head = await repo.resolve('HEAD')
+			if (head.kind !== 'ok') return sendJson(response, 404, { message: 'The project has no commit yet.' })
+			return sendJson(response, 200, (await firstLookAt(head.commit)).look)
 		}
 		if (where === 'GET /api/questions') return sendJson(response, 200, { questions: await desk.rows() })
 		if (where === 'GET /api/live') {

@@ -59,6 +59,18 @@
 	color: var(--k-surface);
 }
 
+.k-vw-asks {
+	max-width: 62ch;
+	margin: 2px 4px 2px;
+	color: var(--k-muted);
+	font-size: 14px;
+}
+
+.k-vw-asks .is-on {
+	color: var(--k-ink);
+	font-weight: 600;
+}
+
 .k .k-vw-switch .k-vw-keybtn {
 	margin-left: 6px;
 	border: 1px solid var(--k-line);
@@ -1070,6 +1082,11 @@
 		max-width: calc(100% - 24px);
 	}
 
+	/* A narrow screen has room to say only what the view on show answers. */
+	.k-vw-asks span:not(.is-on) {
+		display: none;
+	}
+
 	.k .k-vw-switch button {
 		flex: 1;
 		flex-direction: column;
@@ -1085,12 +1102,13 @@
 		margin-left: 2px;
 	}
 
+	/* Under the switch and the line on what the view on show answers. */
 	.k-vw-card:has(.k-vw-switch) ~ .k-layers {
-		top: 128px;
+		top: 162px;
 	}
 
 	.k-vw-card:has(.k-vw-switch) ~ .k-layer-pick {
-		top: 178px;
+		top: 212px;
 	}
 
 	.k-vw-key {

@@ -2,8 +2,8 @@
 // would have the reader look at, and offers the next two. Under it, one tile for each page says its count in a big
 // number over a small picture: the architecture filled as far as the reader knows each part, a few concepts worth a
 // few minutes, the drawn processes, the commits that landed, and the reader's own map. A tile's picture is pressed
-// like the page it stands for. On a first visit "Start here" is the project in two sentences and the path through
-// the pages.
+// like the page it stands for. On a first visit, and until ken's model names the parts, what the project says it is
+// leads in place of "Start here".
 import { partId } from '../brief/concept-id.js'
 import { dayText } from '../changes/timeline.js'
 import { KNOWN, levelLabel } from '../level/level-state.js'
@@ -12,6 +12,7 @@ import { placeParts } from '../project/parts-picture.js'
 import { icon, KIND_ICONS, levelMark } from '../shell/icons.js'
 import { count, esc, prose } from '../views/format.js'
 import { changedParts, openCount } from '../views/open.js'
+import { firstVisitHtml } from './first-visit.js'
 
 // Concepts the tile lists.
 const SHOWN_CONCEPTS = 6
@@ -58,28 +59,8 @@ function mapHtml(look, { lit = null, byLevel = false, key }) {
 	return `<div class="k-mini${byLevel ? ' is-big' : ''}" style="--cols:${cols}"><svg viewBox="0 0 ${cols * 100} ${rows * 100}" preserveAspectRatio="none" aria-hidden="true">${lines.join('')}</svg>${boxes.join('')}</div>`
 }
 
-function startHtml({ look, reader, project }) {
+function startHtml({ look }) {
 	const items = look.next?.items ?? []
-	const first = (reader?.learned.length ?? 0) === 0 && look.boxes.every((box) => box.knows.level === 'new')
-	const chip = (item, i) =>
-		`<button class="k-chip" data-act="start-go" data-index="${i}" data-key="start-chip-${i}">${icon(item.go.way === 'learn' ? 'architecture' : item.kind === 'review' ? 'merge' : 'changes')}<span>Then: ${prose(item.title)}</span></button>`
-	if (first && look.named) {
-		const steps = [
-			['words', 'In two sentences'],
-			['architecture', 'Architecture'],
-			['deeper', 'Deeper'],
-			['question', 'Questions'],
-		].map(
-			([name, label], i) =>
-				`<li${i === 0 ? ' class="is-on"' : ''}><span class="k-path-dot">${icon(name)}</span>${label}</li>`,
-		)
-		return `<section class="k-tile k-start is-first" aria-labelledby="start-title">
-			<ol class="k-path" aria-label="The way through the pages">${steps.join('')}</ol>
-			<div class="k-start-words"><p class="k-eyebrow">Start here</p><h2 id="start-title">${esc(project)}</h2><p class="k-start-why">${prose(look.named.about)}</p>
-				<div class="k-then">${items.slice(0, 2).map(chip).join('')}</div></div>
-			<button class="k-btn is-big" data-act="go-page" data-page="architecture" data-key="start-primary">See the architecture${icon('right')}</button>
-		</section>`
-	}
 	const about = look.named
 		? `<p class="k-home-about">${prose(look.named.about)} <button class="k-link" data-act="project-brief" data-key="home-about">Open the project's brief</button></p>`
 		: ''
@@ -104,12 +85,22 @@ function startHtml({ look, reader, project }) {
 	</section>`
 }
 
+// Folders are not parts, so before ken's model names the parts they are a list with their size, not boxes.
+function foldersHtml(look) {
+	const most = Math.max(1, ...look.boxes.map((box) => box.size?.lines ?? 0))
+	const rows = look.boxes.map((box, i) => {
+		const lines = box.size?.lines ?? 0
+		return `<li><button class="k-mini-row" data-act="brief-open" data-concept="${esc(partId(look.within, box.name))}" data-key="arch-row-${i}">${icon(box.opens ? 'folder' : 'file')}<span class="k-mini-name">${esc(box.name)}</span><span class="k-size-bar" style="--size:${Math.round((lines / most) * 100)}%" aria-hidden="true"></span><span class="k-mini-lines k-num">${count(lines, 'line', 'lines')}</span>${levelMark(box.knows.level, 15)}</button></li>`
+	})
+	return `<ul class="k-mini-rows">${rows.join('')}</ul>`
+}
+
 function architectureHtml(look) {
 	const opened = look.boxes.filter((box) => box.knows.level !== 'new').length
 	const noun = look.named ? 'parts' : 'folders'
 	return `<section class="k-tile k-tile-arch">${head('Architecture', 'architecture', 'Open Architecture')}
 		${big(opened, `of ${look.boxes.length} ${noun} opened`)}
-		${mapHtml(look, { byLevel: true, key: 'arch-map' })}
+		${look.named ? mapHtml(look, { byLevel: true, key: 'arch-map' }) : foldersHtml(look)}
 	</section>`
 }
 
@@ -237,11 +228,18 @@ function waitingHtml(followUp, look) {
 	return `<button class="k-tile k-waiting" data-act="follow-up" data-key="tile-waiting">${icon('decision')}<span class="k-waiting-words"><b class="k-num">${waiting}</b> ${waiting === 1 ? 'thing waits' : 'things wait'} on you</span>${icon('right')}</button>`
 }
 
-// view is { top, home, reader, followUp, concepts, timeline, project, briefOf }: the top level as the server sends
-// it, with the changes it lists, what ken recorded, what is open, what search can find, the commits by day when the
-// server has them, the project's name, and the briefs the page has read.
+// A first visit is one where the reader has opened nothing and ken has recorded nothing of them.
+const isFirst = (look, reader) =>
+	(reader?.learned.length ?? 0) === 0 && look.boxes.every((box) => box.knows.level === 'new')
+
+// view is { top, home, reader, followUp, concepts, timeline, project, briefOf, first, env }: the top level as the
+// server sends it, with the changes it lists, what ken recorded, what is open, what search can find, the commits by
+// day when the server has them, the project's name, the briefs the page has read, what plain code read of the
+// project, and what the page is doing.
 export function startPageHtml(view) {
-	const { top, home, project } = view
+	const { top, home, project, first } = view
+	const drawn = { mapHtml, routeHtml }
+	if (!top && first?.kind === 'ok') return `<div class="k-home">${firstVisitHtml({ ...view, look: null }, drawn)}</div>`
 	if (!top) {
 		const said = home.problem
 			? `ken could not read the project. ${esc(home.problem.message)}`
@@ -249,8 +247,10 @@ export function startPageHtml(view) {
 		return `<div class="k-home"><p class="k-home-line" role="status">${said}</p></div>`
 	}
 	const { look, changes } = top
+	const lead =
+		!look.named || isFirst(look, view.reader) ? firstVisitHtml({ ...view, look }, drawn) : startHtml({ look })
 	return `<div class="k-home">
-		${startHtml({ look, reader: view.reader, project })}
+		${lead}
 		${architectureHtml(look)}
 		${conceptsHtml(look, view.concepts, home)}
 		${processesHtml(view.concepts, view.briefOf)}
