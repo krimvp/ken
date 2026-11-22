@@ -150,7 +150,7 @@ export function rangeQuestion(range: TimeRange, record: RecordRead, userEmail: s
 	}
 }
 
-// "Ask ken to name these parts" and "Name them again" in the Project view. The level as the reader sees it now is the
+// "Ask ken to name these parts" and "Name them again" on the picture of the project. The level as the reader sees it now is the
 // starting point, and the rules are those show's layout is checked against, so the model can pass the check first time.
 // name is what the reader calls the level, such as the part they opened, or null for the whole project.
 export type PartsLevel = {
@@ -181,12 +181,16 @@ export function partsQuestion(level: PartsLevel): LensQuestion {
 
 // The box where the reader tells ken to show a level another way. asked is their own words. The level as they see it
 // now and the layout rules follow, as in partsQuestion, and then what to do: draw the level again when the words are
-// about the picture, keep a reader note when they are about the reader.
+// about the picture, draw one diagram when they ask for an order of events or the data, which parts cannot show, and
+// keep a reader note when they are about the reader. diagram holds the bounds show checks a diagram against.
 export function viewQuestion(
-	level: PartsLevel & { arrows: { from: string; to: string; text: string }[] },
+	level: PartsLevel & {
+		arrows: { from: string; to: string; text: string }[]
+		diagram: { nodes: number; edges: number; title: number }
+	},
 	asked: string,
 ): LensQuestion {
-	const { within, head, arrows } = level
+	const { within, head, arrows, diagram } = level
 	const uses = arrows.map((arrow) => `${arrow.from} ${arrow.text} ${arrow.to}`)
 	return {
 		text: [
@@ -198,7 +202,12 @@ export function viewQuestion(
 			`If what I ask is about the picture, such as how the parts are grouped, how many there are or what the arrows show: read the code at HEAD (${head}), then call show with a layout that does it, with within set to ${JSON.stringify(within)}, and say in one or two sentences what changed.`,
 			...layoutRules(level),
 			'If it is about me, such as what I know or how I want things explained: call remember with one plain sentence, and draw the picture again only if it should change too.',
-			'If the layout rules cannot do what I ask, say so plainly, and say what I can ask for instead.',
+			`If what I ask needs an order of events or the shape of the data, such as following one request, a data flow or a lifecycle, read the code at HEAD (${head}) and call show with one diagram instead of a layout.`,
+			'Use sequence for steps in order, component for calls between pieces, and entity-relationship for data.',
+			'A diagram of a path through the code shows every actor that decides something on it, the ones outside the code too, such as a person, a model or a database.',
+			`Give it a title of at most ${diagram.title} characters that says what it follows, at most ${diagram.nodes} participants, boxes or entities, and at most ${diagram.edges} messages, arrows or relations, each quoting the lines it rests on.`,
+			'Then say in one or two sentences what it shows.',
+			'If neither a layout nor a diagram can do what I ask, say so plainly, and say what I can ask for instead.',
 		].join('\n'),
 		empty: false,
 	}
@@ -227,21 +236,34 @@ function levelLines({ boxes, named, loose }: PartsLevel): string[] {
 	]
 }
 
-// The rules show's layout is checked against, so the model can pass the check first time.
+// What a good picture of a level is, and the rules show's layout is checked against, so the model can pass the check
+// first time. A reviewer found parts filed by folder, a product squeezed into one part and arrows that said more than
+// their lines, so each rule says what to look at.
 function layoutRules(level: PartsLevel): string[] {
 	const { bounds } = level
 	return [
-		`Fill about with what ${whereOf(level)} is as a whole: one or two plain sentences, at most ${bounds.about} characters, for a reader who has never seen it.`,
-		`Group the paths into ${bounds.fewest} to ${bounds.parts} parts the owner would name. Give each a short name, one line of about 80 characters on its job, and the folders or files it holds, each inside within. No two parts share a file. Leave out what is not code if it does not help, such as docs; ken lists it as in no part.`,
-		`Add at most ${bounds.arrows} arrows for which part uses which, each with a short verb said from the part it starts at, so that the start part, the verb and the end part read as a sentence, such as "Server runs questions in Chat engine". Never a passive verb such as "is used by". Each arrow quotes lines from a file of the part it starts at that name a folder or file of the part it ends at: an import line does, a comment does not. Leave out an arrow you cannot quote that way.`,
+		"Read the project's own maps before you group anything: the README, the design docs, a glossary, and any table in the code or the tests that names the modules or their boundaries. Call the parts what those call them, so the picture uses words the owner already knows.",
+		`Group the paths into ${bounds.fewest} to ${bounds.parts} parts. Give each a short name, a job, and the folders or files it holds, each inside within. No two parts share a file.`,
+		'Put a file in the part whose work it does, not the part its folder suggests. What it imports and what starts it tell you. If two parts would use each other, move the file that causes it.',
+		'A file the product reads when it runs goes with the part that reads it, wherever its folder is: a scenario a command loads, a template, a fixture a shipped command reads.',
+		'Spend the parts on the product. The code a user of the project runs gets parts in proportion to its size. What only keeps the repository going, such as build scripts, vendored code and agent setup, is one part at most. Leave out what is not code if it does not help, such as docs; ken lists it as in no part.',
+		'List the parts in the order a newcomer should read them, the heart of the product first. A tour follows that order.',
+		'A job is one sentence of about 80 characters with a verb. It says what the part does for whoever uses it, with no file names, flags or build steps. If you can only write a job as a list of nouns, the part is too big: split it.',
+		'A job that needs the name of an outside tool or library says in a few words what that is, such as "pi, an agent SDK".',
+		`Set the field about to what ${whereOf(level)} is, who uses it, and the one idea its maintainer would say first: one or two plain sentences, at most ${bounds.about} characters. ken sends back a layout without it.`,
+		`Add at most ${bounds.arrows} arrows for which part uses which. Show the relation that matters when the code runs: one part calls the other, launches it as its own process, or reads its files. When a part launches another, quote the lines that launch it, down to the one that names its file. Use an import of types only when nothing stronger joins the two parts.`,
+		'Give each arrow a short verb said from the part it starts at, so that the start part, the verb and the end part read as a sentence, such as "Server runs questions in Chat engine". A part that launches another "runs" or "launches" it. Never a passive verb such as "is used by". The verb says only what the quoted lines show: a line that imports a list shows "reads", not "runs".',
+		'Each arrow quotes lines of code from a file of the part it starts at that name a folder or file of the part it ends at. A comment does not count. Leave out an arrow you cannot quote that way.',
 	]
 }
 
 // "Show me around" on a named level. Plain code picked the stops and their order, so the model explains each part in
-// that order and does not choose. name is what the reader calls the level, or null for the whole project.
+// that order and does not choose. name is what the reader calls the level, or null for the whole project. words is the
+// most words a step may have.
 export type TourLevel = {
 	name: string | null
 	head: string
+	words: number
 	stops: { name: string; job: string; paths: string[] }[]
 	arrows: { from: string; to: string; text: string }[]
 }
@@ -259,9 +281,10 @@ export function tourQuestion(level: TourLevel): LensQuestion {
 			...stops.map(stop),
 			...(uses.length > 0 ? [`- How the parts use each other: ${uses.join('; ')}.`] : []),
 			'',
-			`I am new to ${where}. Walk me through it as a tour of ${stops.length} stops, one stop per part, in the order above: ken picked it from the arrows, starting at the parts nothing else uses. Read the code at HEAD (${level.head}) first.`,
-			"Then send one show call per stop, in order, with step: the stop's number, and in its text two short sentences: what the part does, and how it connects to the stops before and after it.",
-			"With each step send one or two claims that quote the part's own key lines, such as its entry function or its main export, so I can read them beside the stop. Name the file or function in the claim, not in the step.",
+			`I am new to ${where}. Walk me through it as a tour of ${stops.length} stops, one stop per part, in the order above: the order the parts were named in, with tests and upkeep last. Read the code at HEAD (${level.head}) first.`,
+			`Then send one show call per stop, in order, with step: the stop's number and its text. I can read each part's job above, so do not say it again. Tell me the main path through the part, from what comes in to what goes out, and the one choice in its design a maintainer would explain. Use four sentences and ${level.words} words at most.`,
+			'Say how two parts connect in the words of the arrows, such as "Tests runs scenarios through Eval harness". Never use the order of the tour for it, such as "the next stop": I may open a stop on its own.',
+			'With each step send one or two claims that quote code where the work happens: the loop, the dispatch, the table, or the entry function with its body. Not a comment, and not a signature alone. ken sends back a claim that quotes only comments. A claim says only what its quoted lines show. Name the file or function in the claim, not in the step.',
 			'Write nothing before the first stop, and one sentence after the last at most.',
 		].join('\n'),
 		empty: false,

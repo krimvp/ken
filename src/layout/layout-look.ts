@@ -16,8 +16,8 @@ import { type TourStop, tourOrder } from './tour-order.ts'
 export type Scope = RepoPath[]
 
 // kind says how the change was asked for: the reader's uncommitted work, a branch against the main branch, or a range
-// of commits. name says what the change is to the reader: "Uncommitted work", a branch, or a range as they typed it.
-// asked is the text that asks for this change again.
+// of commits, which a span of time is too. name says what the change is to the reader: "Uncommitted work", a branch,
+// a range as they typed it, or a span such as "In the last 14 days". asked is the text that asks for this change again.
 export type Change = { kind: 'uncommitted' | 'branch' | 'range'; name: string; asked: string; range: Range }
 
 export type LayoutAsk = { at: CommitHash; within: Scope; change: Change | null }
@@ -31,15 +31,31 @@ export type LayoutSources = {
 	map: UnderstandingMap
 }
 
-export type Touched = { files: number; added: number; removed: number }
+// What a change did to one box. paths lists its changed files, at most MAX_PATHS, and morePaths counts the rest.
+export type Touched = {
+	files: number
+	added: number
+	removed: number
+	paths: { path: string; added: number; removed: number }[]
+	morePaths: number
+}
+
+// A commit of the change laid over the picture, as the page lists it.
+export type LandedCommit = { hash: CommitHash; subject: string; author: string; date: string }
+
+// The page shows a change with no model, so it lists what git knows, up to what a reader scans.
+const MAX_COMMITS = 50
+const MAX_PATHS = 20
 
 // job is the model's one line on a part it named, null for a folder. files counts the files under the box at HEAD for
-// a folder and at the commit asked for a part. opens is false for a box of one file, which has no level inside. state
-// compares the box at an older commit with HEAD, and a named part at HEAD with the commit it was named at. touched is
-// null when no change is asked or this one leaves the box alone.
+// a folder and at the commit asked for a part. opens is false for a box of one file, which has no level inside. inside
+// is how many parts ken's model named for the level inside the box, or null when nobody named them, so the page can
+// say what opening the box shows. state compares the box at an older commit with HEAD, and a named part at HEAD with
+// the commit it was named at. touched is null when no change is asked or this one leaves the box alone.
 export type LookBox = Seed & {
 	job: string | null
 	opens: boolean
+	inside: number | null
 	state: 'same' | 'changed' | 'gone'
 	touched: Touched | null
 	topics: BoxTopic[]
@@ -67,7 +83,10 @@ export type LookArrow = Stored['arrows'][number] & { stale: boolean }
 type Stored = Extract<RecordEntry, { kind: 'layout' }>
 
 // loose names what sits in the scope at the commit asked and in no box, such as a folder HEAD no longer has or one the
-// model left out of its parts. outside names the changed files no box holds.
+// model left out of its parts. Of a change, files counts the changed files in the level's scope and outside names
+// those no box holds. commits are its commits, newest first, without merges, since the commits a merge brings are
+// listed themselves, and merges counts those merges. Uncommitted work has none: it ends at ken's snapshot, which is no
+// commit of the project. It lists at most MAX_COMMITS, and moreCommits counts the rest.
 export type LayoutLook = {
 	at: CommitHash
 	head: CommitHash
@@ -76,7 +95,9 @@ export type LayoutLook = {
 	boxes: LookBox[]
 	arrows: LookArrow[]
 	loose: string[]
-	change: (Change & { files: number; outside: string[] }) | null
+	change:
+		| (Change & { files: number; outside: string[]; commits: LandedCommit[]; moreCommits: number; merges: number })
+		| null
 	next: Next
 	tour: TourStop[] | null
 }
@@ -100,35 +121,40 @@ export async function lookAtLayout(
 			? await namedLevel(repo, versions, ask, head.commit, signal)
 			: await folderLevel(repo, ask, head.commit, signal)
 	const places = level.boxes.flatMap((box) => box.paths)
-	const [diff, mapRead] = await Promise.all([
+	const [diff, commits, mapRead] = await Promise.all([
 		ask.change && changedFiles(repo, ask.change.range, signal),
+		ask.change && (ask.change.kind === 'uncommitted' ? NO_COMMITS : landedCommits(repo, ask.change.range, signal)),
 		sources.map.read(now, signal),
 	])
 	const topics = read.current.flatMap((entry) => (entry.kind === 'topic' ? [entry] : []))
 	const boxes: LookBox[] = level.boxes.map((box) => {
 		const marks = boxTopics(box.paths, topics, mapRead.states)
+		const within = versionsOf(read.entries, box.paths.toSorted())
 		return {
 			...box,
 			opens: box.files > 1,
+			inside: within.length > 0 ? newest(within).parts.length : null,
 			touched: diff && touchedIn(box.paths, diff),
 			topics: marks,
 			map: boxMap(marks),
 		}
 	})
+	// Inside a part, the change is what it did to that part: a file changed elsewhere is not this level's to count.
+	const inScope = (diff ?? []).filter((file) => ask.within.length === 0 || pathIn(file, ask.within) !== null)
 	const change =
-		ask.change && diff
+		ask.change && commits
 			? {
 					...ask.change,
-					files: diff.length,
-					outside: diff.map((file) => file.path).filter((file) => !places.some((place) => under(file, place))),
+					files: inScope.length,
+					outside: inScope.flatMap((file) =>
+						pathIn(file, places) === null ? [pathIn(file, ask.within) ?? file.path] : [],
+					),
+					commits: commits.commits,
+					moreCommits: commits.more,
+					merges: commits.merges,
 				}
 			: null
-	const tour = level.named
-		? tourOrder(
-				boxes.filter((box) => box.state !== 'gone'),
-				level.arrows,
-			)
-		: null
+	const tour = level.named ? tourOrder(boxes.filter((box) => box.state !== 'gone')) : null
 	return { at: ask.at, head: head.commit, within: ask.within, ...level, boxes, change, next: nextOf(boxes), tour }
 }
 
@@ -301,13 +327,37 @@ async function changedFiles(repo: Repository, range: Range, signal?: AbortSignal
 	return diff.files
 }
 
+type Landed = { commits: LandedCommit[]; more: number; merges: number }
+
+const NO_COMMITS: Landed = { commits: [], more: 0, merges: 0 }
+
+// A range git cannot list even without file names shows no commits rather than no layout.
+async function landedCommits(repo: Repository, range: Range, signal?: AbortSignal): Promise<Landed> {
+	const listed = await repo.commitsIn(range, MAX_COMMITS, signal)
+	if (listed.kind !== 'ok') return NO_COMMITS
+	const commits = listed.commits.map(({ hash, subject, author, date }) => ({ hash, subject, author, date }))
+	return { commits, more: listed.more, merges: listed.merges }
+}
+
 function touchedIn(paths: string[], diff: FileDiff[]): Touched | null {
-	const files = diff.filter((file) => paths.some((place) => under(file.path, place)))
+	const files = diff.flatMap((file) => {
+		const path = pathIn(file, paths)
+		if (path === null) return []
+		const lines = file.kind === 'text' ? file.hunks.flatMap((hunk) => hunk.lines) : []
+		const count = (sign: string) => lines.filter((line) => line.startsWith(sign)).length
+		return [{ path, added: count('+'), removed: count('-') }]
+	})
 	if (files.length === 0) return null
-	const lines = files.flatMap((file) => (file.kind === 'text' ? file.hunks.flatMap((hunk) => hunk.lines) : []))
 	return {
 		files: files.length,
-		added: lines.filter((line) => line.startsWith('+')).length,
-		removed: lines.filter((line) => line.startsWith('-')).length,
+		added: files.reduce((sum, file) => sum + file.added, 0),
+		removed: files.reduce((sum, file) => sum + file.removed, 0),
+		paths: files.slice(0, MAX_PATHS),
+		morePaths: Math.max(0, files.length - MAX_PATHS),
 	}
+}
+
+// A moved file was in the place it left and is in the place it went to, so it counts in both, by the path it has there.
+function pathIn(file: FileDiff, places: string[]): string | null {
+	return [file.path, file.oldPath].find((each) => places.some((place) => under(each, place))) ?? null
 }

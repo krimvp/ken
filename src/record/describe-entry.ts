@@ -59,7 +59,8 @@ export async function describeEntry(
 				lines.push(`diagram ${index + 1}, ${diagram.kind} [${diagram.label}]: ${diagram.title}`)
 				for (const element of diagramElements(diagram)) {
 					const label = element.label === null ? '' : ` [${element.label}]`
-					lines.push(`  ${element.number}. ${element.text}${label}`, ...element.quotes.flatMap(quoted))
+					const number = element.numbered ? `${element.number}.` : '-'
+					lines.push(`  ${number} ${element.text}${label}`, ...element.quotes.flatMap(quoted))
 				}
 			}
 			const decisions = record.current.filter(

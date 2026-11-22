@@ -42,7 +42,7 @@ async function lookAndChange() {
 	const opened = await openMap(home, repo, record)
 	if (opened.kind !== 'ok') assert.fail('the fixture has commits')
 	const sources = { root, repo, snapshots: await openSnapshots(home, repo, root), record, map: opened.map }
-	const asked = await readLayoutAsk(sources, { within: ['src'], change: `${base}..${head}` })
+	const asked = await readLayoutAsk(sources, { within: ['src'], change: `${base}..${head}` }, new Date())
 	if (asked.kind !== 'ok') assert.fail(asked.message)
 	const look = await lookAtLayout(sources, asked.ask, new Date())
 	const coverage = await checkCoverage(repo, { base, head }, [])
@@ -90,9 +90,9 @@ test('the step the reader is on lights the parts its quotes fall in and opens it
 	const reply = {
 		items: [
 			{ kind: 'words', text: 'The retry now waits.' },
-			{ kind: 'step', number: 2, text: 'An old helper changed too.' },
+			{ kind: 'step', number: 2, text: 'An old helper changed too. Its call is renamed.' },
 			{ kind: 'card', step: 2, card: await claimOn('src/retryx/old.ts', 'older()') },
-			{ kind: 'step', number: 1, text: 'The loop sleeps.' },
+			{ kind: 'step', number: 1, text: 'The loop sleeps. It waits a tenth of a second.' },
 			{ kind: 'card', step: 1, card: await claimOn('src/retry/loop.ts', 'sleep(100)') },
 			{ kind: 'step', number: 3, text: 'The README says nothing new.' },
 			{ kind: 'card', step: 3, card: await claimOn('README.md', '# demo') },
@@ -108,8 +108,9 @@ test('the step the reader is on lights the parts its quotes fall in and opens it
 
 	const first = html(1)
 	assert.ok(first.indexOf('The loop sleeps') < first.indexOf('An old helper changed too'), 'steps go by number')
-	assert.match(first, /The loop sleeps\./, "the step's text shows under it")
-	assert.doesNotMatch(first, /An old helper changed too\./, 'the other steps show only their title')
+	assert.match(first, /It waits a tenth of a second\./, "the step's words after its title show under it")
+	assert.equal(first.match(/The loop sleeps/g)?.length, 1, 'its first sentence is its title, and is said once')
+	assert.doesNotMatch(first, /Its call is renamed\./, 'the other steps show only their title')
 	assert.deepEqual(litBoxes(first), [nameOf('src/retry')], 'step 1 lights the part of src/retry/loop.ts')
 	assert.match(first, /src\/retry\/loop\.ts<\/code>, line 2 after the change/)
 	assert.match(first, /<span class="ln"><\/span><span class="ln">2<\/span><span class="lc add">.*sleep\(100\)/)

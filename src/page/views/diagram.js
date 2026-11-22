@@ -59,7 +59,7 @@ function elementHtml(element, diagram, id, rows) {
 			? ''
 			: `<p class="el-more"><button class="link small" data-act="element" data-item="${key}" data-key="el-${key}">${n === 1 ? 'Show its quote' : `Show its ${n} quotes`}</button></p>`
 	return `<li class="st${shown ? '' : ' folded'}" id="item-${key}">
-		<span class="st-n">${element.number}</span>
+		<span class="st-n">${element.numbered ? element.number : ''}</span>
 		<div>
 			<p class="st-text">${own}${prose(element.text)}</p>${more}
 			${shown && n > 0 ? quoteRows(element.quotes, key, rows) : ''}

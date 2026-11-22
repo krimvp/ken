@@ -6,15 +6,24 @@
 		<title>ken</title>
 		<link rel="stylesheet" href="tokens.css" />
 		<link rel="stylesheet" href="page.css" />
+		<link rel="stylesheet" href="home.css" />
 		<script type="module" src="main.js"></script>
 	</head>
 	<body>
+		<button type="button" class="quiet-button skip" data-act="skip" data-key="skip">Skip to the explanation</button>
 		<header class="top">
-			<span class="brand">ken</span>
+			<button type="button" class="brand" data-act="home" data-key="brand" aria-label="ken. Back to the picture.">ken</button>
 			<span class="project" id="project"></span>
 			<div class="top-menu" id="menu"></div>
 		</header>
-		<div class="page" id="page">
+		<div class="home" id="home">
+			<div class="home-toolbar" id="home-toolbar"></div>
+			<main class="home-canvas" id="home-canvas"></main>
+			<div class="home-redraw" id="home-redraw"></div>
+			<aside class="home-inspector" id="home-inspector" aria-label="What ken says about what you picked"></aside>
+			<aside class="home-ask" id="home-ask" aria-label="Ask ken" hidden></aside>
+		</div>
+		<div class="page" id="page" hidden>
 			<main class="chat">
 				<div id="thread"></div>
 				<form class="composer" id="ask" autocomplete="off">
@@ -22,13 +31,14 @@
 					<div class="composer-row">
 						<textarea id="question" rows="1" placeholder="What changed, why was it done that way, how does a part work now?"></textarea>
 						<button type="submit" class="primary" id="send">Ask</button>
-					</div>
-					<p class="composer-hint"><span class="keys">Enter sends. Shift and Enter starts a new line.</span> <span id="ask-cost"></span></p>
+						</div>
+						<p class="composer-cost small muted">One run of ken's model, a minute or two.</p>
 				</form>
 				<div id="after"></div>
 			</main>
 			<aside class="panel" id="panel" aria-label="What ken checked"></aside>
 		</div>
 		<div id="tip" role="tooltip" hidden></div>
+		<p class="visually-hidden" id="run-status" role="status"></p>
 	</body>
 </html>
