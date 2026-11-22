@@ -9,14 +9,14 @@ export function rememberTool(notes: ReaderNotes, round: () => Round): Tool {
 	return {
 		name: 'remember',
 		description:
-			'Keep a note about this reader for every later reply, when they tell you how they want things shown or what they already know.',
+			'Keep a note about this reader for every later reply, when they tell you how they want to be answered or what they already know.',
 		parameters: {
 			type: 'object',
 			properties: {
 				note: {
 					type: 'string',
 					description:
-						'One plain sentence about how this reader wants things shown, or what they already know, when they tell you. ken shows it to the reader, who can remove it. Do not keep what the reader asked about, only how they want to be answered.',
+						'One plain sentence about this reader. Keep how they want to be answered and what they already know, never what they asked about. ken shows it to the reader, who can remove it.',
 				},
 			},
 			required: ['note'],

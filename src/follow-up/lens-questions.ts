@@ -188,10 +188,9 @@ export function viewQuestion(
 ): LensQuestion {
 	const { within, head, arrows } = level
 	const uses = arrows.map((arrow) => `${arrow.from} ${arrow.text} ${arrow.to}`)
-	const where = level.name ?? (within.length === 0 ? 'the project' : within.join(', '))
 	return {
 		text: [
-			`Show ${where} another way: ${asked}`,
+			`Show ${whereOf(level)} another way: ${asked}`,
 			LIST_SAID,
 			...levelLines(level),
 			...(uses.length > 0 ? [`- The arrows now: ${uses.join('; ')}.`] : []),
@@ -232,7 +231,7 @@ function levelLines({ boxes, named, loose }: PartsLevel): string[] {
 function layoutRules(level: PartsLevel): string[] {
 	const { bounds } = level
 	return [
-		`Say in about what ${whereOf(level)} is as a whole, in one or two plain sentences of at most ${bounds.about} characters, for a reader who has never seen it.`,
+		`Fill about with what ${whereOf(level)} is as a whole: one or two plain sentences, at most ${bounds.about} characters, for a reader who has never seen it.`,
 		`Group the paths into ${bounds.fewest} to ${bounds.parts} parts the owner would name. Give each a short name, one line of about 80 characters on its job, and the folders or files it holds, each inside within. No two parts share a file. Leave out what is not code if it does not help, such as docs; ken lists it as in no part.`,
 		`Add at most ${bounds.arrows} arrows for which part uses which, each with a short verb said from the part it starts at, so that the start part, the verb and the end part read as a sentence, such as "Server runs questions in Chat engine". Never a passive verb such as "is used by". Each arrow quotes lines from a file of the part it starts at that name a folder or file of the part it ends at: an import line does, a comment does not. Leave out an arrow you cannot quote that way.`,
 	]
