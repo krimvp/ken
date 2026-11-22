@@ -83,14 +83,13 @@ export type SinceChoice = { kind: 'since'; change: string; name: string; commits
 export type Landed = { choice: SinceChoice; landed: string; short: string }
 
 const SPANS_DAYS = [7, 30, 90]
-// shortcut: the reader's last commit is looked for among this many of the newest commits on HEAD's main line, and
-// their last question among this many of the commits they last asked at. Walk further if a reader ever misses one.
+// shortcut: the reader's last commit is looked for among this many of the newest commits on HEAD's main line. Walk
+// further if a reader ever misses one.
 const MAX_WALK = 200
-const MAX_ASKED_AT = 20
 
-// The spans that hold at least one commit, in this order: since the reader's last question at an older commit, since
-// their own last commit, then the last 7, 30 and 90 days, without a span that holds the same commits as a shorter one.
-// asked is the reader's questions, oldest first.
+// The spans that hold at least one commit, in this order: since the reader's last question, since their own last
+// commit, then the last 7, 30 and 90 days, without a span that holds the same commits as a shorter one. asked is the
+// reader's questions, oldest first.
 export async function sinceChoices(
 	repo: Repository,
 	asked: { askedAt: string; head: string | null }[],
@@ -146,22 +145,18 @@ export async function sinceChoices(
 		})
 }
 
-// The newest question the reader asked while the project was at an older commit of HEAD's history.
+// The reader's newest question that has a head, when the project was at an older commit of HEAD's history then. Asked
+// at HEAD, nothing landed since it. Asked at a commit HEAD's history does not hold, as after a rebase, there is no base.
 async function lastAskedBefore(
 	repo: Repository,
 	asked: { askedAt: string; head: string | null }[],
 	head: CommitHash,
 	signal?: AbortSignal,
 ): Promise<{ askedAt: string; head: CommitHash } | null> {
-	const tried = new Set<string>()
-	for (const each of asked.toReversed()) {
-		if (each.head === null || each.head === head || tried.has(each.head)) continue
-		if (tried.size === MAX_ASKED_AT) return null
-		tried.add(each.head)
-		const commit = await repo.resolve(each.head, signal)
-		if (commit.kind !== 'ok') continue
-		const split = await repo.mergeBase(commit.commit, head, signal)
-		if (split.kind === 'ok' && split.commit === commit.commit) return { askedAt: each.askedAt, head: commit.commit }
-	}
-	return null
+	const newest = asked.findLast((each) => each.head !== null)
+	if (!newest?.head) return null
+	const commit = await repo.resolve(newest.head, signal)
+	if (commit.kind !== 'ok' || commit.commit === head) return null
+	const split = await repo.mergeBase(commit.commit, head, signal)
+	return split.kind === 'ok' && split.commit === commit.commit ? { askedAt: newest.askedAt, head: commit.commit } : null
 }
