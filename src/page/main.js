@@ -278,25 +278,25 @@ async function send(body, onHome = null) {
 	const controller = new AbortController()
 	state.running = { q, controller, started: Date.now(), onHome }
 	let saved = null
-	if (onHome === null) {
-		// A question joins the chat ken talks in now, so the page shows that chat's thread with it at the end.
-		if (state.thread[0]?.thread !== thread) {
-			state.thread = await threadOf(thread)
-			state.ui = freshUi()
-		}
-		state.thread = [...state.thread, q]
-		state.open = picked = q
-		state.menuOpen = false
-		state.ask.open = false
-		state.view = state.base = 'question'
-		if (!body.lens) $('#question').value = ''
-		resizeBox()
-		// On a phone the keyboard would cover the answer as it arrives.
-		if (!state.ui.wide) $('#question').blur()
-	}
-	render()
-	if (onHome === null) $(`#turn-${state.thread.length - 1}`)?.scrollIntoView({ block: 'start' })
 	try {
+		if (onHome === null) {
+			// A question joins the chat ken talks in now, so the page shows that chat's thread with it at the end.
+			if (state.thread[0]?.thread !== thread) {
+				state.thread = await threadOf(thread)
+				state.ui = freshUi()
+			}
+			state.thread = [...state.thread, q]
+			state.open = picked = q
+			state.menuOpen = false
+			state.ask.open = false
+			state.view = state.base = 'question'
+			if (!body.lens) $('#question').value = ''
+			resizeBox()
+			// On a phone the keyboard would cover the answer as it arrives.
+			if (!state.ui.wide) $('#question').blur()
+		}
+		render()
+		if (onHome === null) $(`#turn-${state.thread.length - 1}`)?.scrollIntoView({ block: 'start' })
 		const response = await fetch('/api/questions', {
 			method: 'POST',
 			headers: { 'content-type': 'application/json' },
@@ -331,30 +331,39 @@ async function send(body, onHome = null) {
 		} else {
 			q.outcome = 'error'
 			q.error = `ken stopped answering (${error.message}). Check that ken open is still running in the terminal.`
+			if (!state.thread.includes(q) && onHome === null) state.problem = q.error
 		}
 	} finally {
-		q.live = false
-		q.typing = ''
-		// The run stays the running one until its result is on screen, so no other run can start in between.
-		await Promise.all([loadRows(), loadFollowUp()])
-		// ken saves a stopped question a moment after the page lets go of it, so the list is read once more.
-		if (controller.signal.aborted && state.rows.at(-1)?.question !== q.question) {
-			await new Promise((resolve) => setTimeout(resolve, 500))
-			await loadRows()
-		}
-		const last = state.rows.at(-1)
-		// A stopped question has no saved line, so it is read back from the history.
-		const stopped = controller.signal.aborted && last?.question === q.question
-		const made = saved ?? (stopped ? { ...q, id: last.id } : q)
-		await shell.reread()
-		if (onHome?.kind === 'explain' || onHome?.kind === 'answer') await brief.ended(onHome, made)
-		else if (onHome?.kind === 'draw') await procs.ended(made)
-		else if (onHome?.kind === 'views') await arch.viewsEnded(made)
-		else if (onHome !== null) await level.ended(onHome, made)
-		else if (state.thread.includes(q) && stopped) await openQuestion(last.id)
+		// The run stays the running one until its result is on screen, so no other run can start in between. A read
+		// that fails here still lets go of the run.
+		await runEnded(q, saved, controller, onHome).catch((error) => {
+			state.problem = error.message
+		})
 		state.running = null
 		render()
 	}
+}
+
+// What a run leaves once it is over: the lists read again, and the page or brief it started from told what it made.
+async function runEnded(q, saved, controller, onHome) {
+	q.live = false
+	q.typing = ''
+	await Promise.all([loadRows(), loadFollowUp()])
+	// ken saves a stopped question a moment after the page lets go of it, so the list is read once more.
+	if (controller.signal.aborted && state.rows.at(-1)?.question !== q.question) {
+		await new Promise((resolve) => setTimeout(resolve, 500))
+		await loadRows()
+	}
+	const last = state.rows.at(-1)
+	// A stopped question has no saved line, so it is read back from the history.
+	const stopped = controller.signal.aborted && last?.question === q.question
+	const made = saved ?? (stopped ? { ...q, id: last.id } : q)
+	await shell.reread()
+	if (onHome?.kind === 'explain' || onHome?.kind === 'answer') await brief.ended(onHome, made)
+	else if (onHome?.kind === 'draw') await procs.ended(made)
+	else if (onHome?.kind === 'views') await arch.viewsEnded(made)
+	else if (onHome !== null) await level.ended(onHome, made)
+	else if (state.thread.includes(q) && stopped) await openQuestion(last.id)
 }
 
 async function loadRows() {

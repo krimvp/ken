@@ -60,19 +60,22 @@ export function shellActions(app) {
 		addressed = coarse(place)
 	}
 
-	// The top level, for the Home page and for a part's colour on every page.
+	// The top level, for the Home page and for a part's colour on every page. An answer to an older read is dropped.
+	let topAsked = 0
 	async function loadTop() {
+		const mine = ++topAsked
 		const [top, timeline] = await Promise.all([
 			read('/api/layout').catch(() => null),
 			read('/api/timeline?days=90').catch(() => null),
 		])
+		if (mine !== topAsked) return
 		if (top?.ok) {
 			shell.top = top.body
 			learnParts(top.body.look.boxes)
 			if (state.home.levels.length === 0 && top.body.levels) state.home.levels = top.body.levels
 		} else if (top) state.home.problem ??= { message: top.body.message, field: null }
 		shell.timeline = timeline?.ok ? timeline.body : null
-		shell.concepts = await app.briefs.concepts()
+		shell.concepts = (await app.briefs.concepts()) ?? []
 	}
 
 	// What a page reads when the reader comes to it.
@@ -274,9 +277,10 @@ export function shellActions(app) {
 		if (event.target.id !== 'search-text') return false
 		const { search } = shell
 		Object.assign(search, { text: event.target.value, at: 0, open: true })
-		if (search.list === null) {
+		if (search.list === null || search.list === false) {
+			search.list = null
 			void app.briefs.concepts().then((list) => {
-				search.list = list
+				search.list = list ?? false
 				render()
 			})
 		}

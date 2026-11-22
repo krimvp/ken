@@ -18,6 +18,8 @@ export const freshBrief = () => ({
 	openQuotes: new Set(),
 	problem: null,
 	saveProblem: null,
+	// What ken wrote after the reader said what they know of the open concept, as ken recorded it.
+	said: null,
 	// The key of what the reader pressed to open the drawer, which gets the keyboard back when it closes.
 	opener: null,
 	// The id of the brief ken was last told the reader opened.
@@ -57,6 +59,7 @@ export function briefActions(app) {
 			openQuotes: new Set(),
 			problem: null,
 			saveProblem: null,
+			said: null,
 			inner: undefined,
 			focusName: true,
 		})
@@ -203,6 +206,7 @@ export function briefActions(app) {
 		},
 		'brief-fix'() {
 			ui.fixing = !ui.fixing
+			ui.said = null
 			render()
 			$(ui.fixing ? '.k-rung[aria-pressed="true"]' : '[data-key="brief-fix"]')?.focus()
 		},
@@ -218,6 +222,8 @@ export function briefActions(app) {
 			for (const has of [brief, box]) if (has?.knows) has.knows = { ...has.knows, level }
 			render()
 			await saved(() => post('/api/seen', level === 'said' ? { did: 'said', paths } : { did: 'set', level, paths }))
+			if (!ui.saveProblem) ui.said = state.home.reader?.learned[0]?.text ?? null
+			render()
 			$('[data-key="brief-fix"]')?.focus()
 		},
 		'brief-explain'() {

@@ -354,7 +354,8 @@ function knowsHtml(brief, home, ui) {
 	const since = knows.stale ? ` ${count(knows.since, 'commit', 'commits')} landed there since.` : ''
 	const why = knows.why || since ? `<p class="k-knows-why">${esc(knows.why ?? '')}${since}</p>` : ''
 	const problem = ui.saveProblem ? `<p class="k-ask-problem" role="alert">${esc(ui.saveProblem)}</p>` : ''
-	return `<p class="k-knows"><span class="k-muted">ken thinks:</span>${levelMark(knows.level, 16)}<b>${esc(levelLabel(home, knows.level))}</b><button class="k-link" data-act="brief-fix" data-key="brief-fix">Not right</button></p>${why}${problem}`
+	const said = ui.said ? `<p class="k-knows-said" role="status">ken wrote: ${esc(ui.said)}</p>` : ''
+	return `${said}<p class="k-knows"><span class="k-muted">ken thinks:</span>${levelMark(knows.level, 16)}<b>${esc(levelLabel(home, knows.level))}</b><button class="k-link" data-act="brief-fix" data-key="brief-fix">Not right</button></p>${why}${problem}`
 }
 
 function footHtml(brief, home, ui) {

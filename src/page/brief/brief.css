@@ -667,6 +667,14 @@ li.k-row {
 	font-size: 14px;
 }
 
+.k-knows-said {
+	margin: 0 0 6px;
+	padding: 8px 10px;
+	border-radius: 10px;
+	background: var(--k-brand-soft);
+	font-size: 14px;
+}
+
 .k-ladder {
 	display: flex;
 	flex-direction: column;
@@ -691,7 +699,12 @@ li.k-row {
 	font-weight: 600;
 }
 
-.k .k-rung:is(:hover, [aria-pressed="true"]) {
+.k .k-rung:hover {
+	background: var(--k-sunk);
+}
+
+.k .k-rung[aria-pressed="true"] {
+	background: var(--k-brand-soft);
 	box-shadow: inset 0 0 0 2px var(--k-ink);
 }
 

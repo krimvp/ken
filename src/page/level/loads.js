@@ -81,9 +81,11 @@ export function homeLoads({ state, render, read, post, fromView }) {
 
 	// What ken recorded of the reader. Until the server has said, the board is without that panel, and an answer it
 	// cannot give later leaves the lines the board has.
+	let readerAsked = 0
 	async function loadReader() {
+		const mine = ++readerAsked
 		const answer = await ask('/api/reader')
-		if (answer.ok) state.home.reader = answer.body
+		if (answer.ok && mine === readerAsked) state.home.reader = answer.body
 	}
 
 	// What ken has to say about the level on screen, from the saved questions, and the replies it names once read.

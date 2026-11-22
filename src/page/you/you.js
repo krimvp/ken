@@ -94,7 +94,7 @@ function lineHtml(line, i, { look, home, you }) {
 		: ''
 	return `<li class="k-rec is-fixing">${head}
 		<div class="k-ladder" role="group" aria-label="Correct what ken recorded">
-			<button class="k-btn is-quiet" data-act="you-undo" data-index="${i}" data-key="you-undo">Take this line back</button>
+			<button class="k-btn is-quiet" data-act="you-undo" data-index="${i}" data-key="you-undo">${line.topic ? `I do not know ${prose(line.topic)}` : 'Take this line back'}</button>
 			${rungs}
 			<button class="k-link" data-act="you-fix" data-index="-1" data-key="you-fix-cancel">Cancel</button>
 		</div></li>`
@@ -124,6 +124,7 @@ function sideHtml({ look, home, you }) {
 	return `<aside class="k-tile k-you-side" aria-label="What ken recorded">
 		<h2 class="k-you-title" id="recorded-title" tabindex="-1">What ken recorded</h2>
 		${you.problem ? `<p class="k-ask-problem" role="alert">${esc(you.problem)}</p>` : ''}
+		${you.said ? `<p class="k-knows-said" role="status">${esc(you.said)}</p>` : ''}
 		${lines}
 		<h2 class="k-eyebrow">How you like things shown</h2>
 		${notes}

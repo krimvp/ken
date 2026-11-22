@@ -38,9 +38,14 @@ export function briefStore(app) {
 		return kept.get(id)
 	}
 
-	// Everything search can find: [{ id, kind, name, line, level }].
+	// Everything search can find: [{ id, kind, name, line, level }], or null when ken could not say. A failed read is
+	// not kept, so the next asks again.
 	function concepts() {
-		listed ??= ask('/api/concepts').then((answer) => (answer.ok ? answer.body : []))
+		listed ??= ask('/api/concepts').then((answer) => {
+			if (answer.ok) return answer.body
+			listed = null
+			return null
+		})
 		return listed
 	}
 
@@ -55,8 +60,9 @@ export function briefStore(app) {
 		kept.set(id, { kind: 'ok', brief })
 	}
 
+	// A read in flight is marked too, since it may have left before the change it must show.
 	function forget() {
-		for (const [id, have] of kept) kept.set(id, { ...have, old: have.kind !== 'reading' && !have.brief?.local })
+		for (const [id, have] of kept) kept.set(id, { ...have, old: !have.brief?.local })
 		listed = null
 	}
 

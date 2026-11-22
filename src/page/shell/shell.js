@@ -69,6 +69,9 @@ export function findConcepts(list, text, most = 8) {
 export function foundHtml(search, home) {
 	if (search.text.trim() === '') return ''
 	if (search.list === null) return '<p class="k-found-note" role="status">Reading what there is to find.</p>'
+	if (search.list === false) {
+		return '<p class="k-found-note" role="status">ken could not read what there is to find. Type again to try once more.</p>'
+	}
 	const found = findConcepts(search.list, search.text)
 	if (found.length === 0) {
 		return `<p class="k-found-note" role="status">Nothing is called "${esc(search.text.trim())}". Search finds parts, processes and terms.</p>`

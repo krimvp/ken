@@ -9,6 +9,8 @@ export const freshYou = () => ({
 	fixing: -1,
 	all: false,
 	problem: null,
+	// What ken wrote after the last correction, as ken recorded it.
+	said: null,
 	// The names of the parts inside each part, by its name: null while read.
 	inside: new Map(),
 })
@@ -48,7 +50,7 @@ export function youActions(app) {
 		fill(page, youPageHtml({ look: look(), inside, home: state.home, you, project }))
 	}
 
-	async function saved(change) {
+	async function saved(change, took) {
 		you.problem = null
 		try {
 			await change()
@@ -56,7 +58,9 @@ export function youActions(app) {
 			you.problem = `ken could not save that. ${error.message}`
 		}
 		you.fixing = -1
-		await Promise.all([app.reread(), app.level.loads.loadReader()])
+		await app.level.recorded()
+		const newest = state.home.reader?.learned[0]?.text
+		you.said = you.problem ? null : took ? `ken took back: ${took}` : newest ? `ken wrote: ${newest}` : null
 		render()
 		$('#recorded-title')?.focus({ preventScroll: true })
 	}
@@ -66,6 +70,7 @@ export function youActions(app) {
 	const actions = {
 		'you-fix'(el) {
 			you.fixing = Number(el.dataset.index)
+			you.said = null
 			render()
 			$(you.fixing < 0 ? '#recorded-title' : '[data-key="you-undo"]')?.focus({ preventScroll: true })
 		},
@@ -76,11 +81,9 @@ export function youActions(app) {
 		// A line of the reader's map is taken back by its topic, and a line on what they looked at by its moment.
 		'you-undo'(el) {
 			const line = lineAt(el)
-			return saved(() =>
-				line.topic
-					? post('/api/map', { signal: 'forgot', topics: [line.topic] })
-					: post('/api/seen', { did: 'undo', at: line.at }),
-			)
+			return line.topic
+				? saved(() => post('/api/map', { signal: 'forgot', topics: [line.topic] }))
+				: saved(() => post('/api/seen', { did: 'undo', at: line.at }), line.text)
 		},
 		// "You said you know it" is the reader's to say, so ken writes it as said.
 		'you-set'(el) {

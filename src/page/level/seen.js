@@ -12,10 +12,10 @@ export function homeSeen(app, loads) {
 	// What the timer waits on, by what it would send: the same thing still on screen is not sent twice.
 	let waiting = null
 
-	// ken wrote something down: the level and the record are read again, unless a level is being read anyway.
+	// ken wrote something down: the level, what ken recorded and every brief are read again. A level being read
+	// anyway brings the change itself.
 	async function recorded() {
-		if (state.home.reading) return
-		await Promise.all([loads.loadLayout(true), loads.loadReader(), app.reread()])
+		await Promise.all([state.home.reading ? null : loads.loadLayout(true), loads.loadReader(), app.reread()])
 		render()
 	}
 

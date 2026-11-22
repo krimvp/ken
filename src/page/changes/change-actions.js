@@ -177,6 +177,15 @@ export function changeActions(app) {
 		dragFrom = null
 		void show(`since:${chg.drag.from}`)
 	})
+	// A swipe the browser takes over, or capture lost another way, ends the drag with nothing picked.
+	const drop = () => {
+		if (dragFrom === null) return
+		dragFrom = null
+		chg.drag = null
+		render()
+	}
+	page.addEventListener('pointercancel', drop)
+	page.addEventListener('lostpointercapture', drop)
 
 	function submit(event) {
 		if (event.target.id !== 'chg-another') return false
