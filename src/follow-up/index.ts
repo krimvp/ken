@@ -8,6 +8,7 @@ export {
 	answerQuestion,
 	type ExplainLevel,
 	explainQuestion,
+	isPartsRun,
 	type LensFacts,
 	type LensQuestion,
 	openQuestion,

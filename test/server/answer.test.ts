@@ -85,11 +85,14 @@ test('an answer is kept as a brief: the saved row names it, the question opens a
 	const lines = await ask(server, { lens: { kind: 'answer', concept: 'part::Core', text: WRITTEN } })
 	assert.match(lines.find((line) => line.kind === 'asked').question, /^What happens when a save fails\?\n/)
 	assert.equal(lines.at(-1).view.brief, written.id, 'the saved row names the brief of the question the reader pressed')
-	const rows: { brief: string | null }[] = (await json(server, '/api/questions')).questions
+	const rows: { brief: string | null; answer: boolean }[] = (await json(server, '/api/questions')).questions
 	assert.deepEqual(
-		rows.map((row) => row.brief),
-		['part::Core', written.id],
-		'the run that explained one part names that part, and the answer names its question',
+		rows.map((row) => [row.brief, row.answer]),
+		[
+			['part::Core', false],
+			[written.id, true],
+		],
+		'the run that explained one part names that part and is no answer, and the answer names its question',
 	)
 
 	assert.deepEqual((await json(server, '/api/notes')).notes, [], 'a suggested question cannot set reader notes')

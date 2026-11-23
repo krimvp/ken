@@ -28,9 +28,11 @@ test('the next merge review resumes at the unread paths of that exact change', a
 		)
 
 	await opened(side, 'receipts')
-	assert.equal((await next())?.size?.files, 2)
+	const whole = await next()
+	assert.deepEqual([whole?.title, whole?.size?.files], ['Review the merge of pull request #42', 2])
 	await opened(base, 'delivery')
 	const remaining = await next()
+	assert.equal(remaining?.title, 'Continue reviewing the merge of pull request #42', 'the title says it is a merge')
 	assert.deepEqual(remaining?.parts, ['receipts'])
 	assert.equal(remaining?.go.part, 'receipts')
 	assert.equal(remaining?.size?.files, 1)

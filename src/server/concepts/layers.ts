@@ -120,7 +120,7 @@ export function layerPlan(layout: LayoutSources, reads: ReturnType<typeof concep
 			for (const [k, question] of questions.entries()) {
 				if (question.answered) continue
 				const lens = { kind: 'answer', concept, text: question.text }
-				const title = `ken is answering a question ahead of you: ${question.text}`
+				const title = `ken is preparing an answer: ${question.text}`
 				jobs.push(job({ kind: 'answer', concept: question.id, title, order: 300 + at * 10 + k, layer: 3, lens }))
 			}
 			const box = top.boxes.find((each) => each.name === stop.name)

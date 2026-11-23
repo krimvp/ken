@@ -53,6 +53,7 @@ const { changesPageHtml }: { changesPageHtml: (view: object) => string } = await
 	path.join(PAGE, 'changes/changes.js')
 )
 const { startPageHtml }: { startPageHtml: (view: object) => string } = await import(path.join(PAGE, 'start/start.js'))
+const { youPageHtml }: { youPageHtml: (view: object) => string } = await import(path.join(PAGE, 'you/you.js'))
 const {
 	changedParts,
 	openViewHtml,
@@ -450,4 +451,59 @@ test('a part that changed since the reader looked at it is counted the same on H
 	assert.match(pages.home, /\b1 part changed since you looked/)
 	assert.match(pages.home, /\b1 thing waits on you/)
 	assert.match(pages.waiting, /Changed since you looked \(1\) .* src 2 commits touched it/)
+})
+
+test('Home lists the other ways in as links that say what each is, and offers to draw the main process ken named when none is drawn', async () => {
+	const { root } = buildRepository([
+		{ message: 'First version', files: { 'delivery/send.ts': 'send', 'receipts/save.ts': 'save' } },
+		{ message: 'Change how notices are sent', files: { 'delivery/send.ts': 'retry', 'receipts/save.ts': 'retain' } },
+		{ message: 'Merge pull request #42 from example/notices', parent: 0, merge: 1, files: {} },
+	])
+	const flow = 'A notice is sent and its receipt saved'
+	const named = await fileRecordStore(root, gitRepository(root)).append([
+		{
+			kind: 'layout',
+			within: [],
+			at: 'HEAD',
+			arrows: [],
+			flows: [flow],
+			parts: ['delivery', 'receipts'].map((name) => ({ name, job: `Does the work of ${name}`, paths: [name] })),
+		},
+	])
+	if (named.kind !== 'appended') assert.fail(named.problems.join(' '))
+	const server = await openKen(root, readerHome())
+	await json(server, '/api/seen', { did: 'opened', paths: ['delivery'] })
+	const top = await json(server, '/api/layout?change=none')
+	const html = startPageHtml({
+		top,
+		home: freshHome(() => null, { unfolded: new Set() }),
+		project: 'p',
+		concepts: [],
+		briefOf: () => null,
+		followUp: { decisions: [], topics: [] },
+		env: { jobs: [], off: null },
+	})
+	const tile = (name: string) => html.split('<section').find((each) => each.includes(name)) ?? ''
+	const start = tile('Start here')
+	assert.match(
+		textOf(start),
+		/Review the merge of pull request #42 : 2 files, 2 parts/,
+		'a link says how large the change is',
+	)
+	const processes = tile('>Processes<')
+	assert.match(textOf(processes), new RegExp(`None drawn yet\\. ken's model named the main process, ${flow}`))
+	assert.match(processes, /data-act="first-draw"/, 'and offers to draw it')
+})
+
+test('the You page gives a part the reader opened and read one line, led by the strongest thing they did', async () => {
+	const { server } = await namedProject()
+	for (const did of ['opened', 'read']) await json(server, '/api/seen', { did, paths: ['src/core'] })
+	await json(server, '/api/seen', { did: 'opened', paths: ['src/store'] })
+	const home = { ...freshHome(() => null, { unfolded: new Set() }), reader: await json(server, '/api/reader') }
+	const { look } = await json(server, '/api/layout?change=none')
+	const you = { all: false, fixing: null, note: '' }
+	const lines = textOf(youPageHtml({ look, inside: new Map(), home, you, project: 'p' }))
+	assert.match(lines, /You read about core once and opened it once\./)
+	assert.match(lines, /You opened store\./, 'a part with one line keeps it as ken wrote it')
+	assert.doesNotMatch(lines, /You opened core/, 'core has one line')
 })

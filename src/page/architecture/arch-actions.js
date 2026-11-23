@@ -19,6 +19,7 @@ export const freshArch = () => ({
 	layer: null,
 	process: null,
 	cam: { x: 0, y: 0, z: 1 },
+	moved: false,
 	drawOpen: false,
 	fitted: null,
 	// The brief the camera last brought into sight beside the canvas.
@@ -102,13 +103,15 @@ export function archActions(app) {
 		if (!page.querySelector('#arch-world')) return
 		if (drawn) fitJobs(page)
 		const level = [home.look?.within.join(','), view, column, page.clientWidth, page.clientHeight].join('|')
-		const key = `${level}|${drawer()}`
+		const key = `${level}|${drawer()}|${camera.clearTop()}`
 		const brief = state.brief.id
-		// A brief opened beside the canvas keeps the reader's zoom and brings its own thing into sight.
-		const beside = drawer() > 0 && arch.fitted?.startsWith(`${level}|`)
-		if (arch.fitted !== key && !beside) camera.fit()
-		else if (beside && (arch.fitted !== key || arch.shownBrief !== brief)) camera.show(brief)
-		else if (drawn) camera.apply()
+		// A camera the reader moved stays where they left it when a brief opens beside it or a layer adds a row over the
+		// canvas. One they did not move fits again, so nothing that floats on top covers a block.
+		const kept = arch.moved && arch.fitted?.startsWith(`${level}|`)
+		const refit = arch.fitted !== key && !kept
+		if (refit) camera.fit()
+		if (drawer() > 0 && (arch.fitted !== key || arch.shownBrief !== brief)) camera.show(brief)
+		else if (drawn && !refit) camera.apply()
 		arch.fitted = key
 		arch.shownBrief = brief
 		if (switched) glide(page, before, arch.cam.z)

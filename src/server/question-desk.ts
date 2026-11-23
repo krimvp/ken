@@ -17,6 +17,7 @@ import { DIAGRAM_BOUNDS, deployFacts, drawn, LAYOUT_BOUNDS, VIEWS_BOUNDS } from 
 import {
 	answerQuestion,
 	explainQuestion,
+	isPartsRun,
 	type LensFacts,
 	onDay,
 	openItems,
@@ -63,9 +64,11 @@ const NOTE_CHARS = 400
 // change ends at a commit of ken's own snapshot store, which is uncommitted work and no range to look at again. view is there
 // when the reader asked to see a level another way, and drew says what the reply drew for it: the parts again, a
 // diagram, since a flow or the data is not a grouping of parts, or nothing. brief is the id of the concept whose brief
-// the reply wrote: the question it answers, or the one part it explains, and null for any other reply.
+// the reply wrote: the question it answers, or the one part it explains, and null for any other reply. answer is false
+// for a run that named, explained or drew parts, which the page lists with ken's jobs, not with the answers.
 export type QuestionRow = {
 	background?: true
+	answer: boolean
 	id: string
 	question: string
 	askedAt: string
@@ -102,10 +105,12 @@ export type Spent = { notes: number; inputTokens: number; outputTokens: number }
 
 type Replied = Extract<ChatEvent, { kind: 'replied' }>
 
-// What the page receives while a question runs: "waiting" first when it waits for a free slot, then the question as
-// ken asks it, which for a lens ken wrote itself, each chat event, then the saved entry as the last line. A diagram
-// card carries its drawing, and the reply carries its topics' states as a view does.
+// What the page receives while a question runs: "job" first, with the key the page stops it by and the question as
+// the reader sent it, "waiting" when it waits for a free slot, then the question as ken asks it, which for a lens ken
+// wrote itself, each chat event, then the saved entry as the last line. A diagram card carries its drawing, and the
+// reply carries its topics' states as a view does.
 export type QuestionLine =
+	| { kind: 'job'; key: string; question: string }
 	| { kind: 'waiting' }
 	| { kind: 'asked'; question: string }
 	| Exclude<ChatEvent, Replied>
@@ -171,8 +176,13 @@ export function questionDesk(
 		fresh: async ({ key, work }) => work.kind === 'ask' && work.layer !== null && (await plan.fresh(key)),
 		rankOf: ({ key, kind, concept, work }) =>
 			work.kind === 'ask' && work.layer !== null ? plan.rankOf({ key, layer: work.layer, concept, kind }) : 2,
-		ended: () => void refill(),
+		ended: (job) => {
+			questions.delete(job.key)
+			void refill()
+		},
 	})
+	// The text of each question the reader sent that waits or runs, so a page opened again can show it before it starts.
+	const questions = new Map<string, string>()
 
 	// Wants each job whose thing is missing. A job that waits or runs is that job, so this may run any number of times.
 	let filling: Promise<void> = Promise.resolve()
@@ -216,9 +226,9 @@ export function questionDesk(
 	}
 
 	// The reader's question, as a job at the front of the line, or the job already running for the same thing. send
-	// gets "waiting" while it waits for a free slot, then each line of the run. Stopping the request stops the job
-	// unless ken started it, which then goes on by itself.
-	async function ask(body: unknown, asked: Asked, stop: AbortSignal, send: (line: QuestionLine) => void) {
+	// gets each line of the run until it ends or gone says the request closed. The job runs on without the request: only
+	// stop ends it.
+	async function ask(body: unknown, asked: Asked, gone: AbortSignal, send: (line: QuestionLine) => void) {
 		const lens = fieldOf(body, 'lens')
 		const key = (lens === undefined ? null : lensKey(lens)) ?? `ask:${randomUUID()}`
 		const kind = String(fieldOf(lens, 'kind') ?? 'question')
@@ -238,6 +248,15 @@ export function questionDesk(
 		}
 		const job = queue.want(ask, 'reader')
 		if (!job) return send({ kind: 'error', message: 'ken is closing.' })
+		if (!questions.has(key)) questions.set(key, asked.text)
+		await follow(key, gone, send)
+	}
+
+	// Sends the lines of a job that waits or runs, the "job" line first, as ask does. false when no such job is left.
+	async function follow(key: string, gone: AbortSignal, send: (line: QuestionLine) => void): Promise<boolean> {
+		const job = queue.view().find((each) => each.key === key && ['waiting', 'running'].includes(each.state.kind))
+		if (!job) return false
+		send({ kind: 'job', key, question: questions.get(key) ?? job.title })
 		if (job.state.kind === 'waiting') send({ kind: 'waiting' })
 		// A run that said its error, or saved what it made, has told the reader already.
 		let told = false
@@ -247,9 +266,10 @@ export function questionDesk(
 				if (line.kind === 'saved' || line.kind === 'error') told = true
 				send(line)
 			},
-			stop,
+			gone,
 		)
-		if (ended?.kind === 'failed' && !told && !stop.aborted) send({ kind: 'error', message: ended.why })
+		if (ended?.kind === 'failed' && !told && !gone.aborted) send({ kind: 'error', message: ended.why })
+		return true
 	}
 
 	async function run(
@@ -306,7 +326,7 @@ export function questionDesk(
 			{ key, kind: 'note', concept: null, title: 'ken is writing a live note.', order: 0, yields: false, work },
 			'ken',
 		)
-		const off = () => queue.stop(key, 'stop')
+		const off = () => queue.stop(key)
 		if (stop.aborted) off()
 		stop.addEventListener('abort', off)
 		let written: QuestionView | null = null
@@ -363,9 +383,15 @@ export function questionDesk(
 		void refill()
 	}
 
-	// The reader stopped a job, theirs or ken's. A job ken started is not tried again by itself until ken starts again.
+	// The reader stopped a job, theirs or ken's. A job ken started is not tried again by itself until ken starts again,
+	// or until the reader starts it again.
 	function stop(key: string) {
-		queue.stop(key, 'stop')
+		queue.stop(key)
+	}
+
+	async function again(key: string) {
+		queue.again(key)
+		await refill()
 	}
 
 	async function close() {
@@ -405,6 +431,7 @@ export function questionDesk(
 				const row = {
 					id,
 					question,
+					answer: !isPartsRun(question),
 					askedAt,
 					thread,
 					outcome,
@@ -810,6 +837,7 @@ export function questionDesk(
 		// A stopped question can still be winding down: this waits for it, so the next request finds it in the history.
 		settled: queue.settled,
 		ask,
+		follow,
 		note,
 		notes,
 		spentSince,
@@ -819,6 +847,7 @@ export function questionDesk(
 		questionOf,
 		look,
 		stop,
+		again,
 		refill,
 		close,
 		jobs: queue.view,

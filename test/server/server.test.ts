@@ -123,6 +123,12 @@ async function json(server: KenServer, route: string) {
 	return JSON.parse(text)
 }
 
+async function post(server: KenServer, route: string, body: object) {
+	const { status, text } = await send(server, route, { body }).response
+	assert.equal(status, 200, text)
+	return JSON.parse(text)
+}
+
 async function ask(server: KenServer, question: string) {
 	const { status, text } = await send(server, '/api/questions', { body: { question } }).response
 	assert.equal(status, 200, text)
@@ -142,6 +148,7 @@ test('a question streams its steps, the words and the cards in order, a diagram 
 	assert.deepEqual(
 		lines.map((line) => line.kind).filter((kind) => kind !== 'text'),
 		[
+			'job',
 			'asked',
 			'tool',
 			'step',
@@ -211,6 +218,7 @@ test('a question streams its steps, the words and the cards in order, a diagram 
 		{
 			id: saved.entry.id,
 			question: 'What did the last commit do?',
+			answer: true,
 			askedAt: saved.entry.askedAt,
 			thread: saved.entry.thread,
 			outcome: 'answered',
@@ -307,29 +315,52 @@ test('a question saved before ken kept the HEAD still opens with no HEAD of its 
 	)
 })
 
-test('closing the request stops the question, and the server then takes the next one', {
+test('a closed tab leaves the question running: a page opened again follows it, and its answer is saved; Stop ends a question', {
 	timeout: 10_000,
 }, async () => {
+	let release = () => {}
+	const answer = new Promise<void>((resolve) => (release = resolve))
 	let modelWaits = () => {}
 	const waiting = new Promise<void>((resolve) => (modelWaits = resolve))
-	const model = await scriptedModel([{ hang: modelWaits }, { text: 'One thing changed: retries wait.' }])
+	const model = await scriptedModel([{ text: 'One thing changed: retries wait.', held: answer }, { hang: modelWaits }])
 	const server = await open(tempFolder('ken-home-'), model.baseUrl)
+	const running = async () => {
+		const { jobs } = await post(server, '/api/jobs', { looking: { brief: null, within: null } })
+		return jobs.find((job: { state: { kind: string } }) => job.state.kind === 'running')
+	}
 
-	const first = send(server, '/api/questions', { body: { question: 'What changed?' } })
+	const tab = send(server, '/api/questions', { body: { question: 'What changed?' } })
+	while (!(await running())) await new Promise((resolve) => setTimeout(resolve, 20))
+	const { key } = await running()
+	tab.abort()
+	await tab.response.catch(() => {})
+	const reopened = send(server, `/api/jobs/${encodeURIComponent(key)}`)
+	release()
+	const followed = (await reopened.response).text
+		.trim()
+		.split('\n')
+		.map((line) => JSON.parse(line))
+	assert.deepEqual(followed[0], { kind: 'job', key, question: 'What changed?' })
+	assert.equal(followed.at(-1).view.entry.outcome, 'answered', 'the page opened again sees the answer arrive')
+
+	const stopped = send(server, '/api/questions', { body: { question: 'What changed, in one statement?' } })
 	await waiting
-	first.abort()
-	await first.response.catch(() => {})
-	const lines = await ask(server, 'What changed, in one statement?')
-
-	assert.equal(lines.at(-1).view.entry.outcome, 'answered')
+	const second = await running()
+	await post(server, '/api/jobs', { stop: second.key })
+	const lines = (await stopped.response).text
+		.trim()
+		.split('\n')
+		.map((line) => JSON.parse(line))
+	assert.equal(lines.at(-1).view.entry.outcome, 'stopped')
 	const { questions } = await json(server, '/api/questions')
 	assert.deepEqual(
 		questions.map((row: { question: string; outcome: string }) => [row.question, row.outcome]),
 		[
-			['What changed?', 'stopped'],
-			['What changed, in one statement?', 'answered'],
+			['What changed?', 'answered'],
+			['What changed, in one statement?', 'stopped'],
 		],
 	)
+	assert.equal((await send(server, `/api/jobs/${encodeURIComponent(key)}`).response).status, 404)
 })
 
 test('a request for another host, or a question from another origin, is refused', async () => {
@@ -580,9 +611,12 @@ test("the person lens lists a collaborator's commits and the topics the owner kn
 		.split('\n')
 		.map((line) => JSON.parse(line))
 
-	assert.equal(lines[0]?.kind, 'asked')
-	assert.ok(lines.findIndex((line) => line.kind === 'text') > 0, 'the list comes before anything the model wrote')
-	const list = lines[0].question
+	const asked = lines.findIndex((line) => line.kind === 'asked')
+	assert.ok(
+		asked >= 0 && lines.findIndex((line) => line.kind === 'text') > asked,
+		'the list comes before anything the model wrote',
+	)
+	const list = lines[asked].question
 	for (const named of [wait, readme, 'retry wait']) assert.ok(list.includes(named), `the list names ${named}: ${list}`)
 	assert.doesNotMatch(list, /retry loop/, 'a topic the owner never met is not listed, though Bo changed its file')
 	const toModel = questionPrompt(model.requests[0])

@@ -23,7 +23,8 @@ export async function toReview(
 	let range: Change['range']
 	let change: string
 	let what: string
-	let title: string
+	// The change as the title names it: a merge says it is one.
+	let named: string
 	let why: string
 	if (own) {
 		const result = diff ? { kind: 'ok' as const, files: diff } : await repo.diffFiles(own.range, signal)
@@ -32,7 +33,7 @@ export async function toReview(
 		range = own.range
 		change = own.asked
 		what = own.kind === 'uncommitted' ? 'your uncommitted work' : `your branch ${own.name}`
-		title = `Review ${what}`
+		named = what
 		why = own.kind === 'uncommitted' ? '' : 'It is ahead of the main branch.'
 	} else {
 		const line = await repo.mainLine(head, MAIN_LINE, signal)
@@ -46,7 +47,7 @@ export async function toReview(
 		change = `${merge.hash}^1..${merge.hash}`
 		const pull = pullRequestOf(merge.subject)
 		what = pull ? `pull request ${pull}` : 'the newest merge'
-		title = pull ? `Review the merge of pull request ${pull}` : 'Review the newest merge'
+		named = pull ? `the merge of pull request ${pull}` : 'the newest merge'
 		why = pull
 			? 'It is the newest merge and you have not walked through it.'
 			: `It is "${merge.subject}", and you have not walked through it.`
@@ -65,12 +66,12 @@ export async function toReview(
 	const touched = boxes.filter((box) => remaining.some((file) => touches(box, file)))
 	const parts = touched.map((box) => box.name)
 	const size = { files: remaining.length, parts, change, what }
-	if (remaining.length === files.length) return { ...size, title, why }
+	if (remaining.length === files.length) return { ...size, title: `Review ${named}`, why }
 	const [last] = touched
 	const part = last && touched.length === 1 && remaining.every((file) => touches(last, file)) ? last.name : undefined
 	return {
 		...size,
-		title: `Continue reviewing ${what}`,
+		title: `Continue reviewing ${named}`,
 		why: part ? `You still have changes in ${part} to review.` : 'These changes are still to review.',
 		...(part ? { part } : {}),
 	}

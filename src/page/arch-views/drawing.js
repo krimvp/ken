@@ -100,7 +100,7 @@ function partHtml(placed, view) {
 	]
 	const beads =
 		stops.length > 0
-			? `<span class="k-beads">${stops.map((n) => `<span class="k-bead k-num"><span class="visually-hidden">Stop </span>${n}</span>`).join('')}</span>`
+			? `<span class="k-beads">${stops.map((n) => `<span class="k-bead k-num"><span class="visually-hidden">step </span>${n}</span>`).join('')}</span>`
 			: ''
 	const title = placed.solo && placed.solo.name.toLowerCase() !== name.toLowerCase() ? placed.solo.name : name
 	const under = title === name ? '' : `<span class="k-rt-runs" data-fit="${esc(name)}">${esc(name)}</span>`

@@ -1,5 +1,5 @@
 // What the reader does with the "Ask ken" drawer: open and close it from the rail, take a question it suggests into
-// the box, send the box, and show their earlier replies. The drawer keeps the briefs the reader opened last, for the
+// the box, send the box, and show their earlier answers. The drawer keeps the briefs the reader opened last, for the
 // questions it suggests.
 import { fill } from '../shell/fill.js'
 import { focusLabel } from '../views/format.js'

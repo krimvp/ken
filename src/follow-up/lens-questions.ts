@@ -177,6 +177,21 @@ export type ViewsAsk = {
 	bounds: { outside: number; frames: number; things: number; crossings: number; gaps: number; quotes: number }
 }
 
+// The first lines ken writes for its runs on the parts: naming them, explaining them, and drawing a level, as
+// partsQuestion, explainQuestion, viewsQuestion and viewQuestion below write them.
+const PART_RUNS = [
+	/^(Name|Name again) the main parts of /,
+	/^Explain (the parts of .+|.+, a part of .+)$/,
+	/^Draw where .+ runs and what it talks to$/,
+	/^Show .+ another way: /,
+]
+
+// A saved question is a run on the parts, not an answer to a question, when its first line is one ken writes for one.
+export function isPartsRun(question: string): boolean {
+	const first = question.split('\n')[0] ?? ''
+	return PART_RUNS.some((form) => form.test(first))
+}
+
 // At the top level, drawings is there, and the same run draws "In its world" and "Where it runs" with the parts.
 export function partsQuestion(level: PartsLevel): LensQuestion {
 	const { within, head, named, drawings } = level

@@ -28,7 +28,7 @@ export function fitted(world, room, clear) {
 }
 
 // page is the element that holds the canvas, which is drawn again inside it. arch is the canvas's state: it keeps
-// the camera as arch.cam. drawer gives the width a brief open beside the canvas takes from it. zoomed is told each
+// the camera as arch.cam, and arch.moved says the reader moved it since it was last fitted. drawer gives the width a brief open beside the canvas takes from it. zoomed is told each
 // zoom the reader makes.
 export function canvasCamera(page, arch, drawer, zoomed = () => {}) {
 	const canvas = () => page.querySelector('#arch-canvas')
@@ -85,8 +85,12 @@ export function canvasCamera(page, arch, drawer, zoomed = () => {}) {
 	function fit() {
 		if (!canvas()) return
 		arch.cam = fitted(worldBox(), view(), band())
+		arch.moved = false
 		apply()
 	}
+
+	// Where the band clear of what floats over the canvas starts, which grows when a layer adds a row of its own.
+	const clearTop = () => (canvas() ? Math.round(band().top) : 0)
 
 	// What the brief open beside the canvas is about stays in sight at the reader's zoom: the camera pans just enough
 	// to show it, and steps back only when it cannot fit. A line shows with both its ends.
@@ -128,6 +132,7 @@ export function canvasCamera(page, arch, drawer, zoomed = () => {}) {
 		const { x, y, z } = arch.cam
 		const next = clamp(z * factor)
 		arch.cam = { z: next, x: px - ((px - x) * next) / z, y: py - ((py - y) * next) / z }
+		arch.moved = true
 		apply()
 		zoomed(next)
 	}
@@ -139,6 +144,7 @@ export function canvasCamera(page, arch, drawer, zoomed = () => {}) {
 
 	function panBy(dx, dy) {
 		arch.cam = { ...arch.cam, x: arch.cam.x + dx, y: arch.cam.y + dy }
+		arch.moved = true
 		apply()
 	}
 
@@ -171,6 +177,7 @@ export function canvasCamera(page, arch, drawer, zoomed = () => {}) {
 		drag.moved = true
 		canvas()?.classList.add('is-dragging')
 		arch.cam = { ...drag.cam, x: drag.cam.x + dx, y: drag.cam.y + dy }
+		arch.moved = true
 		apply()
 	})
 	// The press that ends a drag is no press on the block under it: the click that follows it is dropped.
@@ -211,8 +218,9 @@ export function canvasCamera(page, arch, drawer, zoomed = () => {}) {
 		const py = vy + vh / 2 + (event.clientY - box.top - box.height / 2) * scale
 		const room = view()
 		arch.cam = { ...arch.cam, x: room.w / 2 - px * arch.cam.z, y: room.h / 2 - py * arch.cam.z }
+		arch.moved = true
 		apply()
 	}
 
-	return { apply, fit, show, zoomBy, panBy }
+	return { apply, fit, show, zoomBy, panBy, clearTop }
 }

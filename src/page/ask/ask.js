@@ -21,6 +21,12 @@ export function suggestions(recent, briefOf) {
 	return found.slice(0, SUGGESTED)
 }
 
+// The earlier answers, newest first: what the reader asked and the brief questions ken answered by itself. Runs that
+// named, explained or drew parts are left out, as the queue lists them.
+export function earlierAnswers(rows) {
+	return rows.filter((row) => row.answer !== false).reverse()
+}
+
 // ask is the drawer's state: { text, earlier, recent }. env holds the reader's saved questions (rows), the model's
 // setting, off, the reason no run can start now, and what the lenses need.
 export function askDrawerHtml(ask, env, briefOf) {
@@ -32,7 +38,7 @@ export function askDrawerHtml(ask, env, briefOf) {
 		offered.length === 0
 			? '<p class="k-muted">Open a brief, and the questions worth asking about it show here.</p>'
 			: `<ul class="k-ask-sugs">${offered.join('')}</ul>`
-	const rows = [...env.rows].reverse()
+	const rows = earlierAnswers(env.rows)
 	const earlier =
 		rows.length === 0
 			? ''
