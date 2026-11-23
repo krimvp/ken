@@ -127,7 +127,16 @@ function notesHtml(home, env, arch, stops) {
 	// ken's own runs on this level's parts that the reader stopped, or that made nothing, and that ken will not start
 	// again by itself.
 	const stopped = jobs.filter((job) => here(job) && canStartAgain(job) && latest(jobs, job))
-	if (look.named && look.at === look.head && unexplained && queued.length > 0) {
+	const current = look.named && look.at === look.head && unexplained
+	const names = look.boxes
+		.filter((box) => stopped.some((job) => job.concept === partId(look.within, box.name)))
+		.map((box) => esc(box.name))
+	const which = names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`
+	const halted =
+		names.length === 0
+			? ''
+			: ` ${stopped.every((job) => job.reason === STOPPED) ? `You stopped ken explaining ${which}.` : `ken could not explain ${which} by itself.`} <button class="k-link" data-act="job-again" data-jobs="${esc(JSON.stringify(stopped.map((job) => job.key)))}" data-key="run-again">Start again</button>`
+	if (current && queued.length > 0) {
 		// The count is of parts at this level; the quiet line in the bar counts all of ken's runs, as "runs left".
 		const done = look.explained ?? 0
 		const rest = look.boxes.length - done
@@ -138,18 +147,10 @@ function notesHtml(home, env, arch, stops) {
 					: `the other ${rest}`
 				: `${queued.length} of the other ${rest}`
 		said.push(
-			`${done} of ${look.boxes.length} parts explained. ken is explaining ${more} by itself. Open a part to have it explained first.`,
+			`${done} of ${look.boxes.length} parts explained. ken is explaining ${more} by itself. Open a part to have it explained first.${halted}`,
 		)
-	} else if (look.named && look.at === look.head && unexplained && stopped.length > 0) {
-		const names = look.boxes
-			.filter((box) => stopped.some((job) => job.concept === partId(look.within, box.name)))
-			.map((box) => esc(box.name))
-		const which = names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`
-		const why = stopped.every((job) => job.reason === STOPPED)
-			? `You stopped ken explaining ${which}.`
-			: `ken could not explain ${which} by itself.`
-		const again = `<button class="k-link" data-act="job-again" data-jobs="${esc(JSON.stringify(stopped.map((job) => job.key)))}" data-key="run-again">Start again</button>`
-		said.push(`${look.explained ?? 0} of ${look.boxes.length} parts explained. ${why} ${again}`)
+	} else if (current && halted) {
+		said.push(`${look.explained ?? 0} of ${look.boxes.length} parts explained.${halted}`)
 	} else if (look.named && look.at === look.head && home.content.kind === 'level' && unexplained && !env.running) {
 		const done = look.explained ?? 0
 		const button = `<button class="k-link" data-act="run-explain" data-key="run-explain"${env.off ? ' disabled' : ''}>${done === 0 ? 'Ask ken to explain these parts' : 'Ask ken to explain the rest'}</button>`
