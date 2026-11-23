@@ -55,7 +55,7 @@ export type Left = { jobs: number; seconds: number | null }
 export type Ran = { kind: 'ran' } | { kind: 'model-error'; why: string }
 
 type Job<W, L> = JobAsk<W> & {
-	// Who asked first. A job the reader started stops when they stop it; one ken started goes on.
+	// Who asked first. A job ken started that the reader stopped is not queued again by itself.
 	from: 'reader' | 'ken'
 	asked: boolean
 	state: JobState
@@ -340,7 +340,8 @@ export function jobQueue<W, L>(deps: QueueDeps<W, L>) {
 		return view().find((each) => each.key === job.key && live(job)) ?? null
 	}
 
-	// Sends the lines a job has said so far and each one after, until the job ends. Resolves when it has.
+	// Sends the lines a job has said so far and each one after, until the job ends or signal says the follower went.
+	// Resolves when either happens. A follower that goes, as a closed tab does, leaves the job running.
 	async function follow(key: string, onLine: (line: L) => void, signal?: AbortSignal): Promise<JobState | null> {
 		const job = jobs.find((each) => each.key === key && live(each))
 		if (!job) return null
@@ -348,7 +349,6 @@ export function jobQueue<W, L>(deps: QueueDeps<W, L>) {
 		const detached = new Promise<void>((resolve) => (left = resolve))
 		const leave = () => {
 			job.followers.delete(onLine)
-			if (job.followers.size === 0) stop(key, 'unfollow')
 			left()
 		}
 		for (const said of job.lines) onLine(said)
@@ -360,21 +360,21 @@ export function jobQueue<W, L>(deps: QueueDeps<W, L>) {
 		return signal?.aborted ? null : job.state
 	}
 
-	// The reader stopped it, or closed the page that followed it. A job ken started that the reader only followed goes
-	// on, as ken's again.
-	function stop(key: string, how: 'stop' | 'unfollow') {
+	// The reader pressed Stop on it.
+	function stop(key: string) {
 		const job = jobs.find((each) => each.key === key && live(each))
 		if (!job) return
-		if (how === 'unfollow' && job.from === 'ken') {
-			job.asked = false
-			return pump()
-		}
 		// The reader said no to it, so ken does not queue it again by itself.
 		if (job.from === 'ken') tried.set(job.key, null)
 		if (job.state.kind === 'running') return job.stop?.abort('stopped')
 		job.state = { kind: 'failed', why: STOPPED }
 		finish(job)
 		pump()
+	}
+
+	// The reader pressed Start again on a job ken started that ended without its thing: ken may queue it again.
+	function again(key: string) {
+		if (tried.get(key) === null) tried.delete(key)
 	}
 
 	// A stopped run may still be winding down. Resolves when none is.
@@ -408,7 +408,7 @@ export function jobQueue<W, L>(deps: QueueDeps<W, L>) {
 	}
 
 	// refocus: ranks change when the reader looks at something else.
-	return { want, wantAll, follow, stop, settled, refocus: pump, view, left, subscribe, close }
+	return { want, wantAll, follow, stop, again, settled, refocus: pump, view, left, subscribe, close }
 }
 
 const STOPPED = 'You stopped it.'

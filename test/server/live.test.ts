@@ -221,7 +221,7 @@ test("a question asked while a note is being written waits for it, then runs in 
 	)
 
 	const asking = send(server, '/api/questions', { question: 'What does retry do?' })
-	assert.deepEqual(JSON.parse(await asking.firstLine), { kind: 'waiting' })
+	assert.equal(JSON.parse(await asking.firstLine).kind, 'job')
 	assert.equal(model.requests.length, 1, 'the question has not reached the model while the note runs')
 	release()
 	const { status, text } = await asking.all
@@ -237,6 +237,7 @@ test("a question asked while a note is being written waits for it, then runs in 
 		.trim()
 		.split('\n')
 		.map((line) => JSON.parse(line))
+	assert.deepEqual(lines[1], { kind: 'waiting' })
 	assert.equal(lines.at(-1).view.entry.outcome, 'answered')
 	const view = await live(server)
 	assert.equal(view.notes[0].entry.outcome, 'answered')

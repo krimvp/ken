@@ -12,8 +12,8 @@ import { briefStore } from './brief/briefs.js'
 import { partId } from './brief/concept-id.js'
 import { changeActions, freshChanges } from './changes/change-actions.js'
 import { fillDrawings, markPart, numberAt } from './draw-diagrams.js'
-import { freshJobs, jobsActions } from './jobs/jobs.js'
-import { replyAddress } from './level/address.js'
+import { freshJobs, jobsActions, live } from './jobs/jobs.js'
+import { readReply, replyAddress } from './level/address.js'
 import { levelActions } from './level/level-actions.js'
 import { freshHome } from './level/level-state.js'
 import { DOING as LEVEL_RUNS } from './level/runs.js'
@@ -260,6 +260,27 @@ async function* linesOf(body) {
 	if (buffer.trim() !== '') yield buffer
 }
 
+// A run as the page shows it while it goes. question is what the page shows until the server sends the one it asks.
+function runningQ(question, fields = {}) {
+	return {
+		id: null,
+		question,
+		askedAt: new Date().toISOString(),
+		head: null,
+		headNow: null,
+		thread: null,
+		outcome: 'working',
+		steps: [],
+		usage: null,
+		reply: null,
+		typing: '',
+		topics: [],
+		error: null,
+		live: true,
+		...fields,
+	}
+}
+
 // body is a question, {question}, or a lens for ken to write the question from, {lens}. A question opens its thread.
 // onHome is where a run the home started began: the reader stays on the home, which shows the run and what it made.
 async function send(body, onHome = null) {
@@ -273,28 +294,9 @@ async function send(body, onHome = null) {
 	if (onHome === null) shell.leaveReply()
 	const parent = body.after && state.rows.find((row) => row.id === body.after)
 	const thread = body.after === null ? null : parent ? threadId(parent) : state.model.thread
-	const q = {
-		id: null,
-		question,
-		focus: body.focus,
-		after: body.after,
-		askedAt: new Date().toISOString(),
-		head: null,
-		headNow: null,
-		thread,
-		outcome: 'working',
-		steps: [],
-		usage: null,
-		reply: null,
-		typing: '',
-		topics: [],
-		error: null,
-		live: true,
-	}
-	const controller = new AbortController()
-	state.running = { q, controller, started: Date.now(), onHome }
-	let saved = null
-	try {
+	const q = runningQ(question, { focus: body.focus, after: body.after, thread })
+	state.running = { q, started: Date.now(), onHome, key: null, stopping: false }
+	await drive(q, onHome, async () => {
 		if (onHome === null) {
 			// Show the thread the reader chose, or an empty one for a new subject.
 			if (body.after === null) {
@@ -321,41 +323,53 @@ async function send(body, onHome = null) {
 			method: 'POST',
 			headers: { 'content-type': 'application/json' },
 			body: JSON.stringify(body),
-			signal: controller.signal,
 		})
-		if (!response.ok) {
-			const refused = await response.json()
-			// A lens ken refused, or one with nothing to explain, never reached the model.
-			const unasked = body.lens && (response.status === 400 || response.status === 422)
-			q.outcome = unasked ? 'unasked' : 'error'
-			q.error = refused.message
-			if (refused.question) q.question = refused.question
-			return
-		}
-		for await (const line of linesOf(response.body)) {
-			const event = JSON.parse(line)
-			if (event.kind === 'saved') {
-				// The topics keep the states they had when the reply came, so a button pressed since does not fold the reply
-				// the reader is reading.
-				saved = { ...fromView(event.view), topics: q.topics }
-				state.thread = state.thread.map((each) => (each === q ? saved : each))
-				if (picked === q) picked = saved
-				if (state.open === q) {
-					state.open = saved
-					if (state.view === 'question') {
-						state.replyTo = saved.reply && !saved.about ? saved : null
-						addressReply(saved.id)
-					}
-				}
-			} else {
-				addEvent(q, event)
-			}
-			schedule()
-		}
+		if (response.ok) return response
+		const refused = await response.json()
+		// A lens ken refused, or one with nothing to explain, never reached the model.
+		const unasked = body.lens && (response.status === 400 || response.status === 422)
+		q.outcome = unasked ? 'unasked' : 'error'
+		q.error = refused.message
+		if (refused.question) q.question = refused.question
+		return null
+	})
+}
+
+// A page opened while the reader's own question still runs, after a reload or a closed tab, follows it. Questions in
+// the reader's thread are the jobs whose key starts with "ask:". The thread opens on it unless the address names a reply.
+async function followAsked(list) {
+	const job = list.find((each) => each.by === 'reader' && each.key.startsWith('ask:') && live(each))
+	if (!job || state.running || state.model?.kind !== 'ok') return
+	const q = runningQ(job.title)
+	state.running = { q, started: job.state.startedAt ?? Date.now(), onHome: null, key: job.key, stopping: false }
+	if (!readReply(location.hash)) {
+		state.thread = [q]
+		state.open = picked = q
+		state.ui = freshUi()
+		state.view = state.base = 'question'
+	}
+	await drive(q, null, async () => {
+		render()
+		const response = await fetch(`/api/jobs/${encodeURIComponent(job.key)}`)
+		if (response.ok) return response
+		q.outcome = 'error'
+		q.error = 'The question ended before the page could follow it. Its answer is under Earlier answers.'
+		return null
+	})
+}
+
+// Runs start, which shows the run and returns the stream of its lines, or null when the server said no, and reads the
+// lines into q until the run ends.
+async function drive(q, onHome, start) {
+	let saved = null
+	try {
+		const response = await start()
+		if (response) saved = await readRun(response, q)
+		// Stop on a question that had not started yet ends it with no saved line.
+		if (!saved && state.running.stopping) Object.assign(q, { outcome: 'stopped', error: null })
 	} catch (error) {
-		if (controller.signal.aborted) {
-			q.outcome = 'stopped'
-		} else {
+		if (state.running.stopping) q.outcome = 'stopped'
+		else {
 			q.outcome = 'error'
 			q.error = `ken stopped answering (${error.message}). Check that ken open is still running in the terminal.`
 			if (!state.thread.includes(q) && onHome === null) state.problem = q.error
@@ -363,7 +377,7 @@ async function send(body, onHome = null) {
 	} finally {
 		// The run stays the running one until its result is on screen, so no other run can start in between. A read
 		// that fails here still lets go of the run.
-		await runEnded(q, saved, controller, onHome).catch((error) => {
+		await runEnded(q, saved, onHome).catch((error) => {
 			state.problem = error.message
 		})
 		state.running = null
@@ -371,30 +385,45 @@ async function send(body, onHome = null) {
 	}
 }
 
+async function readRun(response, q) {
+	let saved = null
+	for await (const line of linesOf(response.body)) {
+		const event = JSON.parse(line)
+		if (event.kind === 'job') {
+			state.running.key = event.key
+			q.question = event.question
+		} else if (event.kind === 'saved') {
+			// The topics keep the states they had when the reply came, so a button pressed since does not fold the reply
+			// the reader is reading.
+			saved = { ...fromView(event.view), topics: q.topics }
+			state.thread = state.thread.map((each) => (each === q ? saved : each))
+			if (picked === q) picked = saved
+			if (state.open === q) {
+				state.open = saved
+				if (state.view === 'question') {
+					state.replyTo = saved.reply && !saved.about ? saved : null
+					addressReply(saved.id)
+				}
+			}
+		} else {
+			addEvent(q, event)
+		}
+		schedule()
+	}
+	return saved
+}
+
 // What a run leaves once it is over: the lists read again, and the page or brief it started from told what it made.
-async function runEnded(q, saved, controller, onHome) {
+async function runEnded(q, saved, onHome) {
 	q.live = false
 	q.typing = ''
 	await Promise.all([loadRows(), loadFollowUp()])
-	// ken saves a stopped question a moment after the page lets go of it, so the list is read once more.
-	if (controller.signal.aborted && state.rows.at(-1)?.question !== q.question) {
-		await new Promise((resolve) => setTimeout(resolve, 500))
-		await loadRows()
-	}
-	const last = state.rows.at(-1)
-	// A stopped question has no saved line, so it is read back from the history.
-	const stopped = controller.signal.aborted && last?.question === q.question
-	const made = saved ?? (stopped ? { ...q, id: last.id } : q)
+	const made = saved ?? q
 	await shell.reread()
 	if (onHome?.kind === 'explain' || onHome?.kind === 'answer') await brief.ended(onHome, made)
 	else if (onHome?.kind === 'draw') await procs.ended(made)
 	else if (onHome?.kind === 'views') await arch.viewsEnded(made)
 	else if (onHome !== null) await level.ended(onHome, made)
-	else if (state.thread.includes(q) && stopped) {
-		const viewing = state.open === q && state.view === 'question'
-		await openQuestion(last.id)
-		if (viewing && state.open?.id === last.id && state.view === 'question') addressReply(last.id)
-	}
 }
 
 async function loadRows() {
@@ -1137,7 +1166,7 @@ app.you = you
 const chg = changeActions(app)
 app.chg = chg
 // A run ken started by itself made something: the pages read what they show again, so it fills in with no reload.
-const jobs = jobsActions({ ...app, linesOf }, async (made) => {
+const jobs = jobsActions({ ...app, linesOf, followAsked }, async (made) => {
 	await Promise.all([loadRows(), shell.reread()])
 	// The reader asked for nothing, so the level on screen stays while it is read again.
 	await Promise.all([level.loads.loadLayout(true), made.some((job) => job.kind === 'process') ? procs.reread() : null])
@@ -1374,8 +1403,18 @@ const actions = {
 				: { question: q.question, ...(q.after !== undefined ? { after: q.after } : { focus: q.focus }) },
 		)
 	},
-	stop() {
-		state.running?.controller.abort()
+	// The run goes on without the page, so Stop asks the server to end it. Its stream then ends with the stopped entry.
+	async stop() {
+		const run = state.running
+		if (!run?.key || run.stopping) return
+		run.stopping = true
+		try {
+			await post('/api/jobs', { stop: run.key })
+		} catch (error) {
+			run.stopping = false
+			state.problem = error.message
+			render()
+		}
 	},
 }
 

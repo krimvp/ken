@@ -165,13 +165,31 @@ export async function openServer(options: {
 			const body = await readJson(request)
 			const looking = body.kind === 'ok' ? lookingOf(fieldOf(body.value, 'looking')) : null
 			const stop = body.kind === 'ok' ? fieldOf(body.value, 'stop') : undefined
+			const again = body.kind === 'ok' ? fieldOf(body.value, 'again') : undefined
 			if (typeof stop === 'string') desk.stop(stop)
+			else if (typeof again === 'string') await desk.again(again)
 			else if (looking) desk.look(looking)
 			else {
-				const message = 'Send looking, with the open brief and the level on the canvas, or the key of a job to stop.'
+				const message =
+					'Send looking, with the open brief and the level on the canvas, or the key of a job to stop or start again.'
 				return sendJson(response, 400, { message })
 			}
 			return sendJson(response, 200, { jobs: desk.jobs(), left: desk.left() })
+		}
+		if (where.startsWith('GET /api/jobs/')) {
+			// A page opened again follows the question it sent before, as POST /api/questions streams it.
+			const gone = goneWith(request, response)
+			const key = decodeURIComponent(url.pathname.slice('/api/jobs/'.length))
+			let started = false
+			const followed = await desk.follow(key, gone, (line) => {
+				if (!started) {
+					response.writeHead(200, { ...HEADERS, 'content-type': 'application/x-ndjson; charset=utf-8' })
+					started = true
+				}
+				writeLine(response, line)
+			})
+			if (!followed) return sendJson(response, 404, { message: 'ken runs no such job now.' })
+			return response.end()
 		}
 		if (where === 'GET /api/decisions') return sendJson(response, 200, { decisions: decisionRows(await record.read()) })
 		if (where === 'GET /api/map') return sendJson(response, 200, { file: map.file, ...(await map.read(new Date())) })
@@ -334,15 +352,12 @@ export async function openServer(options: {
 				})
 			}
 			await desk.settled()
-			const stop = new AbortController()
-			// Closing the request, by Stop on the page or by closing the tab, stops the question, unless ken started it.
-			response.on('close', () => {
-				if (!response.writableFinished) stop.abort()
-			})
-			if (request.socket.destroyed) stop.abort()
+			// A closed tab only stops following the question, which runs on and is saved. Stop on the page goes through
+			// POST /api/jobs.
+			const gone = goneWith(request, response)
 			response.writeHead(200, { ...HEADERS, 'content-type': 'application/x-ndjson; charset=utf-8' })
 			response.flushHeaders()
-			await desk.ask(body.kind === 'ok' ? body.value : null, asked, stop.signal, (line) => writeLine(response, line))
+			await desk.ask(body.kind === 'ok' ? body.value : null, asked, gone, (line) => writeLine(response, line))
 			return response.end()
 		}
 		const file = request.method === 'GET' ? files.get(url.pathname) : undefined
@@ -431,6 +446,16 @@ function lookingOf(value: unknown): { brief: string | null; within: string[] | n
 	const paths = Array.isArray(within) && within.every((each) => typeof each === 'string') ? within : null
 	if ((brief !== null && typeof brief !== 'string') || (within !== null && paths === null)) return null
 	return { brief: brief ?? null, within: paths }
+}
+
+// Aborts when the reader's side closes the request before the server ends it.
+function goneWith(request: IncomingMessage, response: ServerResponse): AbortSignal {
+	const gone = new AbortController()
+	response.on('close', () => {
+		if (!response.writableFinished) gone.abort()
+	})
+	if (request.socket.destroyed) gone.abort()
+	return gone.signal
 }
 
 function sendJson(response: ServerResponse, status: number, value: unknown) {

@@ -110,11 +110,15 @@ export function jobLineHtml(job, what, tag = 'p') {
 	return `<${tag} class="k-job-says" role="status">${said}</${tag}>`
 }
 
-// app is the page: its state, render, post and linesOf; made is told the jobs that just made something.
+// app is the page: its state, render, post, linesOf, and followAsked, which is given the first list the page reads;
+// made is told the jobs that just made something.
 export function jobsActions(app, made) {
-	const { state, render, post, linesOf } = app
+	const { state, render, post, linesOf, followAsked } = app
+	let first = true
 
 	function take({ jobs, left }) {
+		if (first) void followAsked(jobs)
+		first = false
 		const before = new Map(state.jobs.list.map((job) => [job.key, job.state.kind]))
 		const focused = document.activeElement
 		const inQueue = focused?.closest('#jobs')
