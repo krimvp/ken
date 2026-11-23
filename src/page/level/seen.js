@@ -1,7 +1,7 @@
 // What the page tells ken about what the reader looked at, so ken's idea of what they know grows by itself. A brief
-// open in its drawer counts as read after ten seconds with the tab in view. A send that fails is dropped without a
-// word: it must never block or slow the page. When ken wrote a line, the level and the record are read again, so a
-// part's fill moves with no reload.
+// ken has explained, open in its drawer, counts as read after ten seconds with the tab in view. A send that fails is
+// dropped without a word: it must never block or slow the page. When ken wrote a line, the level and the record are
+// read again, so a part's fill moves with no reload.
 
 const READ_MS = 10_000
 
