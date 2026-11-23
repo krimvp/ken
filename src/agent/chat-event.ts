@@ -5,6 +5,7 @@
 import type { RecordEntry } from '../record/index.ts'
 import type { Commit, CommitHash } from '../repo/index.ts'
 import type { Item, Reply } from './reply/reply.ts'
+import type { QuestionFocus } from './reply/show-tool.ts'
 
 // What happened while the model worked, behind "Show the steps". "tool" is one call as a sentence, "text" is what the
 // model wrote in a turn that read the project, and "sent-back" is a card ken's checks refused, with why.
@@ -16,6 +17,7 @@ export type Step =
 export type Cost = { inputTokens: number; outputTokens: number; seconds: number }
 
 export type ChatEvent =
+	| { kind: 'focus'; focus: QuestionFocus }
 	// Live only: the model's text as it types. When its turn ends, ken files that text as a step or as words of the reply.
 	| { kind: 'text'; delta: string }
 	// step is the call as one plain sentence for the reader, such as "Read `src/cli.ts`, lines 100 to 180".
@@ -34,4 +36,11 @@ export type ChatEvent =
 	| { kind: 'error'; message: string; model?: true }
 
 // "no-answer": the model wrote nothing and showed nothing. "out-of-turns": it was still reading at the turn limit.
-export type Outcome = 'answered' | 'unverified' | 'no-answer' | 'out-of-turns' | 'incomplete' | 'partial'
+export type Outcome =
+	| 'answered'
+	| 'unverified'
+	| 'tool-proposal'
+	| 'no-answer'
+	| 'out-of-turns'
+	| 'incomplete'
+	| 'partial'

@@ -95,10 +95,15 @@ export function shellActions(app) {
 	// brief is a new entry in the browser's history, so Back goes to the one before. Anything finer rewrites the
 	// entry it is in. A reply open over the pages keeps its own address.
 	let addressed = null
+	let restoringReply = false
+	function leaveReply() {
+		restoringReply = false
+		app.cancelReply()
+	}
 	const coarse = (place) =>
 		JSON.stringify([place.page, place.trail, place.tab, place.part, place.brief, place.on, place.source])
 	function address() {
-		if (addressed === null || overlaid()) return
+		if (addressed === null || restoringReply || overlaid()) return
 		const place = placeNow()
 		const hash = writePlace(place)
 		if (hash !== location.hash) history[coarse(place) === addressed ? 'replaceState' : 'pushState'](null, '', hash)
@@ -149,6 +154,7 @@ export function shellActions(app) {
 	}
 
 	async function goPage(page) {
+		leaveReply()
 		state.chg.part = null
 		Object.assign(shell, { page, settingsOpen: false })
 		// What was typed in search was for the page the reader left.
@@ -205,10 +211,24 @@ export function shellActions(app) {
 	}
 
 	// The page opens: at the place its address names, or at Home.
-	const start = () => goPlace(readPlace(location.hash), true)
+	async function start(openReply) {
+		const place = readPlace(location.hash)
+		// Drawing Home beneath a restored reply must not rewrite that reply's history entry.
+		restoringReply = Boolean(place.reply)
+		try {
+			await goPlace(place, true)
+			if (restoringReply) await openReply(place.reply).catch(() => {})
+		} finally {
+			if (restoringReply) {
+				restoringReply = false
+				address()
+			}
+		}
+	}
 
 	// Back and Forward in the browser. reply is given the id of a saved reply the address names.
 	function back(reply) {
+		leaveReply()
 		const place = readPlace(location.hash)
 		return place.reply ? reply(place.reply) : goPlace(place, false)
 	}
@@ -303,6 +323,7 @@ export function shellActions(app) {
 	// "Start here" and its chips go where the server says: a part to read opens as a brief on the canvas, and a
 	// change opens on the Changes page with that change laid over the parts.
 	async function follow(item, opener) {
+		leaveReply()
 		if (item.kind === 'decision') return goTab('decisions')
 		if (item.go.way === 'learn') {
 			await goPage('architecture')
@@ -318,6 +339,7 @@ export function shellActions(app) {
 
 	// A tab of the Changes page: what waits on the reader with the decisions, or live mode.
 	async function goTab(tab) {
+		leaveReply()
 		state.chg.tab = tab
 		state.view = state.base = 'home'
 		if (shell.page !== 'changes') return goPage('changes')
@@ -462,6 +484,7 @@ export function shellActions(app) {
 	})
 
 	return {
+		leaveReply,
 		actions,
 		start,
 		back,

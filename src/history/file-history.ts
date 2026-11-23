@@ -14,6 +14,7 @@ export type History = {
 	file: string
 	// Oldest first.
 	list(): Promise<HistoryEntry[]>
+	find(id: string): Promise<HistoryEntry | undefined>
 	readSaved(): Promise<SavedAnswer[]>
 	add(entry: HistoryEntry): Promise<void>
 }
@@ -43,6 +44,19 @@ export async function openHistory(
 		})
 	}
 
+	// Saved entries never change. Keep two so another question on this branch can start without reading the file.
+	let recent: HistoryEntry[] = []
+	function remember(entry: HistoryEntry) {
+		recent = [entry, ...recent.filter((other) => other.id !== entry.id)].slice(0, 2)
+	}
+	async function find(id: string) {
+		const cached = recent.find((entry) => entry.id === id)
+		if (cached) return cached
+		const found = (await list()).find((entry) => entry.id === id)
+		if (found) remember(found)
+		return found
+	}
+
 	async function add(entry: HistoryEntry): Promise<void> {
 		await mkdir(path.dirname(file), { recursive: true })
 		// A line cut short by a crash would swallow the next one, so a file that does not end a line gets a newline.
@@ -51,6 +65,7 @@ export async function openHistory(
 		// One write per entry. Two clones that finish a question in the same moment append to the same file, and a single
 		// appended write keeps each line whole.
 		await appendFile(file, `${lead}${JSON.stringify(entry)}\n`)
+		remember(entry)
 	}
 
 	async function readSaved(): Promise<SavedAnswer[]> {
@@ -60,6 +75,7 @@ export async function openHistory(
 						{
 							id: entry.id,
 							askedAt: entry.askedAt,
+							...(entry.after && { after: entry.after }),
 							head: entry.head,
 							question: entry.question,
 							reply: entry.reply,
@@ -69,7 +85,7 @@ export async function openHistory(
 				: [],
 		)
 	}
-	return { kind: 'ok', history: { file, list, add, readSaved } }
+	return { kind: 'ok', history: { file, list, find, add, readSaved } }
 }
 
 async function lastByte(file: string): Promise<string> {

@@ -1,7 +1,7 @@
 // What ken holds, as the model's memory tools ask for it: what ken's model said of a concept, a named level, and every
 // thing to know of a saved brief or answer and every term, with the lines each quotes. Plain code over the layout, the
 // record and the reader's history, read again on each call, so it holds what was saved a moment ago.
-import type { Fact, Known, KnownLevel, Memory } from '../../agent/index.ts'
+import type { Fact, Known, KnownLevel, Memory, QuestionFocus } from '../../agent/index.ts'
 import type { History } from '../../history/index.ts'
 import { type LayoutSources, lookAtLayout, readerPart, readLayoutAsk } from '../../layout/index.ts'
 import { sameName } from '../../record/index.ts'
@@ -96,5 +96,34 @@ export function memoryOf(layout: LayoutSources, reads: ReturnType<typeof concept
 		return [...[...parts.values()].flat(), ...answers, ...terms]
 	}
 
-	return { known, level, facts, readerPart: (question, record, signal) => readerPart(layout, question, record, signal) }
+	return {
+		known,
+		level,
+		facts,
+		async readerPart(question, record, signal) {
+			const found = await readerPart(layout, question, record, signal)
+			if (!found) return null
+			const { name, commit, within, reader, source, neighbor } = found
+			const part = { name, id: partId(within, name) }
+			const focus: QuestionFocus = source
+				? { part, commit, path: source.path, start: 1, end: source.end }
+				: { part, commit, view: 'parts', concepts: [part.id], earlier: found.earlier }
+			const lines = [
+				reader ? `Reader's map for ${name}: ${reader}` : '',
+				`The layout at ${found.drawnAt.slice(0, 7)} names this part ${JSON.stringify(name)}. Open ${part.id} with memory_known for more.`,
+				neighbor
+					? `Another part in the same layout is ${JSON.stringify(neighbor.name)}. Its path ${JSON.stringify(neighbor.path)} exists at this commit.`
+					: '',
+				neighbor?.source
+					? `Ken also read lines 1 to ${neighbor.source.end} of ${JSON.stringify(neighbor.path)} at ${commit}:\n${neighbor.source.text}`
+					: '',
+				neighbor?.arrow ? `The saved layout connects them: ${JSON.stringify(neighbor.arrow)}.` : '',
+				source
+					? `Ken read ${JSON.stringify(source.path)} at ${commit}. Lines 1 to ${source.end} are quoted as data:\n${source.text}`
+					: '',
+				'Base your explanation and next reading suggestion on this evidence. Check other files before suggesting them. Use show to quote the relevant lines.',
+			]
+			return { focus, text: lines.filter(Boolean).join('\n') }
+		},
+	}
 }

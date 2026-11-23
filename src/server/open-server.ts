@@ -3,6 +3,7 @@ import { MODEL_EXAMPLE, type ModelFlags } from '../agent/index.ts'
 import { layoutDraft } from '../diagram/index.ts'
 import { readFirstLook, sizeOf } from '../first-look/index.ts'
 import { authorsOf, decide, openItems, sinceChoices, timeRange } from '../follow-up/index.ts'
+import { readerQuestions } from '../history/index.ts'
 import type { JobView, Left } from '../jobs/index.ts'
 import {
 	type ChangeChoice,
@@ -82,8 +83,7 @@ export async function openServer(options: {
 	// levels are the words for what ken thinks the reader knows of a box, weakest first.
 	async function layoutView(ask: LayoutAsk) {
 		const now = new Date()
-		// A note ken wrote by itself in live mode is not a question the reader asked.
-		const questions = (await history.list()).filter((entry) => entry.about === undefined)
+		const questions = readerQuestions(await history.list())
 		const visit = lastVisit((await seen.read()).lines, now)
 		const [look, since, choices] = await Promise.all([
 			lookAtLayout(layout, ask, now),
@@ -96,7 +96,7 @@ export async function openServer(options: {
 		const isTop = ask.within.length === 0 && ask.change === null && ask.at === look.head
 		const top = isTop ? look : await lookAtLayout(layout, { at: look.head, within: [], change: null, own }, now)
 		const [wayIn, told, { sizes }] = await Promise.all([
-			suggestWayIn(layout, { history, questions, visit, spans: since, own, top }, now),
+			suggestWayIn(layout, { questions, visit, spans: since, own, top }, now),
 			reads.levelTold(look),
 			firstLookAt(look.head),
 		])
@@ -409,7 +409,7 @@ async function readJson(
 // Two of the three buttons under an answer, "I do not know this any more" on the map, and a tour stop the reader
 // reached. "Go deeper" asks a question, so it comes as a lens, and a question marks its topics itself, so the page
 // never sends "asked".
-const BUTTONS: MapSignal[] = ['know', 'too-much', 'forgot', 'toured']
+const BUTTONS: MapSignal[] = ['know', 'too-much', 'usual', 'forgot', 'toured']
 
 function mapSignalOf(
 	body: unknown,

@@ -407,6 +407,29 @@ html {
 	clip-path: inset(50%);
 }
 
+.composer.is-follow-up .composer-target {
+	display: flex;
+	align-items: baseline;
+	gap: var(--space-3);
+	margin-bottom: var(--space-2);
+	font-size: var(--text-note);
+}
+
+.composer.is-follow-up .composer-label {
+	position: static;
+	width: auto;
+	height: auto;
+	clip-path: none;
+	display: -webkit-box;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 2;
+	overflow-wrap: anywhere;
+}
+
+.composer-target .link {
+	flex: none;
+}
+
 .composer-row {
 	display: flex;
 	gap: var(--space-2);
@@ -525,6 +548,12 @@ html {
 	line-height: var(--leading-tight);
 	letter-spacing: -0.02em;
 	overflow-wrap: anywhere;
+}
+
+.question a {
+	color: inherit;
+	text-decoration-thickness: 1px;
+	text-underline-offset: 0.14em;
 }
 
 .moved {

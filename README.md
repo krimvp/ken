@@ -51,6 +51,10 @@ New to a project, or back after weeks away? ken's Architecture page shows the pr
 
 Open the page again later and the briefs are there with no model. When you open a saved explanation, ken checks its quoted lines against the current commit. If it cannot find them, the brief names the file and offers **Update this brief**. You can still read the original quotes. Press a block a second time to go inside it: its own parts, then its files, and once its parts are named they can be explained too.
 
+To follow a value into another part, open a named JavaScript or TypeScript export and choose **Find uses**. ken looks for single-line relative imports and shows examples from those files at the revision you opened. You can follow each line with the model off.
+
+When you return, open an earlier answer to ask a follow-up about it, or choose **New subject** to start fresh. If you were reviewing a change, Home shows the files you still have to read at that revision.
+
 ## What ken gives you
 
 - **A colleague who shows the lines.** The model's words are its own, and ken does not check them. A boxed card is a claim, a decision, a risk, a diagram or a topic, with the lines of code, the commit message or the saved session it quotes. ken finds every quoted line where the quote says it is. A card with a quote that is not there goes back to the model alone, and you never see it; the rest of the reply stands. ken checks where a quote is, not whether a sentence is true. Every arrow in a diagram quotes its lines.

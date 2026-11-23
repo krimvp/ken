@@ -5,7 +5,7 @@ import { type MapRead, type Prefs, prefsLine, type ReaderNote, stateLine } from 
 
 export function readerIndex(read: MapRead, notes: ReaderNote[], prefs: Prefs): string {
 	const told = [...notesLines(notes), '', `How much text the reader chose: ${prefsLine(prefs)}`]
-	const met = read.states.filter((state) => state.kind !== 'never-met')
+	const met = read.states.filter((state) => state.kind !== 'never-met' || state.shorterSince)
 	if (met.length === 0) {
 		return ['The reader has no recorded familiarity with the topics shown above.', ...told].join('\n')
 	}

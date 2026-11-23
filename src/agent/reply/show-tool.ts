@@ -87,12 +87,13 @@ export type Round = {
 // or the files whose quoted lines changed since its brief), and typed is true when the reader typed it.
 // view: the reader asked, in the words of text, for another way to show the level whose paths are within. parts: the
 // main parts of a level, named from what ken wrote of it. views: the drawings of where the project runs.
-export type QuestionFocus =
+export type QuestionFocus = (
 	| { path: string; commit: string; start: number; end: number }
 	| { view: 'parts' | 'world' | 'runtime'; commit: string; concepts: string[]; earlier: boolean }
+) & { part?: { id: string; name: string } }
 
 export type Asking =
-	| { kind: 'question'; focus?: QuestionFocus }
+	| { kind: 'question'; focus?: QuestionFocus; after?: { id: string; thread: string; opening: string } | null }
 	| { kind: 'parts'; within: string[]; parts: { name: string; paths: string[] }[] }
 	| { kind: 'views' }
 	| { kind: 'note' }

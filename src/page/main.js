@@ -6,13 +6,14 @@
 import { VIEWS_RUN } from './arch-views/switch.js'
 import { archActions, freshArch } from './architecture/arch-actions.js'
 import { askActions, freshAsk } from './ask/ask-actions.js'
+import { openingRows, threadGaps, threadId } from './ask/thread-window.js'
 import { briefActions, freshBrief } from './brief/brief-actions.js'
 import { briefStore } from './brief/briefs.js'
 import { partId } from './brief/concept-id.js'
 import { changeActions, freshChanges } from './changes/change-actions.js'
 import { fillDrawings, markPart, numberAt } from './draw-diagrams.js'
 import { freshJobs, jobsActions } from './jobs/jobs.js'
-import { readReply, replyAddress } from './level/address.js'
+import { replyAddress } from './level/address.js'
 import { levelActions } from './level/level-actions.js'
 import { freshHome } from './level/level-state.js'
 import { DOING as LEVEL_RUNS } from './level/runs.js'
@@ -87,6 +88,7 @@ const state = {
 	// question in it whose checks the panel shows.
 	thread: [],
 	open: null,
+	replyTo: undefined,
 	running: null,
 	menuOpen: false,
 	lensesOpen: false,
@@ -183,6 +185,9 @@ function fromView(view) {
 // model's text shows as it types; when its turn ends, ken files it as a step or as words of the reply.
 function addEvent(q, event) {
 	switch (event.kind) {
+		case 'focus':
+			q.focus = event.focus
+			break
 		case 'text':
 			q.typing += event.delta
 			break
@@ -229,13 +234,14 @@ function addEvent(q, event) {
 // What the server answers, whether or not it is ok. It throws only when the server sends no answer at all, or none
 // within READ_MS: a read that never ends would leave the page waiting for good.
 const READ_MS = 30_000
-async function read(url) {
-	const response = await fetch(url, { signal: AbortSignal.timeout(READ_MS) })
+async function read(url, signal) {
+	const timeout = AbortSignal.timeout(READ_MS)
+	const response = await fetch(url, { signal: signal ? AbortSignal.any([signal, timeout]) : timeout })
 	return { ok: response.ok, body: await response.json(), status: response.status }
 }
 
-async function getJson(url) {
-	const { ok, body, status } = await read(url)
+async function getJson(url, signal) {
+	const { ok, body, status } = await read(url, signal)
 	if (!ok) throw new Error(body.message ?? `${url} answered ${status}`)
 	return body
 }
@@ -264,11 +270,14 @@ async function send(body, onHome = null) {
 			? CHANGE_TITLES[lens.want]
 			: LENS_TITLES[lens.kind]
 	if (question === '' || state.running || state.model?.kind !== 'ok') return
-	const { thread } = state.model
+	if (onHome === null) shell.leaveReply()
+	const parent = body.after && state.rows.find((row) => row.id === body.after)
+	const thread = body.after === null ? null : parent ? threadId(parent) : state.model.thread
 	const q = {
 		id: null,
 		question,
 		focus: body.focus,
+		after: body.after,
 		askedAt: new Date().toISOString(),
 		head: null,
 		headNow: null,
@@ -287,13 +296,17 @@ async function send(body, onHome = null) {
 	let saved = null
 	try {
 		if (onHome === null) {
-			// A question joins the chat ken talks in now, so the page shows that chat's thread with it at the end.
-			if (state.thread[0]?.thread !== thread) {
-				state.thread = await threadOf(thread)
+			// Show the thread the reader chose, or an empty one for a new subject.
+			if (body.after === null) {
+				state.thread = []
+				state.ui = freshUi()
+			} else if ((state.thread[0]?.thread ?? state.thread[0]?.id) !== thread) {
+				state.thread = await threadOf(thread, body.after)
 				state.ui = freshUi()
 			}
 			state.thread = [...state.thread, q]
 			state.open = picked = q
+			state.replyTo = undefined
 			state.menuOpen = false
 			state.ask.open = false
 			state.view = state.base = 'question'
@@ -329,7 +342,10 @@ async function send(body, onHome = null) {
 				if (picked === q) picked = saved
 				if (state.open === q) {
 					state.open = saved
-					if (state.view === 'question') addressReply(saved.id)
+					if (state.view === 'question') {
+						state.replyTo = saved.reply && !saved.about ? saved : null
+						addressReply(saved.id)
+					}
 				}
 			} else {
 				addEvent(q, event)
@@ -397,19 +413,81 @@ async function loadFollowUp() {
 	}
 }
 
-// The saved questions of one thread, oldest first.
-async function threadOf(thread) {
-	const rows = state.rows.filter((row) => row.thread === thread)
-	const views = await Promise.all(rows.map((row) => getJson(`/api/questions/${encodeURIComponent(row.id)}`)))
-	return views.map(fromView)
+function rowsOfThread(thread) {
+	return state.rows.filter((row) => threadId(row) === thread)
 }
 
-// A question opens in its thread. One saved before ken kept threads stands alone.
+function readTurns(rows, signal) {
+	return Promise.all(rows.map((row) => getJson(`/api/questions/${encodeURIComponent(row.id)}`, signal).then(fromView)))
+}
+
+function threadOf(thread, selected, signal) {
+	return readTurns(openingRows(rowsOfThread(thread), selected), signal)
+}
+
+let replyRead = null
+function cancelReply() {
+	replyRead?.abort()
+	replyRead = null
+}
+
+// A Back, Forward, or another selection can land while the chosen reply is still coming from disk.
 async function openQuestion(id) {
-	const q = fromView(await getJson(`/api/questions/${encodeURIComponent(id)}`))
-	state.thread = q.thread ? await threadOf(q.thread) : [q]
-	state.open = state.thread.find((each) => each.id === id) ?? q
-	state.ui = freshUi()
+	cancelReply()
+	const reader = new AbortController()
+	replyRead = reader
+	const place = location.hash
+	const row = state.rows.find((each) => each.id === id)
+	try {
+		const turns = row ? await threadOf(threadId(row), id, reader.signal) : await readTurns([{ id }], reader.signal)
+		if (reader.signal.aborted || location.hash !== place) return false
+		state.thread = turns
+		state.open = turns.at(-1)
+		state.ui = freshUi()
+		return true
+	} catch (error) {
+		if (reader.signal.aborted) return false
+		throw error
+	} finally {
+		if (replyRead === reader) replyRead = null
+	}
+}
+
+let pageRead = null
+
+function gapsOfThread() {
+	const first = state.thread[0]
+	return first ? threadGaps(rowsOfThread(threadId(first)), state.thread) : new Map()
+}
+
+async function readPage(el) {
+	const shown = state.thread
+	if (state.running || (pageRead?.shown === shown && !pageRead.error)) return
+	const pos = Number(el.dataset.turn)
+	const rows = gapsOfThread().get(pos)
+	if (!rows?.length) return
+	pageRead = { shown, pos, error: null }
+	render()
+	let read
+	try {
+		read = await readTurns(rows)
+	} catch (error) {
+		if (state.thread === shown) {
+			pageRead = { shown, pos, error: error.message }
+			render()
+		}
+		return
+	}
+	if (state.thread !== shown || state.view !== 'question' || state.running) {
+		if (pageRead?.shown === shown) pageRead = null
+		return
+	}
+	pageRead = null
+	state.thread = [...shown.slice(0, pos), ...read, ...shown.slice(pos)]
+	// A drawer or diagram key containing a turn number would name a different card after an insertion.
+	if (pos < shown.length) state.ui = { ...freshUi(), changeLooks: state.ui.changeLooks }
+	render()
+	$(`#turn-${pos} .question`)?.focus()
 }
 
 // ---- Rendering ----
@@ -431,6 +509,7 @@ function rowMeta(row) {
 		incomplete: 'No checked brief',
 		partial: 'Some parts still need a brief',
 		error: "ken's model did not reply",
+		'tool-proposal': 'No answer',
 		'no-answer': "ken's model gave no reply",
 		'out-of-turns': "ken's model ran out of turns",
 	}[row.outcome]
@@ -445,7 +524,7 @@ function rowMeta(row) {
 function rowHtml(row) {
 	const current = state.open?.id === row.id
 	return `<button class="row" data-act="open" data-id="${esc(row.id)}" data-key="menu-${esc(row.id)}"${current ? ' aria-current="true"' : ''}>
-		<span class="row-q">${esc(firstLine(row.question))}</span><span class="row-meta">${current ? 'Open now · ' : ''}${rowMeta(row)}</span></button>`
+		<span class="row-q">${esc(firstLine(row.question))}</span><span class="row-meta">${current ? 'Open now · ' : ''}${row.background ? 'Prepared by ken · ' : ''}${rowMeta(row)}</span></button>`
 }
 
 // A lens's question is a line the reader asked and the list ken wrote under it. A question on a live note saved before
@@ -500,6 +579,7 @@ function runLine(q, t, ui) {
 }
 
 function turnHtml(q, t, ui) {
+	const parent = q.after && state.thread[t - 1]?.id !== q.after && state.rows.find((row) => row.id === q.after)
 	const seconds = () => (Date.now() - state.running.started) / 1000
 	const working = q.live ? workingHtml(q, t, ui.openSteps.has(t), seconds()) : ''
 	let body
@@ -509,8 +589,9 @@ function turnHtml(q, t, ui) {
 	} else if (q.live) body = working
 	else body = runLine(q, t, ui) + endedHtml(q, t)
 	return `<article class="turn" id="turn-${t}">
-		<p class="asked">You asked ${when(q.askedAt)}<span class="described-note">What ken checked for this reply is on the right.</span></p>
-		${questionHtml(q.question, ui)}
+		<p class="asked">${q.background || q.about ? 'ken prepared this' : 'You asked'} ${when(q.askedAt)}<span class="described-note">What ken checked for this reply is on the right.</span></p>
+		${parent ? `<p class="small muted">In reply to <a href="${esc(replyAddress(parent.id))}">${esc(firstLine(parent.question))}</a></p>` : ''}
+		${questionHtml(q.question, ui, q.id)}
 		${focusHtml(q)}
 		${movedHtml(q, t)}
 		${body}
@@ -519,29 +600,33 @@ function turnHtml(q, t, ui) {
 
 function focusHtml(q) {
 	if (!q.focus) return ''
+	const part = q.focus.part
+	const partLink = part
+		? `<p><a href="${esc(writePlace({ page: 'home', brief: part.id }))}">Open ${esc(part.name)} in the project layout</a></p>`
+		: ''
 	const label = esc(focusLabel(q.focus))
-	if (!('path' in q.focus)) return `<p class="muted">About ${label}</p>`
+	if (!('path' in q.focus)) return partLink || `<p class="muted">About ${label}</p>`
 	const { path, commit, start } = q.focus
-	const address = writePlace({
-		page: 'home',
-		brief: partId([path], path),
-		on: 'source',
-		source: { path, commit, line: start },
-	})
-	return `<p class="muted"><a href="${esc(address)}">Read ${label}</a></p>`
+	const place = { page: 'home', brief: partId([path], path), on: 'source', source: { path, commit, line: start } }
+	const find =
+		q.outcome === 'tool-proposal' && /\.[cm]?[jt]sx?$/i.test(path)
+			? writePlace({ ...place, source: { ...place.source, uses: `@${q.focus.end}` } })
+			: null
+	return `${partLink}<p class="muted"><a href="${esc(writePlace(place))}">Read ${label}</a></p>${find ? `<p><a href="${esc(find)}">Find uses in the source</a></p>` : ''}`
 }
 
 // A lens's question is its first line and the list ken wrote under it, each item a line that starts with "- ". Any
 // other line is for the agent alone, such as where ken keeps a snapshot. The list folds to one line.
-function questionHtml(question, ui) {
+function questionHtml(question, ui, id) {
 	const [, ...listed] = question.split('\n')
-	const first = firstLine(question)
+	const first = prose(firstLine(question))
+	const heading = id && id !== state.replyTo?.id ? `<a href="${esc(replyAddress(id))}">${first}</a>` : first
 	const items = listed.filter((line) => line.startsWith('- ')).map((line) => `<li>${prose(line.slice(2))}</li>`)
 	const fold =
 		items.length === 0
 			? ''
 			: `<p class="asked-fold"><button class="link small" data-act="added" data-key="added" aria-expanded="${ui.addedOpen}">${ui.addedOpen ? 'Hide what ken added' : `What ken added to your question, from git (${count(items.length, 'line', 'lines')})`}</button></p>${ui.addedOpen ? `<ul class="asked-list">${items.join('')}</ul>` : ''}`
-	return `<h2 class="question">${prose(first)}</h2>${fold}`
+	return `<h2 class="question" tabindex="-1" data-key="question-${esc(id ?? 'running')}">${heading}</h2>${fold}`
 }
 
 // One notice for a reply older than HEAD. When a topic it names changed since the reader understood it, the notice
@@ -564,7 +649,18 @@ function threadHtml() {
 		return `<div class="notice" role="alert"><h3>ken did not answer</h3><p>${esc(state.problem)}</p></div>`
 	if (!q) return ''
 	const back = '<button class="link" data-act="back-page" data-key="back-home">Back to the page</button>'
-	return `<p class="back-home">${back}</p><p class="legend">${LEGEND}</p>${state.thread.map((each, t) => turnHtml(each, t, state.ui)).join('')}`
+	const gaps = gapsOfThread()
+	const page = (pos) => {
+		const next = gaps.get(pos)
+		if (!next) return ''
+		const active = pageRead?.shown === state.thread && pageRead.pos === pos
+		const label = pos === 0 ? 'Show earlier answers' : 'Show later answers'
+		const busy = pageRead?.shown === state.thread && !pageRead.error
+		const problem = active && pageRead.error ? `<span role="alert">${esc(pageRead.error)}</span>` : ''
+		return `<p class="thread-page"><button class="link" data-act="read-page" data-turn="${pos}" data-key="read-page-${pos}" aria-controls="thread"${state.running || busy ? ' disabled' : ''}>${active && busy ? 'Reading answers...' : label}</button> ${problem}</p>`
+	}
+	const turns = state.thread.map((each, pos) => page(pos) + turnHtml(each, pos, state.ui)).join('')
+	return `<p class="back-home">${back}</p><p class="legend">${LEGEND}</p>${turns}${page(state.thread.length)}`
 }
 
 function panelHtml() {
@@ -696,11 +792,17 @@ function render() {
 	const canAsk = state.model?.kind === 'ok'
 	$('#ask').hidden = !canAsk || state.view !== 'question'
 	$('#send').disabled = state.running !== null
+	const target = state.replyTo
+	const label = $('#ask label')
+	label.textContent = target ? `Follow up on "${firstLine(target.question)}"` : 'Your question'
+	label.title = label.textContent
+	$('#ask').classList.toggle('is-follow-up', Boolean(target))
+	$('#new-subject').hidden = !target
 	// The area box is drawn again with the rest, so what the reader typed in it is carried over.
 	const typed = [...document.querySelectorAll('.area-form input')].find((input) => input.value !== '')?.value ?? ''
 	const pick = lensPick()
 	// Under an answer the lenses fold behind one line, so the end of an answer is not a wall of forms.
-	const tucked = `<div class="lens-fold"><button class="link" data-act="lenses" data-key="lenses" aria-expanded="${state.lensesOpen}">Or let ken write the question</button>${state.lensesOpen ? lensHtml('ask', pick) : ''}</div>`
+	const tucked = `<div class="lens-fold"><button class="link" data-act="lenses" data-key="lenses" aria-expanded="${state.lensesOpen}">${state.lensesOpen ? 'Hide question ideas' : 'Show question ideas'}</button>${state.lensesOpen ? lensHtml('ask', pick) : ''}</div>`
 	$('#after').innerHTML =
 		state.model?.kind === 'unset'
 			? noModelHtml(state.model, state.rows.length > 0, q !== null)
@@ -708,7 +810,11 @@ function render() {
 				? tucked
 				: ''
 	for (const input of document.querySelectorAll('.area-form input')) input.value = typed
-	$('#question').placeholder = ui.wide ? 'Ask what changed, why, or how a part works.' : 'Ask what changed, and why.'
+	$('#question').placeholder = target
+		? 'Ask a follow-up question'
+		: ui.wide
+			? 'Ask what changed, why, or how a part works.'
+			: 'Ask what changed, and why.'
 	panel.innerHTML = panelHtml()
 	panel.scrollTop = scroll
 	watchTurns()
@@ -1009,7 +1115,7 @@ async function followUpSaved(save, said) {
 }
 
 // The page as its modules see it. Each takes what it needs from here, and the modules made later are added to it.
-const app = { state, render, read, post, send, stored, store, fromView }
+const app = { state, render, read, post, send, stored, store, fromView, cancelReply }
 app.prefs = readerPrefs(app)
 state.shell = freshShell(app.prefs.prefs)
 app.briefs = briefStore(app)
@@ -1087,7 +1193,8 @@ function addressReply(id) {
 }
 
 async function showReply(id) {
-	await openQuestion(id)
+	if (!(await openQuestion(id))) return false
+	state.replyTo = state.open?.reply && !state.open.about ? state.open : null
 	state.ask.open = false
 	state.menuOpen = false
 	state.view = state.base = 'question'
@@ -1095,7 +1202,8 @@ async function showReply(id) {
 	if (!brief.close()) render()
 	const turn = `#turn-${state.thread.indexOf(state.open)}`
 	$(turn)?.scrollIntoView({ block: 'start' })
-	$(`${turn} .q-row, ${turn} button`)?.focus({ preventScroll: true })
+	$(`${turn} .question`)?.focus({ preventScroll: true })
+	return true
 }
 
 const actions = {
@@ -1110,7 +1218,14 @@ const actions = {
 	...jobs.actions,
 	// What waits on the reader, the record's decisions and live mode are tabs of the Changes page now.
 	'follow-up': () => shell.goTab('decisions'),
+	'read-page': readPage,
+	'new-subject'() {
+		state.replyTo = null
+		render()
+		$('#question').focus()
+	},
 	'back-page'() {
+		shell.leaveReply()
 		state.view = state.base = 'home'
 		render()
 		$('[aria-current="page"]')?.focus()
@@ -1154,7 +1269,10 @@ const actions = {
 	'map-too-much': (el) => postMap('too-much', Number(el.dataset.turn)),
 	'map-deeper'(el) {
 		const q = state.thread[Number(el.dataset.turn)]
-		void send({ lens: { kind: 'deeper', topics: q.reply.topics, question: firstLine(q.question) } })
+		void send({
+			lens: { kind: 'deeper', topics: q.reply.topics, question: firstLine(q.question) },
+			...(q.id && { after: q.id }),
+		})
 	},
 	// ken's server writes the question, so it names the change as every question about it does.
 	chip(el) {
@@ -1177,14 +1295,15 @@ const actions = {
 	// An opened reply is a new entry in the browser's history, so Back goes to where the reader was and a reload
 	// opens the reply again.
 	async open(el) {
-		await showReply(el.dataset.id)
-		addressReply(el.dataset.id)
+		shell.leaveReply()
+		if (await showReply(el.dataset.id)) addressReply(el.dataset.id)
 	},
 	async 'open-running'() {
+		shell.leaveReply()
 		state.menuOpen = false
 		state.view = state.base = 'question'
 		const { q } = state.running
-		if (!state.thread.includes(q)) state.thread = [...(await threadOf(q.thread)), q]
+		if (!state.thread.includes(q)) state.thread = [...(await threadOf(q.thread, q.after)), q]
 		state.open = picked = q
 		state.ui = freshUi()
 		render()
@@ -1249,7 +1368,11 @@ const actions = {
 	},
 	again: (el) => {
 		const q = state.thread[Number(el.dataset.turn)]
-		return send(q.retry ? { lens: q.retry } : { question: q.question, focus: q.focus })
+		return send(
+			q.retry
+				? { lens: q.retry }
+				: { question: q.question, ...(q.after !== undefined ? { after: q.after } : { focus: q.focus }) },
+		)
 	},
 	stop() {
 		state.running?.controller.abort()
@@ -1331,7 +1454,7 @@ function resizeBox() {
 
 $('#ask').addEventListener('submit', (event) => {
 	event.preventDefault()
-	void send({ question: $('#question').value })
+	void send({ question: $('#question').value, after: state.replyTo?.id ?? state.replyTo })
 })
 
 document.addEventListener('submit', (event) => {
@@ -1383,7 +1506,7 @@ document.addEventListener('change', (event) => {
 $('#question').addEventListener('keydown', (event) => {
 	if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
 		event.preventDefault()
-		void send({ question: $('#question').value })
+		$('#ask').requestSubmit()
 	}
 })
 
@@ -1482,9 +1605,8 @@ try {
 	// The saved questions come first, since a page finds its stored replies among them. The place the address names
 	// is read while the rest comes, so the first page does not wait on the server's state.
 	const reads = Promise.all([getJson('/api/state'), getJson('/api/authors'), loadFollowUp()])
-	const reply = readReply(location.hash)
 	await loadRows()
-	const started = shell.start()
+	const started = shell.start(showReply)
 	const [server, recent] = await reads
 	state.project = { name: server.name, folder: server.project }
 	state.home.project = server.name
@@ -1497,7 +1619,6 @@ try {
 	render()
 	// An address that names a reply opens it over the pages. A reply ken no longer has leaves the Home page.
 	await started
-	if (reply) await actions.open({ dataset: { id: reply } }).catch(() => {})
 } catch (error) {
 	state.home.problem = {
 		message: `ken did not answer at this address (${error.message}). Run \`ken open\` again.`,

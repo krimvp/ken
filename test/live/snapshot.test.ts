@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -29,7 +30,7 @@ function fingerprint(root: string, keep: (name: string) => boolean) {
 }
 
 test('a snapshot of uncommitted work reads back through the repository and passes the quote check, and the project does not change', async () => {
-	const { root } = buildRepository([
+	const { root, hashes } = buildRepository([
 		{
 			message: 'feat: retry',
 			files: { 'src/retry.ts': RETRY, 'notes.md': '# notes\n', '.gitignore': '*.log\n' },
@@ -37,17 +38,18 @@ test('a snapshot of uncommitted work reads back through the repository and passe
 	])
 	const home = mkdtempSync(path.join(tmpdir(), 'ken-home-'))
 	after(() => rmSync(home, { recursive: true, force: true }))
+	const repo = gitRepository(root)
+	const store = await openSnapshots(home, repo, root)
+	writeFileSync(path.join(root, 'logo.png'), Buffer.from([137, 80, 78, 71, 0, 0, 1]))
+	writeFileSync(path.join(root, 'dump.txt'), 'x'.repeat(1024 * 1024 + 1))
+	assert.deepEqual(await takeSnapshot(store, repo, root), { kind: 'clean', head: hashes[0], leftOut: 2 })
 	writeFileSync(path.join(root, 'src/retry.ts'), RETRY.replace('attempt()', 'attempt(i)'))
 	writeFileSync(path.join(root, 'src/wait.ts'), 'export const WAIT_MS = 100\n')
 	unlinkSync(path.join(root, 'notes.md'))
 	writeFileSync(path.join(root, 'debug.log'), 'ignored\n')
-	writeFileSync(path.join(root, 'logo.png'), Buffer.from([137, 80, 78, 71, 0, 0, 1]))
-	writeFileSync(path.join(root, 'dump.txt'), 'x'.repeat(1024 * 1024 + 1))
 	const gitBefore = fingerprint(path.join(root, '.git'), () => true)
 	const treeBefore = fingerprint(root, (name) => !name.startsWith('.git/') && name !== '.git')
 
-	const repo = gitRepository(root)
-	const store = await openSnapshots(home, repo, root)
 	const first = await takeSnapshot(store, repo, root)
 	if (first.kind !== 'taken') return assert.fail(`ken took no snapshot: ${first.kind}`)
 
@@ -85,5 +87,28 @@ test('a snapshot of uncommitted work reads back through the repository and passe
 		fingerprint(path.join(root, '.git'), () => true),
 		gitBefore,
 		'still unchanged after a second one',
+	)
+})
+
+test('two worktrees opened at the same time each return their own uncommitted code', async (t) => {
+	const { root } = buildRepository([{ message: 'Start', files: { 'main.ts': 'original' } }])
+	const home = mkdtempSync(path.join(tmpdir(), 'ken-home-'))
+	after(() => rmSync(home, { recursive: true, force: true }))
+	const other = path.join(home, 'other')
+	execFileSync('git', ['worktree', 'add', '--quiet', '--detach', other], { cwd: root })
+	const repo = gitRepository(root)
+	const store = await openSnapshots(home, repo, root)
+	const pathInRepo = parsePath('main.ts')
+	if (pathInRepo.kind !== 'ok') return assert.fail(pathInRepo.reason)
+	const trees = [root, other]
+	for (const tree of trees) writeFileSync(path.join(tree, 'main.ts'), tree)
+	t.mock.method(Date, 'now', () => 1)
+	await Promise.all(
+		[...trees, ...trees, ...trees].map(async (tree) => {
+			const result = await takeSnapshot(store, gitRepository(tree), tree)
+			if (result.kind !== 'taken') return assert.fail(result.kind)
+			const files = gitRepository(tree, { alternate: store.objects })
+			assert.deepEqual(await files.readFile(result.commit, pathInRepo.path), { kind: 'ok', text: tree })
+		}),
 	)
 })

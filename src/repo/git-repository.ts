@@ -1,6 +1,6 @@
 import { lstat, readFile } from 'node:fs/promises'
 import path from 'node:path'
-import { parseDiff } from './parse-diff.ts'
+import { parseDiff, parseNumstat } from './parse-diff.ts'
 import type { BlameLine, Commit, CommitHash, ObjectId, Repository, SearchMatch, Uncommitted } from './repository.ts'
 import { MAX_OUTPUT_BYTES, runGit } from './run-git.ts'
 
@@ -42,9 +42,16 @@ export function gitRepository(root: string, options: { alternate?: string } = {}
 			return { kind: 'ok', commit: hash as CommitHash }
 		},
 
-		async readFile(commit, path, signal) {
-			const run = await git(['cat-file', 'blob', `${commit}:${path}`], signal)
-			if (run.kind === 'too-large') return tooLarge
+		async readFile(commit, path, signal, maxBytes = MAX_OUTPUT_BYTES) {
+			const run = await runGit(
+				root,
+				['cat-file', 'blob', `${commit}:${path}`],
+				signal,
+				options.alternate ?? null,
+				'',
+				maxBytes,
+			)
+			if (run.kind === 'too-large') return { kind: 'too-large', limitBytes: maxBytes }
 			if (run.kind === 'failed') return { kind: 'no-file', path, commit }
 			return { kind: 'ok', text: run.stdout }
 		},
@@ -71,9 +78,21 @@ export function gitRepository(root: string, options: { alternate?: string } = {}
 			return { kind: 'ok', lines }
 		},
 
-		async search(commit, pattern, signal) {
+		async search(commit, pattern, signal, paths) {
 			if (pattern.includes('\0')) return { kind: 'bad-pattern', message: 'the pattern holds a NUL byte' }
-			const args = ['grep', '-n', '-z', '-I', '--no-color', '--no-column', '-E', '-e', pattern, commit, '--']
+			const args = [
+				'grep',
+				'-n',
+				'-z',
+				'-I',
+				'--no-color',
+				'--no-column',
+				'-E',
+				'-e',
+				pattern,
+				commit,
+				...(paths ? literalPaths(paths) : ['--']),
+			]
 			const run = await git(args, signal)
 			if (run.kind === 'too-large') return tooLarge
 			// git grep exits 1 when nothing matches and 128 when the pattern does not compile.
@@ -231,6 +250,16 @@ export function gitRepository(root: string, options: { alternate?: string } = {}
 			return HASH.test(hash) ? (hash as CommitHash) : null
 		},
 
+		async diffFiles({ base, head }, signal) {
+			const run = await git(
+				['diff', '--numstat', '-z', '-M', '--no-ext-diff', '--no-textconv', base, head, ...OUTSIDE_RECORD],
+				signal,
+			)
+			if (run.kind === 'too-large') return tooLarge
+			if (run.kind === 'failed') throw new Error(`git diff failed on resolved commits ${base} and ${head}`)
+			return { kind: 'ok', files: parseNumstat(run.stdout) }
+		},
+
 		async diff({ base, head }, signal, within = []) {
 			const args = ['-M', '--no-color', '--no-ext-diff', '--no-textconv', base, head]
 			let paths = OUTSIDE_RECORD
@@ -384,7 +413,7 @@ function parseLog(stdout: string): Commit[] {
 				.split('\x1f')
 				.map((value) => value.trim())
 				.filter((value) => value !== '')
-			const parentList = parents.split(' ').filter((parent) => parent !== '')
+			const parentList = parents.split(' ').filter((parent): parent is CommitHash => HASH.test(parent))
 			// git printed the hash itself, so it names a commit.
 			const commit = hash as CommitHash
 			return { hash: commit, parents: parentList, author, email, date: isoDate(time), subject, coAuthors, paths }

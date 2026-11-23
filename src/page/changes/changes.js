@@ -117,14 +117,18 @@ function blocksHtml(look) {
 	return `<div class="k-chg-map" style="--cols:${placed.cols};--rows:${placed.rows}"><svg viewBox="0 0 ${placed.cols * 100} ${placed.rows * 100}" preserveAspectRatio="none" aria-hidden="true">${lines.join('')}</svg>${blocks.join('')}</div>${loose}`
 }
 
-// The files a step shows only part of: their lines in the step beside all the change did to them. files are the
-// step's own counts.
-export function shownInPart(look, files) {
+// Compare the step's displayed lines with the whole change. A file with no known total cannot count as reviewed.
+export function stepCoverage(look, files) {
 	const all = look.boxes.flatMap((box) => box.touched?.paths ?? [])
-	return files.flatMap((file) => {
+	const partial = []
+	const complete = []
+	for (const file of files) {
 		const whole = all.find((each) => each.path === file.path)
-		return whole && (whole.added > file.added || whole.removed > file.removed) ? [{ ...file, whole }] : []
-	})
+		if (!whole) continue
+		if (whole.added === file.added && whole.removed === file.removed) complete.push(file.path)
+		else partial.push({ ...file, whole })
+	}
+	return { partial, complete }
 }
 
 // The story and the steps of the change on show, from what ken's model said of it before, or the offers to ask.
@@ -147,7 +151,7 @@ function storyHtml(home, env) {
 		const removed = files.reduce((sum, file) => sum + file.removed, 0)
 		const where =
 			parts.length > 0 ? `<span class="k-sw ${partClass(parts[0])}"></span>${esc(parts.join(', '))}` : 'In no part'
-		const part = shownInPart(look, files).map((file) => file.path.split('/').at(-1))
+		const part = stepCoverage(look, files).partial.map((file) => file.path.split('/').at(-1))
 		const some = part.length > 0 ? `, part of ${esc(part.join(', '))}` : ''
 		return `<li><button class="k-chg-step" data-act="chg-step" data-n="${step.number}" data-key="chg-step-${step.number}"><span class="k-chg-n k-num ${parts[0] ? partClass(parts[0]) : ''}">${step.number}</span><span class="k-chg-step-words"><b>${prose(stepWords(step).title)}</b><span>${where} &middot; ${count(files.length, 'file', 'files')}${some} <span class="k-num">+${added} &minus;${removed}</span></span></span></button></li>`
 	})
@@ -229,7 +233,8 @@ function partChangeHtml({ part, partDiff }, env) {
 	}
 	const { files, hunks, binary, range } = partDiff
 	const shownPaths = new Set(hunks.map((hunk) => hunk.path))
-	const other = files.filter((file) => !shownPaths.has(file.path))
+	const complete = new Set(partDiff.complete)
+	const other = files.filter((file) => complete.has(file.path) && !shownPaths.has(file.path))
 	const paths = other.map(({ path, oldPath }) => {
 		const name = path === oldPath ? esc(path) : `${esc(oldPath)} to ${esc(path)}`
 		return `<li><code>${name}</code>${binary.includes(path) || binary.includes(oldPath) ? ' (binary file)' : ''}</li>`
@@ -244,8 +249,12 @@ function partChangeHtml({ part, partDiff }, env) {
 	return `${heading}<p>${count(files.length, 'changed file', 'changed files')} · <code>${esc(short(range.base))}..${esc(short(range.head))}</code></p>
 		${explain}
 		${partDiff.historyTooLarge ? '<p>Too many commits to list.</p>' : commitsHtml(partDiff, true)}
-		${hunks.length ? stepDiffHtml(partDiff, range) : ''}
-		${partDiff.cut ? '<p>Only the first 400 changed lines are shown.</p>' : ''}
+		${partDiff.pages > 1 ? `<h3 id="chg-lines" tabindex="-1">Changed lines, page ${partDiff.page} of ${partDiff.pages}</h3>` : ''}
+		${hunks.length ? stepDiffHtml(partDiff, range, Infinity) : ''}
+		${partDiff.page > 1 ? `<button class="k-link" data-act="chg-lines" data-page="${partDiff.page - 1}" data-key="chg-prev-lines"${partDiff.paging ? ' disabled' : ''}>Previous lines</button>` : ''}
+		${partDiff.cut ? `<button class="k-link" data-act="chg-lines" data-page="${partDiff.page + 1}" data-key="chg-next-lines"${partDiff.paging ? ' disabled' : ''}>Next lines</button>` : ''}
+		${partDiff.paging ? '<p role="status">Reading the changed lines.</p>' : ''}
+		${partDiff.pageProblem ? `<p role="alert">${esc(partDiff.pageProblem)}</p>` : ''}
 		${paths.length ? `<ul>${paths.join('')}</ul>` : ''}
 		${files.length ? '' : '<p>The files in this part are the same at both ends of the range.</p>'}`
 }

@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { type ChatEvent, startChat } from '../../src/agent/index.ts'
+import { type Asking, type ChatEvent, startChat } from '../../src/agent/index.ts'
 import { fileRecordStore } from '../../src/record/index.ts'
-import { gitRepository } from '../../src/repo/index.ts'
+import { gitRepository, resolveRange } from '../../src/repo/index.ts'
 import { buildRepository } from '../fixtures/build-repository.ts'
 import { cardsIn, replyIn } from '../fixtures/chat-events.ts'
 import {
@@ -49,7 +49,7 @@ function show(args: Record<string, unknown>): Turn {
 }
 const ABOUT_THE_CHANGE = { scope: { base, head }, work: { title: 'Time out sooner' } }
 
-async function ask(script: Turn[], as: 'question' | 'note' = 'question', directory = root) {
+async function ask(script: Turn[], as: Asking = { kind: 'question' }, directory = root) {
 	const model = await scriptedModel(script)
 	const started = await startChat({
 		directory,
@@ -58,8 +58,7 @@ async function ask(script: Turn[], as: 'question' | 'note' = 'question', directo
 	})
 	if (started.kind !== 'ok') throw new Error(started.message)
 	const events: ChatEvent[] = []
-	for await (const event of started.chat.ask('What did the last commit do?', undefined, { kind: as }))
-		events.push(event)
+	for await (const event of started.chat.ask('What did the last commit do?', undefined, as)) events.push(event)
 	await started.chat.close()
 	return { events, requests: model.requests }
 }
@@ -73,6 +72,10 @@ function withdrawn(events: ChatEvent[]) {
 }
 
 const SECOND_LOOK = 'ken checked the risks you sent'
+
+function canRevise(request: ChatRequest): boolean {
+	return request.tools.some((tool) => tool.function.name === 'review__revise_risks')
+}
 
 function userTexts(request: ChatRequest | undefined): string[] {
 	return (request?.messages ?? [])
@@ -132,7 +135,7 @@ test('log over a change and the second look list the later commits on its files:
 			{ text: '' },
 			...nothingToRevise(1),
 		],
-		'question',
+		{ kind: 'question' },
 		later.root,
 	)
 
@@ -154,6 +157,7 @@ test('risks of a question not about a change, and of a live note about one, show
 	const spare: Turn = { text: 'A second look would get this.' }
 	const now = await ask([show({ risks: [FIRST_RISK] }), { text: '' }, spare])
 	assert.equal(now.requests.length, 2, 'the reply and the end of its turn, nothing more')
+	assert.ok(!now.requests.some(canRevise))
 	assert.deepEqual(
 		risks(now.events).map((risk) => risk.text),
 		[FIRST_RISK.text],
@@ -166,9 +170,10 @@ test('risks of a question not about a change, and of a live note about one, show
 			{ text: '.' },
 			spare,
 		],
-		'note',
+		{ kind: 'note' },
 	)
 	assert.equal(note.requests.length, 3)
+	assert.ok(!note.requests.some(canRevise))
 	assert.equal(risks(note.events).length, 1)
 	assert.ok(!(toolResults(note.requests[1])[0] ?? '').includes('src/load.ts:2'), 'a note reads the diff alone')
 	assert.equal(userTexts(note.requests.at(-1)).length, 1)
@@ -182,14 +187,21 @@ test('the risks of a change are held for one second look: the model gets them an
 		[
 			show({ ...ABOUT_THE_CHANGE, risks: [FIRST_RISK, SECOND_RISK] }),
 			{ text: '' },
-			{ tool: 'ken__revise_risks', args: { risks: [falseRisk], order: [3, 1, 2] } },
-			{ tool: 'ken__revise_risks', args: { risks: [CALLER_RISK], withdraw, order: [3, 2] } },
+			{ tool: 'review__revise_risks', args: { risks: [falseRisk], order: [3, 1, 2] } },
+			{ tool: 'review__revise_risks', args: { risks: [CALLER_RISK], withdraw, order: [3, 2] } },
 			{ text: 'The second look took one risk out.' },
 		],
-		'question',
+		{ kind: 'question' },
 		own,
 	)
 
+	assert.deepEqual(requests.map(canRevise), [false, false, true, true, true])
+	assert.ok(
+		events.some(
+			(event) =>
+				event.kind === 'tool' && event.name === 'revise_risks' && event.step.startsWith('Looked again at the risks'),
+		),
+	)
 	const [question, pass, ...more] = userTexts(requests.at(-1))
 	assert.ok(question?.includes('What did the last commit do?'))
 	assert.equal(more.length, 0, 'ken asks the risk questions once')
@@ -237,18 +249,44 @@ test('the risks of a change are held for one second look: the model gets them an
 	)
 })
 
+test('a scoped change opens risk review after checking its risks, even if the model asks to open it sooner', async () => {
+	const scope = await resolveRange(gitRepository(root), { base, head })
+	assert.ok(scope.kind === 'ok')
+	const { events, requests } = await ask(
+		[
+			{ tool: 'core__enable_plugin', args: { name: 'review' } },
+			show({ risks: [FIRST_RISK] }),
+			{ text: '' },
+			...nothingToRevise(1),
+		],
+		{ kind: 'change', range: scope.range, want: 'story' },
+	)
+
+	assert.match(toolResults(requests[1])[0] ?? '', /ken opens the second look/)
+	assert.deepEqual(requests.map(canRevise), [false, false, false, true, true])
+	assert.deepEqual(
+		risks(events).map((risk) => risk.text),
+		[FIRST_RISK.text],
+	)
+	assert.ok(
+		events.some(
+			(event) => event.kind === 'tool' && event.step === 'Looked again at the risks and found nothing to change',
+		),
+	)
+})
+
 test('risks asked for after the record already explains the change still get the second look before the reader sees them', async () => {
 	const own = buildRepository(COMMITS).root
-	await ask([show({ ...ABOUT_THE_CHANGE }), { text: '' }], 'question', own)
+	await ask([show({ ...ABOUT_THE_CHANGE }), { text: '' }], { kind: 'question' }, own)
 	const withdraw = [{ risk: 1, reason: 'Only requests slower than 100 ms fail.', quotes: [LIMIT] }]
 	const asked = await ask(
 		[
 			show({ scope: { base, head }, risks: [FIRST_RISK] }),
 			{ text: '' },
-			{ tool: 'ken__revise_risks', args: { withdraw, order: [] } },
+			{ tool: 'review__revise_risks', args: { withdraw, order: [] } },
 			{ text: '' },
 		],
-		'question',
+		{ kind: 'question' },
 		own,
 	)
 
@@ -267,7 +305,10 @@ test('a withdrawal with no quote goes back without using an attempt, and the ris
 	const { events, requests } = await ask([
 		show({ scope: { base, head }, risks: [FIRST_RISK, SECOND_RISK] }),
 		{ text: '' },
-		{ tool: 'ken__revise_risks', args: { withdraw: [{ risk: 1, reason: 'This is not new behaviour.' }], order: [2] } },
+		{
+			tool: 'review__revise_risks',
+			args: { withdraw: [{ risk: 1, reason: 'This is not new behaviour.' }], order: [2] },
+		},
 		{ text: 'I keep both risks.' },
 	])
 
@@ -285,7 +326,7 @@ test('eight risks reach the reader in the order the second look gave', async () 
 	const { events } = await ask([
 		show({ scope: { base, head }, risks: eight }),
 		{ text: '' },
-		{ tool: 'ken__revise_risks', args: { order } },
+		{ tool: 'review__revise_risks', args: { order } },
 		{ text: '' },
 	])
 
@@ -322,7 +363,7 @@ test('a risk shown during the second look shows as it is and leaves the numbers 
 		show({ scope: { base, head }, risks: [FIRST_RISK] }),
 		{ text: '' },
 		{ tool: 'ken__show', args: { risks: [CALLER_RISK] } },
-		{ tool: 'ken__revise_risks', args: { order: [1] } },
+		{ tool: 'review__revise_risks', args: { order: [1] } },
 		{ text: '' },
 	])
 

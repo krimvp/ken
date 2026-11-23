@@ -8,6 +8,7 @@ import {
 	type Change,
 	type Claim,
 	type Item,
+	onlyToolRequests,
 	type Reply,
 	type Risk,
 	type Step,
@@ -33,6 +34,7 @@ type OldAnswer = {
 const OUTCOMES = new Set([
 	'answered',
 	'unverified',
+	'tool-proposal',
 	'rejected',
 	'no-answer',
 	'incomplete',
@@ -119,6 +121,27 @@ export function parseLine(line: string, decisions: RecordEntry[]): HistoryEntry 
 			return outcome === 'partial'
 				? { ...entry, outcome: 'partial', reply: { ...reply, missingParts: missing }, retry }
 				: { ...base, outcome: 'incomplete', retry }
+		}
+	}
+	if (
+		(entry.outcome === 'answered' || entry.outcome === 'unverified') &&
+		!entry.about &&
+		!entry.background &&
+		!entry.reply.tour &&
+		!entry.reply.answers &&
+		!entry.reply.want &&
+		!entry.reply.view &&
+		!entry.reply.change
+	) {
+		const item = entry.reply.items[0]
+		if (
+			entry.reply.items.length === 1 &&
+			item?.kind === 'words' &&
+			typeof item.text === 'string' &&
+			onlyToolRequests(entry.question, item.text)
+		) {
+			const { reply: _reply, recorded: _recorded, ...base } = entry
+			return { ...base, outcome: 'tool-proposal' }
 		}
 	}
 	if (entry.outcome === 'answered' && unverifiedSource(entry.focus, entry.reply.items))

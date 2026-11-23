@@ -17,7 +17,7 @@ import {
 	sameName,
 } from '../../record/index.ts'
 import type { CommitHash, Repository } from '../../repo/index.ts'
-import type { Asking } from '../reply/show-tool.ts'
+import type { Asking, QuestionFocus } from '../reply/show-tool.ts'
 import { readArgs, refuse, reply } from './tool-edge.ts'
 
 const KINDS = ['work', 'decision', 'topic', 'note', 'layout'] as const satisfies Kind[]
@@ -62,7 +62,11 @@ export type Fact = {
 
 // Plain code on the server answers these from the layout, the record and the reader's history.
 export type Memory = {
-	readerPart(question: string, record: RecordRead, signal?: AbortSignal): Promise<string | null>
+	readerPart(
+		question: string,
+		record: RecordRead,
+		signal?: AbortSignal,
+	): Promise<{ focus: QuestionFocus; text: string } | null>
 	known(about: string): Promise<Known | null>
 	level(within: string[]): Promise<KnownLevel | null>
 	facts(): Promise<Fact[]>
@@ -144,7 +148,9 @@ export function memoryTools(deps: {
 				return found ? page(found.text) : refuse(`There is no answer ${about} in this chat.`)
 			}
 			const record = await store.read()
-			const entry = record.entries.find((other) => other.id === about)
+			const entry = record.entries.find(
+				(other) => other.id === about || (other.kind === 'decision' && `decision:${other.id}` === about),
+			)
 			if (entry) {
 				const full = await describeEntry(repo, record, entry, ctx.signal)
 				if (entry.kind !== 'topic' || !map) return page(full)

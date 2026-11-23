@@ -2,7 +2,7 @@
 // they last looked, or learn the project. Plain code picks it from git, the reader's history and their map, says why in
 // one sentence, and gives one short fact for each way in, which the page shows under each choice.
 import { at as atMoment, type Landed } from '../follow-up/index.ts'
-import type { Asked, History } from '../history/index.ts'
+import type { Asked } from '../history/index.ts'
 import { type Change, type LayoutLook, type LayoutSources, pullRequestOf } from '../layout/index.ts'
 import type { Repository } from '../repo/index.ts'
 
@@ -26,7 +26,6 @@ const SUBJECT_CHARS = 40
 export async function suggestWayIn(
 	layout: LayoutSources,
 	reader: {
-		history: History
 		questions: Pick<Asked, 'head' | 'askedAt'>[]
 		visit: { at: string; head: string } | null
 		spans: Landed[]
@@ -38,15 +37,17 @@ export async function suggestWayIn(
 	const { repo } = layout
 	const { top } = reader
 	const at = top.head
-	const [work, asked] = await Promise.all([reader.own && ownWork(repo, reader.own), reader.history.list()])
-	const met = asked.length > 0 || (await layout.map.read(now)).states.some((state) => state.kind !== 'never-met')
+	const work = reader.own && (await ownWork(repo, reader.own))
+	const met =
+		reader.questions.length > 0 || (await layout.map.read(now)).states.some((state) => state.kind !== 'never-met')
 	const [first] = reader.spans
 	const facts = {
 		learn: count(top.boxes.length, top.named ? 'part' : 'folder'),
 		'catch-up': first?.short ?? null,
 		review: work?.short ?? (await newestOnMainLine(repo, at)),
 	}
-	if (work) return { suggested: 'review', why: work.why, facts }
+	if (work && top.next.items.some((item) => item.kind === 'review'))
+		return { suggested: 'review', why: work.why, facts }
 	// When they last looked says why ken thinks so, to a reader who is back after weeks.
 	const { visit } = reader
 	if (visit?.head === at) {
@@ -67,8 +68,9 @@ export async function suggestWayIn(
 
 async function ownWork(repo: Repository, change: Change): Promise<{ why: string; short: string }> {
 	if (change.kind === 'uncommitted') {
-		const diff = await repo.diff(change.range)
-		const files = count(diff.kind === 'ok' ? diff.files.length : 0, 'file')
+		const diff = await repo.diffFiles(change.range)
+		if (diff.kind !== 'ok') return { why: 'You have uncommitted work.', short: 'Uncommitted work' }
+		const files = count(diff.files.length, 'file')
 		return { why: `You have uncommitted work in ${files}.`, short: `${files} uncommitted` }
 	}
 	const logged = await repo.log(change.range)

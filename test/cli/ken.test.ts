@@ -305,7 +305,7 @@ test('ken ask prints a risk the second look withdrew with the line that rules it
 		},
 		{ text: '' },
 		{
-			tool: 'ken__revise_risks',
+			tool: 'review__revise_risks',
 			args: { withdraw: [{ risk: 1, reason: 'sum of an empty list is 0.', quotes: [SUM] }], order: [2] },
 		},
 		{ text: 'The second look took one risk out.' },

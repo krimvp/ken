@@ -17,7 +17,7 @@ export function parseDiff(numstat: string, patch: string): FileDiff[] {
 	)
 }
 
-function parseNumstat(numstat: string) {
+export function parseNumstat(numstat: string) {
 	const tokens = numstat.split('\0')
 	const entries: { binary: boolean; path: string; oldPath: string }[] = []
 	for (let index = 0; index < tokens.length; index++) {

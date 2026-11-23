@@ -38,6 +38,7 @@ export function writePlace(place) {
 			query.set('file', place.source.path)
 			query.set('at', place.source.commit)
 			query.set('line', String(place.source.line))
+			if (place.source.uses) query.set('uses', place.source.uses)
 		}
 	}
 	const fields = query.toString()
@@ -84,7 +85,7 @@ export function readPlace(hash) {
 		/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(commit) &&
 		Number.isSafeInteger(line) &&
 		line >= 1
-			? { path, commit, line }
+			? { path, commit, line, ...(query.get('uses') ? { uses: query.get('uses') } : {}) }
 			: null
 	const changed = page === 'changes' || layer === 'changes'
 	return {

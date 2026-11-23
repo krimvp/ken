@@ -196,12 +196,13 @@ export function briefActions(app) {
 	async function readSource(start, ref, record = true) {
 		if (!ref) return
 		const { path, commit } = ref
-		const where = { path, commit, line: Number(start) }
+		const where = { path, commit, line: Number(start), ...(ref.uses ? { uses: ref.uses } : {}) }
 		const reading = { kind: 'reading', where }
 		ui.on = 'source'
 		ui.source = reading
 		render()
 		const query = new URLSearchParams({ path, at: commit, start })
+		if (where.uses) query.set('uses', where.uses)
 		const result = await app
 			.read(`/api/source?${query}`)
 			.catch((error) => ({ ok: false, body: { message: error.message } }))
@@ -214,7 +215,9 @@ export function briefActions(app) {
 	}
 
 	const actions = {
-		'brief-source': (el) => readSource(el.dataset.start, el.dataset.path ? el.dataset : ui.source?.where),
+		'brief-source': (el) =>
+			readSource(el.dataset.start, el.dataset.path ? el.dataset : { ...ui.source?.where, uses: null }),
+		'brief-uses': (el) => readSource(ui.source.start, { ...ui.source.where, uses: el.dataset.name }, false),
 		'brief-open': (el) => show(el.dataset.concept, { inside: Boolean(el.closest('#brief')), opener: el.dataset.key }),
 		'brief-close': close,
 		'brief-trail': (el) => show(ui.trail[Number(el.dataset.index)].id, { inside: true }),

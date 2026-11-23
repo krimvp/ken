@@ -7,7 +7,7 @@ import { fileRecordStore } from '../../src/record/index.ts'
 import { gitRepository } from '../../src/repo/index.ts'
 import { buildRepository } from '../fixtures/build-repository.ts'
 import { ask, call, json, openKen, readerHome } from '../fixtures/ken-server.ts'
-import { scriptedModel, type Turn } from '../fixtures/scripted-model.ts'
+import { scriptedModel, type Turn, toolResults } from '../fixtures/scripted-model.ts'
 
 // A command that runs the core, a core of two files that saves to a store, and a test of the core.
 const FILES = {
@@ -162,12 +162,13 @@ test('a part ken has not explained opens from what ken holds: its job, the decis
 	)
 	assert.deepEqual(unexplained.explain, { lens: { kind: 'explain', within: [], part: 'Core' } })
 	assert.deepEqual(
-		unexplained.decisions.map((each: { question: string; chosen: string; why: string }) => [
+		unexplained.decisions.map((each: { question: string; chosen: string; why: string; reasonSource: string }) => [
 			each.question,
 			each.chosen,
 			each.why,
+			each.reasonSource,
 		]),
-		[['When does the core save?', 'Once, at the end of a run', 'One write keeps a run whole.']],
+		[['When does the core save?', 'Once, at the end of a run', 'One write keeps a run whole.', 'inferred']],
 	)
 	assert.deepEqual(unexplained.deeper, { within: 'src/core', parts: 2, files: 2 }, 'two files, each a box inside')
 	assert.equal(unexplained.knows.level, 'new')
@@ -386,4 +387,63 @@ test('an old term note and its line numbers stay out of a brief when the quoted 
 	const brief = await read()
 	assert.deepEqual(brief.staleFiles, [file])
 	assert.deepEqual([brief.note, brief.points, brief.usedIn], [undefined, [], []])
+})
+
+test('reopening a decision and asking why keeps the recorded reason and its own evidence', async () => {
+	const reason = 'The store requires one atomic write per run.'
+	const { root } = buildRepository([{ message: 'Save a run once', body: reason, files: FILES }])
+	const store = fileRecordStore(root, gitRepository(root))
+	const made = await store.append([
+		{
+			kind: 'decision',
+			question: 'Why save once?',
+			chosen: 'Save at the end.',
+			reason: { text: reason, quotes: [{ path: null, commit: 'HEAD', text: reason }] },
+			rejected: [],
+			undo: 'easy',
+			needsOwner: false,
+			work: null,
+			quotes: [quote('src/core/run.ts', '\tsave(plan())')],
+		},
+	])
+	assert.equal(made.kind, 'appended')
+	const [entry] = (await store.read()).current
+	assert.ok(entry)
+	const concept = `decision:${entry.id}`
+	const provider = await scriptedModel([{ tool: 'ken__memory_known', args: { about: concept } }, { text: 'Done.' }])
+	const server = await openKen(root, readerHome(), provider.baseUrl)
+	const brief = await json(server, `/api/brief?concept=${concept}`)
+	assert.equal(brief.reasonSource, 'recorded from a commit message')
+	assert.deepEqual(
+		brief.reasonQuotes.map((q: { path: string | null; text: string }) => [q.path, q.text]),
+		[[null, reason]],
+	)
+	await ask(server, { lens: { kind: 'answer', concept, text: 'What led to this choice?', typed: true } })
+	assert.ok(
+		String(provider.requests[0]?.messages.at(-1)?.content).includes(
+			`Reason (recorded from a commit message): ${reason}`,
+		),
+	)
+	const [held] = toolResults(provider.requests[1])
+	assert.match(held ?? '', /recorded from a commit message/)
+	assert.ok(held?.includes(reason))
+	const replaced = await store.append([
+		{
+			kind: 'decision',
+			question: 'How do writes work now?',
+			chosen: 'Save at each step.',
+			reason: { text: 'Writes can be retried independently.', quotes: [] },
+			rejected: [],
+			undo: 'easy',
+			needsOwner: false,
+			work: null,
+			quotes: [quote('src/core/run.ts', '\tsave(plan())')],
+			replaces: entry.id,
+		},
+	])
+	assert.equal(replaced.kind, 'appended')
+	const older = await json(server, `/api/brief?concept=${concept}`)
+	assert.equal(older.why, reason)
+	const later = await json(server, `/api/brief?concept=${older.replacedBy}`)
+	assert.equal(later.name, 'How do writes work now?')
 })

@@ -87,7 +87,7 @@ function mapText(file: string, { states }: MapRead): string {
 		`Your understanding map: ${file}`,
 		...(states.length === 0 ? ['The project record has no topics yet. Ask about a part of the project first.'] : []),
 		...states.map((state) => `  ${stateLine(state)} [hash ${state.hash}]`),
-		'To correct it, add a line to that file. ken reads the newest line for each topic. Depth is heard-of, can-follow or could-change; evidence is asked, read, said or wrote; the hash is the one shown above.',
+		'To correct it, add a line to that file. Use heard-of, can-follow or could-change for depth and asked, said, wrote, toured or forgot for evidence. Copy the hash shown above. To set reply length, add a line with topic, date and detail (shorter or usual).',
 		...(example ? [`For example: ${JSON.stringify(example)}`] : []),
 		'',
 	].join('\n')

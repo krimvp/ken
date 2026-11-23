@@ -74,11 +74,22 @@ export function readerView(
 		return { at: line.at, did: line.did, part, topic: null, text }
 	})
 	const signalled = map.states.flatMap((state) => {
-		if (state.kind === 'never-met') return []
 		const quoted = topics.find((topic) => topic.name === state.topic)?.quotes.flatMap((quote) => quote.path ?? [])
-		const { date, evidence } = state.entry
 		const part = holds(quoted ?? [])?.name ?? null
-		return [{ at: date, did: evidence, part, topic: state.topic, text: SIGNALLED[evidence](state.topic) }]
+		const shorter = state.shorterSince
+			? [
+					{
+						at: state.shorterSince,
+						did: 'shorter',
+						part,
+						topic: state.topic,
+						text: `You asked for shorter replies on ${state.topic}.`,
+					},
+				]
+			: []
+		if (state.kind === 'never-met') return shorter
+		const { date, evidence } = state.entry
+		return [...shorter, { at: date, did: evidence, part, topic: state.topic, text: SIGNALLED[evidence](state.topic) }]
 	})
 	const learned = [...looked, ...signalled].toSorted((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0))
 	return {

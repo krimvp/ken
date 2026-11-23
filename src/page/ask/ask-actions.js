@@ -74,11 +74,12 @@ export function askActions(app) {
 		const typed = text !== ask.suggestion
 		Object.assign(ask, { text: '', open: false, about: null, suggestion: null })
 		if (state.brief.on === 'source') app.brief.close()
-		if (about?.focus) void send({ question: text, focus: about.focus })
+		if (about?.after) void send({ question: text, after: about.after })
+		else if (about?.focus) void send({ question: text, focus: about.focus })
 		else if (about) {
 			app.brief.show(about.id, { opener: ask.opener })
 			void app.brief.ask(text, typed)
-		} else void send({ question: text })
+		} else void send(state.view === 'question' ? { question: text, after: null } : { question: text })
 	}
 
 	const actions = {
@@ -93,6 +94,8 @@ export function askActions(app) {
 					const { path, commit } = page.where
 					const focus = { path, commit, start: page.start, end: page.start + page.lines.length - 1 }
 					ask.about = { name: focusLabel(focus), focus }
+				} else if (!brief && state.view === 'question' && state.replyTo) {
+					ask.about = { name: state.replyTo.question.split('\n')[0], after: state.replyTo.id }
 				} else if (brief && !brief.local) ask.about = { id: brief.id, name: brief.name }
 				else {
 					const focus = brief ? null : architectureFocus()

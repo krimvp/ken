@@ -12,6 +12,9 @@ export async function readChangeDiff(layout: LayoutSources, query: URLSearchPara
 	const paths = query.getAll('path').map(parsePath)
 	const within = query.getAll('within')
 	const byPart = within.length > 0
+	const page = Number(query.get('page') ?? 1)
+	if (!Number.isSafeInteger(page) || page < 1 || (!byPart && page !== 1))
+		return { status: 400, body: { message: 'Choose a page of changes for this part.' } }
 	if (
 		(byPart && paths.length > 0) ||
 		(!byPart && paths.length === 0) ||
@@ -27,17 +30,40 @@ export async function readChangeDiff(layout: LayoutSources, query: URLSearchPara
 	const wanted = new Set<string>(paths.flatMap((each) => (each.kind === 'ok' ? [each.path] : [])))
 	const [diff, history] = await Promise.all([
 		layout.repo.diff(change.range, undefined, byPart ? scope : [...wanted]),
-		byPart && change.kind !== 'uncommitted' ? layout.repo.commitsIn(change.range, 40, undefined, scope) : null,
+		byPart && page === 1 && change.kind !== 'uncommitted'
+			? layout.repo.commitsIn(change.range, 40, undefined, scope)
+			: null,
 	])
 	if (diff.kind !== 'ok') return { status: 200, body: { hunks: [], cut: false, binary: [], tooLarge: true } }
 	// A move belongs both to the part that lost the file and the one that got it.
 	const matches = (path: string) => wanted.has(path) || scope.some((place) => under(path, place))
 	const asked = diff.files.filter((file) => matches(file.path) || matches(file.oldPath))
-	const hunks = asked.flatMap((file) =>
-		file.kind === 'text' ? file.hunks.map((hunk) => ({ path: file.path, oldPath: file.oldPath, hunk })) : [],
-	)
+	const start = (page - 1) * DIFF_LINES
+	const end = start + DIFF_LINES
+	const hunks: ChangedHunk[] = []
+	const complete = new Set<string>()
+	let at = 0
+	for (const file of asked) {
+		const from = at
+		for (const hunk of file.kind === 'text' ? file.hunks : []) {
+			// Git returns these hunks with no context. A missing-newline marker belongs to its preceding line.
+			const size = hunk.oldLength + hunk.newLength
+			if (at < end && at + size > start) {
+				const shown = at >= start && at + size <= end ? hunk : sliceHunk(hunk, start - at, end - at)
+				hunks.push({ path: file.path, oldPath: file.oldPath, hunk: shown })
+			}
+			at += size
+		}
+		// A file finishes on the page with its last line. Binary and mode-only changes are listed on page one.
+		if ((at > from && at > start && at <= end) || (at === from && page === 1)) {
+			complete.add(file.path)
+			complete.add(file.oldPath)
+		}
+	}
+	const pages = Math.max(1, Math.ceil(at / DIFF_LINES))
+	if (page > pages) return { status: 400, body: { message: 'This change has no such page.' } }
 	const binary = asked.flatMap((file) => (file.kind === 'binary' ? [file.path, file.oldPath].filter(matches) : []))
-	const body = { ...cutAt(hunks, DIFF_LINES), binary: [...new Set(binary)], tooLarge: false }
+	const body = { hunks, cut: page < pages, binary: [...new Set(binary)], tooLarge: false }
 	if (!byPart) return { status: 200, body }
 	const part = query.get('part')
 	return {
@@ -45,6 +71,9 @@ export async function readChangeDiff(layout: LayoutSources, query: URLSearchPara
 		body: {
 			...body,
 			range: change.range,
+			page,
+			pages,
+			complete: [...complete],
 			...(part ? { question: partChangeQuestion(part, change.range, scope) } : {}),
 			files: asked.map(({ path, oldPath }) => ({ path, oldPath })),
 			commits:
@@ -57,28 +86,30 @@ export async function readChangeDiff(layout: LayoutSources, query: URLSearchPara
 
 type ChangedHunk = { path: string; oldPath: string; hunk: Hunk }
 
-// The hunks up to most changed lines, in the shape a walkthrough step's hunks have. The hunk that passes the limit
-// keeps the lines that fit and counts them again, and cut says the diff goes on.
-function cutAt(hunks: ChangedHunk[], most: number): { hunks: ChangedHunk[]; cut: boolean } {
-	const changed = (line: string) => line.startsWith('+') || line.startsWith('-')
-	const kept: ChangedHunk[] = []
-	let room = most
-	for (const each of hunks) {
-		const lines: string[] = []
-		for (const line of each.hunk.lines) {
-			if (changed(line) && room === 0) break
-			if (changed(line)) room -= 1
+// Keep whole changed lines and their markers, with the old and new positions of this slice of the hunk.
+function sliceHunk(hunk: Hunk, from: number, to: number): Hunk {
+	let oldStart = hunk.oldStart
+	let newStart = hunk.newStart
+	let oldLength = 0
+	let newLength = 0
+	let index = -1
+	const lines = []
+	for (const line of hunk.lines) {
+		const removed = line.startsWith('-')
+		const added = line.startsWith('+')
+		if (removed || added) index++
+		if (index >= to) break
+		if (index < from) {
+			if (removed) oldStart++
+			if (added) newStart++
+		} else {
 			lines.push(line)
+			if (removed) oldLength++
+			if (added) newLength++
 		}
-		if (lines.length === each.hunk.lines.length) {
-			kept.push(each)
-			continue
-		}
-		const allBut = (sign: string) => lines.filter((line) => !line.startsWith(sign) && !line.startsWith('\\')).length
-		if (lines.some(changed)) {
-			kept.push({ ...each, hunk: { ...each.hunk, lines, oldLength: allBut('+'), newLength: allBut('-') } })
-		}
-		return { hunks: kept, cut: true }
 	}
-	return { hunks: kept, cut: false }
+	// A zero-length side in a unified diff names the line before the change.
+	if (!oldLength && hunk.oldLength) oldStart--
+	if (!newLength && hunk.newLength) newStart--
+	return { oldStart, newStart, oldLength, newLength, lines }
 }

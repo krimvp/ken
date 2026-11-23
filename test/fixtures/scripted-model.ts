@@ -26,7 +26,7 @@ export const USAGE_PER_REPLY = { prompt_tokens: 100, completion_tokens: 10 }
 // the second look no reply, so the risks ken held show as it first checked them.
 export function nothingToRevise(risks: number): Turn[] {
 	const order = Array.from({ length: risks }, (_, at) => at + 1)
-	return [{ tool: 'ken__revise_risks', args: { order } }, { text: '' }]
+	return [{ tool: 'review__revise_risks', args: { order } }, { text: '' }]
 }
 
 // The model's words and the cards it shows in one turn, then the turn that ends its reply.

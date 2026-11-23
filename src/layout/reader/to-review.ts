@@ -19,59 +19,60 @@ export async function toReview(
 	{ boxes, lines }: { boxes: { name: string; paths: string[] }[]; lines: SeenLine[] },
 	signal?: AbortSignal,
 ): Promise<ToReview | null> {
-	const touched = (files: string[]) =>
-		boxes.filter(({ paths }) => files.some((file) => paths.some((place) => under(file, place)))).map((box) => box.name)
+	let files: Pick<FileDiff, 'path' | 'oldPath'>[]
+	let range: Change['range']
+	let change: string
+	let what: string
+	let title: string
+	let why: string
 	if (own) {
-		const read = diff ? null : await repo.diff(own.range, signal)
-		const files = diff ?? (read?.kind === 'ok' ? read.files : [])
-		return {
-			title: own.kind === 'uncommitted' ? 'Review your uncommitted work' : `Review your branch ${own.name}`,
-			what: own.kind === 'uncommitted' ? 'your uncommitted work' : `your branch ${own.name}`,
-			why: own.kind === 'uncommitted' ? '' : 'It is ahead of the main branch.',
-			change: own.asked,
-			files: files.length,
-			parts: touched(files.flatMap((file) => [file.path, file.oldPath])),
-		}
+		const result = diff ? { kind: 'ok' as const, files: diff } : await repo.diffFiles(own.range, signal)
+		if (result.kind !== 'ok') return null
+		files = result.files
+		range = own.range
+		change = own.asked
+		what = own.kind === 'uncommitted' ? 'your uncommitted work' : `your branch ${own.name}`
+		title = `Review ${what}`
+		why = own.kind === 'uncommitted' ? '' : 'It is ahead of the main branch.'
+	} else {
+		const line = await repo.mainLine(head, MAIN_LINE, signal)
+		const merge = line.kind === 'ok' ? line.commits.find((commit) => commit.parents.length > 1) : undefined
+		const base = merge?.parents[0]
+		if (!merge || !base) return null
+		range = { base, head: merge.hash }
+		const result = await repo.diffFiles(range, signal)
+		if (result.kind !== 'ok') return null
+		files = result.files
+		change = `${merge.hash}^1..${merge.hash}`
+		const pull = pullRequestOf(merge.subject)
+		what = pull ? `pull request ${pull}` : 'the newest merge'
+		title = pull ? `Review the merge of pull request ${pull}` : 'Review the newest merge'
+		why = pull
+			? 'It is the newest merge and you have not walked through it.'
+			: `It is "${merge.subject}", and you have not walked through it.`
 	}
-	const line = await repo.mainLine(head, MAIN_LINE, signal)
-	const merge = line.kind === 'ok' ? line.commits.find((commit) => commit.parents.length > 1) : undefined
-	if (!merge || merge.paths.length === 0) return null
-	// A step or a part shows only its own paths. Reading a span with a different base can also show a different diff.
+
+	// Reading the same file at another base or head can show a different diff.
 	const seen = new Set(
-		lines.flatMap((each) =>
-			each.did === 'change' && each.change.base === merge.parents[0] && each.change.head === merge.hash
-				? each.paths
-				: [],
+		lines.flatMap((line) =>
+			line.did === 'change' && line.change.base === range.base && line.change.head === range.head ? line.paths : [],
 		),
 	)
-	const remaining = merge.paths.filter((file) => !covered(file, seen))
+	const remaining = files.filter(({ path, oldPath }) => !covered(path, seen) && !covered(oldPath, seen))
 	if (remaining.length === 0) return null
-	const pull = pullRequestOf(merge.subject)
-	const what = pull ? `pull request ${pull}` : 'the newest merge'
-	if (remaining.length < merge.paths.length) {
-		const parts = touched(remaining)
-		const last = parts.length === 1 ? boxes.find((box) => box.name === parts[0]) : undefined
-		const part =
-			last && remaining.every((file) => last.paths.some((place) => under(file, place))) ? last.name : undefined
-		return {
-			title: `Continue reviewing ${what}`,
-			what,
-			why: part ? `You still have changes in ${part} to review.` : 'These changes are still to review.',
-			change: `${merge.hash}^1..${merge.hash}`,
-			files: remaining.length,
-			parts,
-			...(part ? { part } : {}),
-		}
-	}
+	const touches = (box: { paths: string[] }, file: Pick<FileDiff, 'path' | 'oldPath'>) =>
+		box.paths.some((place) => under(file.path, place) || under(file.oldPath, place))
+	const touched = boxes.filter((box) => remaining.some((file) => touches(box, file)))
+	const parts = touched.map((box) => box.name)
+	const size = { files: remaining.length, parts, change, what }
+	if (remaining.length === files.length) return { ...size, title, why }
+	const [last] = touched
+	const part = last && touched.length === 1 && remaining.every((file) => touches(last, file)) ? last.name : undefined
 	return {
-		title: pull ? `Review the merge of pull request ${pull}` : 'Review the newest merge',
-		what,
-		why: pull
-			? 'It is the newest merge and you have not walked through it.'
-			: `It is "${merge.subject}", and you have not walked through it.`,
-		change: `${merge.hash}^1..${merge.hash}`,
-		files: merge.paths.length,
-		parts: touched(merge.paths),
+		...size,
+		title: `Continue reviewing ${what}`,
+		why: part ? `You still have changes in ${part} to review.` : 'These changes are still to review.',
+		...(part ? { part } : {}),
 	}
 }
 
