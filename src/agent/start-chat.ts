@@ -127,7 +127,7 @@ export async function startChat(options: {
 	const gate = { sources: { repo, sessions }, store, project, map: reader?.map ?? null }
 	const { model, baseUrl, apiKeyEnv } = options.model
 	const chatId = randomUUID()
-	const thread = threadMemory(reader?.readSaved)
+	const thread = threadMemory(reader?.readSaved, reader?.memory !== undefined)
 	// A question's own session: a lens's tools and prompt, or every tool and the whole prompt.
 	const open = (as: Asking, run: Run) => {
 		const lens = lensOf(as)

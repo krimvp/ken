@@ -110,6 +110,13 @@ test('an answer about a part starts from its brief with the lines each point quo
 	)
 })
 
+test('memory_search gives a saved brief and a saved answer once each, not again as earlier answers of this chat', () => {
+	assert.match(
+		search,
+		/^2 hits:\nbrief of part::Core \(Core\): .*\nanswer of question:\w+ \(What does a run give back\?\): /,
+	)
+})
+
 test('memory_known gives a part with its line and points, and marks a quote whose lines changed since', () => {
 	assert.match(known, /part part::Core \(Core\): Runs the work\./)
 	assert.match(known, /- A run gives back one\. \[src\/core\/run\.ts:2 \(changed since: read the file again\)\]/)
