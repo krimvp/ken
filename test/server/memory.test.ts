@@ -110,6 +110,13 @@ test('an answer about a part starts from its brief with the lines each point quo
 	)
 })
 
+test('memory_search gives a saved brief and a saved answer once each, not again as earlier answers of this chat', () => {
+	assert.match(
+		search,
+		/^2 hits:\nbrief of part::Core \(Core\): .*\nanswer of question:\w+ \(What does a run give back\?\): /,
+	)
+})
+
 test('memory_known gives a part with its line and points, and marks a quote whose lines changed since', () => {
 	assert.match(known, /part part::Core \(Core\): Runs the work\./)
 	assert.match(known, /- A run gives back one\. \[src\/core\/run\.ts:2 \(changed since: read the file again\)\]/)
@@ -216,6 +223,68 @@ async function sharedRecall(concept: string) {
 		assert.doesNotMatch(JSON.stringify(request.messages), new RegExp(MARK), 'the naming run never saw the marked word')
 	}
 }
+
+test("an answer that opens with the reader's notes keeps the terms of its brief in their history, out of the record", async () => {
+	const MARK = 'quokka'
+	const { root } = buildRepository([{ message: 'feat: start', files: FILES }])
+	const store = fileRecordStore(root, gitRepository(root))
+	const named = await store.append([
+		{
+			kind: 'layout',
+			within: [],
+			at: 'HEAD',
+			parts: [
+				{ name: 'Core', job: 'Runs the work', paths: ['src/core'] },
+				{ name: 'Command', job: 'The command a person types', paths: ['src/cli'] },
+			],
+			arrows: [],
+		},
+	])
+	if (named.kind !== 'appended') assert.fail(named.problems.join(' '))
+	const point = (line: string) => ({
+		line,
+		more: line,
+		long: line,
+		drawing: { kind: 'dot' },
+		quotes: [{ path: 'src/core/run.ts', text: '\treturn 1' }],
+	})
+	const term = {
+		name: `${MARK} run`,
+		means: `What you call the core, the ${MARK}, running once.`,
+		quote: { path: 'src/core/run.ts', text: 'export function run() {' },
+	}
+	const model = await scriptedModel([
+		{
+			tool: 'ken__show',
+			args: {
+				brief: {
+					number: 1,
+					line: 'A run gives back one.',
+					points: [point('A run gives back one.'), point('It returns a number.'), point('It takes no input.')],
+					terms: [term],
+				},
+			},
+		},
+		{ text: 'Done.' },
+	])
+	const server = await openKen(root, readerHome(), model.baseUrl)
+	await json(server, '/api/notes', { text: `I call the core the ${MARK}.` })
+	const answered = await ask(server, {
+		lens: { kind: 'answer', concept: 'part::Core', text: 'What does a run give back?' },
+	})
+	assert.match(
+		JSON.stringify(model.requests[0]?.messages),
+		new RegExp(`call the core the ${MARK}`),
+		'the run read the note',
+	)
+	const saved = answered.at(-1)
+	assert.equal(saved.kind, 'saved')
+	const shown = saved.view.entry.reply.items.flatMap((item: { card?: { kind: string; topic?: { name: string } } }) =>
+		item.card?.kind === 'topic' ? [item.card.topic?.name] : [],
+	)
+	assert.deepEqual(shown, [term.name], 'the answer still shows its term')
+	assert.doesNotMatch(JSON.stringify((await store.read()).entries), new RegExp(MARK))
+})
 
 test('a memory search lists every id on a page even when the names are long', () => {
 	assert.match(page, /^100 hits:/)

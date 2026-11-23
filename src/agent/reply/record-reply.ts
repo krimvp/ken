@@ -163,17 +163,22 @@ function raw(quote: VerifiedQuote): Quote {
 }
 
 // The end of a question with a reply: the change facts from git over every quote the reader saw, the record entries
-// the reply adds, and the topics it names, marked as asked on the reader's map. problems says why the record left out
-// an entry; the reply stands either way.
+// the reply adds, and the topics it names, marked as asked on the reader's map. withTopics is false when the
+// reply's topics stay in the reader's history and out of the record (see topicsToRecord). problems says why the record
+// left out an entry; the reply stands either way.
 export async function endReply(
 	gate: Gate,
 	round: Round,
+	withTopics: boolean,
 	signal: AbortSignal,
 ): Promise<{ reply: Reply; recorded: RecordEntry[]; problems: string[] }> {
 	const { scope } = round
 	const change = scope && (await changeOf(gate.sources.repo, scope.range, round.items, signal))
-	const recorded = await recordReply(gate.store, gate.project, round.items, scope, round.tour, round.views, signal)
-	// Every topic is in the record now, so each card names it as the record spells it.
+	const kept = withTopics
+		? round.items
+		: round.items.filter((item) => item.kind !== 'card' || item.card.kind !== 'topic')
+	const recorded = await recordReply(gate.store, gate.project, kept, scope, round.tour, round.views, signal)
+	// Each card names a topic the record holds as the record spells it.
 	const names = (await gate.store.read()).current.flatMap((entry) => (entry.kind === 'topic' ? [entry.name] : []))
 	const canonical = (name: string) => names.find((other) => sameName(other, name)) ?? name
 	const items = round.items.map((item) => spelled(item, canonical))

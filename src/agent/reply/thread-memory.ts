@@ -109,10 +109,14 @@ export function savedOpening(selected: SavedAnswer, parent?: SavedAnswer): strin
 	return `The reader is following up on the last saved reply below. Use memory_known with an id for the full reply or its after id for the preceding reply. Recheck the source for current facts and follow what the reader asks now.\n${replies.map((row) => JSON.stringify(savedExcerpt(row))).join('\n')}\n\n`
 }
 
-export function threadMemory(readSaved?: () => Promise<SavedAnswer[]>) {
+// heldElsewhere is true when the server's memory holds the briefs and lens answers, read from the same history. Then
+// thread memory leaves them out, so a search finds each once, and it holds the free questions.
+export function threadMemory(readSaved: (() => Promise<SavedAnswer[]>) | undefined, heldElsewhere: boolean) {
 	const exchanges: Exchange[] = []
 	let number = 0
+	const held = (reply: Reply) => heldElsewhere && (reply.tour !== undefined || reply.answers !== undefined)
 	function keep(question: string, shown: Reply, readPaths: Set<string>, focus?: QuestionFocus) {
+		if (held(shown)) return
 		exchanges.push({ number: ++number, ...preview(contents(question, shown, readPaths, focus)) })
 		if (exchanges.length > KEPT_REPLIES) exchanges.shift()
 	}
@@ -138,7 +142,7 @@ export function threadMemory(readSaved?: () => Promise<SavedAnswer[]>) {
 		const found: { id: string; text: string }[] = []
 		for (let i = rows.length - 1; i >= 0 && found.length < 3; i--) {
 			const row = rows[i]
-			if (!row || (id && id !== row.id)) continue
+			if (!row || (id && id !== row.id) || (!id && held(row.reply))) continue
 			const full = contents(row.reply.answers?.text ?? row.reply.view?.asked ?? row.question, row.reply, [], row.focus)
 			if (id || matches(full, lower)) {
 				const brief = id ? full : preview(full, lower)
