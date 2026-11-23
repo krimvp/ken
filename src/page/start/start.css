@@ -79,7 +79,7 @@
 .k-start {
 	display: grid;
 	grid-column: 1 / -1;
-	grid-template-columns: auto minmax(0, 1fr) auto;
+	grid-template-columns: auto minmax(0, 1fr);
 	align-items: center;
 	gap: 26px;
 	padding: 18px 26px;
@@ -116,6 +116,10 @@
 .k-start-why {
 	color: var(--k-muted);
 	font-size: 16px;
+}
+
+.k-start-words > .k-btn {
+	margin-top: 12px;
 }
 
 .k-then {

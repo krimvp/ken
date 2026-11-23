@@ -84,8 +84,8 @@ function startHtml({ look, briefOf }) {
 	if (!lead) {
 		return `<section class="k-tile k-start" aria-labelledby="start-title">
 			<div class="k-start-pic">${mapHtml(look, { lit: [], key: 'start-map' })}</div>
-			<div class="k-start-words"><p class="k-eyebrow">Start here</p><h2 id="start-title">Nothing new since you looked</h2><p class="k-start-why">${look.named ? 'The architecture is as you left it.' : "ken's model has not named the parts of this project yet."}</p></div>
-			<button class="k-btn is-big" data-act="go-page" data-page="architecture" data-key="start-primary">See the architecture${icon('right')}</button>
+			<div class="k-start-words"><p class="k-eyebrow">Start here</p><h2 id="start-title">Nothing new since you looked</h2><p class="k-start-why">${look.named ? 'The architecture is as you left it.' : "ken's model has not named the parts of this project yet."}</p>
+			<button class="k-btn is-big" data-act="go-page" data-page="architecture" data-key="start-primary">See the architecture${icon('right')}</button></div>
 		</section>`
 	}
 	const stale = lead.kind === 'stale' ? look.boxes.find((box) => box.name === lead.parts[0])?.knows.since : null
@@ -94,6 +94,7 @@ function startHtml({ look, briefOf }) {
 	return `<section class="k-tile k-start" aria-labelledby="start-title">
 		<div class="k-start-pic">${mapHtml(look, { lit: lead.parts, key: 'start-map' })}${badge}</div>
 		<div class="k-start-words"><p class="k-eyebrow">Start here</p><h2 id="start-title">${prose(lead.title)}</h2><p class="k-start-why">${prose(stop ?? lead.why)}</p>
+			<button class="k-btn is-big" data-act="start-go" data-index="0" data-key="start-primary">${DOES[lead.kind] ?? 'Open it'}${icon('right')}</button>
 			${
 				rest.length > 0
 					? `<ul class="k-then" aria-label="Or">${rest
@@ -102,7 +103,6 @@ function startHtml({ look, briefOf }) {
 							.join('')}</ul>`
 					: ''
 			}</div>
-		<button class="k-btn is-big" data-act="start-go" data-index="0" data-key="start-primary">${DOES[lead.kind] ?? 'Open it'}${icon('right')}</button>
 	</section>`
 }
 
