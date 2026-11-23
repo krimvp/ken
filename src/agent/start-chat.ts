@@ -8,7 +8,7 @@ import { findRoot, gitRepository, parsePath, type Repository } from '../repo/ind
 import { projectSessions } from '../transcripts/index.ts'
 import { SHORTEN_PROMPT, type Shorten, shortened, shortenQuestion } from './brief/shorten-lines.ts'
 import type { ChatEvent, Cost } from './chat-event.ts'
-import { briefParts, forRecord, lensOf, readLimit } from './lens/lens.ts'
+import { briefParts, forRecord, lensOf, readLimit, topicsToRecord } from './lens/lens.ts'
 import { plainFacts } from './lens/plain-facts.ts'
 import { sourceUses } from './lens/source-uses.ts'
 import type { ModelConfig } from './model-config.ts'
@@ -448,7 +448,7 @@ export async function startChat(options: {
 				!signal?.aborted
 			) {
 				// Past this check the reply is whole, so a stop that comes while it is saved does not lose it.
-				const ended = await endReply(gate, current, new AbortController().signal)
+				const ended = await endReply(gate, current, topicsToRecord(as), new AbortController().signal)
 				if (
 					ending.outcome === 'answered' &&
 					as.kind === 'question' &&
