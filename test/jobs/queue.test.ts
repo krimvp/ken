@@ -130,7 +130,7 @@ test('KEN_PARALLEL of 2 runs two jobs at once, and the third waits for a free sl
 	assert.deepEqual(started, ['a', 'b', 'c'])
 })
 
-test('a follower gets what a job said so far and leaves it running when it goes; Stop ends a job, which ken queues again only after Start again', async () => {
+test('a follower gets what a job said so far and leaves it running when it goes; Stop ends a job, which ken does not queue again', async () => {
 	const { queue, ask, finish, settle, state } = harness()
 	queue.want(ask('mine'), 'reader')
 	await settle()
@@ -149,9 +149,6 @@ test('a follower gets what a job said so far and leaves it running when it goes;
 	await settle()
 	assert.deepEqual(queue.view().find((job) => job.key === 'bg')?.state, { kind: 'failed', why: 'You stopped it.' })
 	assert.equal(queue.want(ask('bg'), 'ken'), null, 'ken does not queue again what the reader stopped')
-	queue.again('bg')
-	assert.equal(queue.want(ask('bg'), 'ken')?.state.kind, 'running', 'Start again lets ken queue it')
-	await finish('bg')
 })
 
 test('a background job that gave way and takes time to stop holds nothing up: settled waits for its run alone, and close ends it', async () => {

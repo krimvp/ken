@@ -22,7 +22,8 @@ const fresh = buildRepository([{ message: 'feat: start', files: FILES }])
 const namedRepo = buildRepository([{ message: 'feat: start', files: FILES }])
 const asking = buildRepository([{ message: 'feat: start', files: FILES }])
 const busy = buildRepository([{ message: 'feat: start', files: FILES }])
-const homes = [readerHome(), readerHome(), readerHome(), readerHome()]
+const stopping = buildRepository([{ message: 'feat: start', files: FILES }])
+const homes = [readerHome(), readerHome(), readerHome(), readerHome(), readerHome()]
 
 type Job = {
 	key: string
@@ -293,4 +294,27 @@ test("a brief the model endpoint refused says the endpoint's reason, stays out o
 	assert.deepEqual([core?.state.kind, core?.reason], ['failed', 'The model endpoint is busy: 429.'])
 	assert.ok((core?.retryIn ?? 0) > 25, `tried again in ${core?.retryIn} s`)
 	assert.deepEqual((await json(server, '/api/questions')).questions, [], "ken's failed run is not in the reader's list")
+})
+
+test('a run ken started that the reader stopped goes back in line when they press Start again', async () => {
+	const { root } = stopping
+	const record = fileRecordStore(root, gitRepository(root))
+	const parts = [
+		{ name: 'Core', job: 'Runs the work', paths: ['src/core'] },
+		{ name: 'Command', job: 'The command a person types', paths: ['src/cli'] },
+	]
+	const named = await record.append([{ kind: 'layout', within: [], at: 'HEAD', parts, arrows: [] }])
+	if (named.kind !== 'appended') assert.fail(named.problems.join(' '))
+	const model = await scriptedModel([{ hang: () => {} }, { hang: () => {} }])
+	const server = await openKen(root, homes[4] ?? '', model.baseUrl, BACKGROUND)
+	const looking = { looking: { brief: null, within: null } }
+	const core = async (send: object = looking) =>
+		((await json(server, '/api/jobs', send)).jobs as Job[]).find((job) => job.key === 'explain:part::Core')
+	await until(core, (job) => job?.state.kind === 'running')
+	await json(server, '/api/jobs', { stop: 'explain:part::Core' })
+	const stopped = await until(core, (job) => job?.state.kind === 'failed')
+	assert.equal(stopped?.reason, 'You stopped it.')
+	const again = await core({ again: 'explain:part::Core' })
+	assert.equal(again?.state.kind, 'waiting', 'Start again put it back in line')
+	await server.close()
 })

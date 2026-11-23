@@ -55,6 +55,14 @@ function stateHtml(job) {
 	return failedWords(job)
 }
 
+// A job ken started by itself that the reader stopped, or that ended with nothing, and that ken will not try again by
+// itself: the reader can start it again.
+export const canStartAgain = (job) => job.by === 'ken' && job.state.kind === 'failed' && job.retryIn == null
+
+// Whether a job that ended is the last of its thing: no later job for the same thing waits, runs or ended.
+export const latest = (list, job) =>
+	!list.some((other) => other.key === job.key && live(other)) && list.findLast((other) => other.key === job.key) === job
+
 // The jobs ken holds now, for the page: the one the reader looks at, any that wait, and the runs that ended.
 export function jobOf(jobs, concept) {
 	return jobs.find((job) => job.concept === concept && live(job)) ?? null
@@ -89,7 +97,9 @@ export function jobsLineHtml(jobs) {
 	const row = (job) => {
 		const stop = live(job)
 			? `<button class="k-link" data-act="job-stop" aria-label="Stop: ${esc(sentenceOf(job))}" data-job="${esc(job.key)}" data-key="job-stop-${esc(job.key)}">Stop</button>`
-			: ''
+			: canStartAgain(job) && latest(jobs.list, job)
+				? `<button class="k-link" data-act="job-again" aria-label="Start again: ${esc(sentenceOf(job))}" data-jobs="${esc(JSON.stringify([job.key]))}" data-key="job-again-${esc(job.key)}">Start again</button>`
+				: ''
 		const by = job.by === 'reader' ? '<span class="k-job-by">You asked</span>' : ''
 		return `<li class="k-job is-${job.state.kind}"><span class="k-job-title">${prose(sentenceOf(job))}</span>${by}<span class="k-job-state">${stateHtml(job)}</span>${stop}</li>`
 	}
@@ -166,6 +176,9 @@ export function jobsActions(app, made) {
 		},
 		async 'job-stop'(el) {
 			await post('/api/jobs', { stop: el.dataset.job }).catch(() => {})
+		},
+		async 'job-again'(el) {
+			for (const key of JSON.parse(el.dataset.jobs)) await post('/api/jobs', { again: key }).catch(() => {})
 		},
 	}
 
