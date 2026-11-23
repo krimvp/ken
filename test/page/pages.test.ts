@@ -53,6 +53,7 @@ const { changesPageHtml }: { changesPageHtml: (view: object) => string } = await
 	path.join(PAGE, 'changes/changes.js')
 )
 const { startPageHtml }: { startPageHtml: (view: object) => string } = await import(path.join(PAGE, 'start/start.js'))
+const { youPageHtml }: { youPageHtml: (view: object) => string } = await import(path.join(PAGE, 'you/you.js'))
 const {
 	changedParts,
 	openViewHtml,
@@ -492,4 +493,17 @@ test('Home lists the other ways in as links that say what each is, and offers to
 	const processes = tile('>Processes<')
 	assert.match(textOf(processes), new RegExp(`None drawn yet\\. ken's model named the main process, ${flow}`))
 	assert.match(processes, /data-act="first-draw"/, 'and offers to draw it')
+})
+
+test('the You page gives a part the reader opened and read one line, led by the strongest thing they did', async () => {
+	const { server } = await namedProject()
+	for (const did of ['opened', 'read']) await json(server, '/api/seen', { did, paths: ['src/core'] })
+	await json(server, '/api/seen', { did: 'opened', paths: ['src/store'] })
+	const home = { ...freshHome(() => null, { unfolded: new Set() }), reader: await json(server, '/api/reader') }
+	const { look } = await json(server, '/api/layout?change=none')
+	const you = { all: false, fixing: null, note: '' }
+	const lines = textOf(youPageHtml({ look, inside: new Map(), home, you, project: 'p' }))
+	assert.match(lines, /You read about core once and opened it once\./)
+	assert.match(lines, /You opened store\./, 'a part with one line keeps it as ken wrote it')
+	assert.doesNotMatch(lines, /You opened core/, 'core has one line')
 })

@@ -85,26 +85,47 @@ function legendHtml(home, look) {
 const dayOf = (at) =>
 	new Date(at.length === 10 ? `${at}T12:00:00Z` : at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
 
-// What ken recorded, newest first, with the same thing done on the same day as one line and how many times. i is the
-// newest line's place in the list, which "Not right" acts on.
-function sameDayOnce(learned) {
-	const lines = []
+// What the reader did to a part, strongest first, as a line of what ken recorded words it.
+const LOOKS = { code: 'opened the code of', read: 'read about', opened: 'opened' }
+const howOften = (n) => (n === 1 ? 'once' : `${n} times`)
+
+// What ken recorded, newest first, one line for each thing on each day. What the reader opened, read about and read
+// the code of in one part that day is one line, led by the strongest, with how many times each. i is the place in the
+// list of the line "Not right" acts on: the newest of the strongest.
+function foldLines(learned) {
+	const groups = []
 	for (const [i, line] of learned.entries()) {
-		const same = lines.find((each) => each.line.text === line.text && dayOf(each.line.at) === dayOf(line.at))
-		if (same) same.times += 1
-		else lines.push({ line, i, times: 1 })
+		const looked = line.part !== null && line.did in LOOKS
+		const key = `${dayOf(line.at)}|${looked ? `part:${line.part}` : `text:${line.text}`}`
+		const group = groups.find((each) => each.key === key)
+		if (group) group.lines.push({ line, i })
+		else groups.push({ key, looked, lines: [{ line, i }] })
 	}
-	return lines
+	return groups.map(({ looked, lines }) => {
+		const [first] = lines
+		if (!looked || lines.length === 1) return { ...first, text: first.line.text, times: lines.length }
+		const done = Object.keys(LOOKS)
+			.map((did) => lines.filter((each) => each.line.did === did))
+			.filter((each) => each.length > 0)
+		const [strongest] = done
+		const said = done.map((each, k) =>
+			k === 0
+				? `You ${LOOKS[each[0].line.did]} ${first.line.part} ${howOften(each.length)}`
+				: `${LOOKS[each[0].line.did]} it ${howOften(each.length)}`,
+		)
+		const text = said.length === 1 ? `${said[0]}.` : `${said.slice(0, -1).join(', ')} and ${said.at(-1)}.`
+		return { ...strongest[0], text, times: 1 }
+	})
 }
 
 // One line of what ken recorded. fixing is the line whose "Not right" is open.
-function lineHtml({ line, i, times }, { look, home, you }) {
+function lineHtml({ line, i, text, times }, { look, home, you }) {
 	const box = line.part ? look.boxes.find((each) => each.name === line.part) : null
 	const swatch = line.part ? `<span class="k-sw ${partClass(line.part)}"></span>` : ''
 	const often = times > 1 ? ` <span class="k-muted">${times} times</span>` : ''
-	const head = `<span class="k-rec-day">${esc(dayOf(line.at))}</span><span class="k-rec-text">${swatch}${prose(line.text)}${often}</span>`
+	const head = `<span class="k-rec-day">${esc(dayOf(line.at))}</span><span class="k-rec-text">${swatch}${prose(text)}${often}</span>`
 	if (you.fixing !== i) {
-		return `<li class="k-rec">${head}<button class="k-link" data-act="you-fix" data-index="${i}" data-key="rec-${i}" aria-label="Not right: ${esc(line.text)}">Not right</button></li>`
+		return `<li class="k-rec">${head}<button class="k-link" data-act="you-fix" data-index="${i}" data-key="rec-${i}" aria-label="Not right: ${esc(text)}">Not right</button></li>`
 	}
 	const rungs =
 		box && line.did !== 'shorter'
@@ -124,7 +145,7 @@ function lineHtml({ line, i, times }, { look, home, you }) {
 function sideHtml({ look, home, you }) {
 	const reader = home.reader
 	const learned = reader?.learned ?? []
-	const once = sameDayOnce(learned)
+	const once = foldLines(learned)
 	const shown = you.all ? once : once.slice(0, SHOWN_LINES)
 	const lines =
 		learned.length === 0
