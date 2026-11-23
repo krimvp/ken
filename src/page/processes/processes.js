@@ -63,7 +63,7 @@ function drawHtml(procs, offers, off) {
 			<button class="k-btn" type="submit" data-key="proc-draw-send"${off ? ' disabled' : ''}>Draw it</button>
 		</form>
 		<p class="k-muted k-proc-cost">${esc(off ?? RUN_COST)}</p>
-		${procs.problem ? `<p class="k-ask-problem" role="alert">${esc(procs.problem)}</p>` : ''}
+		${procs.problem ? `<p class="k-ask-problem" role="alert">${esc(procs.problem)}${procs.reply ? ` <button class="k-link" data-act="open" data-id="${esc(procs.reply)}" data-key="proc-reply">Read its reply</button>` : ''}</p>` : ''}
 	</section>`
 }
 

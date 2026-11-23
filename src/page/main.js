@@ -5,6 +5,7 @@
 
 import { VIEWS_RUN } from './arch-views/switch.js'
 import { archActions, freshArch } from './architecture/arch-actions.js'
+import { earlierAnswers } from './ask/ask.js'
 import { askActions, freshAsk } from './ask/ask-actions.js'
 import { openingRows, threadGaps, threadId } from './ask/thread-window.js'
 import { briefActions, freshBrief } from './brief/brief-actions.js'
@@ -565,24 +566,25 @@ function firstLine(question) {
 	return old ? `Go deeper on the ${old[2]} UTC note about ${old[1]}` : first
 }
 
-// The header over a reply: ken's earlier replies in a menu, behind one word on a phone.
+// The header over a reply: the earlier answers in a menu, behind one word on a phone.
 function menuHtml() {
-	const n = state.rows.length
+	const answers = earlierAnswers(state.rows)
+	const n = answers.length
 	const questions =
 		n === 0
 			? ''
-			: `<button class="link top-wide" data-act="menu" data-key="menu" aria-expanded="${state.menuOpen}">Earlier replies (${n})</button>`
-	const narrow = `<button class="link top-narrow" data-act="menu" data-key="menu-narrow" aria-expanded="${state.menuOpen}" aria-label="Earlier replies">Menu</button>`
+			: `<button class="link top-wide" data-act="menu" data-key="menu" aria-expanded="${state.menuOpen}">Earlier answers (${n})</button>`
+	const narrow = `<button class="link top-narrow" data-act="menu" data-key="menu-narrow" aria-expanded="${state.menuOpen}" aria-label="Earlier answers">Menu</button>`
 	const bar = `${questions}${narrow}`
 	if (!state.menuOpen) return bar
 	const running = state.running
 		? `<button class="row" data-act="open-running" data-key="menu-running"><span class="row-q">${esc(firstLine(state.running.q.question))}</span><span class="row-meta">Running now</span></button>`
 		: ''
-	const rows = [...state.rows].reverse().map((row) => rowHtml(row))
+	const rows = answers.map((row) => rowHtml(row))
 	const list =
 		n === 0 && !running
 			? ''
-			: `<p class="menu-head">ken's earlier replies to you about this project, newest first. ken keeps them on this computer, outside the project.</p>${running}${rows.join('')}`
+			: `<p class="menu-head">ken's earlier answers to you about this project, newest first. ken keeps them on this computer, outside the project.</p>${running}${rows.join('')}`
 	return `${bar}<div class="menu">${list}</div>`
 }
 

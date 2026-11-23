@@ -237,7 +237,7 @@ test('a walk asked through the change lens is about that change though the model
 	assert.deepEqual([replied.reply.change.base, replied.reply.change.head], [base, head])
 
 	const [row] = (await json(server, '/api/questions')).questions
-	assert.deepEqual([row.change, row.steps], [{ base, head, snapshot: false }, 2])
+	assert.deepEqual([row.change, row.steps, row.answer], [{ base, head, snapshot: false }, 2, true])
 })
 
 test('a row says which lens asked it: the story of a change, a later question about the same commits which is no story, and a walk through uncommitted work, whose change ken marks as its own snapshot', async () => {
@@ -314,7 +314,7 @@ test('a level the reader asks to see another way is stored with their own words 
 	assert.deepEqual(names(look), ['Front', 'Store'])
 	assert.equal(look.named.asked, words)
 	const [row] = (await json(server, '/api/questions')).questions
-	assert.deepEqual(row.view, { within: ['src'], asked: words, drew: 'parts' })
+	assert.deepEqual([row.view, row.answer], [{ within: ['src'], asked: words, drew: 'parts' }, false])
 })
 
 test('the flows the model names with the parts of a level are sent with that level, a fourth flow is sent back, and a level named without any has none', async () => {

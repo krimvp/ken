@@ -218,6 +218,7 @@ test('a question streams its steps, the words and the cards in order, a diagram 
 		{
 			id: saved.entry.id,
 			question: 'What did the last commit do?',
+			answer: true,
 			askedAt: saved.entry.askedAt,
 			thread: saved.entry.thread,
 			outcome: 'answered',

@@ -142,6 +142,6 @@ export function noModelHtml(model, hasHistory, heading) {
 			<li>Stop ken with Ctrl-C in the terminal where it runs.</li>
 			${settings}
 		</ol>
-		${hasHistory ? '<p class="muted">Until then you can still read what ken told you before, under Earlier replies.</p>' : ''}
+		${hasHistory ? '<p class="muted">Until then you can still read what ken told you before, under Earlier answers.</p>' : ''}
 	</div>`
 }

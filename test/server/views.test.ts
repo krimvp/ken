@@ -252,6 +252,12 @@ test('a changed worker call marks its drawing and brief until they are redrawn; 
 
 test('naming the parts of the top level names its drawings in the same run, against the new parts', async () => {
 	await ask(server, { lens: { kind: 'parts', within: [] } })
+	const rows: { answer: boolean }[] = (await json(server, '/api/questions')).questions
+	assert.deepEqual(
+		rows.map((row) => row.answer),
+		[false, true, false],
+		'the runs that drew where it runs and named the parts are not answers, and the question between them is',
+	)
 	const views = (await top()).views
 	assert.deepEqual(
 		views.runtime.things.map((thing: { part: string }) => thing.part),

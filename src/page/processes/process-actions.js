@@ -10,6 +10,8 @@ export const freshProcesses = () => ({
 	at: null,
 	view: 'lanes',
 	problem: null,
+	// The saved reply of a run that drew nothing, which the earlier answers do not list.
+	reply: null,
 	// The ids there were when a drawing was asked for, so the new one opens when it is done.
 	before: null,
 })
@@ -52,7 +54,7 @@ export function processActions(app) {
 	function ask(text) {
 		const said = text.trim()
 		if (said === '' || state.running || state.model?.kind !== 'ok') return
-		Object.assign(procs, { problem: null, before: (procs.list ?? []).map((each) => each.id) })
+		Object.assign(procs, { problem: null, reply: null, before: (procs.list ?? []).map((each) => each.id) })
 		void send(
 			{ lens: { kind: 'view', within: [], name: null, text: said } },
 			{ kind: 'draw', text: said, trail: [], change: 'none', wayIn: 'learn' },
@@ -63,9 +65,8 @@ export function processActions(app) {
 	async function ended(q) {
 		if (!(await load())) {
 			procs.problem =
-				q.outcome === 'stopped'
-					? 'You stopped the run.'
-					: (q.error ?? "ken's model drew no process for that. Its reply is under Ask ken, with your earlier replies.")
+				q.outcome === 'stopped' ? 'You stopped the run.' : (q.error ?? "ken's model drew no process for that.")
+			procs.reply = q.outcome === 'stopped' ? null : q.id
 		}
 		render()
 		$('#proc-title')?.focus({ preventScroll: true })

@@ -17,6 +17,7 @@ import { DIAGRAM_BOUNDS, deployFacts, drawn, LAYOUT_BOUNDS, VIEWS_BOUNDS } from 
 import {
 	answerQuestion,
 	explainQuestion,
+	isPartsRun,
 	type LensFacts,
 	onDay,
 	openItems,
@@ -63,9 +64,11 @@ const NOTE_CHARS = 400
 // change ends at a commit of ken's own snapshot store, which is uncommitted work and no range to look at again. view is there
 // when the reader asked to see a level another way, and drew says what the reply drew for it: the parts again, a
 // diagram, since a flow or the data is not a grouping of parts, or nothing. brief is the id of the concept whose brief
-// the reply wrote: the question it answers, or the one part it explains, and null for any other reply.
+// the reply wrote: the question it answers, or the one part it explains, and null for any other reply. answer is false
+// for a run that named, explained or drew parts, which the page lists with ken's jobs, not with the answers.
 export type QuestionRow = {
 	background?: true
+	answer: boolean
 	id: string
 	question: string
 	askedAt: string
@@ -428,6 +431,7 @@ export function questionDesk(
 				const row = {
 					id,
 					question,
+					answer: !isPartsRun(question),
 					askedAt,
 					thread,
 					outcome,
