@@ -28,12 +28,12 @@ import {
 	showTool,
 } from './reply/show-tool.ts'
 import { type SavedAnswer, threadMemory } from './reply/thread-memory.ts'
-import { SYSTEM_PROMPT } from './system-prompt.ts'
+import { systemPrompt } from './system-prompt.ts'
 import { describeCall } from './tools/describe-call.ts'
 import { diffTool } from './tools/diff-tool.ts'
 import { type Elsewhere, elsewhereText } from './tools/elsewhere-text.ts'
 import { explorationTools } from './tools/exploration-tools.ts'
-import { type Memory, memoryTools, recordIndex } from './tools/memory-tool.ts'
+import { MEMORY_TOOLS, type Memory, memoryTools, recordIndex } from './tools/memory-tool.ts'
 import { rememberTool } from './tools/remember-tool.ts'
 import { sessionTools } from './tools/session-tools.ts'
 
@@ -186,7 +186,8 @@ export async function startChat(options: {
 			toolMode: 'native',
 			maxTurns: STEPS.talk.turns,
 			maxToolResultChars: MAX_TOOL_RESULT_CHARS,
-			systemPrompt: lens?.systemPrompt ?? SYSTEM_PROMPT,
+			systemPrompt:
+				lens?.systemPrompt ?? systemPrompt(MEMORY_TOOLS.filter((name) => memory.some((tool) => tool.name === name))),
 		})
 	}
 	// A question counts what its small requests to shorten a line cost.

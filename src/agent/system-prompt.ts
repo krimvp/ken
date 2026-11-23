@@ -1,10 +1,10 @@
 // What the model is told before every chat. It shapes what ken tells its reader, so it follows the plain-words skill.
 // A question in the reader's words gets all of it. A lens, which ken writes itself and which carries its own rules,
-// gets only the parts it uses (see lens/lens.ts), and the memory rules only for the memory tools it has: every request
-// sends the prompt again.
+// gets only the parts it uses (see lens/lens.ts). Each gets the memory rules only for the memory tools it has: every
+// request sends the prompt again.
 import { DIAGRAM_BOUNDS } from '../diagram/index.ts'
 import { STEP_WORDS, WEIGHT_RULE } from './reply/show-tool.ts'
-import { MEMORY_TOOLS, type MemoryTool } from './tools/memory-tool.ts'
+import type { MemoryTool } from './tools/memory-tool.ts'
 
 const KEN = `You are ken. You explain a software project to the developer who owns it. Talk as a colleague who has read the code would: plain words, short sentences, the high level first, the detail when they ask. Your tools read the project's files and git history, and the sessions a coding agent saved while it worked on the project. Nothing you do changes the project.`
 
@@ -77,19 +77,11 @@ function memoryRules(tools: readonly MemoryTool[]): string {
 - Ask memory before you read a file. Then read only the lines memory lacks, or the ones it marks as changed since. Memory says where lines are; quote them from read_file.`
 }
 
-export const SYSTEM_PROMPT = [
-	KEN,
-	RECORD,
-	EXPLORE,
-	memoryRules(MEMORY_TOOLS),
-	REPLY,
-	CARDS,
-	CHANGE,
-	BRIEF,
-	DIAGRAMS,
-	MAP,
-	NOTES,
-].join('\n\n')
+// What a question in the reader's words is told. memory is the memory tools it has, two in the terminal and four on
+// the server.
+export function systemPrompt(memory: readonly MemoryTool[]): string {
+	return [KEN, RECORD, EXPLORE, memoryRules(memory), REPLY, CARDS, CHANGE, BRIEF, DIAGRAMS, MAP, NOTES].join('\n\n')
+}
 
 // What a lens that ken wrote is told. The question holds what ken knows and the rules for what to send, so these
 // say only how to read and quote.
