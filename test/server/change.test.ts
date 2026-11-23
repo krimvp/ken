@@ -263,6 +263,68 @@ test('the diff of a change comes from git for the files asked, as hunks with the
 	}
 })
 
+test('a long part diff pages through replacement lines at their git positions and counts a file only when it ends', async () => {
+	const { root, hashes } = buildRepository([
+		{ message: 'old values', files: { 'part/replaced': lines(450, 'old').trimEnd(), 'part/old-name': 'moved' } },
+		{
+			message: 'new values',
+			files: { 'part/replaced': lines(430, 'new').trimEnd(), 'part/old-name': null, 'part/new-name': 'moved' },
+		},
+	])
+	const server = await openKen(root, readerHome())
+	const url = `/api/change/diff?within=part&change=${hashes[0]}..${hashes[1]}`
+	const pages = await Promise.all([1, 2, 3].map((page) => json(server, `${url}&page=${page}`)))
+	const [first, middle, last] = pages
+	assert.deepEqual(
+		pages.map(({ page, pages, cut }) => [page, pages, cut]),
+		[
+			[1, 3, true],
+			[2, 3, true],
+			[3, 3, false],
+		],
+	)
+	assert.deepEqual(first.complete.toSorted(), ['part/new-name', 'part/old-name'])
+	assert.deepEqual(middle.complete, [])
+	assert.deepEqual(last.complete, ['part/replaced'])
+	const hunks = pages.map((page) => page.hunks[0].hunk)
+	assert.deepEqual(
+		hunks.map(
+			({
+				oldStart,
+				oldLength,
+				newStart,
+				newLength,
+			}: {
+				oldStart: number
+				oldLength: number
+				newStart: number
+				newLength: number
+			}) => [oldStart, oldLength, newStart, newLength],
+		),
+		[
+			[1, 400, 0, 0],
+			[401, 50, 1, 350],
+			[450, 0, 351, 80],
+		],
+	)
+	assert.deepEqual(
+		hunks.flatMap((h) => h.lines),
+		[
+			...lines(450, 'old')
+				.trimEnd()
+				.split('\n')
+				.map((line) => `-${line}`),
+			'\\ No newline at end of file',
+			...lines(430, 'new')
+				.trimEnd()
+				.split('\n')
+				.map((line) => `+${line}`),
+			'\\ No newline at end of file',
+		],
+	)
+	for (const page of [0, 1.5, 4]) assert.equal((await call(server, `${url}&page=${page}`)).status, 400)
+})
+
 test("explaining one part reads its changed files and keeps the whole change's story available", async () => {
 	const { root, hashes } = buildRepository([
 		{ message: 'First receipt', files: { 'receipts/lookup.js': 'lookup', 'other.js': 'older' } },

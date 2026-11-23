@@ -80,12 +80,13 @@ export function diagramPath(diagram) {
 }
 
 // The files a step changed, from the changed blocks its quotes fall on, each with its lines added and removed.
-export function stepFiles(step) {
+export function stepFiles(step, limit) {
 	const files = new Map()
 	for (const { path, hunk } of step.hunks) {
 		const file = files.get(path) ?? { path, added: 0, removed: 0 }
-		file.added += hunk.lines.filter((line) => line.startsWith('+')).length
-		file.removed += hunk.lines.filter((line) => line.startsWith('-')).length
+		const lines = limit === undefined ? hunk.lines : hunk.lines.slice(0, limit)
+		file.added += lines.filter((line) => line.startsWith('+')).length
+		file.removed += lines.filter((line) => line.startsWith('-')).length
 		files.set(path, file)
 	}
 	return [...files.values()]

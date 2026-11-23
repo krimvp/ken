@@ -98,6 +98,10 @@ export function endedHtml(q, t) {
 		],
 		unverified: ['Unverified source answer', "ken's model gave an explanation without a checked quote from a file."],
 		incomplete: ['The brief is incomplete', "ken's model did not give a point it could check against the code."],
+		'tool-proposal': [
+			'The model gave no answer',
+			'Its reply contained only proposed actions. None of those actions ran.',
+		],
 		'no-answer': ["ken's model stopped without a reply", 'It read the project but wrote nothing back.'],
 		'out-of-turns': [
 			"ken's model ran out of turns",

@@ -9,6 +9,7 @@ const KEPT_REPLIES = 40
 export type SavedAnswer = {
 	id: string
 	askedAt: string
+	after?: string | null
 	head: string | null
 	question: string
 	reply: Reply
@@ -90,6 +91,24 @@ function matches(each: Excerpt, search: string | undefined): boolean {
 	return (search ?? '').split(/\s+/).every((word) => all.includes(word))
 }
 
+function savedExcerpt(row: SavedAnswer) {
+	const full = contents(row.reply.answers?.text ?? row.reply.view?.asked ?? row.question, row.reply, [], row.focus)
+	return {
+		id: row.id,
+		...(row.after && { after: row.after }),
+		head: row.head,
+		...preview(full),
+		question: excerpt(full.question, 240),
+		answer: excerpt(full.answer, 460),
+	}
+}
+
+// A chosen reply and its parent give a follow-up its subject, even after ken restarts.
+export function savedOpening(selected: SavedAnswer, parent?: SavedAnswer): string {
+	const replies = parent ? [parent, selected] : [selected]
+	return `The reader is following up on the last saved reply below. Use memory_known with an id for the full reply or its after id for the preceding reply. Recheck the source for current facts and follow what the reader asks now.\n${replies.map((row) => JSON.stringify(savedExcerpt(row))).join('\n')}\n\n`
+}
+
 export function threadMemory(readSaved?: () => Promise<SavedAnswer[]>) {
 	const exchanges: Exchange[] = []
 	let number = 0
@@ -123,7 +142,16 @@ export function threadMemory(readSaved?: () => Promise<SavedAnswer[]>) {
 			const full = contents(row.reply.answers?.text ?? row.reply.view?.asked ?? row.question, row.reply, [], row.focus)
 			if (id || matches(full, lower)) {
 				const brief = id ? full : preview(full, lower)
-				found.push({ id: row.id, text: JSON.stringify({ id: row.id, askedAt: row.askedAt, head: row.head, ...brief }) })
+				found.push({
+					id: row.id,
+					text: JSON.stringify({
+						id: row.id,
+						...(row.after && { after: row.after }),
+						askedAt: row.askedAt,
+						head: row.head,
+						...brief,
+					}),
+				})
 			}
 		}
 		return found

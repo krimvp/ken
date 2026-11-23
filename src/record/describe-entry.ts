@@ -136,7 +136,7 @@ async function checkedNote(repo: Repository, topic: Topic, note: Note & { id: st
 }
 
 // Which of the two kinds of recorded decision this is, so a reader can tell a logged one from a quoted message.
-function decisionMark(decision: Decision): string {
+export function decisionMark(decision: Decision): string {
 	const by = decision.logged?.by
 	if (decision.logged) return by ? `recorded, logged by ${by}` : 'recorded, logged with ken decide'
 	if (decision.label === 'recorded') return 'recorded from a commit message'

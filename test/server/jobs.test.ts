@@ -206,6 +206,15 @@ test("ken explains each part by itself in tour order; a part the reader presses 
 		],
 		'the run that gave way left nothing in the history',
 	)
+	assert.deepEqual(
+		rows.map((row: { background?: true }) => Boolean(row.background)),
+		[false, true],
+	)
+	const [requested, unattended] = await Promise.all(
+		rows.map((row: { id: string }) => json(server, `/api/questions/${row.id}`)),
+	)
+	assert.equal(requested.entry.background, undefined)
+	assert.equal(unattended.entry.background, true)
 	assert.equal((await json(server, '/api/brief?concept=part%3A%3ACore')).line, 'Runs the work and gives back one.')
 })
 

@@ -403,6 +403,18 @@
 	font-size: 14px;
 }
 
+.k-source-uses ul {
+	padding-inline-start: 1.25rem;
+}
+.k-source-uses li {
+	margin-block: 0.65rem;
+	overflow-wrap: anywhere;
+}
+.k-source-uses code {
+	display: block;
+	white-space: pre-wrap;
+}
+
 .k-quotes .q-source code {
 	color: var(--k-ink);
 	font-family: var(--font-code);

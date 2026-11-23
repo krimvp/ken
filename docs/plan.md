@@ -175,7 +175,7 @@ When many topics have changed at once, such as after weeks away, the answer star
 ### Signals that update the map
 
 - A question marks its topic as a gap. Its wording sets the level: "what is a write-ahead log" and "why sync per batch" call for different answers.
-- Three buttons on every answer: "I know this", "too much", "go deeper".
+- "I know this" records understanding of the quoted code. "Too much detail" asks for shorter replies on that topic. "Go deeper" asks for detail now and restores the usual reply length. Both keep the reader's knowledge evidence and its date.
 - Code the reader wrote by hand counts as understood, when the record knows it was by hand.
 
 ## What stays deterministic

@@ -1,6 +1,7 @@
 // The understanding map on disk: ~/.ken/projects/<project id>/map.jsonl, beside the reader's history and never in the
 // repository. ken only appends; a person may add or change lines by hand. Every line that parses counts, whoever wrote
-// it, and the newest line for a topic wins. A line that does not parse is skipped and named, never fatal.
+// it. Each topic keeps its newest knowledge evidence and latest reply-length preference.
+// A line that does not parse is skipped and named.
 import { appendFile, mkdir, readFile } from 'node:fs/promises'
 import path from 'node:path'
 import {
@@ -14,7 +15,7 @@ import {
 } from '../record/index.ts'
 import type { Repository } from '../repo/index.ts'
 import { lineFor, type MapSignal } from './learn.ts'
-import { type MapEntry, mapLine, parseMapLine } from './map-entry.ts'
+import { type DetailEntry, type MapEntry, type MapLine, parseMapLine } from './map-entry.ts'
 import { stateOf, type TopicState } from './topic-state.ts'
 
 // states holds every topic in the project record, in the record's order. problems names each line ken skipped.
@@ -40,9 +41,9 @@ export async function openMap(
 	if (first === null) return { kind: 'no-commits' }
 	const file = path.join(home, 'projects', first, 'map.jsonl')
 
-	async function lines(): Promise<{ entries: MapEntry[]; problems: string[] }> {
+	async function lines(): Promise<{ entries: MapLine[]; problems: string[] }> {
 		const text = await readFile(file, 'utf8').catch(emptyWhenMissing)
-		const entries: MapEntry[] = []
+		const entries: MapLine[] = []
 		const problems: string[] = []
 		for (const [index, line] of text.split('\n').entries()) {
 			if (line.trim() === '') continue
@@ -64,18 +65,22 @@ export async function openMap(
 	async function stateNow(
 		topic: Topic,
 		{ versions }: Topics,
-		entries: MapEntry[],
+		entries: MapLine[],
 		now: Date,
 		abort?: AbortSignal,
 	): Promise<TopicState> {
-		const entry = entries.findLast((each) => sameName(each.topic, topic.name))
+		const entry = entries.findLast((line): line is MapEntry => 'evidence' in line && sameName(line.topic, topic.name))
+		const preference = entries.findLast(
+			(line): line is DetailEntry => 'detail' in line && sameName(line.topic, topic.name),
+		)
 		const code = await topicCode(repo, topic, abort)
 		const knew =
 			entry && code.hash !== entry.hash
 				? versions.find((version) => sameName(version.name, topic.name) && codeHash(version.quotes) === entry.hash)
 				: undefined
 		const knewGone = knew ? (await topicCode(repo, knew, abort)).gone : []
-		return stateOf(topic, entry, code, now, knewGone)
+		const state = stateOf(topic, entry, code, now, knewGone)
+		return preference?.detail === 'shorter' ? { ...state, shorterSince: preference.date } : state
 	}
 
 	async function read(now: Date, abort?: AbortSignal, selected?: SelectedTopics): Promise<MapRead> {
@@ -95,21 +100,20 @@ export async function openMap(
 	async function learn(mapSignal: MapSignal, names: string[], now: Date, abort?: AbortSignal) {
 		const [{ entries }, known] = await Promise.all([lines(), topics()])
 		const chosen = known.current.filter((topic) => names.some((name) => sameName(name, topic.name)))
-		const added: MapEntry[] = []
-		for (const topic of chosen) {
-			const line = lineFor(mapSignal, await stateNow(topic, known, entries, now, abort), now)
-			if (line) added.push(line)
-		}
-		if (added.length > 0) await append(added)
-		return await Promise.all(chosen.map((topic) => stateNow(topic, known, [...entries, ...added], now, abort)))
+		const before = await Promise.all(chosen.map((topic) => stateNow(topic, known, entries, now, abort)))
+		const added = before.flatMap((state) => lineFor(mapSignal, state, now) ?? [])
+		if (added.length === 0) return before
+		await append(added)
+		const updated = [...entries, ...added]
+		return await Promise.all(chosen.map((topic) => stateNow(topic, known, updated, now, abort)))
 	}
 
-	async function append(entries: MapEntry[]) {
+	async function append(entries: MapLine[]) {
 		await mkdir(path.dirname(file), { recursive: true })
 		const text = await readFile(file, 'utf8').catch(emptyWhenMissing)
 		// A person may save the file without a newline at its end, which would join their last line to ken's first.
 		const lead = text === '' || text.endsWith('\n') ? '' : '\n'
-		await appendFile(file, `${lead}${entries.map((entry) => `${mapLine(entry)}\n`).join('')}`)
+		await appendFile(file, `${lead}${entries.map((entry) => `${JSON.stringify(entry)}\n`).join('')}`)
 	}
 
 	return { kind: 'ok', map: { file, read, learn } }

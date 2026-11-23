@@ -106,15 +106,16 @@ function lineHtml({ line, i, times }, { look, home, you }) {
 	if (you.fixing !== i) {
 		return `<li class="k-rec">${head}<button class="k-link" data-act="you-fix" data-index="${i}" data-key="rec-${i}" aria-label="Not right: ${esc(line.text)}">Not right</button></li>`
 	}
-	const rungs = box
-		? `<p class="k-ladder-q">What do you know of ${prose(box.name)}?</p>${KNOWN.map(
-				(level) =>
-					`<button class="k-rung" data-act="you-set" data-level="${level}" data-name="${esc(box.name)}" data-key="you-set-${level}" aria-pressed="${level === box.knows.level}">${levelMark(level, 18)}<span>${esc(levelLabel(home, level))}</span>${level === box.knows.level ? '<em>ken thinks this</em>' : ''}</button>`,
-			).join('')}`
-		: ''
+	const rungs =
+		box && line.did !== 'shorter'
+			? `<p class="k-ladder-q">What do you know of ${prose(box.name)}?</p>${KNOWN.map(
+					(level) =>
+						`<button class="k-rung" data-act="you-set" data-level="${level}" data-name="${esc(box.name)}" data-key="you-set-${level}" aria-pressed="${level === box.knows.level}">${levelMark(level, 18)}<span>${esc(levelLabel(home, level))}</span>${level === box.knows.level ? '<em>ken thinks this</em>' : ''}</button>`,
+				).join('')}`
+			: ''
 	return `<li class="k-rec is-fixing">${head}
 		<div class="k-ladder" role="group" aria-label="Correct what ken recorded">
-			<button class="k-btn is-quiet" data-act="you-undo" data-index="${i}" data-key="you-undo">${line.topic ? `I do not know ${prose(line.topic)}` : 'Take this line back'}</button>
+			<button class="k-btn is-quiet" data-act="you-undo" data-index="${i}" data-key="you-undo">${line.did === 'shorter' ? 'Use the usual reply length' : line.topic ? `I do not know ${prose(line.topic)}` : 'Take this line back'}</button>
 			${rungs}
 			<button class="k-link" data-act="you-fix" data-index="-1" data-key="you-fix-cancel">Cancel</button>
 		</div></li>`

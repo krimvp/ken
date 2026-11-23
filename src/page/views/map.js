@@ -27,7 +27,12 @@ export function linesText(lines) {
 
 // The topics of this answer whose entries fold: the reader knows them and their code is unchanged. A topic the reader
 // asked to see anyway stays open.
+function askedForDetail(q) {
+	return q.question?.startsWith('Go one level deeper on ')
+}
+
 export function foldedTopics(q, ui) {
+	if (askedForDetail(q)) return new Set()
 	return new Set(
 		(q.topics ?? []).filter((t) => t.kind === 'unchanged' && !ui.unfolded.has(t.topic)).map((t) => t.topic),
 	)
@@ -47,7 +52,7 @@ export function changedTopics(q) {
 // since the reader knew it, unless the answer is older than HEAD: its notice says so then.
 export function knownHtml(q, ui, named, moved) {
 	const lines = (q.topics ?? []).flatMap((t) => {
-		if (t.kind === 'unchanged' && named.has(t.topic)) {
+		if (t.kind === 'unchanged' && named.has(t.topic) && !askedForDetail(q)) {
 			const open = ui.unfolded.has(t.topic)
 			return [
 				`<p class="known">${open ? 'Showing' : 'Hiding'} the cards on ${esc(t.topic)}. You know it, and its code has not changed since ${sinceDay(t.entry.date)}. <button class="link" data-act="unfold" data-topic="${esc(t.topic)}" data-key="unfold-${esc(t.topic)}" aria-expanded="${open}">${open ? 'Hide them' : 'Show them'}</button></p>`,
@@ -70,7 +75,7 @@ export function knownHtml(q, ui, named, moved) {
 const SAID = {
 	know: (names) =>
 		`Saved to your map. Later replies hide the cards on ${list(names)} until ${names.length === 1 ? 'its' : 'their'} code changes.`,
-	'too-much': (names) => `Saved. The next reply on ${list(names)} will be shorter.`,
+	'too-much': (names) => `Saved. You asked for shorter replies on ${list(names)}.`,
 }
 
 // The three buttons under a reply, on one quiet line, which act on the topics it names. t is the reply's turn in the thread.
@@ -82,7 +87,7 @@ export function mapBarHtml(q, t, ui, running) {
 	const button = (act, text, means, off = false) =>
 		`<button class="link" data-act="map-${act}" data-turn="${t}" data-key="map-${act}-${t}" title="${means}"${off ? ' disabled' : ''}>${text}</button>`
 	return `<section class="map-bar small" aria-label="Your map">
-		<p>Tell ken how well you know ${named} now.</p>
+		<p>How should ken explain ${named} to you?</p>
 		<p class="map-buttons-line">${button('know', 'I know it', 'Later replies hide its cards until its code changes.')} <span aria-hidden="true">·</span> ${button('too-much', 'Too much detail', 'The next reply on it is shorter.')} <span aria-hidden="true">·</span> ${button('deeper', 'Go deeper', `Asks for more detail. ${RUN_COST}`, running)}</p>
 		${said}
 	</section>`

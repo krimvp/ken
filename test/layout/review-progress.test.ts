@@ -37,3 +37,24 @@ test('the next merge review resumes at the unread paths of that exact change', a
 	await opened(base, 'receipts/save.ts')
 	assert.equal(await next(), undefined)
 })
+
+test('Home counts a renamed file once and recognizes a review of its old name', async () => {
+	const { root, hashes } = buildRepository([
+		{ message: 'First version', files: { 'orders/save.ts': 'save the order' } },
+		{ message: 'Move saving', files: { 'orders/save.ts': null, 'delivery/save.ts': 'save the order' } },
+		{ message: 'Merge delivery', parent: 0, merge: 1, files: {} },
+	])
+	const sources = await sourcesFor(root)
+	const ask = await readLayoutAsk(sources, { change: 'none' }, new Date())
+	if (ask.kind !== 'ok') assert.fail(ask.message)
+	const next = async () =>
+		(await lookAtLayout(sources, ask.ask, new Date())).next.items.find((item) => item.kind === 'review')
+	assert.equal((await next())?.size?.files, 1)
+	const [base = '', , head = ''] = hashes
+	await sources.seen.add(
+		{ did: 'change', change: { base, head }, paths: ['orders/save.ts' as RepoPath] },
+		head as CommitHash,
+		new Date(),
+	)
+	assert.equal(await next(), undefined)
+})

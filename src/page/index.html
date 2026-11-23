@@ -48,7 +48,10 @@
 					<main class="chat">
 						<div id="thread"></div>
 						<form class="composer" id="ask" autocomplete="off">
-							<label class="composer-label" for="question">Your question</label>
+							<div class="composer-target">
+								<label class="composer-label" for="question">Your question</label>
+								<button class="link" type="button" data-act="new-subject" id="new-subject" hidden>New subject</button>
+							</div>
 							<div class="composer-row">
 								<textarea id="question" rows="1" placeholder="What changed, why was it done that way, how does a part work now?"></textarea>
 								<button type="submit" class="primary" id="send">Ask</button>

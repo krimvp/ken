@@ -14,7 +14,7 @@ export type ObjectId = string & { readonly __brand: 'ObjectId' }
 // more parents; the first is the line it was merged into.
 export type Commit = {
 	hash: CommitHash
-	parents: string[]
+	parents: CommitHash[]
 	author: string
 	email: string
 	date: string
@@ -59,6 +59,7 @@ export interface Repository {
 		commit: CommitHash,
 		path: RepoPath,
 		signal?: AbortSignal,
+		maxBytes?: number,
 	): Promise<{ kind: 'ok'; text: string } | NoFile | TooLarge>
 	listFiles(commit: CommitHash, signal?: AbortSignal): Promise<{ kind: 'ok'; paths: string[] } | TooLarge>
 	// How many lines each text file holds at the commit, by path. A binary file and an empty one are not listed.
@@ -67,6 +68,7 @@ export interface Repository {
 		commit: CommitHash,
 		pattern: string,
 		signal?: AbortSignal,
+		paths?: RepoPath[],
 	): Promise<{ kind: 'ok'; matches: SearchMatch[] } | { kind: 'bad-pattern'; message: string } | TooLarge>
 	// The commit where head split from base. Unrelated when the two share no history.
 	mergeBase(
@@ -110,6 +112,11 @@ export interface Repository {
 	// The newest commit on head's main line that git committed at or before the moment, an ISO date. Null when every
 	// commit is newer. The commit date, not the author date, so a commit rebased onto the line counts from when it landed.
 	before(head: CommitHash, moment: string, signal?: AbortSignal): Promise<CommitHash | null>
+	// File names at both ends of a change, without loading its patch.
+	diffFiles(
+		range: Range,
+		signal?: AbortSignal,
+	): Promise<{ kind: 'ok'; files: Pick<FileDiff, 'path' | 'oldPath'>[] } | TooLarge>
 	diff(range: Range, signal?: AbortSignal, within?: string[]): Promise<{ kind: 'ok'; files: FileDiff[] } | TooLarge>
 	// The branch HEAD is on, or null when HEAD is detached.
 	branch(signal?: AbortSignal): Promise<string | null>

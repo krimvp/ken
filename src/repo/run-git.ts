@@ -20,12 +20,13 @@ export async function runGit(
 	signal?: AbortSignal,
 	alternate: string | null = null,
 	input = '',
+	maxBytes = MAX_OUTPUT_BYTES,
 ): Promise<GitRun> {
 	try {
 		const run = execFileAsync('git', args, {
 			cwd: root,
 			encoding: 'utf8',
-			maxBuffer: MAX_OUTPUT_BYTES,
+			maxBuffer: maxBytes,
 			env: {
 				...process.env,
 				GIT_OPTIONAL_LOCKS: '0',

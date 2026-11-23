@@ -9,6 +9,7 @@ import {
 	firstWords,
 	type Item,
 	type Reply,
+	savedOpening,
 	WANTS,
 	type Want,
 } from '../agent/index.ts'
@@ -28,7 +29,7 @@ import {
 	viewQuestion,
 	viewsQuestion,
 } from '../follow-up/index.ts'
-import { entryFrom, type History, type HistoryEntry, whyNoNote } from '../history/index.ts'
+import { entryFrom, type History, type HistoryEntry, readerQuestions, whyNoNote } from '../history/index.ts'
 import { gaveWay, jobQueue, type Ran } from '../jobs/index.ts'
 import {
 	type Change,
@@ -64,10 +65,12 @@ const NOTE_CHARS = 400
 // diagram, since a flow or the data is not a grouping of parts, or nothing. brief is the id of the concept whose brief
 // the reply wrote: the question it answers, or the one part it explains, and null for any other reply.
 export type QuestionRow = {
+	background?: true
 	id: string
 	question: string
 	askedAt: string
 	thread: string | null
+	after?: string | null
 	outcome: HistoryEntry['outcome']
 	cards: number
 	calls: number
@@ -150,6 +153,12 @@ export function questionDesk(
 				say(line)
 			}
 			const { ran, entry } = await run(chat, asked.text, signal, sent, asked.as)
+			// A reader can join a run Ken already started. Check who asked when it finishes.
+			if (entry && (entry.outcome === 'answered' || job.asked)) {
+				if (!job.asked) entry.background = true
+				await history.add(entry)
+				sent({ kind: 'saved', view: await viewOf(entry) })
+			}
 			if (ran.kind === 'model-error') return ran
 			if (entry?.outcome === 'partial') throw new Error("ken's model explained only some parts.")
 			if (entry?.outcome === 'incomplete') throw new Error("ken's model did not give a brief with a checked point.")
@@ -250,12 +259,15 @@ export function questionDesk(
 		send: (line: QuestionLine) => void,
 		as?: Asking,
 	): Promise<{ ran: Ran; entry: HistoryEntry | null }> {
+		const after = as?.kind === 'question' ? as.after : undefined
+		const id = randomUUID()
 		const asked = {
-			id: randomUUID(),
+			id,
 			question,
 			askedAt: new Date().toISOString(),
 			head: await headNow(),
-			thread: chat.thread,
+			thread: after === null ? id : (after?.thread ?? chat.thread),
+			...(after !== undefined && { after: after?.id ?? null }),
 			...(as?.kind === 'question' && as.focus ? { focus: as.focus } : {}),
 		}
 		send({ kind: 'asked', question })
@@ -279,11 +291,6 @@ export function questionDesk(
 					within: as.tour.within,
 					part: as.tour.stops.length === 1 ? (as.tour.stops[0]?.name ?? null) : null,
 				}
-		}
-		// The reader's list of questions holds what they asked and what ken made; the jobs list says why ken's failed.
-		if (entry.outcome === 'answered' || chat !== chats?.ken) {
-			await history.add(entry)
-			send({ kind: 'saved', view: await viewOf(entry) })
 		}
 		const last = events.at(-1)
 		const ran: Ran = last?.kind === 'error' && last.model ? { kind: 'model-error', why: last.message } : RAN
@@ -395,7 +402,15 @@ export function questionDesk(
 		return await Promise.all(
 			asked.map(async (entry) => {
 				const { id, question, askedAt, thread, outcome } = entry
-				const row = { id, question, askedAt, thread, outcome }
+				const row = {
+					id,
+					question,
+					askedAt,
+					thread,
+					outcome,
+					...(entry.background && { background: entry.background }),
+					...(entry.after !== undefined && { after: entry.after }),
+				}
 				if (!('reply' in entry)) {
 					const none = { hunks: null, tour: null, change: null, want: null, steps: 0, view: null, brief: null }
 					return { ...row, cards: 0, calls: 0, risks: 0, ...none }
@@ -425,13 +440,13 @@ export function questionDesk(
 	}
 
 	async function view(id: string): Promise<QuestionView | null> {
-		const entry = (await history.list()).find((each) => each.id === id)
+		const entry = await history.find(id)
 		return entry ? await viewOf(entry) : null
 	}
 
 	async function lensFacts(): Promise<LensFacts> {
 		const [{ states }, read, asked] = await Promise.all([map.read(new Date()), record.read(), history.list()])
-		return { record: read, states, lastQuestion: asked.at(-1) }
+		return { record: read, states, lastQuestion: readerQuestions(asked).at(-1) }
 	}
 
 	// The level a parts or view lens names, as the reader sees it. The model draws parts at HEAD, so the starting point
@@ -468,6 +483,43 @@ export function questionDesk(
 		return { deploy, bounds: VIEWS_BOUNDS }
 	}
 
+	async function followSaved(
+		after: unknown,
+		text: string,
+	): Promise<({ kind: 'ok' } & Asked) | { kind: 'refused'; problem: string }> {
+		if (typeof after !== 'string' || !after || after.length > 200)
+			return { kind: 'refused', problem: 'Choose a saved reply to follow up on.' }
+		const prior = await history.find(after)
+		if (!prior || !('reply' in prior) || prior.about)
+			return {
+				kind: 'refused',
+				problem: 'This saved reply is unavailable. Open another reply or start a new subject.',
+			}
+		const ancestor = prior.after ? await history.find(prior.after) : undefined
+		return {
+			kind: 'ok',
+			text,
+			as: {
+				kind: 'question',
+				after: {
+					id: prior.id,
+					thread: prior.thread ?? prior.id,
+					opening: savedOpening(
+						prior,
+						ancestor &&
+							ancestor.id !== prior.id &&
+							(ancestor.thread ?? ancestor.id) === prior.thread &&
+							'reply' in ancestor &&
+							!ancestor.about
+							? ancestor
+							: undefined,
+					),
+				},
+				...(prior.focus && { focus: prior.focus }),
+			},
+		}
+	}
+
 	// The page sends a question, or a lens for ken to write the question from: catch up, an area, "Go deeper" on the
 	// topics of an answer, which also tells the map the reader needs more on them, a person, a time range, "Explain
 	// what changed" on a topic of the open list, one change, another way to show a level, the brief of a part or of
@@ -485,6 +537,11 @@ export function questionDesk(
 			if (text.length > MAX_QUESTION_CHARS) {
 				return { kind: 'refused', problem: `Keep the question under ${MAX_QUESTION_CHARS} characters.` }
 			}
+			const after = fieldOf(body, 'after')
+			if (after !== undefined && fieldOf(body, 'focus') !== undefined)
+				return { kind: 'refused', problem: 'Choose a saved reply or ask from the open source or drawing.' }
+			if (after === null) return { kind: 'ok', text: text.trim(), as: { kind: 'question', after: null } }
+			if (after !== undefined) return await followSaved(after, text.trim())
 			const focus = fieldOf(body, 'focus')
 			if (focus === undefined) return { kind: 'ok', text: text.trim() }
 			const view = fieldOf(focus, 'view')
@@ -522,7 +579,16 @@ export function questionDesk(
 		}
 		if (kind === 'catch-up') {
 			const [{ states }, read, asked] = await Promise.all([map.read(new Date()), record.read(), history.list()])
-			return { kind: 'ok', text: catchUpQuestion({ states, record: read, asked, head: await headNow(), day: onDay }) }
+			return {
+				kind: 'ok',
+				text: catchUpQuestion({
+					states,
+					record: read,
+					asked: readerQuestions(asked),
+					head: await headNow(),
+					day: onDay,
+				}),
+			}
 		}
 		if (kind === 'area') {
 			const area = parsePath(String(fieldOf(lens, 'path') ?? ''))
@@ -653,7 +719,16 @@ export function questionDesk(
 					knows: readerLine(about.knows),
 					line: about.staleFiles ? '' : about.line,
 					paths,
-					told: about.staleFiles ? [] : about.points.map(toldWithLines),
+					told:
+						about.kind === 'decision'
+							? [
+									about.why ? `Reason (${about.reasonSource}): ${about.why}` : 'No reason was recorded.',
+									`Open ${about.id} with memory_known for its evidence.`,
+									...(about.replacedBy ? [`This was replaced by ${about.replacedBy}.`] : []),
+								]
+							: about.staleFiles
+								? []
+								: about.points.map(toldWithLines),
 				},
 				bounds: BRIEF_BOUNDS,
 				drawings: DRAWINGS,
@@ -724,8 +799,11 @@ export function questionDesk(
 					'Send a question, or a lens: answer, catch-up, area with a path, change, deeper, explain, parts, person, range, topic, view, views or note.',
 			}
 		}
-		await map.learn('deeper', names, new Date())
-		return { kind: 'ok', text: deeperQuestion(names, asked.slice(0, MAX_QUESTION_CHARS)) }
+		const text = deeperQuestion(names, asked.slice(0, MAX_QUESTION_CHARS))
+		const after = fieldOf(body, 'after')
+		const question = after === undefined ? { kind: 'ok' as const, text } : await followSaved(after, text)
+		if (question.kind === 'ok') await map.learn('deeper', names, new Date())
+		return question
 	}
 
 	return {

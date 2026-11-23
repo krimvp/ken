@@ -5,11 +5,11 @@
 import { pageBrief } from '../brief/briefs.js'
 import { stepFiles } from '../level/content.js'
 import { WHOLE } from '../level/level-state.js'
-import { stepDiffHtml, stepParts, stepWords, walkOf } from '../project/walk.js'
+import { SHOWN_LINES, stepDiffHtml, stepParts, stepWords, walkOf } from '../project/walk.js'
 import { fill } from '../shell/fill.js'
 import { esc } from '../views/format.js'
 import { wordsHtml } from '../views/reply.js'
-import { changeName, changesPageHtml, shownInPart, spanChoices, spanOf } from './changes.js'
+import { changeName, changesPageHtml, spanChoices, spanOf, stepCoverage } from './changes.js'
 import { dayAt, daysShown } from './timeline.js'
 
 const DAY = 86_400_000
@@ -37,26 +37,41 @@ export function changeActions(app) {
 	const loads = () => app.level.loads
 
 	let readingPart = 0
-	async function readPart(name, change, remember, mine) {
+	async function readPart(name, change, remember, mine, page = 1, previous = null) {
 		let look = state.shell.top?.look
-		if (!look) {
+		if (!previous && !look) {
 			const top = await app.read('/api/layout?change=none').catch(() => null)
 			if (mine !== readingPart || state.shell.page !== 'changes') return
 			look = top?.body.look
 		}
-		const box = look?.boxes.find((each) => each.name === name)
-		if (!box) {
+		const paths = previous?.within ?? look?.boxes.find((each) => each.name === name)?.paths
+		if (!paths) {
 			chg.partDiff = { message: 'ken could not find this part in the project.' }
 		} else {
-			const query = new URLSearchParams({ change, part: name })
-			for (const path of box.paths) query.append('within', path)
+			const query = new URLSearchParams({ change, part: name, page: String(page) })
+			for (const path of paths) query.append('within', path)
 			const answer = await app
 				.read(`/api/change/diff?${query}`)
 				.catch((error) => ({ ok: false, body: { message: error.message } }))
-			if (mine !== readingPart || chg.part !== name || state.shell.page !== 'changes') return
-			chg.partDiff = { ...answer.body, within: box.paths }
-			if (remember && answer.ok && !answer.body.tooLarge)
-				void app.level.tell({ did: 'change', paths: box.paths, change: answer.body.range })
+			if (mine !== readingPart || chg.part !== name || chg.tab !== 'changes' || state.shell.page !== 'changes') return
+			if (previous && (!answer.ok || answer.body.tooLarge)) {
+				chg.partDiff = {
+					...chg.partDiff,
+					paging: false,
+					pageProblem: answer.body.message ?? 'This diff is too large to show.',
+				}
+				return render()
+			}
+			const saved = previous
+				? {
+						commits: previous.commits,
+						moreCommits: previous.moreCommits,
+						historyTooLarge: previous.historyTooLarge,
+					}
+				: {}
+			chg.partDiff = { ...answer.body, ...saved, within: paths }
+			if (remember && answer.ok && answer.body.complete?.length)
+				void app.level.tell({ did: 'change', paths: answer.body.complete, change: answer.body.range })
 		}
 		render()
 	}
@@ -117,7 +132,9 @@ export function changeActions(app) {
 		if (!step || !look?.change) return
 		const { title, body } = stepWords(step)
 		const id = `change-step:${q.id}:${n}`
-		const part = shownInPart(look, stepFiles(step)).map(
+		const displayed = stepFiles(step, SHOWN_LINES)
+		const { partial, complete } = stepCoverage(look, displayed)
+		const part = partial.map(
 			({ path, added, removed, whole }) =>
 				`<p class="k-muted">This step shows part of the change to <code>${esc(path)}</code>: +${added} &minus;${removed} of its +${whole.added} &minus;${whole.removed}.</p>`,
 		)
@@ -127,9 +144,8 @@ export function changeActions(app) {
 			html: `<h3 class="k-eyebrow">The changed lines</h3>${part.join('')}${stepDiffHtml(step, look.change.range)}`,
 		})
 		app.brief.show(id, { opener })
-		const paths = stepFiles(step).map((file) => file.path)
 		const { base, head } = look.change.range
-		if (paths.length > 0) void app.level.tell({ did: 'change', paths, change: { base, head } })
+		if (complete.length > 0) void app.level.tell({ did: 'change', paths: complete, change: { base, head } })
 	}
 
 	function openStory(opener) {
@@ -162,6 +178,15 @@ export function changeActions(app) {
 		'chg-pick': (el) => show(el.dataset.change).then(() => $('#chg-name')?.focus({ preventScroll: true })),
 		'chg-shift': (el) => shift(Number(el.dataset.by)),
 		'chg-step': (el) => openStep(Number(el.dataset.n), el.dataset.key),
+		async 'chg-lines'(el) {
+			const previous = chg.partDiff
+			const { range } = previous
+			chg.partDiff = { ...previous, paging: true, pageProblem: null }
+			render()
+			const mine = ++readingPart
+			await readPart(chg.part, `${range.base}..${range.head}`, true, mine, Number(el.dataset.page), previous)
+			if (mine === readingPart && state.shell.page === 'changes' && chg.tab === 'changes') $('#chg-lines')?.focus()
+		},
 		'chg-explain-part'() {
 			const { range, within } = chg.partDiff
 			return app.send({
@@ -170,10 +195,11 @@ export function changeActions(app) {
 		},
 		'chg-story': (el) => openStory(el.dataset.key),
 		async 'chg-tab'(el) {
+			readingPart++
 			chg.tab = el.dataset.tab
 			render()
 			if (chg.tab !== 'changes') await app.older.load(chg.tab)
-			else if (!lookNow()?.change) await enter()
+			else if (chg.part || !lookNow()?.change) await enter(chg.part ? state.home.change : null)
 			render()
 			$(`[data-key="chg-tab-${chg.tab}"]`)?.focus()
 		},

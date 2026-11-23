@@ -6,7 +6,7 @@
 import { count, esc, isSession, lineSpan, prose } from '../views/format.js'
 
 // Lines a hunk shows before it says how many more it has.
-const SHOWN_LINES = 60
+export const SHOWN_LINES = 60
 
 // The steps of a reply by number, each with its cards, as { card, j } with j the card's place in the reply, the hunks
 // its quotes overlap, and on a tour the name of its stop's part. A reply saved before ken had steps has none.
@@ -153,25 +153,26 @@ export function walkHtml(steps, t, { at, boxes, cardHtml, under, change, tour = 
 
 // The changed lines of a step as a diff: each block under its file, removed lines in red and added lines in green,
 // with the line numbers before and after.
-export function stepDiffHtml(step, change) {
+export function stepDiffHtml(step, change, limit = SHOWN_LINES) {
 	if (step.hunks.length === 0) {
 		return '<p class="cc-line">No quote of this step falls on a changed line, so it has no diff to show.</p>'
 	}
-	return step.hunks.map((changed) => hunkHtml(changed, change)).join('')
+	return step.hunks.map((changed) => hunkHtml(changed, change, limit)).join('')
 }
 
-function hunkHtml({ path, oldPath, hunk }, change) {
+function hunkHtml({ path, oldPath, hunk }, change, limit) {
 	const name =
 		path === oldPath ? `<code>${esc(path)}</code>` : `<code>${esc(oldPath)}</code> to <code>${esc(path)}</code>`
 	const span =
 		hunk.newLength === 0
 			? `removes ${lineSpan(hunk.oldStart, hunk.oldStart + hunk.oldLength - 1)}`
 			: `${lineSpan(hunk.newStart, hunk.newStart + hunk.newLength - 1)} after the change`
-	const shown = hunk.lines.slice(0, SHOWN_LINES)
+	const shown = hunk.lines.slice(0, limit)
 	let before = hunk.oldStart
 	let after = hunk.newStart
 	const rows = shown.map((line) => {
 		const sign = line[0]
+		if (sign === '\\') return `<span class="ln"></span><span class="ln"></span><span class="lc">${esc(line)}</span>`
 		const [old, now, kind] =
 			sign === '-' ? [before++, '', 'del'] : sign === '+' ? ['', after++, 'add'] : [before++, after++, '']
 		const text = esc(line.slice(1)) || ' '

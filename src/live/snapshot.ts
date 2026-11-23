@@ -3,6 +3,7 @@
 // a commit of its own, in a git object folder under ~/.ken. Nothing under the project's .git and nothing in its working
 // tree changes: no object, no ref, no index, no lock. storeEnv is the only place ken points git at a place it may write.
 import { execFile } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
 import { lstat, mkdir, readdir, rm, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { promisify } from 'node:util'
@@ -50,12 +51,15 @@ export async function takeSnapshot(
 	const resolved = await repo.resolve('HEAD', signal)
 	if (resolved.kind !== 'ok') throw new Error(`${root} has no HEAD commit to take a snapshot on top of`)
 	const head = resolved.commit
-	const [listed, line] = await Promise.all([repo.uncommitted(signal), repo.mainLine(head, 1, signal)])
+	const listed = await repo.uncommitted(signal)
 	const files = listed.kind === 'ok' ? listed.files : []
-	const date = line.kind === 'ok' ? line.commits[0]?.date : undefined
 	const { kept, leftOut } = await within(root, files)
+	if (kept.length === 0) return { kind: 'clean', head, leftOut }
 
-	const index = path.join(path.dirname(store.objects), `snapshot-index-${process.pid}-${Date.now()}`)
+	const line = await repo.mainLine(head, 1, signal)
+	const date = line.kind === 'ok' ? line.commits[0]?.date : undefined
+
+	const index = path.join(path.dirname(store.objects), `snapshot-index-${randomUUID()}`)
 	const git = storeGit(store, root, index, date ?? new Date(0).toISOString())
 	try {
 		await git(['read-tree', head], '', signal)

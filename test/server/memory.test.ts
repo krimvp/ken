@@ -247,3 +247,63 @@ test('a free question that names one part starts with what the reader last said 
 	assert.match(maps[1] ?? '', /^Core: You said .* that this part is new to you/)
 	assert.deepEqual(maps.slice(2), [undefined, undefined])
 })
+
+test('a reader naming one part gets current code and can open it without another model run', async () => {
+	const oldLine = 'export const price = 12'
+	const currentLine = 'export const price = 15'
+	const file = 'src/invoice.ts'
+	const { root, hashes } = buildRepository([
+		{
+			message: 'Add billing and delivery',
+			files: { [file]: `${oldLine}\n`, 'src/deliver.ts': 'export const hours = 9\n' },
+		},
+	])
+	const made = await fileRecordStore(root, gitRepository(root)).append([
+		{
+			kind: 'layout',
+			within: [],
+			at: 'HEAD',
+			parts: [
+				{ name: 'Billing', job: 'Counts the price.', paths: [file] },
+				{ name: 'Schedule', job: 'Chooses the delivery time.', paths: ['src/deliver.ts'] },
+			],
+			arrows: [],
+		},
+	])
+	assert.equal(made.kind, 'appended')
+	writeFileSync(path.join(root, file), `${currentLine}\n`)
+	execFileSync('git', ['commit', '-qam', 'Use the current price'], { cwd: root })
+	const head = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim()
+	const questions = [
+		'How does billing work? What should I read next?',
+		'Compare Billing and Schedule.',
+		'Is the release schedule in the project plan?',
+		'Skip Billing and explain the overall project.',
+	]
+	const model = await scriptedModel(questions.map(() => ({ text: 'An unchecked answer.' })))
+	const server = await openKen(root, readerHome(), model.baseUrl)
+	const answers = []
+	for (const question of questions) {
+		const events = await ask(server, { question, after: null })
+		answers.push(events.find((row) => row.kind === 'saved')?.view.entry)
+	}
+	const [selected, ...others] = answers
+	assert.deepEqual(selected.focus, {
+		part: { id: 'part::Billing', name: 'Billing' },
+		commit: head,
+		path: file,
+		start: 1,
+		end: 1,
+	})
+	assert.equal(selected.outcome, 'unverified')
+	assert.ok(others.every((answer) => !answer.focus))
+	const first = String(model.requests[0]?.messages.at(-1)?.content)
+	assert.ok(first.includes(currentLine) && first.includes('export const hours = 9') && !first.includes(oldLine))
+	assert.ok(first.includes(hashes[0]?.slice(0, 7) ?? 'missing') && first.includes('src/deliver.ts'))
+	const saved = await json(server, `/api/questions/${selected.id}`)
+	const { part, path: sourcePath, commit } = saved.entry.focus
+	assert.equal((await json(server, `/api/brief?concept=${encodeURIComponent(part.id)}`)).name, 'Billing')
+	const source = await json(server, `/api/source?${new URLSearchParams({ path: sourcePath, at: commit })}`)
+	assert.deepEqual(source.lines, [currentLine])
+	assert.equal(model.requests.length, 4)
+})

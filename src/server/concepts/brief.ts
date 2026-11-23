@@ -14,7 +14,7 @@ import {
 	readLayoutAsk,
 	under,
 } from '../../layout/index.ts'
-import { type RecordRead, sameName } from '../../record/index.ts'
+import { decisionMark, type RecordRead, sameName } from '../../record/index.ts'
 import { type CommitHash, parsePath } from '../../repo/index.ts'
 import {
 	arrowId,
@@ -71,7 +71,7 @@ export type Brief = {
 	points: BriefPoint[]
 	terms: Named[]
 	questions: { id: string; text: string; answered: boolean }[]
-	decisions: { id: string; question: string; chosen: string; why: string }[]
+	decisions: { id: string; question: string; chosen: string; why: string; reasonSource: string }[]
 	sideways: { uses: Neighbour[]; usedBy: Neighbour[]; processes: { id: string; name: string; steps: number }[] }
 	source?: { path: string; commit: CommitHash }
 	deeper: { within: string; parts: number; files: number } | null
@@ -87,6 +87,9 @@ export type Brief = {
 	lit?: string[]
 	quotes?: BriefQuote[]
 	why?: string
+	replacedBy?: string
+	reasonSource?: string
+	reasonQuotes?: NonNullable<Decided['reason']>['quotes']
 	inside?: Named[]
 	parts?: Named[]
 	gaps?: string[]
@@ -360,11 +363,15 @@ export function conceptReads(layout: LayoutSources, history: History) {
 	function decisionBrief(id: string, all: Held): Brief | null {
 		const decision = all.read.entries.find((entry) => entry.kind === 'decision' && entry.id === id)
 		if (decision?.kind !== 'decision') return null
+		const later = all.read.entries.find((entry) => entry.replaces === decision.id)
 		return {
 			...blank(decisionId(decision.id), 'decision', decision.question, decision.chosen),
 			explained: true,
 			quotes: fileQuotes(decision.quotes),
 			why: decision.reason?.text ?? '',
+			reasonSource: decisionMark(decision),
+			...(later ? { replacedBy: decisionId(later.id) } : {}),
+			reasonQuotes: decision.reason?.quotes ?? [],
 		}
 	}
 
@@ -593,7 +600,15 @@ type Decided = Extract<RecordRead['current'][number], { kind: 'decision' }>
 function decisionsOf(read: RecordRead, about: (decision: Decided) => boolean): Brief['decisions'] {
 	return read.current.flatMap((entry) =>
 		entry.kind === 'decision' && about(entry)
-			? [{ id: decisionId(entry.id), question: entry.question, chosen: entry.chosen, why: entry.reason?.text ?? '' }]
+			? [
+					{
+						id: decisionId(entry.id),
+						question: entry.question,
+						chosen: entry.chosen,
+						why: entry.reason?.text ?? '',
+						reasonSource: decisionMark(entry),
+					},
+				]
 			: [],
 	)
 }

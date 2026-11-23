@@ -77,9 +77,11 @@ export function deeperQuestion(topics: string[], asked: string): string {
 function areaLine(state: TopicState, day: DayWords): string {
 	switch (state.kind) {
 		case 'never-met':
-			return `You have not met ${state.topic}`
+			return state.shorterSince
+				? `You asked for shorter replies on ${state.topic}. Your familiarity is unknown`
+				: `You have not met ${state.topic}`
 		case 'met':
-			return `You asked about ${state.topic}, and do not know it yet`
+			return `You have met ${state.topic}. Your map has no confirmation that you understand it`
 		case 'unchanged':
 			return `You know ${state.topic}, unchanged since you understood it ${day(state.entry.date)}`
 		case 'changed':

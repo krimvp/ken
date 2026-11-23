@@ -5,6 +5,39 @@ import type { TurnSnapshot } from 'aigent/plugin'
 import type { ChatEvent } from '../chat-event.ts'
 import type { Item } from './reply.ts'
 
+// A model sometimes prints tool requests as its entire reply. Recognize their envelopes only; their arguments never run.
+export function onlyToolRequests(question: string, text: string): boolean {
+	if (text.length > 8192) return false
+	const content = text.trim()
+	const bodies =
+		content.startsWith('{') && content.endsWith('}')
+			? [content]
+			: /^```(?:json)?[ \t]*\r?\n([\s\S]+)\r?\n```$/i.exec(content)?.[1]?.split(/\r?\n```\s*```(?:json)?[ \t]*\r?\n/i)
+	if (!bodies) return false
+	// A reader can explicitly request this exact representation as an example.
+	const format =
+		/\b(?:show|give|print|write|return|output|display|provide|generate)\s+(?:(?:me|the|a|an|examples?|samples?|of|raw|valid|exact|full)\s+)*(?:json\b|payload\b|tool (?:calls?|requests?|proposals?)\b|(?:ken|core)__)|\b(?:as|in) (?:a )?json\b|\b(?:tool (?:call|request)|payload) (?:look|looks) like\b/i
+	if (format.test(question)) return false
+	return bodies.every(toolEnvelope)
+}
+
+function toolEnvelope(body: string): boolean {
+	try {
+		const data = JSON.parse(body)
+		return Boolean(
+			data &&
+				typeof data.name === 'string' &&
+				/^(?:ken|core)__\w+$/.test(data.name) &&
+				data.arguments &&
+				typeof data.arguments === 'object' &&
+				!Array.isArray(data.arguments) &&
+				Object.keys(data).length === 2,
+		)
+	} catch {
+		return false
+	}
+}
+
 export function fileTurn(turn: Pick<TurnSnapshot, 'text' | 'calls'>, shown: Item[]): ChatEvent[] {
 	const working = turn.calls.some(({ call }) => call.tool !== 'show')
 	const text = turn.text.trim()

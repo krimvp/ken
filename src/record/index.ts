@@ -5,7 +5,7 @@
 export type { Label, Quote } from '../checks/index.ts'
 export { type EntryDraft, RECORD_LIMITS, sameName, textProblem } from './check-entry.ts'
 export { decisionWork } from './decision-work.ts'
-export { describeEntry, entryLine } from './describe-entry.ts'
+export { decisionMark, describeEntry, entryLine } from './describe-entry.ts'
 export type {
 	Decision,
 	Entry,

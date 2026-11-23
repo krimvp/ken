@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict'
+import { appendFileSync } from 'node:fs'
+import path from 'node:path'
 import { test } from 'node:test'
 import { buildRepository } from '../fixtures/build-repository.ts'
 import { ask, call, json, openKen, readerHome } from '../fixtures/ken-server.ts'
-import { scriptedModel } from '../fixtures/scripted-model.ts'
+import { scriptedModel, toolResults } from '../fixtures/scripted-model.ts'
 
 // Two commits on the main line, one on a side branch, and the merge that brings it in: commit n lands on day n + 1 of
 // January 2026.
-const { root } = buildRepository([
+const { root, hashes } = buildRepository([
 	{ message: 'feat: start', files: { 'src/a.ts': 'a()\n' } },
 	{ message: 'feat: more of a', files: { 'src/a.ts': 'a()\na()\n' } },
 	{ message: 'feat: b, on a branch', files: { 'src/b.ts': 'b()\n' }, parent: 0 },
@@ -86,4 +88,108 @@ test('a question about open lines keeps their file, commit and range when reopen
 	await ask(later, { question: 'Do you remember that source?' })
 	const recalled = JSON.stringify(next.requests[1]?.messages.find((msg) => msg.role === 'tool')?.content)
 	assert.ok(recalled.includes(source) && !recalled.includes(invented))
+	const follow = await scriptedModel([{ text: 'Here is the same source.' }])
+	const reopenedServer = await openKen(root, home, follow.baseUrl)
+	const saved = (await ask(reopenedServer, { question: 'Which line was that?', after: entry.id })).find(
+		(line) => line.kind === 'saved',
+	)?.view.entry
+	assert.deepEqual(saved?.focus, focus)
+	const followPrompt = String(follow.requests[0]?.messages.at(-1)?.content)
+	assert.ok(
+		followPrompt.includes('return 12') &&
+			followPrompt.includes('no checked source') &&
+			!followPrompt.includes(invented),
+	)
+})
+
+test('a follow-up resumes the saved reply across visits and a new subject starts without either thread', async () => {
+	const home = readerHome()
+	const first = await scriptedModel([{ text: 'The receipt has a blue code.' }])
+	const old = await openKen(root, home, first.baseUrl)
+	const original = (await ask(old, { question: 'What does the receipt show?' })).find((row) => row.kind === 'saved')
+		?.view.entry
+	assert.ok(original)
+	await old.close()
+
+	const next = await scriptedModel([
+		{ text: 'The sorter has green bins.' },
+		{ text: 'It identifies a parcel.' },
+		{ text: 'More details.' },
+		{ tool: 'ken__memory_known', args: { about: original.id } },
+		{ text: 'The original was blue.' },
+		{ text: 'A new subject.' },
+	])
+	const later = await openKen(root, home, next.baseUrl)
+	await ask(later, { question: 'Explain the sorter.' })
+	const follow = (await ask(later, { question: 'What does it mean?', after: original.id })).find(
+		(row) => row.kind === 'saved',
+	)?.view.entry
+	assert.ok(follow)
+	assert.equal(follow.thread, original.thread)
+	assert.equal(follow.after, original.id)
+	const example = (await ask(later, { question: 'Give an example.', after: follow.id })).find(
+		(row) => row.kind === 'saved',
+	)?.view.entry
+	assert.ok(example)
+	await ask(later, { question: 'What did you say in the first answer?', after: example.id })
+	const fresh = (await ask(later, { question: 'Start over.', after: null })).find((row) => row.kind === 'saved')?.view
+		.entry
+	assert.ok(fresh)
+	assert.notEqual(fresh.thread, original.thread)
+	const [, second, third, fourth, , freshPrompt] = next.requests.map((request) =>
+		String(request.messages.at(-1)?.content),
+	)
+	assert.match(second ?? '', /receipt has a blue code/)
+	assert.doesNotMatch(second ?? '', /sorter has green bins/)
+	assert.match(third ?? '', /receipt has a blue code/)
+	assert.match(third ?? '', /identifies a parcel/)
+	assert.doesNotMatch(fourth ?? '', /blue code|green bins/)
+	assert.ok(fourth?.includes(original.id), 'the oldest excerpt points back to the preceding reply')
+	assert.match(toolResults(next.requests[4]).at(-1) ?? '', /receipt has a blue code/)
+	assert.doesNotMatch(freshPrompt ?? '', /blue code|green bins|identifies a parcel/)
+	assert.equal(fresh.after, null)
+	const firstCommit = hashes[0]
+	assert.ok(firstCommit)
+	const history = path.join(home, 'projects', firstCommit, 'history.jsonl')
+	const empty = {
+		id: 'stopped',
+		question: 'An interrupted question',
+		askedAt: original.askedAt,
+		outcome: 'stopped',
+		steps: [],
+	}
+	const note = { ...original, id: 'note', about: { kind: 'commits', base: firstCommit, head: original.head } }
+	appendFileSync(history, [empty, note].map((row) => `${JSON.stringify(row)}\n`).join(''))
+	for (const after of [42, '', 'missing-id', empty.id, note.id]) {
+		assert.equal((await call(later, '/api/questions', { question: 'And that?', after })).status, 400)
+	}
+	assert.equal(
+		(await call(later, '/api/questions', { question: 'Which one?', after: original.id, focus: {} })).status,
+		400,
+	)
+	const foreign = await openKen(root, readerHome(), next.baseUrl)
+	assert.equal((await call(foreign, '/api/questions', { question: 'And this?', after: original.id })).status, 400)
+	assert.equal(next.requests.length, 6)
+})
+
+test('a saved question about a drawing reopens the same view and links after a restart', async () => {
+	const home = readerHome()
+	const model = await scriptedModel([{ text: 'The worker receives a parcel.' }, { text: 'Start with that link.' }])
+	const focus = { view: 'runtime', commit: hashes[0], concepts: ['crossing:pickup'], earlier: true }
+	const first = await openKen(root, home, model.baseUrl)
+	const saved = (await ask(first, { question: 'What does this link do?', focus })).find((line) => line.kind === 'saved')
+		?.view.entry
+	assert.ok(saved)
+	await first.close()
+	const later = await openKen(root, home, model.baseUrl)
+	const follow = (await ask(later, { question: 'What happens next?', after: saved.id })).find(
+		(line) => line.kind === 'saved',
+	)?.view.entry
+	assert.deepEqual(follow?.focus, focus)
+	const prompt = String(model.requests[1]?.messages.at(-1)?.content)
+	assert.ok(
+		prompt.includes('crossing:pickup') &&
+			prompt.includes(focus.commit ?? 'missing') &&
+			prompt.includes('worker receives a parcel'),
+	)
 })

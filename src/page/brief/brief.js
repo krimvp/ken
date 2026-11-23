@@ -12,7 +12,8 @@ import { DOING } from '../level/runs.js'
 import { partClass, partOfFile } from '../project/part-colours.js'
 import { placeParts } from '../project/parts-picture.js'
 import { icon, KIND_ICONS, levelMark } from '../shell/icons.js'
-import { codeLines, count, esc, lineSpan, prose, quoteBody, RUN_COST } from '../views/format.js'
+import { readPlace, writePlace } from '../shell/place.js'
+import { codeLines, count, esc, lineSpan, prose, quoteBody, quoteSource, RUN_COST } from '../views/format.js'
 import { readConcept } from './concept-id.js'
 import { drawingHtml } from './drawings.js'
 import {
@@ -246,10 +247,15 @@ function mainHtml(brief, { ui, env, prefs, look, views, inner, runtime, home }) 
 					)
 					.join('')}</ol>`
 			: ''
-	const why = brief.why ? `<h3 class="k-eyebrow">Why</h3><p class="k-why">${prose(brief.why)}</p>` : ''
+	const why = brief.why
+		? `<h3 class="k-eyebrow">Why (${esc(brief.reasonSource)})</h3><p class="k-why">${prose(brief.why)}</p>
+			${brief.reasonQuotes?.length ? `<details class="dv-quotes"><summary>Show the evidence for this reason</summary>${brief.reasonQuotes.map((quote) => quoteBody(quote, `${quoteSource(quote)}. `)).join('')}</details>` : ''}`
+		: brief.kind === 'decision'
+			? '<p>No reason was recorded.</p>'
+			: ''
 	const lines =
 		brief.quotes?.length > 0
-			? `<h3 class="k-eyebrow">${isViewKind(brief.kind) ? (brief.staleFiles ? 'Source for the earlier drawing' : 'ken found this in') : brief.quotes.length === 1 ? 'The lines it rests on' : `The ${brief.quotes.length} quotes it rests on`}</h3><div class="k-quotes">${quotesHtml(brief.quotes)}</div>`
+			? `<h3 class="k-eyebrow">${brief.kind === 'decision' ? 'Where the choice appears in code' : isViewKind(brief.kind) ? (brief.staleFiles ? 'Source for the earlier drawing' : 'ken found this in') : brief.quotes.length === 1 ? 'The lines it rests on' : `The ${brief.quotes.length} quotes it rests on`}</h3><div class="k-quotes">${quotesHtml(brief.quotes)}</div>`
 			: ''
 	const terms =
 		brief.terms.length === 0
@@ -269,6 +275,7 @@ function mainHtml(brief, { ui, env, prefs, look, views, inner, runtime, home }) 
 			<span class="k-seg k-text-seg" role="group" aria-label="How much text">${texts.join('')}</span>
 		</div>
 		<h2 class="k-brief-name" id="brief-name" tabindex="-1"><span class="k-sw"></span><span>${prose(brief.name)}</span></h2>
+		${brief.replacedBy ? `<p class="dv-replaced"><strong>A later decision replaces this one.</strong> <button class="k-link" data-act="brief-open" data-concept="${esc(brief.replacedBy)}" data-key="brief-later-decision">Open the later decision</button></p>` : ''}
 		${brief.staleFiles ? explainHtml(brief, env, ui) : ''}
 		<p class="k-brief-line">${isViewKind(brief.kind) && brief.staleFiles ? 'Earlier drawing. ' : ''}${prose(brief.line)}</p>
 		${brief.note ? `<p class="k-brief-note"><span class="k-eyebrow">What the record says it means</span>${prose(brief.note)}</p>` : ''}
@@ -288,7 +295,7 @@ function mainHtml(brief, { ui, env, prefs, look, views, inner, runtime, home }) 
 		${lines}
 		${terms}
 		${knowsHtml(brief, home, ui)}
-		<p class="k-trust">${esc(brief.trust)}</p>`
+		${brief.kind === 'decision' ? '' : `<p class="k-trust">${esc(brief.trust)}</p>`}`
 }
 
 const backHtml = '<button class="k-back" data-act="brief-way" data-way="" data-key="brief-back">'
@@ -348,7 +355,7 @@ function questionsHtml(brief, { ui, env }) {
 			: `<h3 class="k-eyebrow">Decided here</h3>${brief.decisions
 					.map(
 						(d, i) =>
-							`<div class="k-decision"><button class="k-decision-name" data-act="brief-open" data-concept="${esc(d.id)}" data-key="brief-d-${i}">${icon('decision')}<b>${prose(d.question)}</b>${icon('right', 'k-row-go')}</button><p><span class="k-eyebrow">Chosen</span>${prose(d.chosen)}</p>${d.why ? `<p><span class="k-eyebrow">Why</span>${prose(d.why)}</p>` : ''}</div>`,
+							`<div class="k-decision"><button class="k-decision-name" data-act="brief-open" data-concept="${esc(d.id)}" data-key="brief-d-${i}">${icon('decision')}<b>${prose(d.question)}</b>${icon('right', 'k-row-go')}</button><p><span class="k-eyebrow">Chosen</span>${prose(d.chosen)}</p>${d.why ? `<p><span class="k-eyebrow">Why (${esc(d.reasonSource)})</span>${prose(d.why)}</p>` : ''}</div>`,
 					)
 					.join('')}`
 	const none = rows.length === 0 ? '<p class="k-none">ken has no question written out for this yet.</p>' : ''
@@ -399,7 +406,36 @@ function fromGitHtml(brief, inner) {
 	return `${arrows}${files}`
 }
 
-function sourceHtml(page, back) {
+function sourceUsesHtml(page, brief) {
+	const controls = (page.names ?? [])
+		.filter((name) => name !== page.uses?.name)
+		.map(
+			(name) =>
+				`<button class="k-link" data-act="brief-uses" data-name="${esc(name)}" data-key="uses-${esc(name)}">Find uses of ${esc(name)}</button>`,
+		)
+	const choose =
+		controls.length > 1
+			? `<details><summary>Find uses of an export</summary><ul>${controls.map((control) => `<li>${control}</li>`).join('')}</ul></details>`
+			: controls.join('')
+	const used = page.uses
+	if (!used)
+		return (
+			choose || (page.where.uses?.startsWith('@') ? '<p>No named export was identified in the selected lines.</p>' : '')
+		)
+	const name = esc(used.name)
+	const place = readPlace(globalThis.location?.hash ?? '')
+	const rows = used.lines.map((hit) => {
+		const source = { path: hit.path, commit: page.where.commit, line: hit.line }
+		const address = writePlace({ ...place, brief, on: 'source', source })
+		return `<li><a class="k-link" href="${esc(address)}">${esc(hit.path)}, line ${hit.line}</a> <small>${hit.kind === 'import' ? 'Import' : 'Name in source'}</small>${hit.text !== null ? `<code>${esc(hit.text.trim())}</code>` : ''}</li>`
+	})
+	const empty = used.limited
+		? 'Git could not return all matching lines.'
+		: 'No single-line relative import matched this name and file at this revision. Other import forms may still use it.'
+	return `${choose}<section class="k-source-uses"><h3>Uses of ${name}</h3>${rows.length ? `<p>Each file has a single-line relative import for ${name}. Open a line to see the name in context.</p><ul>${rows.join('')}</ul>${used.limited ? '<p>Only some matching lines are shown.</p>' : ''}` : `<p>${empty}</p>`}</section>`
+}
+
+function sourceHtml(page, back, brief) {
 	const heading = `${back}<h2 class="k-way-name" id="brief-name" tabindex="-1">${esc(page.where.path)}</h2>`
 	if (page.kind === 'reading') return `${heading}<p role="status">Reading the source from git.</p>`
 	if (page.kind === 'error') return `${heading}<p role="alert">${esc(page.message)}</p>`
@@ -411,6 +447,7 @@ function sourceHtml(page, back) {
 	const range = lineSpan(page.start, page.start + page.lines.length - 1)
 	return `${heading}${page.where.line > page.total ? `<p>This version ends before line ${page.where.line}. Showing the end of the file.</p>` : ''}<p class="q-source">${range} of ${page.total} at commit <code>${esc(page.where.commit.slice(0, 7))}</code></p>
 		<button class="k-link" data-act="ask-open" data-key="ask-source">Ask about these lines</button>
+		${sourceUsesHtml(page, brief)}
 		${page.shortened ? '<p>Long lines end with an ellipsis here.</p>' : ''}
 		<pre class="code"><code>${codeLines(
 			page.lines,
@@ -483,7 +520,7 @@ export function briefHtml(ui, found, ctx) {
 	const head = `<div class="k-brief-head"><nav class="k-trail" aria-label="The briefs you came through">${trail.join('')}</nav><button class="k-icon-btn" data-act="brief-close" data-key="brief-close" aria-label="Close the brief">${icon('close')}</button></div>`
 	const back = `${backHtml}${icon('left')}The brief</button>`
 	if (ui.on === 'source' && found.kind !== 'ok') {
-		return `${head}<div class="k-brief-body" id="brief-scroll">${sourceHtml(ui.source, back)}</div>`
+		return `${head}<div class="k-brief-body" id="brief-scroll">${sourceHtml(ui.source, back, ui.id)}</div>`
 	}
 	if (found.kind === 'reading') {
 		return `${head}<div class="k-brief-body" id="brief-scroll"><p class="k-none" role="status">Reading the brief.</p></div>`
@@ -505,7 +542,7 @@ export function briefHtml(ui, found, ctx) {
 						? viewDeeperHtml(brief, back)
 						: deeperHtml(brief, ctx.inner)
 					: ui.on === 'source'
-						? sourceHtml(ui.source, back)
+						? sourceHtml(ui.source, back, ui.id)
 						: mainHtml(brief, { ...ctx, ui })
 	// A frame, a store, an outside thing or a crossing is no part, so it takes no part's colour.
 	const colour = view ? '' : colourOf(brief)

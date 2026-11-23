@@ -122,6 +122,8 @@ export function youActions(app) {
 		// A line of the reader's map is taken back by its topic, and a line on what they looked at by its moment.
 		'you-undo'(el) {
 			const line = lineAt(el)
+			if (line.did === 'shorter')
+				return saved(() => post('/api/map', { signal: 'usual', topics: [line.topic] }), line.text)
 			return line.topic
 				? saved(() => post('/api/map', { signal: 'forgot', topics: [line.topic] }))
 				: saved(() => post('/api/seen', { did: 'undo', at: line.at }), line.text)

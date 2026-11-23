@@ -42,7 +42,7 @@ export function askDrawerHtml(ask, env, briefOf) {
 						? `<ul class="k-ask-rows">${rows
 								.map(
 									(row) =>
-										`<li><button class="k-ask-row" data-act="open" data-id="${esc(row.id)}" data-key="ask-row-${esc(row.id)}"><b>${esc(row.question.split('\n')[0])}</b><span>${row.outcome === 'unverified' ? 'Unverified source answer · ' : ''}${when(row.askedAt)}</span></button></li>`,
+										`<li><button class="k-ask-row" data-act="open" data-id="${esc(row.id)}" data-key="ask-row-${esc(row.id)}"><b>${esc(row.question.split('\n')[0])}</b><span>${row.background ? 'Prepared by ken · ' : ''}${row.outcome === 'unverified' ? 'Unverified source answer · ' : row.outcome === 'tool-proposal' ? 'No answer · ' : ''}${when(row.askedAt)}</span></button></li>`,
 								)
 								.join('')}</ul>`
 						: ''
@@ -53,13 +53,13 @@ export function askDrawerHtml(ask, env, briefOf) {
 			: ''
 	const lenses =
 		env.model?.kind === 'ok'
-			? `<div class="k-ask-lenses"><button class="k-link" data-act="lenses" data-key="lenses" aria-expanded="${env.lenses.open}">Or let ken write the question</button>${env.lenses.open ? lensHtml('drawer', env.lenses.pick) : ''}</div>`
+			? `<div class="k-ask-lenses"><button class="k-link" data-act="lenses" data-key="lenses" aria-expanded="${env.lenses.open}">${env.lenses.open ? 'Hide question ideas' : 'Show question ideas'}</button>${env.lenses.open ? lensHtml('drawer', env.lenses.pick) : ''}</div>`
 			: ''
 	return `<div class="k-brief-head"><h2 class="k-ask-title" id="ask-title" tabindex="-1">Ask ken</h2><button class="k-icon-btn" data-act="ask-close" data-key="ask-close" aria-label="Close Ask ken">${icon('close')}</button></div>
 		<div class="k-brief-body k-ask-body">
-			${ask.about?.focus ? '' : `<h3 class="k-eyebrow">Worth asking</h3>${suggested}`}
+			${ask.about?.focus || ask.about?.after ? '' : `<h3 class="k-eyebrow">Worth asking</h3>${suggested}`}
 			<form class="k-ask-form" id="ask-form" autocomplete="off">
-				<label class="${ask.about?.focus ? 'k-source-question' : 'k-eyebrow'}" for="ask-text">${ask.about ? `Your question about ${esc(ask.about.name)}` : 'Your question'}</label>
+				<label class="${ask.about?.focus || ask.about?.after ? 'k-source-question' : 'k-eyebrow'}" for="ask-text">${ask.about?.after ? `Follow up on "${esc(ask.about.name)}"` : ask.about ? `Your question about ${esc(ask.about.name)}` : 'Your question'}</label>
 				${ask.about ? '<button class="k-link k-ask-earlier" type="button" data-act="ask-anything" data-key="ask-anything">Ask about something else</button>' : ''}
 				<textarea id="ask-text" name="text" maxlength="4000" data-key="ask-text" rows="3" placeholder="Ask what changed, why, or how a part works">${esc(ask.text)}</textarea>
 				<button class="k-btn is-big k-run-btn" type="submit" data-key="ask-send"${env.off ? ' disabled' : ''}><span>Send the question</span><small>${RUN_COST}</small></button>

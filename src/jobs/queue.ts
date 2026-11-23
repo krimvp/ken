@@ -77,7 +77,12 @@ type Job<W, L> = JobAsk<W> & {
 // what the reader looks at now. ended is told when any job ends, so the server can want what is missing next.
 export type QueueDeps<W, L> = {
 	parallel: number
-	run(job: JobAsk<W>, signal: AbortSignal, say: (line: L) => void, acted: () => void): Promise<Ran>
+	run(
+		job: JobAsk<W> & { readonly asked: boolean },
+		signal: AbortSignal,
+		say: (line: L) => void,
+		acted: () => void,
+	): Promise<Ran>
 	fresh(job: JobAsk<W>): Promise<boolean>
 	rankOf(job: JobAsk<W>): Exclude<Rank, 1>
 	ended?(job: JobView): void

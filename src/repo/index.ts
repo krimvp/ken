@@ -4,6 +4,7 @@
 export { findRoot } from './find-root.ts'
 export { gitRepository } from './git-repository.ts'
 export { parsePath } from './parse-path.ts'
+export { type DirectImports, directImports, namedExports } from './references/direct-imports.ts'
 export type {
 	BlameLine,
 	Commit,

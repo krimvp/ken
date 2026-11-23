@@ -29,11 +29,20 @@ export type HistoryEntry = {
 	askedAt: string
 	head: string | null
 	thread: string | null
+	background?: true
 	about?: About
 	focus?: QuestionFocus
+	after?: string | null
 	steps: Step[]
 	usage: Usage | null
 } & Ending
+
+// Jobs may finish after a later question. Catch-up starts when the reader asked, independent of completion order.
+export function readerQuestions(entries: HistoryEntry[]): HistoryEntry[] {
+	return entries
+		.filter((entry) => !entry.background && entry.about === undefined)
+		.sort((a, b) => a.askedAt.localeCompare(b.askedAt))
+}
 
 export type Asked = {
 	id: string
@@ -41,6 +50,7 @@ export type Asked = {
 	askedAt: string
 	head: string | null
 	thread: string
+	after?: string | null
 	focus?: QuestionFocus
 	about?: About
 }
@@ -58,6 +68,9 @@ export function entryFrom(asked: Asked, events: ChatEvent[], stopped: boolean): 
 				break
 			case 'step':
 				steps.push(event.step)
+				break
+			case 'focus':
+				asked = { ...asked, focus: event.focus }
 				break
 			case 'replied':
 				replied = event
@@ -98,6 +111,8 @@ export function whyNoNote(entry: HistoryEntry): string | null {
 			return "ken's model explained only some parts."
 		case 'incomplete':
 			return "ken's model did not give a brief with a checked point."
+		case 'tool-proposal':
+			return "ken's model only proposed actions. It gave no answer."
 		case 'no-answer':
 			return `ken's model stopped without writing a note, ${none}`
 		case 'out-of-turns':

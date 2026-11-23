@@ -12,7 +12,7 @@ export type QuotedLines = { path: string; startLine: number; endLine: number }
 
 // hash is the topic's hash at HEAD now, which a line typed by hand needs. changed holds the quoted lines the reader
 // knew that are no longer the same, as the record quotes them.
-export type TopicState = { topic: string; hash: string } & (
+export type TopicState = { topic: string; hash: string; shorterSince?: string } & (
 	| { kind: 'never-met' }
 	| { kind: 'met'; entry: MapEntry }
 	| { kind: 'unchanged'; entry: MapEntry }
@@ -62,21 +62,23 @@ const EVIDENCE_WORDS: Record<Evidence, string> = {
 
 // One line per topic in plain words, for the terminal and for the model.
 export function stateLine(state: TopicState): string {
-	if (state.kind === 'never-met') return `${state.topic}: never met`
+	const preference = state.shorterSince ? '. The reader asked for shorter replies on this topic' : ''
+	if (state.kind === 'never-met')
+		return state.shorterSince ? `${state.topic}: no recorded familiarity${preference}` : `${state.topic}: never met`
 	const { depth, evidence, date } = state.entry
 	const known = `${state.topic}: ${DEPTH_WORDS[depth]}, ${EVIDENCE_WORDS[evidence]} on ${date}`
 	const lines = (changed: QuotedLines[]) => changed.map(linesText).join(', ')
 	switch (state.kind) {
 		case 'met':
-			return `${known}; not understood yet`
+			return `${known}; understanding unconfirmed${preference}`
 		case 'unchanged':
-			return `${known}; understood, and the code is unchanged since`
+			return `${known}; understood, and the code is unchanged since${preference}`
 		case 'changed':
-			return `${known}; understood, and the code changed since: ${lines(state.changed)}`
+			return `${known}; understood, and the code changed since: ${lines(state.changed)}${preference}`
 		case 'long-ago':
 			return state.changed.length === 0
-				? `${known}; understood long ago, and the code is unchanged since`
-				: `${known}; understood long ago, and the code changed since: ${lines(state.changed)}`
+				? `${known}; understood long ago, and the code is unchanged since${preference}`
+				: `${known}; understood long ago, and the code changed since: ${lines(state.changed)}${preference}`
 		default:
 			return state satisfies never
 	}

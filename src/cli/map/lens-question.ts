@@ -1,4 +1,5 @@
 import { onDay, openItems, openQuestion, personLens, rangeLens } from '../../follow-up/index.ts'
+import { readerQuestions } from '../../history/index.ts'
 import { areaQuestion, catchUpQuestion } from '../../map/index.ts'
 import { fileRecordStore } from '../../record/index.ts'
 import { gitRepository, parsePath } from '../../repo/index.ts'
@@ -26,7 +27,7 @@ export async function lensQuestion(
 		return { kind: 'ok', text: areaQuestion(area.path, states, record, onDay), empty: false }
 	}
 	if (lens.kind === 'follow-up') return { kind: 'ok', ...openQuestion(await openItems(repo, record, states)) }
-	const asked = await opened.history.list()
+	const asked = readerQuestions(await opened.history.list())
 	if (lens.kind === 'who' || lens.kind === 'since') {
 		const facts = { record, states, lastQuestion: asked.at(-1) }
 		const written =
