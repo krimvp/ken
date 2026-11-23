@@ -144,10 +144,11 @@ export function briefActions(app) {
 		if (box) box.value = typed
 	}
 
-	// The files of the open brief, for the ten seconds after which ken counts it as read.
+	// The files of the open brief, for the ten seconds after which ken counts it as read. A brief ken has not
+	// explained yet holds nothing to read, so it starts no wait.
 	const readPaths = () => {
 		const brief = open()
-		return brief ? pathsOf(brief) : null
+		return brief?.explained ? pathsOf(brief) : null
 	}
 
 	async function saved(change) {
