@@ -20,11 +20,6 @@ export function readerIndex(read: MapRead, notes: ReaderNote[], prefs: Prefs): s
 	].join('\n')
 }
 
-// A lens ken wrote holds its own rules for what to send, so it starts from the reader's notes alone.
-export function readerNotes(notes: ReaderNote[]): string {
-	return notesLines(notes).join('\n').trim()
-}
-
 function notesLines(notes: ReaderNote[]): string[] {
 	if (notes.length === 0) return []
 	return [
