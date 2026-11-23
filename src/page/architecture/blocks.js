@@ -66,7 +66,7 @@ export function blockHtml(box, i, at, view) {
 	]
 	const beads =
 		layer === 'processes'
-			? `<span class="k-beads">${stops.map((n) => `<span class="k-bead k-num"><span class="visually-hidden">Stop </span>${n}</span>`).join('')}</span>`
+			? `<span class="k-beads">${stops.map((n) => `<span class="k-bead k-num"><span class="visually-hidden">, step </span>${n}</span>`).join('')}</span>`
 			: ''
 	const job = look.named
 		? prose(box.job ?? '')
