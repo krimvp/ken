@@ -210,7 +210,7 @@ function addEvent(q, event) {
 			q.liveChange = { base: event.base, head: event.head, commits: event.commits }
 			break
 		case 'waiting':
-			q.steps.push({ kind: 'text', text: 'ken is finishing a note for Live. Your question starts when it ends.' })
+			q.steps.push({ kind: 'text', text: 'ken is finishing another run. Your question starts when it ends.' })
 			break
 		case 'asked':
 			q.question = event.question
@@ -341,8 +341,9 @@ async function send(body, onHome = null) {
 async function followAsked(list) {
 	const job = list.find((each) => each.by === 'reader' && each.key.startsWith('ask:') && live(each))
 	if (!job || state.running || state.model?.kind !== 'ok') return
-	const q = runningQ(job.title)
-	state.running = { q, started: job.state.startedAt ?? Date.now(), onHome: null, key: job.key, stopping: false }
+	const started = job.state.startedAt ?? Date.now()
+	const q = runningQ(job.title, { askedAt: new Date(started).toISOString() })
+	state.running = { q, started, onHome: null, key: job.key, stopping: false }
 	if (!readReply(location.hash)) {
 		state.thread = [q]
 		state.open = picked = q
