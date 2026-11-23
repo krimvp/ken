@@ -8,7 +8,7 @@ import { findRoot, gitRepository, parsePath, type Repository } from '../repo/ind
 import { projectSessions } from '../transcripts/index.ts'
 import { SHORTEN_PROMPT, type Shorten, shortened, shortenQuestion } from './brief/shorten-lines.ts'
 import type { ChatEvent, Cost } from './chat-event.ts'
-import { briefParts, forRecord, lensOf, readLimit } from './lens/lens.ts'
+import { briefParts, forRecord, lensOf, readLimit, topicsToRecord } from './lens/lens.ts'
 import { plainFacts } from './lens/plain-facts.ts'
 import { sourceUses } from './lens/source-uses.ts'
 import type { ModelConfig } from './model-config.ts'
@@ -28,12 +28,12 @@ import {
 	showTool,
 } from './reply/show-tool.ts'
 import { type SavedAnswer, threadMemory } from './reply/thread-memory.ts'
-import { SYSTEM_PROMPT } from './system-prompt.ts'
+import { systemPrompt } from './system-prompt.ts'
 import { describeCall } from './tools/describe-call.ts'
 import { diffTool } from './tools/diff-tool.ts'
 import { type Elsewhere, elsewhereText } from './tools/elsewhere-text.ts'
 import { explorationTools } from './tools/exploration-tools.ts'
-import { type Memory, memoryTools, recordIndex } from './tools/memory-tool.ts'
+import { MEMORY_TOOLS, type Memory, memoryTools, recordIndex } from './tools/memory-tool.ts'
 import { rememberTool } from './tools/remember-tool.ts'
 import { sessionTools } from './tools/session-tools.ts'
 
@@ -127,7 +127,7 @@ export async function startChat(options: {
 	const gate = { sources: { repo, sessions }, store, project, map: reader?.map ?? null }
 	const { model, baseUrl, apiKeyEnv } = options.model
 	const chatId = randomUUID()
-	const thread = threadMemory(reader?.readSaved)
+	const thread = threadMemory(reader?.readSaved, reader?.memory !== undefined)
 	// A question's own session: a lens's tools and prompt, or every tool and the whole prompt.
 	const open = (as: Asking, run: Run) => {
 		const lens = lensOf(as)
@@ -186,7 +186,8 @@ export async function startChat(options: {
 			toolMode: 'native',
 			maxTurns: STEPS.talk.turns,
 			maxToolResultChars: MAX_TOOL_RESULT_CHARS,
-			systemPrompt: lens?.systemPrompt ?? SYSTEM_PROMPT,
+			systemPrompt:
+				lens?.systemPrompt ?? systemPrompt(MEMORY_TOOLS.filter((name) => memory.some((tool) => tool.name === name))),
 		})
 	}
 	// A question counts what its small requests to shorten a line cost.
@@ -448,7 +449,7 @@ export async function startChat(options: {
 				!signal?.aborted
 			) {
 				// Past this check the reply is whole, so a stop that comes while it is saved does not lose it.
-				const ended = await endReply(gate, current, new AbortController().signal)
+				const ended = await endReply(gate, current, topicsToRecord(as), new AbortController().signal)
 				if (
 					ending.outcome === 'answered' &&
 					as.kind === 'question' &&

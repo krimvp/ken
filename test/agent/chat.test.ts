@@ -63,6 +63,16 @@ test("a plain question gets the model's own words as the reply, and what it wrot
 	assert.equal(usage?.kind === 'usage' && usage.inputTokens, 2 * USAGE_PER_REPLY.prompt_tokens)
 })
 
+test('a question in the terminal, which has no server memory, is told only of the memory tools it has', async () => {
+	const { requests } = await ask([{ text: 'Done.' }])
+	const sent = requests[0]?.tools.map((tool) => tool.function.name) ?? []
+	const told = JSON.stringify(requests[0]?.messages.filter((message) => message.role === 'system'))
+	assert.ok(sent.includes('ken__memory_known') && sent.includes('ken__memory_search'), sent.join(' '))
+	for (const name of ['memory_known', 'memory_level', 'memory_quoted_in', 'memory_search']) {
+		assert.equal(told.includes(name), sent.includes(`ken__${name}`), name)
+	}
+})
+
 test('a show call with a good card, a false quote and a label the quotes do not allow shows the good card after the words, and sends back only the bad two, each with its problem', async () => {
 	const { events, requests } = await ask(
 		reply('Each retry now waits before the next attempt.', {
