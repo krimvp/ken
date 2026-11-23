@@ -6,6 +6,7 @@
 // the parts, in place of "Start here", and after that smaller, above it.
 import { partId } from '../brief/concept-id.js'
 import { dayText } from '../changes/timeline.js'
+import { live } from '../jobs/jobs.js'
 import { KNOWN, levelLabel } from '../level/level-state.js'
 import { partClass } from '../project/part-colours.js'
 import { placeParts } from '../project/parts-picture.js'
@@ -65,9 +66,15 @@ function mapHtml(look, { lit = null, byLevel = false, key }) {
 	return `<div class="k-mini${byLevel ? ' is-big' : ''}" style="--cols:${cols}"><svg viewBox="0 0 ${cols * 100} ${rows * 100}" preserveAspectRatio="none" aria-hidden="true">${lines.join('')}</svg>${boxes.join('')}</div>`
 }
 
-function nextButton(item, index) {
-	const mark = item.go.way === 'learn' ? 'architecture' : item.kind === 'decision' ? 'decision' : 'changes'
-	return `<button class="k-chip" data-act="start-go" data-index="${index}" data-key="start-chip-${index}">${icon(mark)}<span>${prose(item.title)}</span></button>`
+// The other ways in, under the main one: a smaller link each, which says what the thing is, such as how large a change
+// to review is.
+function nextLink(item, index) {
+	const size = item.size
+		? `${count(item.size.files, 'file', 'files')}${item.parts.length > 0 ? `, ${count(item.parts.length, 'part', 'parts')}` : ''}`
+		: item.kind === 'stale'
+			? item.why.replace(/\.$/, '')
+			: ''
+	return `<li><button class="k-link k-then-link" data-act="start-go" data-index="${index}" data-key="start-then-${index}">${prose(item.title)}${size ? `<span class="k-then-size">: ${prose(size)}</span>` : ''}</button></li>`
 }
 
 // briefOf gives a brief the page has read: a stop of the tour says what its part does, from its brief.
@@ -87,10 +94,14 @@ function startHtml({ look, briefOf }) {
 	return `<section class="k-tile k-start" aria-labelledby="start-title">
 		<div class="k-start-pic">${mapHtml(look, { lit: lead.parts, key: 'start-map' })}${badge}</div>
 		<div class="k-start-words"><p class="k-eyebrow">Start here</p><h2 id="start-title">${prose(lead.title)}</h2><p class="k-start-why">${prose(stop ?? lead.why)}</p>
-			<div class="k-then">${rest
-				.slice(0, 2)
-				.map((item, i) => nextButton(item, i + 1))
-				.join('')}</div></div>
+			${
+				rest.length > 0
+					? `<ul class="k-then" aria-label="Or">${rest
+							.slice(0, 2)
+							.map((item, i) => nextLink(item, i + 1))
+							.join('')}</ul>`
+					: ''
+			}</div>
 		<button class="k-btn is-big" data-act="start-go" data-index="0" data-key="start-primary">${DOES[lead.kind] ?? 'Open it'}${icon('right')}</button>
 	</section>`
 }
@@ -149,7 +160,8 @@ export function routeHtml(stops) {
 	return `<svg class="k-route" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" aria-hidden="true"><path d="${line}"/>${dots.join('')}</svg>`
 }
 
-function processesHtml(concepts, briefOf) {
+// With none drawn, the main process ken's model named is offered to draw, as the top of Home offers it.
+function processesHtml(concepts, briefOf, look, env) {
 	const drawn = concepts.filter((each) => each.kind === 'process')
 	const rows = drawn.slice(0, SHOWN_PROCESSES).map((process, i) => {
 		const brief = briefOf(process.id)
@@ -159,10 +171,14 @@ function processesHtml(concepts, briefOf) {
 		const steps = brief?.steps ? `<span>${count(brief.steps.length, 'step', 'steps')}</span>` : ''
 		return `<li><button class="k-proc" data-act="brief-open" data-concept="${esc(process.id)}" data-key="proc-${i}">${routeHtml(stops)}<span class="k-proc-words"><b>${prose(process.name)}</b>${steps}</span></button></li>`
 	})
-	const none =
-		drawn.length === 0
-			? '<p class="k-tile-note">None drawn yet. Ask for one on the Architecture page, with "Draw it another way".</p>'
-			: ''
+	const flow = look.named?.flows[0]
+	const drawing = env?.jobs?.some((job) => job.kind === 'process' && live(job))
+	const named = !flow
+		? 'Ask for one on the Architecture page, with "Draw it another way".'
+		: drawing
+			? `ken's model named the main process, <b>${prose(flow)}</b>, and ken is drawing it now.`
+			: `ken's model named the main process, <b>${prose(flow)}</b>. <button class="k-link" data-act="first-draw" data-key="tile-draw"${env?.off ? ' disabled' : ''}>Draw it</button>`
+	const none = drawn.length === 0 ? `<p class="k-tile-note">None drawn yet. ${named}</p>` : ''
 	return `<section class="k-tile">${head('Processes', 'processes', 'Open Processes')}
 		${big(drawn.length, 'drawn')}
 		<ul class="k-procs">${rows.join('')}</ul>${none}
@@ -265,7 +281,7 @@ export function startPageHtml(view) {
 		${lead}
 		${architectureHtml(look)}
 		${conceptsHtml(look, view.concepts, home)}
-		${processesHtml(view.concepts, view.briefOf)}
+		${processesHtml(view.concepts, view.briefOf, look, view.env)}
 		${changesHtml(look, changes, view.timeline)}
 		${youHtml(look, project)}
 		${waitingHtml(view.followUp, look)}
