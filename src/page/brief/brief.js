@@ -343,11 +343,15 @@ function questionsHtml(brief, { ui, env }) {
 		const note = busy
 			? "ken's model is answering it."
 			: ahead?.state.kind === 'running'
-				? 'ken is answering it now, ahead of you.'
+				? 'ken is preparing an answer now.'
 				: ahead
-					? `ken will answer it ahead of you: ${inLine(ahead.place)}.`
+					? `ken is preparing an answer: ${inLine(ahead.place)}.`
 					: 'No answer yet.'
-		return `<li class="k-row is-open"><span class="k-row-ic">${icon('question')}</span><span class="k-row-main"><b>${prose(question.text)}</b><span class="k-row-note">${note}</span></span><button class="k-btn is-quiet k-run-btn" data-act="brief-answer" data-index="${i}" data-key="brief-ask-${i}"${env.off ? ' disabled' : ''}><span>Ask ken</span><small>One run of ken's model</small></button></li>`
+		// Pressing it while ken prepares the answer joins that run, so the button opens it rather than offering a run.
+		const button = ahead
+			? '<span>Open it</span><small>It fills in as ken writes it</small>'
+			: "<span>Ask ken</span><small>One run of ken's model</small>"
+		return `<li class="k-row is-open"><span class="k-row-ic">${icon('question')}</span><span class="k-row-main"><b>${prose(question.text)}</b><span class="k-row-note">${note}</span></span><button class="k-btn is-quiet k-run-btn" data-act="brief-answer" data-index="${i}" data-key="brief-ask-${i}"${env.off ? ' disabled' : ''}>${button}</button></li>`
 	})
 	const decided =
 		brief.decisions.length === 0

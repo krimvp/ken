@@ -246,8 +246,8 @@ test('ken answers ahead only the first two questions of the parts the reader ope
 	assert.deepEqual(
 		after.map((job) => [job.title, job.state.kind]),
 		[
-			[`ken is answering a question ahead of you: ${asked[1]}`, 'running'],
-			[`ken is answering a question ahead of you: ${asked[0]}`, 'done'],
+			[`ken is preparing an answer: ${asked[1]}`, 'running'],
+			[`ken is preparing an answer: ${asked[0]}`, 'done'],
 		],
 		"with the first answered, neither Core's third question nor Command's joins the line",
 	)
@@ -263,7 +263,7 @@ test('ken answers ahead only the first two questions of the parts the reader ope
 		(job) => job !== undefined,
 	)
 	stream.close()
-	assert.equal(finished?.title, `ken is answering a question ahead of you: ${asked[0]}`)
+	assert.equal(finished?.title, `ken is preparing an answer: ${asked[0]}`)
 	const [question] = (await json(later, '/api/brief?concept=part%3A%3ACore')).questions
 	const answer = await json(later, `/api/brief?concept=${encodeURIComponent(question.id)}`)
 	assert.equal(answer.points[0].quotes[0].text, '\treturn 2', "the queue refreshed the answer's own changed quote")
