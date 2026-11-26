@@ -12,6 +12,7 @@ type Placed = Rect & {
 	thing: { kind: string; part?: string }
 	second?: string
 	solo?: { id: string; in: string | null } | null
+	title: string
 }
 type Line = {
 	id: string
@@ -210,18 +211,33 @@ test('a line that goes from inside a frame to outside it has a ring where it cro
 	assert.equal(inside.rings.length, 0, 'a call inside one frame has no ring')
 })
 
-test('a part in two frames is drawn twice, the second place small, and a part each container runs is drawn whole', () => {
+test('a part in two frames is drawn twice, the second place small, also when a container runs it alone', () => {
 	const drawn = runtimeLayout(DEMO)
 	const sandboxes = drawn.things.filter((placed) => placed.thing.part === 'Sandbox')
 	assert.equal(sandboxes.length, 2)
 	const [first, second] = [sandboxes.find((placed) => !placed.second), sandboxes.find((placed) => placed.second)]
 	assert.equal(second?.id, 'sandbox-worker')
 	assert.ok(first && second && second.w * second.h < first.w * first.h, 'the second place is smaller')
-	const workers = runtimeLayout(SHOP_NAMED).things.filter((placed) => placed.thing.part === 'Event workers')
-	assert.equal(workers.length, 3)
+	// Two of the containers that run the event workers share a word, as "multeval subject" and "multeval grader" do.
+	const renamed: Record<string, string> = { 'payments-c': 'queue payments', 'inventory-c': 'queue inventory' }
+	const runtime = SHOP_NAMED.runtime
+	const frames = runtime.frames.map((frame) => ({ ...frame, name: renamed[frame.id] ?? frame.name }))
+	const workers = runtimeLayout({ ...SHOP_NAMED, runtime: { ...runtime, frames } }).things.filter(
+		(placed) => placed.thing.part === 'Event workers',
+	)
 	assert.ok(
-		workers.every((placed) => !placed.second && placed.solo),
+		workers.every((placed) => placed.solo),
 		'each is the block of the container it runs in',
+	)
+	assert.deepEqual(
+		workers.map((placed) => Boolean(placed.second)),
+		[false, true, true],
+		'the first place is whole, the others are marked as second places',
+	)
+	assert.deepEqual(
+		workers.map((placed) => placed.title),
+		['payments', 'inventory', 'notifier'],
+		"each leads with its container's own words",
 	)
 })
 

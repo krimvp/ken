@@ -80,8 +80,9 @@ function tagHtml(frame, view) {
 	return `<button class="k-rt-tag" data-act="brief-open" data-concept="${esc(id)}" data-key="frame-${esc(frame.id)}" aria-pressed="${view.brief === id}" aria-label="${esc(`${FRAME_NAMES[frame.kind] ?? 'Frame'}: ${frame.name}${frame.copies ? `, ${copiesOf(frame)}` : ''}`)}">${mark(frame.kind)}${words}</button>`
 }
 
-// A part as a bold block, in its colour. A container that runs it alone names the block, and the part's name goes
-// under it: "payments", then "Event workers". The second place of a part drawn twice is small and dashed.
+// A part as a bold block, in its colour. A container that runs it alone names the block with its own words, and the
+// part's name goes under it: "payments", then "Event workers". The second place of a part drawn twice is small and
+// dashed.
 function partHtml(placed, view) {
 	const name = placed.thing.part
 	const box = view.boxes.get(name)
@@ -102,7 +103,7 @@ function partHtml(placed, view) {
 		stops.length > 0
 			? `<span class="k-beads">${stops.map((n) => `<span class="k-bead k-num"><span class="visually-hidden">step </span>${n}</span>`).join('')}</span>`
 			: ''
-	const title = placed.solo && placed.solo.name.toLowerCase() !== name.toLowerCase() ? placed.solo.name : name
+	const title = placed.title.toLowerCase() === name.toLowerCase() ? name : placed.title
 	const under = title === name ? '' : `<span class="k-rt-runs" data-fit="${esc(name)}">${esc(name)}</span>`
 	const foot = placed.second ? `<span>Also runs here</span>` : footOf(box, view)
 	const index = box ? view.home.look.boxes.indexOf(box) : -1

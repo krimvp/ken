@@ -590,6 +590,11 @@
 	text-overflow: ellipsis;
 }
 
+.k-rt-part.is-second .k-rt-runs {
+	padding-left: 38px;
+	margin-top: -4px;
+}
+
 .k-rt-part .k-blk-in {
 	top: 12px;
 	right: 12px;
