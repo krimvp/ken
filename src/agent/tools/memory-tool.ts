@@ -74,7 +74,10 @@ export type Memory = {
 
 // Earlier answers, as thread memory finds them: in this chat by words or as chat:2, and the answers saved on earlier
 // visits by words or by id.
-export type ChatRecall = { find(search: string | undefined, id?: string): Promise<{ id: string; text: string }[]> }
+export type ChatRecall = {
+	known(id: string): Promise<string | undefined>
+	search(words: string, start: number, limit: number): Promise<{ total: number; hits: { id: string; text: string }[] }>
+}
 
 export const MEMORY_TOOLS = ['memory_known', 'memory_level', 'memory_quoted_in', 'memory_search'] as const
 export type MemoryTool = (typeof MEMORY_TOOLS)[number]
@@ -86,6 +89,8 @@ const CAPS = {
 	search: { hits: 20, chars: 3000 },
 }
 const CHANGED = 'changed since: read the file again'
+// What ken holds of these comes from the reader's saved answers: a term's meaning, a question, a drawn process.
+const HISTORY_KINDS = ['term', 'question', 'process', 'step']
 
 type Anchor = Pick<MemoryQuote, 'path' | 'startLine' | 'endLine'> & { changed: boolean }
 
@@ -114,17 +119,19 @@ function factLine(fact: Fact, at: Anchor[], limit?: number): string {
 	return shortLine(`${status}${fact.kind} of ${fact.about}: ${at.map(anchorText).join(', ')} ${fact.text}`, limit)
 }
 
-// asked is what the reader asked and was told: their map of the topics and the earlier answers. A run whose output
-// goes into the project record gets null, so memory gives it the record and the briefs ken wrote from the code alone.
+// asked is what the reader asked and was told: their map of the topics and the earlier answers. recalled runs when a
+// tool gives the run text of the reader's saved answers or questions. A run whose output goes into the project record
+// gets null, so memory gives it the record and the briefs ken wrote from the code alone.
 export function memoryTools(deps: {
 	store: RecordStore
 	repo: Repository
 	memory?: Memory | undefined
-	asked: { map?: UnderstandingMap | undefined; chat: ChatRecall } | null
+	asked: { map?: UnderstandingMap | undefined; chat: ChatRecall; recalled: () => void } | null
 }): Tool[] {
 	const { store, repo, memory, asked } = deps
 	const map = asked?.map
-	const chat: ChatRecall = asked?.chat ?? { find: async () => [] }
+	const recalled = () => asked?.recalled()
+	const chat = asked?.chat
 	const visibleFacts = async () => ((await memory?.facts()) ?? []).filter((fact) => asked || fact.kind !== 'answer')
 
 	const known: Tool = {
@@ -144,8 +151,10 @@ export function memoryTools(deps: {
 			const about = read.text('about').trim()
 			const page = (text: string) => reply(memoryPage(text, read.optionalLine('from') ?? 1))
 			if (/^chat:\d+$/.test(about)) {
-				const [found] = await chat.find(undefined, about)
-				return found ? page(found.text) : refuse(`There is no answer ${about} in this chat.`)
+				const found = await chat?.known(about)
+				if (!found) return refuse(`There is no answer ${about} in this chat.`)
+				recalled()
+				return page(found)
 			}
 			const record = await store.read()
 			const entry = record.entries.find(
@@ -167,9 +176,12 @@ export function memoryTools(deps: {
 					: refuse(`There is no recorded topic "${found.name}".`)
 			}
 			// Processes and their steps can come from a diagram in a private reply.
-			const held = !asked && found && ['question', 'process', 'step'].includes(found.kind) ? null : found
-			const [saved] = held ? [] : await chat.find(undefined, about)
-			if (saved) return page(saved.text)
+			const held = !asked && found && HISTORY_KINDS.includes(found.kind) ? null : found
+			const saved = held ? undefined : await chat?.known(about)
+			if (saved) {
+				recalled()
+				return page(saved)
+			}
 			if (!held) return refuse(`ken holds nothing on "${about}". Search memory with memory_search, or read the code.`)
 			const anchors = memoryAnchors(repo, ctx.signal)
 			const sources = await anchors(held.quotes)
@@ -181,6 +193,7 @@ export function memoryTools(deps: {
 			const questions = asked
 				? held.questions.map((question) => `- ${question.text}${question.answered ? ' (answered)' : ''}`)
 				: []
+			if (questions.length > 0 || HISTORY_KINDS.includes(held.kind)) recalled()
 			const text = [
 				`${held.kind} ${held.id} (${held.name}): ${held.line}`,
 				...(held.changed.length
@@ -270,6 +283,7 @@ export function memoryTools(deps: {
 					lines.push(continuation(index + 1))
 					break
 				}
+				if (fact.kind === 'answer') recalled()
 				lines.push(line)
 				left -= line.length + 1
 			}
@@ -285,7 +299,7 @@ export function memoryTools(deps: {
 
 	const search: Tool = {
 		name: 'memory_search',
-		description: `Search what ken holds by words: this chat's earlier answers, the things to know of saved briefs and answers, terms, and the entries of the project record (work, decisions, topics, notes and named levels), newest first. kind keeps only record entries of that kind; with no words it lists them. Open one with memory_known. At most ${CAPS.search.hits} hits and ${CAPS.search.chars} characters a page.`,
+		description: `Search what ken holds by words: earlier answers from this chat and previous visits, the things to know of saved briefs and answers, terms, and the entries of the project record (work, decisions, topics, notes and named levels), newest first. kind keeps only record entries of that kind; with no words it lists them. Open one with memory_known. At most ${CAPS.search.hits} hits and ${CAPS.search.chars} characters a page.`,
 		parameters: {
 			type: 'object',
 			properties: {
@@ -314,17 +328,28 @@ export function memoryTools(deps: {
 				.reverse()
 				.sort((a, b) => b.at.localeCompare(a.at))
 			const asked = kind === undefined && words.length > 0
-			const answers = asked ? await chat.find(words.join(' ')) : []
+			const start = (page - 1) * CAPS.search.hits
+			const answers =
+				asked && chat ? await chat.search(words.join(' '), start, CAPS.search.hits) : { total: 0, hits: [] }
 			const facts = asked ? (await visibleFacts()).filter((fact) => has(`${fact.name} ${fact.text}`)) : []
 			const anchors = memoryAnchors(repo, ctx.signal)
-			const hits: ((limit: number) => Promise<string>)[] = [
-				...answers.map((each) => async () => `answer ${each.id}: ${each.text}`),
-				...facts.map((fact) => async (limit: number) => factLine(fact, await anchors(fact.quotes), limit)),
-				...entries.map((entry) => async () => entryLine(entry)),
+			const otherHits: { saved: boolean; line: (limit: number) => Promise<string> }[] = [
+				...facts.map((fact) => ({
+					saved: fact.kind === 'answer',
+					line: async (limit: number) => factLine(fact, await anchors(fact.quotes), limit),
+				})),
+				...entries.map((entry) => ({ saved: false, line: async () => entryLine(entry) })),
 			]
-			const shown = hits.slice((page - 1) * CAPS.search.hits, page * CAPS.search.hits)
-			const more = page * CAPS.search.hits < hits.length ? `\nAsk for page ${page + 1} for more.` : ''
-			const header = `${hits.length} hits:`
+			const otherStart = Math.max(0, start - answers.total)
+			const others = otherHits.slice(otherStart, otherStart + CAPS.search.hits - answers.hits.length)
+			if (answers.hits.length > 0 || others.some((hit) => hit.saved)) recalled()
+			const shown = [
+				...answers.hits.map((each) => async () => `answer ${each.id}: ${each.text}`),
+				...others.map((hit) => hit.line),
+			]
+			const total = answers.total + otherHits.length
+			const more = page * CAPS.search.hits < total ? `\nAsk for page ${page + 1} for more.` : ''
+			const header = `${total} hits:`
 			const budget = Math.floor((CAPS.search.chars - header.length - more.length) / Math.max(1, shown.length)) - 1
 			const lines = await Promise.all(shown.map(async (hit) => shortLine(await hit(budget), budget)))
 			return reply([header, ...lines].join('\n') + more)

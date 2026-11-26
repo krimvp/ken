@@ -108,3 +108,42 @@ test('a search keeps the changed-source warning on every shortened fact', async 
 	assert.equal(hits.length, 20)
 	for (const hit of hits) assert.match(hit, /changed since/)
 })
+
+test('an earlier answer can be found on a later search page when the current chat and the record also match', async () => {
+	const { root } = buildRepository([{ message: 'Add worker', files: { 'work.ts': 'run()' } }])
+	const home = readerHome()
+	const previous = await scriptedModel(Array.from({ length: 21 }, (_, i) => ({ text: `Finding ${i}.` })))
+	const old = await openKen(root, home, previous.baseUrl)
+	const archived: string[] = []
+	for (let i = 0; i < 21; i++) {
+		const events = await ask(old, { question: `Investigate delay ${i}.` })
+		archived.push(events.at(-1).view.entry.id)
+	}
+	await old.close()
+	const record = await fileRecordStore(root, gitRepository(root)).append([
+		{ kind: 'topic', name: 'Delay budget', quotes: [{ path: 'work.ts', commit: 'HEAD', text: 'run()' }] },
+	])
+	assert.equal(record.kind, 'appended')
+	const model = await scriptedModel([
+		{ text: 'One new finding.' },
+		{ tool: 'ken__memory_search', args: { words: 'delay' } },
+		{ tool: 'ken__memory_search', args: { words: 'delay', page: 2 } },
+		{ tool: 'ken__memory_known', args: { about: archived[0] } },
+		{ text: 'Found the first investigation.' },
+	])
+	const server = await openKen(root, home, model.baseUrl)
+	await ask(server, { question: 'Investigate delay today.' })
+	await ask(server, { question: 'Where did those investigations start?' })
+	const pageOne = toolResults(model.requests[2]).at(-1) ?? ''
+	const pageTwo = toolResults(model.requests[3]).at(-1) ?? ''
+	assert.match(pageOne, /Ask for page 2/)
+	assert.match(pageOne, /answer chat:1/)
+	for (const page of [pageOne, pageTwo]) assert.ok(page.length <= 3000)
+	const ids = [...`${pageOne}\n${pageTwo}`.matchAll(/^answer (\S+): /gm)].map((match) => match[1])
+	assert.deepEqual(ids, ['chat:1', ...archived.toReversed()])
+	assert.match(pageOne, /Investigate delay 20/)
+	assert.match(pageTwo, /Investigate delay 0/)
+	assert.match(pageTwo, /Delay budget/)
+	assert.doesNotMatch(pageTwo, /Ask for page 3/)
+	assert.match(toolResults(model.requests[4]).at(-1) ?? '', /Finding 0\./)
+})

@@ -47,7 +47,7 @@ const NOTHING_NEXT = 'Nothing here is new to you or changed since you looked.'
 // The map's topics that sit in a box, each with its state for this reader.
 export function topicsIn(
 	paths: string[],
-	topics: Topic[],
+	topics: Pick<Topic, 'name' | 'quotes'>[],
 	states: TopicState[],
 ): { topic: string; state: TopicState }[] {
 	return topics.flatMap((topic) => {

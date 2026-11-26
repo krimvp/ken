@@ -99,6 +99,25 @@ export async function checkViews(
 	const outsideIds = () => new Set(world.outside.map((each) => each.id))
 	const frameIds = () => new Set(runtime.frames.map((each) => each.id))
 	const thingIds = () => new Set(runtime.things.map((each) => each.id))
+	// A reader takes two boxes with one name for one thing, so a frame, a store and an outside system each take a name no
+	// other item of the drawing has. A part may sit in several frames: that is one part, which runs in two places.
+	const outsideName = (id: string) => world.outside.find((each) => each.id === id)?.name ?? ''
+	type Named = { name: string; what: string; part: boolean }
+	const drawnNames = (): Named[] => [
+		...runtime.frames.map((frame) => ({ name: frame.name, what: `the frame "${frame.id}"`, part: false })),
+		...runtime.things.map((thing) =>
+			thing.kind === 'part'
+				? { name: thing.part, what: `the part "${thing.part}"`, part: true }
+				: thing.kind === 'store'
+					? { name: thing.name, what: `the store "${thing.id}"`, part: false }
+					: { name: outsideName(thing.id), what: `the outside system "${thing.id}"`, part: false },
+		),
+	]
+	const twice = (name: string, taken: Named[]) => {
+		const before = name.trim() === '' ? undefined : taken.find((each) => sameName(each.name, name))
+		if (!before) return []
+		return [`its name "${name}" is the name of ${before.what}, so the two read as one thing. Give each its own name.`]
+	}
 
 	// The checks every item gets: its id, how many of its kind there are, and its texts.
 	// unique is false for an outside thing, whose id is that of its outside system.
@@ -129,6 +148,12 @@ export async function checkViews(
 
 	for (const sent of draft.world?.outside ?? []) {
 		const item = start('Outside', sent.id, world.outside, B.outside)
+		const taken = world.outside.map((each) => ({
+			name: each.name,
+			what: `the outside system "${each.id}"`,
+			part: false,
+		}))
+		item.problems.push(...twice(sent.name, taken))
 		const outside: Outside = {
 			id: sent.id,
 			kind: sent.kind,
@@ -157,6 +182,12 @@ export async function checkViews(
 	for (const sent of draft.runtime?.frames ?? []) {
 		const item = start('Frame', sent.id, [...runtime.frames, ...frames], B.frames)
 		if (frames.some((each) => each.sent.id === sent.id)) item.problems.push('another item has this id.')
+		const sentBefore = frames.map((each) => ({
+			name: each.frame.name,
+			what: `the frame "${each.frame.id}"`,
+			part: false,
+		}))
+		item.problems.push(...twice(sent.name, [...drawnNames(), ...sentBefore]))
 		const copies = sent.copies && (await copiesOf(repo, sent.copies, item.problems, signal))
 		const frame: Frame = {
 			id: sent.id,
@@ -205,6 +236,7 @@ export async function checkViews(
 				)
 			}
 			if (thingIds().has(sent.id)) item.problems.push('this outside system is in the drawing already.')
+			else item.problems.push(...twice(outsideName(sent.id), drawnNames()))
 			item.done({ id: sent.id, kind: 'outside', frame }, runtime.things)
 			continue
 		}
@@ -215,6 +247,13 @@ export async function checkViews(
 					`it names the part "${sent.part}", which is not a part of the level. The parts are: ${parts.join(', ') || 'none yet'}.`,
 				)
 			}
+			if (part)
+				item.problems.push(
+					...twice(
+						part,
+						drawnNames().filter((each) => !each.part),
+					),
+				)
 			const quotes = await item.quoted('it', sent.quotes)
 			item.done({ id: sent.id, kind: 'part', part: part ?? sent.part, frame, quotes }, runtime.things)
 			continue
@@ -222,6 +261,7 @@ export async function checkViews(
 		if (sent.store === null) item.problems.push(`a store needs its kind, one of ${STORE_KINDS.join(', ')}.`)
 		if (sent.topics.length > B.topics)
 			item.problems.push(`it has ${sent.topics.length} topics; keep it to ${B.topics}.`)
+		item.problems.push(...twice(sent.name, drawnNames()))
 		const thing: Thing = {
 			id: sent.id,
 			kind: 'store',
@@ -392,6 +432,12 @@ function names(what: string, id: string): string {
 	return `it names "${id}", which is no ${what} ken took. Send that ${what} first, or fix the id.`
 }
 
+// As the record compares names: case, spaces, - and _ do not count.
 function sameName(a: string, b: string): boolean {
-	return a.trim().toLowerCase() === b.trim().toLowerCase()
+	const normal = (name: string) =>
+		name
+			.toLowerCase()
+			.replaceAll(/[\s_-]+/g, ' ')
+			.trim()
+	return normal(a) === normal(b)
 }

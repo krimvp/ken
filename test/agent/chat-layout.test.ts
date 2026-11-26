@@ -10,6 +10,7 @@ const { root } = buildRepository([
 		message: 'feat: start',
 		files: {
 			'src/server/serve.ts': "import { answer } from '../agent/answer.ts'\nexport const port = 80\n",
+			'src/server/routes.ts': 'export const routes = []\n',
 			'src/agent/answer.ts': 'export function answer() {}\n',
 		},
 	},
@@ -97,4 +98,31 @@ test('a layout the model sends without saying what the level is comes back namin
 	)
 	const [card] = cardsIn(events)
 	assert.equal(card?.kind === 'layout' && card.layout.about, about)
+})
+
+test('a part named as the part it sits in goes back to the model, so the reader never meets Server inside Server', async () => {
+	await ask([{ tool: 'ken__show', args: { layout: layout(IMPORT) } }, { text: '' }])
+	const inside = (name: string) => ({
+		within: ['src/server'],
+		about: 'How the server serves the page.',
+		parts: [
+			{ name, job: 'listens on a port', paths: ['src/server/serve.ts'] },
+			{ name: 'Routes', job: 'picks the handler', paths: ['src/server/routes.ts'] },
+		],
+		arrows: [],
+	})
+	const { events } = await ask([
+		{ tool: 'ken__show', text: 'Two parts inside.', args: { layout: inside('server') } },
+		{ tool: 'ken__show', args: { layout: inside('Listener') } },
+		{ text: '' },
+	])
+	assert.deepEqual(
+		sentBackIn(events).map((each) => [
+			each.what,
+			/part 1 \("server"\) has the name of the part it sits in/.test(each.problems.join(' ')),
+		]),
+		[['The layout', true]],
+	)
+	const [card] = cardsIn(events)
+	assert.deepEqual(card?.kind === 'layout' && card.layout.parts.map((part) => part.name), ['Listener', 'Routes'])
 })

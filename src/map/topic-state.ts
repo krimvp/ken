@@ -26,7 +26,7 @@ const DAY_MS = 86_400_000
 // knewGone holds the quotes of the topic as the reader knew it that are gone at HEAD, when the record has been given a
 // newer version of the topic since.
 export function stateOf(
-	topic: Topic,
+	topic: Pick<Topic, 'name' | 'quotes'>,
 	entry: MapEntry | undefined,
 	code: TopicCode,
 	now: Date,

@@ -1,5 +1,6 @@
 // The personal map stores two kinds of line. Knowledge evidence is tied to the quoted code the reader knew that day.
 // A reply-length preference applies to the topic across changes to its code.
+import type { Topic } from '../record/index.ts'
 
 export const DEPTHS = ['heard-of', 'can-follow', 'could-change'] as const
 export type Depth = (typeof DEPTHS)[number]
@@ -10,8 +11,17 @@ export type Depth = (typeof DEPTHS)[number]
 export const EVIDENCE = ['asked', 'read', 'said', 'wrote', 'forgot', 'toured'] as const
 export type Evidence = (typeof EVIDENCE)[number]
 
-// date is a day, such as 2026-11-16. hash is the topic's codeHash at HEAD that day: see topicCode in the record.
-export type MapEntry = { topic: string; depth: Depth; evidence: Evidence; date: string; hash: string }
+// date is a day, such as 2026-11-16. hash is the topic's codeHash at HEAD that day: see topicCode in the record. quotes
+// are the lines of a topic the record does not hold, such as one a reply kept in the reader's history, as that reply
+// quoted them. A topic of the record has none, since the record holds its lines.
+export type MapEntry = {
+	topic: string
+	depth: Depth
+	evidence: Evidence
+	date: string
+	hash: string
+	quotes?: Topic['quotes']
+}
 
 export type DetailEntry = { topic: string; detail: 'shorter' | 'usual'; date: string }
 export type MapLine = MapEntry | DetailEntry
@@ -29,7 +39,7 @@ export function parseMapLine(line: string): ParsedLine {
 	if (typeof value !== 'object' || value === null || Array.isArray(value)) {
 		return { kind: 'skipped', problem: 'it is not a JSON object' }
 	}
-	const { topic, depth, evidence, date, hash, detail } = value as Record<string, unknown>
+	const { topic, depth, evidence, date, hash, detail, quotes } = value as Record<string, unknown>
 	const knownDepth = DEPTHS.find((each) => each === depth)
 	const knownEvidence = EVIDENCE.find((each) => each === evidence)
 	if (typeof topic !== 'string' || topic.trim() === '') return { kind: 'skipped', problem: 'it names no topic' }
@@ -50,6 +60,22 @@ export function parseMapLine(line: string): ParsedLine {
 	if (knownEvidence === 'asked' && knownDepth !== 'heard-of') {
 		return { kind: 'ok', entry: { topic: topic.trim(), detail: 'usual', date: day } }
 	}
+	if (quotes !== undefined && !(Array.isArray(quotes) && quotes.every(isQuote))) {
+		return { kind: 'skipped', problem: 'its quotes are not lines of files, each with a path, commit, lines and text' }
+	}
 	const level = knownEvidence === 'said' || knownEvidence === 'wrote' ? knownDepth : 'heard-of'
-	return { kind: 'ok', entry: { topic: topic.trim(), depth: level, evidence: knownEvidence, date: day, hash } }
+	const entry = { topic: topic.trim(), depth: level, evidence: knownEvidence, date: day, hash }
+	return { kind: 'ok', entry: quotes === undefined ? entry : { ...entry, quotes } }
+}
+
+function isQuote(value: unknown): value is Topic['quotes'][number] {
+	if (typeof value !== 'object' || value === null) return false
+	const { path, commit, startLine, endLine, text } = value as Record<string, unknown>
+	return (
+		typeof path === 'string' &&
+		typeof commit === 'string' &&
+		Number.isSafeInteger(startLine) &&
+		Number.isSafeInteger(endLine) &&
+		typeof text === 'string'
+	)
 }

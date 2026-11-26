@@ -162,7 +162,7 @@ export async function lookAtLayout(
 		sources.map.read(now, signal),
 		sources.seen.read(),
 	])
-	const topics = read.current.flatMap((entry) => (entry.kind === 'topic' ? [entry] : []))
+	const topics = [...read.current.flatMap((entry) => (entry.kind === 'topic' ? [entry] : [])), ...mapRead.own]
 	const drawn = level.boxes.map((box) => {
 		const inBox = topicsIn(box.paths, topics, mapRead.states)
 		const states = inBox.map((each) => each.state)

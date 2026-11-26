@@ -159,3 +159,19 @@ test('with KEN_SESSIONS=off the session tools say so, no session text reaches th
 	const sent = JSON.stringify(requests.map((request) => toolResults(request)))
 	assert.ok(!sent.includes('queue drains') && !sent.includes('Make retry wait'), 'no session text reaches the model')
 })
+
+test("a topic shown after the model read a saved session, which holds the reader's own words, stays out of the record; one shown without it goes in", async () => {
+	const topic = (name: string): Turn => ({
+		tool: 'ken__show',
+		text: 'Retry waits.',
+		args: { topics: [{ name, note: 'How retry waits between attempts.', quotes: [SLEEP] }] },
+	})
+	const read = await ask([{ tool: 'ken__read_session', args: { session: SESSION } }, topic('retry wait'), { text: '' }])
+	assert.match(toolResults(read.requests[1])[0] ?? '', /the queue drains within a second/, 'the run read the session')
+	assert.deepEqual(replyIn(read.events).recorded, [])
+	const plain = await ask([topic('retry pause'), { text: '' }])
+	assert.deepEqual(
+		replyIn(plain.events).recorded.map((entry) => entry.kind),
+		['topic', 'note'],
+	)
+})
