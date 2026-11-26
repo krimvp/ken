@@ -43,7 +43,7 @@ export type Chat = {
 	thread: string
 	// Several questions may run at once, each in a session of its own. Breaking out of the loop early stops the
 	// question. as says how it is asked: see Asking.
-	ask(question: string, signal?: AbortSignal, as?: Asking): AsyncGenerator<ChatEvent>
+	ask(question: string, signal?: AbortSignal, as?: Asking, savedId?: string): AsyncGenerator<ChatEvent>
 	close(): Promise<void>
 }
 
@@ -232,6 +232,7 @@ export async function startChat(options: {
 		question: string,
 		signal?: AbortSignal,
 		as: Asking = { kind: 'question' },
+		savedId?: string,
 	): AsyncGenerator<ChatEvent> {
 		if (closed) {
 			yield { kind: 'error', message: 'This chat has closed.' }
@@ -241,7 +242,7 @@ export async function startChat(options: {
 		const run = freshRun(as, events.push)
 		const opening = open(as, run)
 		try {
-			yield* askIn(await opening, question, signal, as, run, events)
+			yield* askIn(await opening, question, signal, as, run, events, savedId)
 		} finally {
 			await opening.then((session) => session.close())
 		}
@@ -254,6 +255,7 @@ export async function startChat(options: {
 		as: Asking,
 		run: Run,
 		events: ReturnType<typeof eventQueue>,
+		savedId?: string,
 	): AsyncGenerator<ChatEvent> {
 		const current = run.round
 		let questionFocus = as.kind === 'question' ? as.focus : undefined
@@ -468,6 +470,7 @@ export async function startChat(options: {
 						ended.reply,
 						readPaths,
 						questionFocus,
+						savedId,
 					)
 				}
 				events.push({ kind: 'replied', reply: ended.reply, recorded: ended.recorded })

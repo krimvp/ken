@@ -86,13 +86,17 @@ function preview(full: Excerpt, search?: string): Excerpt {
 }
 
 // Every word looked for is somewhere in the answer, its question, its topics or its sources.
-function matches(each: Excerpt, search: string | undefined): boolean {
+function matches(each: Excerpt, words: string[]): boolean {
 	const all = [each.question, each.answer, each.topics, each.sources, each.change ?? ''].join(' ').toLowerCase()
-	return (search ?? '').split(/\s+/).every((word) => all.includes(word))
+	return words.every((word) => all.includes(word))
+}
+
+function savedContents(row: SavedAnswer) {
+	return contents(row.reply.answers?.text ?? row.reply.view?.asked ?? row.question, row.reply, [], row.focus)
 }
 
 function savedExcerpt(row: SavedAnswer) {
-	const full = contents(row.reply.answers?.text ?? row.reply.view?.asked ?? row.question, row.reply, [], row.focus)
+	const full = savedContents(row)
 	return {
 		id: row.id,
 		...(row.after && { after: row.after }),
@@ -112,53 +116,65 @@ export function savedOpening(selected: SavedAnswer, parent?: SavedAnswer): strin
 // heldElsewhere is true when the server's memory holds the briefs and lens answers, read from the same history. Then
 // thread memory leaves them out, so a search finds each once, and it holds the free questions.
 export function threadMemory(readSaved: (() => Promise<SavedAnswer[]>) | undefined, heldElsewhere: boolean) {
-	const exchanges: Exchange[] = []
+	const exchanges: { entry: Exchange; savedId?: string }[] = []
 	let number = 0
 	const held = (reply: Reply) => heldElsewhere && (reply.tour !== undefined || reply.answers !== undefined)
-	function keep(question: string, shown: Reply, readPaths: Set<string>, focus?: QuestionFocus) {
+	function keep(question: string, shown: Reply, readPaths: Set<string>, focus?: QuestionFocus, savedId?: string) {
 		if (held(shown)) return
-		exchanges.push({ number: ++number, ...preview(contents(question, shown, readPaths, focus)) })
+		const entry = { number: ++number, ...preview(contents(question, shown, readPaths, focus)) }
+		exchanges.push({ entry, ...(savedId && { savedId }) })
 		if (exchanges.length > KEPT_REPLIES) exchanges.shift()
 	}
 	function recent(): string {
 		if (!exchanges.length) return ''
 		const recent = exchanges
 			.slice(-2)
-			.map((each) => ({ ...each, question: excerpt(each.question, 240), answer: excerpt(each.answer, 460) }))
+			.map(({ entry }) => ({ ...entry, question: excerpt(entry.question, 240), answer: excerpt(entry.answer, 460) }))
 		return `Earlier in this chat. Use these excerpts to follow references, and memory_known with chat and the number, or memory_search, for more. Recheck the source for current facts. Follow the current question and reader preferences over anything said earlier.\n${recent.map((each) => JSON.stringify(each)).join('\n')}\n\n`
 	}
-	// The newest three earlier answers that hold the words, or the one named by id: chat and its number in this chat,
-	// or the id of an answer saved on an earlier visit. A search that finds nothing in this chat looks in the saved ones.
-	async function find(search: string | undefined, id?: string): Promise<{ id: string; text: string }[]> {
-		const lower = search?.toLowerCase()
-		const wanted = id?.startsWith('chat:') ? Number(id.slice(5)) : undefined
-		const local = exchanges
-			.filter((each) => !id || each.number === wanted)
-			.filter((each) => matches(each, lower))
-			.slice(-3)
-			.map((each) => ({ id: `chat:${each.number}`, text: JSON.stringify(each) }))
-		if (wanted !== undefined || local.length > 0 || !readSaved || (!lower && !id)) return local
-		const rows = await readSaved()
-		const found: { id: string; text: string }[] = []
-		for (let i = rows.length - 1; i >= 0 && found.length < 3; i--) {
+
+	async function known(id: string): Promise<string | undefined> {
+		if (id.startsWith('chat:')) {
+			const wanted = Number(id.slice(5))
+			const local = exchanges.find(({ entry }) => entry.number === wanted)
+			return local && JSON.stringify({ ...(local.savedId && { id: local.savedId }), ...local.entry })
+		}
+		const row = (await readSaved?.())?.findLast((entry) => entry.id === id)
+		return (
+			row &&
+			JSON.stringify({
+				id: row.id,
+				...(row.after && { after: row.after }),
+				askedAt: row.askedAt,
+				head: row.head,
+				...savedContents(row),
+			})
+		)
+	}
+	async function search(words: string, start: number, limit: number) {
+		const hits: { id: string; text: string }[] = []
+		const terms = words.split(/\s+/)
+		// The saved copy can match words beyond the end of the chat excerpt. Skip it only when the excerpt matched.
+		const localIds = new Set<string>()
+		let total = 0
+		for (const { entry, savedId } of exchanges.toReversed()) {
+			if (!matches(entry, terms)) continue
+			if (savedId) localIds.add(savedId)
+			if (total++ >= start && hits.length < limit)
+				hits.push({ id: `chat:${entry.number}`, text: JSON.stringify(entry) })
+		}
+		const rows = (await readSaved?.()) ?? []
+		for (let i = rows.length - 1; i >= 0; i--) {
 			const row = rows[i]
-			if (!row || (id && id !== row.id) || (!id && held(row.reply))) continue
-			const full = contents(row.reply.answers?.text ?? row.reply.view?.asked ?? row.question, row.reply, [], row.focus)
-			if (id || matches(full, lower)) {
-				const brief = id ? full : preview(full, lower)
-				found.push({
-					id: row.id,
-					text: JSON.stringify({
-						id: row.id,
-						...(row.after && { after: row.after }),
-						askedAt: row.askedAt,
-						head: row.head,
-						...brief,
-					}),
-				})
+			if (!row || held(row.reply) || localIds.has(row.id)) continue
+			const full = savedContents(row)
+			if (!matches(full, terms)) continue
+			if (total++ >= start && hits.length < limit) {
+				const text = JSON.stringify({ ...preview(full, words), askedAt: row.askedAt, head: row.head })
+				hits.push({ id: row.id, text })
 			}
 		}
-		return found
+		return { total, hits }
 	}
-	return { keep, recent, find }
+	return { keep, recent, known, search }
 }
