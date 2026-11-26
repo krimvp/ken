@@ -2,6 +2,7 @@
 // git at its commit, each point's line has at most BRIEF_BOUNDS.lineWords words, and no term is a code name. Then it prints each
 // point beside its quoted lines, for a person or a model to judge whether the point is true against its quote.
 //
+// A run passes only when it finished with an answer and the checker found claim or topic quotes to check.
 // node scripts/bench/check-reply.ts --repo <project checkout> <run.ndjson>...
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
@@ -49,7 +50,8 @@ for (const run of positionals) {
 		.filter((line) => line.trim() !== '')
 		.map((line) => JSON.parse(line))
 	const saved = events.find((event) => event.kind === 'saved')
-	const items: Item[] = saved?.view?.entry?.reply?.items ?? []
+	const entry = saved?.view?.entry
+	const items: Item[] = entry?.reply?.items ?? []
 	const counts = { quotes: 0, notInGit: 0, points: 0, longLines: 0, terms: 0, codeNames: 0 }
 	const report: string[] = []
 	for (const item of items) {
@@ -82,6 +84,12 @@ for (const run of positionals) {
 			report.push('', `- Term: ${card.topic.name}${code ? ' (CODE NAME)' : ''}: ${card.topic.note}`)
 			for (const quote of quotes) report.push(`  > ${quote.path}:${quote.startLine} | ${quote.text}`)
 		}
+	}
+	if (entry?.outcome !== 'answered' || counts.quotes === 0) {
+		failed++
+		if (!entry) report.push('No saved reply. The run could not be checked.')
+		else if (entry.outcome !== 'answered') report.push(`The run ended with ${entry.outcome}.`)
+		else report.push('No claim or topic quotes for the brief checker to evaluate.')
 	}
 	failed += counts.notInGit + counts.longLines + counts.codeNames
 	process.stdout.write(`# ${run}\n${JSON.stringify(counts)}\n${report.join('\n')}\n\n`)

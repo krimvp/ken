@@ -292,7 +292,7 @@ export function questionDesk(
 		}
 		send({ kind: 'asked', question })
 		const events: ChatEvent[] = []
-		for await (const event of chat.ask(question, stop, as)) {
+		for await (const event of chat.ask(question, stop, as, id)) {
 			events.push(event)
 			if (event.kind === 'item') send({ ...event, item: drawnItem(event.item) })
 			else if (event.kind === 'replied') {

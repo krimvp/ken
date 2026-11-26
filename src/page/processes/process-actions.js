@@ -1,4 +1,4 @@
-// What the reader does on the Processes page: pick a drawn process, switch between its lanes and the map, and ask
+// What the reader does on the Processes page: pick a drawn process, choose how to read its steps, and ask
 // ken's model to draw one more, from an offer or in their own words. A drawing ken's model finished opens large.
 import { fill } from '../shell/fill.js'
 import { drawLaneLinks, processesPageHtml } from './processes.js'
@@ -8,7 +8,7 @@ export const freshProcesses = () => ({
 	list: null,
 	offers: [],
 	at: null,
-	view: 'lanes',
+	view: null,
 	problem: null,
 	// The saved reply of a run that drew nothing, which the earlier answers do not list.
 	reply: null,
@@ -47,7 +47,8 @@ export function processActions(app) {
 
 	function draw(env) {
 		const look = state.shell.top?.look ?? null
-		if (fill(page, processesPageHtml({ procs, look, home: state.home, env }))) drawLaneLinks(page)
+		if (fill(page, processesPageHtml({ procs, look, home: state.home, text: state.shell.prefs.text, env })))
+			drawLaneLinks(page)
 	}
 
 	// One run of ken's model draws what the reader asked for, at the top of the project.

@@ -75,7 +75,7 @@ const waysCount = (brief) => ({
 })
 
 // A row that opens another brief.
-function rowHtml({ id, name, note, key, swatch = null, number = null }) {
+export function rowHtml({ id, name, note, key, swatch = null, number = null }) {
 	const concept = readConcept(id)
 	const lead =
 		number !== null

@@ -49,6 +49,9 @@ const { architectureHtml }: { architectureHtml: (view: object) => string } = awa
 	path.join(PAGE, 'architecture/architecture.js')
 )
 
+const { processesPageHtml }: { processesPageHtml: (view: object) => string } = await import(
+	path.join(PAGE, 'processes/processes.js')
+)
 const { changesPageHtml }: { changesPageHtml: (view: object) => string } = await import(
 	path.join(PAGE, 'changes/changes.js')
 )
@@ -362,6 +365,35 @@ const textOf = (html: string) =>
 		.replace(/<[^>]*>/g, ' ')
 		.replace(/&minus;/g, '-')
 		.replace(/\s+/g, ' ')
+
+test('a reader can follow the process in words and switch to either picture', () => {
+	const process = {
+		id: 'saved:route',
+		name: 'Send a receipt',
+		drawn: '2026-11-23',
+		steps: 2,
+		lanes: [{ name: 'Desk' }, { name: 'Mailer' }],
+		messages: [
+			{ n: 1, from: 0, to: 1, line: 'sends a receipt' },
+			{ n: 2, from: 1, to: 0, line: 'returns a delivery ID' },
+		],
+	}
+	const draw = (text: string, view: string | null = null) =>
+		processesPageHtml({
+			procs: { list: [process], offers: [], at: process.id, view },
+			look: { boxes: [], arrows: [], within: [] },
+			home: {},
+			env: {},
+			text,
+		})
+	const words = draw('words')
+	assert.match(textOf(words), /1 sends a receipt Desk to Mailer 2 returns a delivery ID Mailer to Desk/)
+	assert.match(words, /data-concept="step:saved:route:2"/)
+	assert.match(words, /data-key="proc-view-text" aria-pressed="true"/)
+	assert.match(draw('words', 'map'), /data-key="proc-view-map" aria-pressed="true"/)
+	assert.match(draw('pictures'), /data-key="proc-view-lanes" aria-pressed="true"/)
+	assert.match(draw('pictures', 'text'), /data-key="proc-view-text" aria-pressed="true"/)
+})
 
 const DAY = 86_400_000
 const dayText = (time: number) =>

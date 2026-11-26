@@ -74,7 +74,10 @@ export type Memory = {
 
 // Earlier answers, as thread memory finds them: in this chat by words or as chat:2, and the answers saved on earlier
 // visits by words or by id.
-export type ChatRecall = { find(search: string | undefined, id?: string): Promise<{ id: string; text: string }[]> }
+export type ChatRecall = {
+	known(id: string): Promise<string | undefined>
+	search(words: string, start: number, limit: number): Promise<{ total: number; hits: { id: string; text: string }[] }>
+}
 
 export const MEMORY_TOOLS = ['memory_known', 'memory_level', 'memory_quoted_in', 'memory_search'] as const
 export type MemoryTool = (typeof MEMORY_TOOLS)[number]
@@ -124,7 +127,7 @@ export function memoryTools(deps: {
 }): Tool[] {
 	const { store, repo, memory, asked } = deps
 	const map = asked?.map
-	const chat: ChatRecall = asked?.chat ?? { find: async () => [] }
+	const chat = asked?.chat
 	const visibleFacts = async () => ((await memory?.facts()) ?? []).filter((fact) => asked || fact.kind !== 'answer')
 
 	const known: Tool = {
@@ -144,8 +147,8 @@ export function memoryTools(deps: {
 			const about = read.text('about').trim()
 			const page = (text: string) => reply(memoryPage(text, read.optionalLine('from') ?? 1))
 			if (/^chat:\d+$/.test(about)) {
-				const [found] = await chat.find(undefined, about)
-				return found ? page(found.text) : refuse(`There is no answer ${about} in this chat.`)
+				const found = await chat?.known(about)
+				return found ? page(found) : refuse(`There is no answer ${about} in this chat.`)
 			}
 			const record = await store.read()
 			const entry = record.entries.find(
@@ -168,8 +171,8 @@ export function memoryTools(deps: {
 			}
 			// Processes and their steps can come from a diagram in a private reply.
 			const held = !asked && found && ['question', 'process', 'step'].includes(found.kind) ? null : found
-			const [saved] = held ? [] : await chat.find(undefined, about)
-			if (saved) return page(saved.text)
+			const saved = held ? undefined : await chat?.known(about)
+			if (saved) return page(saved)
 			if (!held) return refuse(`ken holds nothing on "${about}". Search memory with memory_search, or read the code.`)
 			const anchors = memoryAnchors(repo, ctx.signal)
 			const sources = await anchors(held.quotes)
@@ -285,7 +288,7 @@ export function memoryTools(deps: {
 
 	const search: Tool = {
 		name: 'memory_search',
-		description: `Search what ken holds by words: this chat's earlier answers, the things to know of saved briefs and answers, terms, and the entries of the project record (work, decisions, topics, notes and named levels), newest first. kind keeps only record entries of that kind; with no words it lists them. Open one with memory_known. At most ${CAPS.search.hits} hits and ${CAPS.search.chars} characters a page.`,
+		description: `Search what ken holds by words: earlier answers from this chat and previous visits, the things to know of saved briefs and answers, terms, and the entries of the project record (work, decisions, topics, notes and named levels), newest first. kind keeps only record entries of that kind; with no words it lists them. Open one with memory_known. At most ${CAPS.search.hits} hits and ${CAPS.search.chars} characters a page.`,
 		parameters: {
 			type: 'object',
 			properties: {
@@ -314,17 +317,23 @@ export function memoryTools(deps: {
 				.reverse()
 				.sort((a, b) => b.at.localeCompare(a.at))
 			const asked = kind === undefined && words.length > 0
-			const answers = asked ? await chat.find(words.join(' ')) : []
+			const start = (page - 1) * CAPS.search.hits
+			const answers =
+				asked && chat ? await chat.search(words.join(' '), start, CAPS.search.hits) : { total: 0, hits: [] }
 			const facts = asked ? (await visibleFacts()).filter((fact) => has(`${fact.name} ${fact.text}`)) : []
 			const anchors = memoryAnchors(repo, ctx.signal)
-			const hits: ((limit: number) => Promise<string>)[] = [
-				...answers.map((each) => async () => `answer ${each.id}: ${each.text}`),
+			const otherHits: ((limit: number) => Promise<string>)[] = [
 				...facts.map((fact) => async (limit: number) => factLine(fact, await anchors(fact.quotes), limit)),
 				...entries.map((entry) => async () => entryLine(entry)),
 			]
-			const shown = hits.slice((page - 1) * CAPS.search.hits, page * CAPS.search.hits)
-			const more = page * CAPS.search.hits < hits.length ? `\nAsk for page ${page + 1} for more.` : ''
-			const header = `${hits.length} hits:`
+			const otherStart = Math.max(0, start - answers.total)
+			const shown = [
+				...answers.hits.map((each) => async () => `answer ${each.id}: ${each.text}`),
+				...otherHits.slice(otherStart, otherStart + CAPS.search.hits - answers.hits.length),
+			]
+			const total = answers.total + otherHits.length
+			const more = page * CAPS.search.hits < total ? `\nAsk for page ${page + 1} for more.` : ''
+			const header = `${total} hits:`
 			const budget = Math.floor((CAPS.search.chars - header.length - more.length) / Math.max(1, shown.length)) - 1
 			const lines = await Promise.all(shown.map(async (hit) => shortLine(await hit(budget), budget)))
 			return reply([header, ...lines].join('\n') + more)
