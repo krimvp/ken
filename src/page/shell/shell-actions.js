@@ -111,8 +111,20 @@ export function shellActions(app) {
 	}
 
 	// The top level, for the Home page and for a part's colour on every page. An answer to an older read is dropped.
+	// reading is the read under way, so a page that needs the top level waits for it rather than asking again.
 	let topAsked = 0
+	let reading = null
 	async function loadTop() {
+		const read = readTop()
+		reading = read
+		try {
+			await read
+		} finally {
+			if (reading === read) reading = null
+		}
+	}
+
+	async function readTop() {
 		const mine = ++topAsked
 		const [top, timeline, first] = await Promise.all([
 			read('/api/layout').catch(() => null),
@@ -127,9 +139,14 @@ export function shellActions(app) {
 			if (state.home.levels.length === 0 && top.body.levels) state.home.levels = top.body.levels
 		} else if (top) state.home.problem ??= { message: top.body.message, field: null }
 		shell.timeline = timeline?.ok ? timeline.body : null
-		// Home draws with the top level; what search can find fills the Concepts tile when it comes.
+		// Home draws with the top level; what search can find fills its Concepts tile when it comes. No other page shows it.
 		render()
-		shell.concepts = (await app.briefs.concepts()) ?? []
+		if (shell.page !== 'home') return
+		void app.briefs.concepts().then((list) => {
+			if (mine !== topAsked) return
+			shell.concepts = list ?? []
+			render()
+		})
 	}
 
 	// What plain code says of the project comes in well under a second, so Home shows it as soon as it is here, before
@@ -201,10 +218,20 @@ export function shellActions(app) {
 			render()
 		}
 		const { loads } = app.level
-		if (first) await Promise.all([loadTop(), loads.loadNotes(), loads.loadReader(), app.prefs.load()])
+		// On the first open the page asks for its own reads beside the frame's, and shows each as it lands. The reader's
+		// settings come first, since they choose how a page draws.
+		let frame = null
+		if (first) {
+			const prefs = app.prefs.load()
+			frame = Promise.all([loadTop(), loads.loadNotes(), loads.loadReader(), prefs])
+			await prefs
+		}
 		if (place.page === 'changes') await app.chg.enter(place.change === 'none' ? null : place.change)
 		else if (place.page !== 'home') await enter(place.page)
 		else if (!first) await loadTop()
+		await frame
+		// Search reads what there is to find once the page has what it shows.
+		if (first) void app.briefs.concepts()
 		addressed = coarse(placeNow())
 		render()
 	}
@@ -237,6 +264,9 @@ export function shellActions(app) {
 		app.briefs.forget()
 		await loadTop()
 	}
+
+	// The top level for a page that needs it: the read under way, else a fresh one.
+	const topRead = () => reading ?? reread()
 
 	// ken wrote a line about the reader: only what ken thinks they know moves, so the top level and the briefs are
 	// read again, and the commits by day and what search can find stay.
@@ -493,6 +523,7 @@ export function shellActions(app) {
 		draw,
 		reread,
 		rereadKnows,
+		topRead,
 		input,
 		key,
 		pressed,
