@@ -286,6 +286,53 @@ test("an answer that opens with the reader's notes keeps the terms of its brief 
 	assert.doesNotMatch(JSON.stringify((await store.read()).entries), new RegExp(MARK))
 })
 
+// A free question whose model sends a topic in the words of a note the reader may have kept. Gives the record and the
+// reader's map once the question is saved.
+async function freeQuestion(note: string | null) {
+	const MARK = 'quokka'
+	const { root } = buildRepository([{ message: 'feat: start', files: FILES }])
+	const store = fileRecordStore(root, gitRepository(root))
+	const named = await store.append([
+		{
+			kind: 'layout',
+			within: [],
+			at: 'HEAD',
+			parts: [
+				{ name: 'Core', job: 'Runs the work', paths: ['src/core'] },
+				{ name: 'Command', job: 'The command a person types', paths: ['src/cli'] },
+			],
+			arrows: [],
+		},
+	])
+	if (named.kind !== 'appended') assert.fail(named.problems.join(' '))
+	const topic = {
+		name: `${MARK} run`,
+		note: `What you call the core, the ${MARK}, running once.`,
+		quotes: [{ path: 'src/core/run.ts', commit: 'HEAD', text: 'export function run() {' }],
+	}
+	const model = await scriptedModel([
+		{ tool: 'ken__show', text: 'The core runs once.', args: { topics: [topic] } },
+		{ text: 'Done.' },
+	])
+	const server = await openKen(root, readerHome(), model.baseUrl)
+	if (note) await json(server, '/api/notes', { text: note })
+	const lines = await ask(server, { question: 'What does the core do?' })
+	assert.equal(lines.at(-1).kind, 'saved')
+	const shown = JSON.stringify(lines.at(-1).view.entry.reply.items)
+	assert.ok(shown.includes(topic.name), 'the reply shows its topic')
+	const told = JSON.stringify(model.requests[0]?.messages)
+	assert.equal(told.includes(`call the core the ${MARK}`), note !== null, 'the run read the note, if any')
+	return { MARK, topic, server, record: JSON.stringify((await store.read()).entries) }
+}
+
+test("a free question given the reader's notes keeps its topic and note out of the record, and one given none writes them", async () => {
+	const kept = await freeQuestion('I call the core the quokka.')
+	assert.doesNotMatch(kept.record, new RegExp(kept.MARK))
+	const written = await freeQuestion(null)
+	assert.ok(written.record.includes(`"name":"${written.topic.name}"`), 'the topic is in the record')
+	assert.ok(written.record.includes(`"text":"${written.topic.note}"`), 'its note is in the record')
+})
+
 test('a memory search lists every id on a page even when the names are long', () => {
 	assert.match(page, /^100 hits:/)
 	assert.equal(new Set([...page.matchAll(/^term of term:workshop (\d+)/gm)].map((match) => match[1])).size, 20)

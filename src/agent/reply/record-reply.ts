@@ -164,7 +164,7 @@ function raw(quote: VerifiedQuote): Quote {
 
 // The end of a question with a reply: the change facts from git over every quote the reader saw, the record entries
 // the reply adds, and the topics it names, marked as asked on the reader's map. withTopics is false when the
-// reply's topics stay in the reader's history and out of the record (see topicsToRecord). problems says why the record
+// reply's topics stay in the reader's history and out of the record (see readerWords in start-chat.ts). problems says why the record
 // left out an entry; the reply stands either way.
 export async function endReply(
 	gate: Gate,

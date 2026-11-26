@@ -8,7 +8,7 @@ import { findRoot, gitRepository, parsePath, type Repository } from '../repo/ind
 import { projectSessions } from '../transcripts/index.ts'
 import { SHORTEN_PROMPT, type Shorten, shortened, shortenQuestion } from './brief/shorten-lines.ts'
 import type { ChatEvent, Cost } from './chat-event.ts'
-import { briefParts, forRecord, lensOf, readLimit, topicsToRecord } from './lens/lens.ts'
+import { briefParts, forRecord, lensOf, readLimit } from './lens/lens.ts'
 import { plainFacts } from './lens/plain-facts.ts'
 import { sourceUses } from './lens/source-uses.ts'
 import type { ModelConfig } from './model-config.ts'
@@ -136,7 +136,10 @@ export async function startChat(options: {
 		const shorten = shortenIn(run)
 		const reads = explorationTools(repo, elsewhere, () => run.round.read)
 		const shared = forRecord(as)
-		const asked = shared ? null : { map: reader?.map, chat: thread }
+		const recalled = () => {
+			run.readerWords = true
+		}
+		const asked = shared ? null : { map: reader?.map, chat: thread, recalled }
 		const memory = memoryTools({ store, repo, memory: reader?.memory, asked })
 		const remember = reader ? [rememberTool(reader.notes, round)] : []
 		const formats = as.kind === 'question' ? showFormats(Boolean(as.focus)) : undefined
@@ -378,7 +381,7 @@ export async function startChat(options: {
 					: await chatOpening(
 							question,
 							as,
-							shared,
+							run,
 							(focus) => {
 								questionFocus = focus
 								events.push({ kind: 'focus', focus })
@@ -387,6 +390,7 @@ export async function startChat(options: {
 						)
 			const earlier =
 				as.kind === 'question' && as.after !== undefined ? (as.after?.opening ?? '') : followUp ? thread.recent() : ''
+			if (earlier !== '') run.readerWords = true
 			const facts = lens ? await briefFacts(as, signal) : ''
 			let ran = await prompt(`${opening}${earlier}The question: ${question}${facts}`, stops.talk)
 			if (
@@ -449,7 +453,7 @@ export async function startChat(options: {
 				!signal?.aborted
 			) {
 				// Past this check the reply is whole, so a stop that comes while it is saved does not lose it.
-				const ended = await endReply(gate, current, topicsToRecord(as), new AbortController().signal)
+				const ended = await endReply(gate, current, !run.readerWords, new AbortController().signal)
 				if (
 					ending.outcome === 'answered' &&
 					as.kind === 'question' &&
@@ -497,12 +501,12 @@ export async function startChat(options: {
 	async function chatOpening(
 		question: string,
 		as: Asking,
-		shared: boolean,
+		run: Run,
 		found: (focus: QuestionFocus) => void,
 		signal?: AbortSignal,
 	): Promise<string> {
 		const record = await store.read()
-		if (shared) return `${(await recordIndex(record, question, as, repo, signal)).text}\n\n`
+		if (forRecord(as)) return `${(await recordIndex(record, question, as, repo, signal)).text}\n\n`
 		const focus = as.kind === 'question' ? as.focus : undefined
 		const source = focus && 'path' in focus ? focus : undefined
 		const [index, at] = await Promise.all([
@@ -519,6 +523,7 @@ export async function startChat(options: {
 				: null,
 		])
 		if (part) found(part.focus)
+		if (notes.length > 0) run.readerWords = true
 		const named = part ? `${part.text}\n\n` : ''
 		return `${index.text}\n\n${readerIndex(map, notes, prefs)}\n\n${named}${at}`
 	}
@@ -544,19 +549,22 @@ export async function startChat(options: {
 }
 
 // What one question keeps while it runs: its round, the turns it has had in this step, the changes whose names used
-// elsewhere it was already told, and where the small requests to shorten a line add their cost.
+// elsewhere it was already told, and where the small requests to shorten a line add their cost. readerWords is true
+// once the run was given the reader's notes or text of their saved answers, whatever kind of run it is: its topics and
+// their notes then stay in the reader's history and out of the record the team commits.
 type Run = {
 	round: Round
 	turnsEnded: number
 	shown: Set<string>
 	charge: (usage: { input: number; output: number }) => void
+	readerWords: boolean
 }
 
 function freshRun(as: Asking, emit: Round['emit']): Run {
 	const round = freshRound(as, emit)
 	const most = readLimit(as)
 	round.read = most === null ? null : { used: 0, most }
-	return { round, turnsEnded: 0, shown: new Set(), charge: () => {} }
+	return { round, turnsEnded: 0, shown: new Set(), charge: () => {}, readerWords: false }
 }
 
 function accepted(outcome: ToolOutcome): boolean {
