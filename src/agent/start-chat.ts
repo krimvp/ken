@@ -153,7 +153,7 @@ export async function startChat(options: {
 					diffTool(repo, elsewhere),
 					...memory,
 					// The saved sessions are what the reader typed to their coding tool.
-					...(shared ? [] : sessionTools(sessions)),
+					...(shared ? [] : sessionTools(sessions, recalled)),
 					...remember,
 					showTool(gate, round, { shorten, ...(formats && { formats }) }),
 				]
@@ -550,8 +550,9 @@ export async function startChat(options: {
 
 // What one question keeps while it runs: its round, the turns it has had in this step, the changes whose names used
 // elsewhere it was already told, and where the small requests to shorten a line add their cost. readerWords is true
-// once the run was given the reader's notes or text of their saved answers, whatever kind of run it is: its topics and
-// their notes then stay in the reader's history and out of the record the team commits.
+// once the run was given the reader's notes, text of their saved answers or of their saved coding sessions, whatever
+// kind of run it is: its topics and their notes then stay in the reader's history and out of the record the team
+// commits.
 type Run = {
 	round: Round
 	turnsEnded: number
