@@ -19,7 +19,8 @@ const OFF = reply(
 	'ken reads no saved sessions for this project: the owner turned it off with KEN_SESSIONS=off. Answer from the code and the git history.',
 )
 
-export function sessionTools(sessions: Transcripts | null): Tool[] {
+// A session holds what the reader typed to their coding tool, so recalled runs each time a tool gives a run some of it.
+export function sessionTools(sessions: Transcripts | null, recalled: () => void): Tool[] {
 	return [
 		{
 			name: 'list_sessions',
@@ -61,6 +62,7 @@ export function sessionTools(sessions: Transcripts | null): Tool[] {
 					at === undefined ? null : Date.parse(at.endsWith('Z') || /[+-]\d\d:?\d\d$/.test(at) ? at : `${at}Z`)
 				if (time !== null && Number.isNaN(time))
 					return refuse(`"${at}" is not a time. Give one such as 2026-11-15T21:40.`)
+				recalled()
 				return reply(sessionPart(whole.session, whole.entries, read.optionalLine('message') ?? null, time))
 			},
 		},
@@ -80,6 +82,7 @@ export function sessionTools(sessions: Transcripts | null): Tool[] {
 				const { hits, more } = await searchSessions(sessions, text, ctx.signal)
 				if (hits.length === 0) return reply(`No message in the saved sessions holds "${text}".`)
 				const lines = hits.map((hit) => `${hit.session} #${hit.message} ${hit.kind}, ${time(hit.at)}: ${hit.line}`)
+				recalled()
 				const left = more > 0 ? [`and ${more} more lines, not shown. Search for more words to narrow it.`] : []
 				return reply([`${hits.length} lines hold "${text}", times in UTC:`, ...lines, ...left].join('\n'))
 			},

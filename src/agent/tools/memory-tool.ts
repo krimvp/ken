@@ -89,6 +89,8 @@ const CAPS = {
 	search: { hits: 20, chars: 3000 },
 }
 const CHANGED = 'changed since: read the file again'
+// What ken holds of these comes from the reader's saved answers: a term's meaning, a question, a drawn process.
+const HISTORY_KINDS = ['term', 'question', 'process', 'step']
 
 type Anchor = Pick<MemoryQuote, 'path' | 'startLine' | 'endLine'> & { changed: boolean }
 
@@ -117,16 +119,18 @@ function factLine(fact: Fact, at: Anchor[], limit?: number): string {
 	return shortLine(`${status}${fact.kind} of ${fact.about}: ${at.map(anchorText).join(', ')} ${fact.text}`, limit)
 }
 
-// asked is what the reader asked and was told: their map of the topics and the earlier answers. A run whose output
-// goes into the project record gets null, so memory gives it the record and the briefs ken wrote from the code alone.
+// asked is what the reader asked and was told: their map of the topics and the earlier answers. recalled runs when a
+// tool gives the run text of the reader's saved answers or questions. A run whose output goes into the project record
+// gets null, so memory gives it the record and the briefs ken wrote from the code alone.
 export function memoryTools(deps: {
 	store: RecordStore
 	repo: Repository
 	memory?: Memory | undefined
-	asked: { map?: UnderstandingMap | undefined; chat: ChatRecall } | null
+	asked: { map?: UnderstandingMap | undefined; chat: ChatRecall; recalled: () => void } | null
 }): Tool[] {
 	const { store, repo, memory, asked } = deps
 	const map = asked?.map
+	const recalled = () => asked?.recalled()
 	const chat = asked?.chat
 	const visibleFacts = async () => ((await memory?.facts()) ?? []).filter((fact) => asked || fact.kind !== 'answer')
 
@@ -148,7 +152,9 @@ export function memoryTools(deps: {
 			const page = (text: string) => reply(memoryPage(text, read.optionalLine('from') ?? 1))
 			if (/^chat:\d+$/.test(about)) {
 				const found = await chat?.known(about)
-				return found ? page(found) : refuse(`There is no answer ${about} in this chat.`)
+				if (!found) return refuse(`There is no answer ${about} in this chat.`)
+				recalled()
+				return page(found)
 			}
 			const record = await store.read()
 			const entry = record.entries.find(
@@ -170,9 +176,12 @@ export function memoryTools(deps: {
 					: refuse(`There is no recorded topic "${found.name}".`)
 			}
 			// Processes and their steps can come from a diagram in a private reply.
-			const held = !asked && found && ['question', 'process', 'step'].includes(found.kind) ? null : found
+			const held = !asked && found && HISTORY_KINDS.includes(found.kind) ? null : found
 			const saved = held ? undefined : await chat?.known(about)
-			if (saved) return page(saved)
+			if (saved) {
+				recalled()
+				return page(saved)
+			}
 			if (!held) return refuse(`ken holds nothing on "${about}". Search memory with memory_search, or read the code.`)
 			const anchors = memoryAnchors(repo, ctx.signal)
 			const sources = await anchors(held.quotes)
@@ -184,6 +193,7 @@ export function memoryTools(deps: {
 			const questions = asked
 				? held.questions.map((question) => `- ${question.text}${question.answered ? ' (answered)' : ''}`)
 				: []
+			if (questions.length > 0 || HISTORY_KINDS.includes(held.kind)) recalled()
 			const text = [
 				`${held.kind} ${held.id} (${held.name}): ${held.line}`,
 				...(held.changed.length
@@ -273,6 +283,7 @@ export function memoryTools(deps: {
 					lines.push(continuation(index + 1))
 					break
 				}
+				if (fact.kind === 'answer') recalled()
 				lines.push(line)
 				left -= line.length + 1
 			}
@@ -322,14 +333,19 @@ export function memoryTools(deps: {
 				asked && chat ? await chat.search(words.join(' '), start, CAPS.search.hits) : { total: 0, hits: [] }
 			const facts = asked ? (await visibleFacts()).filter((fact) => has(`${fact.name} ${fact.text}`)) : []
 			const anchors = memoryAnchors(repo, ctx.signal)
-			const otherHits: ((limit: number) => Promise<string>)[] = [
-				...facts.map((fact) => async (limit: number) => factLine(fact, await anchors(fact.quotes), limit)),
-				...entries.map((entry) => async () => entryLine(entry)),
+			const otherHits: { saved: boolean; line: (limit: number) => Promise<string> }[] = [
+				...facts.map((fact) => ({
+					saved: fact.kind === 'answer',
+					line: async (limit: number) => factLine(fact, await anchors(fact.quotes), limit),
+				})),
+				...entries.map((entry) => ({ saved: false, line: async () => entryLine(entry) })),
 			]
 			const otherStart = Math.max(0, start - answers.total)
+			const others = otherHits.slice(otherStart, otherStart + CAPS.search.hits - answers.hits.length)
+			if (answers.hits.length > 0 || others.some((hit) => hit.saved)) recalled()
 			const shown = [
 				...answers.hits.map((each) => async () => `answer ${each.id}: ${each.text}`),
-				...otherHits.slice(otherStart, otherStart + CAPS.search.hits - answers.hits.length),
+				...others.map((hit) => hit.line),
 			]
 			const total = answers.total + otherHits.length
 			const more = page * CAPS.search.hits < total ? `\nAsk for page ${page + 1} for more.` : ''

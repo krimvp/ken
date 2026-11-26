@@ -90,12 +90,37 @@ const VIEWS = {
 				quotes: at('src/engine/worker.ts', 'self.onmessage = () => {}'),
 			},
 			{ id: 'cache', kind: 'part', part: 'Cache', frame: 'proc', quotes: at('src/main.ts', MAIN) },
+			// Engine where it runs too, and a store that takes the name of the part Entry.
+			{
+				id: 'engine-again',
+				kind: 'part',
+				part: 'Engine',
+				frame: 'proc',
+				quotes: at('src/engine/run.ts', 'export function work() {}'),
+			},
+			{
+				id: 'entry-files',
+				kind: 'store',
+				store: 'files',
+				name: 'entry',
+				line: 'Keeps what starts the work.',
+				quotes: at('src/main.ts', 'work()'),
+			},
 			{
 				id: 'db',
 				kind: 'store',
 				store: 'database',
 				name: 'Database',
 				line: 'Keeps the rows.',
+				quotes: at('compose.yml', '  db:\n    image: postgres'),
+			},
+			// A second store with the name of the first.
+			{
+				id: 'db-again',
+				kind: 'store',
+				store: 'database',
+				name: 'database',
+				line: 'Keeps the rows too.',
 				quotes: at('compose.yml', '  db:\n    image: postgres'),
 			},
 		],
@@ -182,16 +207,22 @@ test('frames that sit inside each other are refused, since frames form a tree', 
 	assert.match(problemsOf('Frame "loop-a"'), /loop-b, which sit inside it/)
 })
 
-test('a part that is not a part of the level is refused, and the parts that are sit in their frames', () => {
+test('a part that is not a part of the level is refused, and the parts that are sit in their frames, one part in two', () => {
 	assert.deepEqual(
 		after.runtime.things.map((thing: { id: string; frame: string | null }) => [thing.id, thing.frame]),
 		[
 			['entry', 'proc'],
 			['engine-worker', 'worker'],
+			['engine-again', 'proc'],
 			['db', null],
 		],
 	)
 	assert.match(problemsOf('Thing "cache"'), /"Cache", which is not a part of the level/)
+})
+
+test('two stores with one name, or a store named as a part, go back to the model', () => {
+	assert.match(problemsOf('Thing "db-again"'), /its name "database" is the name of the store "db"/)
+	assert.match(problemsOf('Thing "entry-files"'), /its name "entry" is the name of the part "Entry"/)
 })
 
 test('copies that the quoted line does not give, or that disagree with a compose file or a manifest, are refused, and copies that agree are kept', () => {

@@ -75,13 +75,6 @@ export function forRecord(as: Asking): boolean {
 	return as.kind === 'explain' || as.kind === 'parts' || as.kind === 'views' || as.kind === 'view'
 }
 
-// Whether the topics a reply shows, with their notes, go into the record. An answer is a lens ken wrote that opens with
-// the reader's notes and map, so the terms of its brief stay in the reader's history. A question in the reader's own
-// words, and a run for the record, write their topics into it.
-export function topicsToRecord(as: Asking): boolean {
-	return forRecord(as) || lensOf(as) === null
-}
-
 // null: every tool and the whole system prompt.
 export function lensOf(as: Asking): Lens | null {
 	switch (as.kind) {

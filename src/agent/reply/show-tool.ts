@@ -255,6 +255,7 @@ export function showTool(
 						continue
 					}
 				}
+				if (draft.kind === 'layout') problems.push(...(await namedAsAround(gate.store, draft.draft, where)))
 				if (topic !== undefined && !known.some((name) => sameName(name, topic))) {
 					problems.push(
 						`${where} names the topic "${topic}", which is neither in the record nor a topic shown in this reply. Use the name the index gives, send the topic, or leave topic out.`,
@@ -477,6 +478,29 @@ export function contextOf(gate: Gate, current: Round): CardContext {
 		return scope.hunks
 	}
 	return { sources: gate.sources, change: { range: scope.range, hunks } }
+}
+
+// A part inside a part, named as that part, reads as the same thing twice: "Engine" inside "Engine". The part around a
+// level is the newest one the record names whose paths are the level's.
+async function namedAsAround(store: RecordStore, draft: LayoutDraft, where: string): Promise<string[]> {
+	const paths = (list: string[]) =>
+		list
+			.map((path) => path.replace(/\/+$/, ''))
+			.toSorted()
+			.join('\n')
+	const within = paths(draft.within)
+	if (within === '') return []
+	const around = (await store.read()).current
+		.flatMap((entry) => (entry.kind === 'layout' ? entry.parts : []))
+		.findLast((part) => paths(part.places.map((place) => place.path)) === within)
+	if (!around) return []
+	return draft.parts.flatMap((part, at) =>
+		sameName(part.name, around.name)
+			? [
+					`${where}: part ${at + 1} ("${part.name.trim()}") has the name of the part it sits in. Name what it does inside ${around.name}.`,
+				]
+			: [],
+	)
 }
 
 async function topicNames(store: RecordStore): Promise<string[]> {
