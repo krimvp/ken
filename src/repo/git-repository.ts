@@ -33,7 +33,17 @@ export function gitRepository(root: string, options: { alternate?: string } = {}
 	// A command that names a ref, the working tree or the config runs every time: HEAD is always read afresh.
 	const kept = new Map<string, string>()
 	let keptChars = 0
-	async function gitKept(args: string[], signal?: AbortSignal, input = '', maxBytes = MAX_OUTPUT_BYTES) {
+	async function gitKept(
+		commits: string[],
+		args: string[],
+		signal?: AbortSignal,
+		input = '',
+		maxBytes = MAX_OUTPUT_BYTES,
+	) {
+		// A name such as HEAD can point somewhere new, so only output for full hashes is kept.
+		if (!commits.every((each) => HASH.test(each))) {
+			return runGit(root, args, signal, options.alternate ?? null, input, maxBytes)
+		}
 		const key = JSON.stringify([args, input, maxBytes])
 		const stdout = kept.get(key)
 		if (stdout !== undefined) {
@@ -71,14 +81,14 @@ export function gitRepository(root: string, options: { alternate?: string } = {}
 		},
 
 		async readFile(commit, path, signal, maxBytes = MAX_OUTPUT_BYTES) {
-			const run = await gitKept(['cat-file', 'blob', `${commit}:${path}`], signal, '', maxBytes)
+			const run = await gitKept([commit], ['cat-file', 'blob', `${commit}:${path}`], signal, '', maxBytes)
 			if (run.kind === 'too-large') return { kind: 'too-large', limitBytes: maxBytes }
 			if (run.kind === 'failed') return { kind: 'no-file', path, commit }
 			return { kind: 'ok', text: run.stdout }
 		},
 
 		async listFiles(commit, signal) {
-			const run = await gitKept(['ls-tree', '-r', '-z', '--name-only', '--full-tree', commit], signal)
+			const run = await gitKept([commit], ['ls-tree', '-r', '-z', '--name-only', '--full-tree', commit], signal)
 			if (run.kind === 'too-large') return tooLarge
 			if (run.kind === 'failed') throw new Error(`git ls-tree failed on a resolved commit: ${run.stderr}`)
 			return { kind: 'ok', paths: run.stdout.split('\0').filter((path) => path !== '') }
@@ -124,7 +134,7 @@ export function gitRepository(root: string, options: { alternate?: string } = {}
 		},
 
 		async mergeBase(base, head, signal) {
-			const run = await gitKept(['merge-base', base, head], signal)
+			const run = await gitKept([base, head], ['merge-base', base, head], signal)
 			const hash = run.kind === 'ok' ? run.stdout.trim() : ''
 			if (!HASH.test(hash)) return { kind: 'unrelated', base, head }
 			return { kind: 'ok', commit: hash as CommitHash }
@@ -154,7 +164,7 @@ export function gitRepository(root: string, options: { alternate?: string } = {}
 				LOG_FORMAT,
 				`${base}..${head}`,
 			]
-			const run = await gitKept([...args, ...OUTSIDE_RECORD], signal)
+			const run = await gitKept([base, head], [...args, ...OUTSIDE_RECORD], signal)
 			if (run.kind === 'too-large') return tooLarge
 			if (run.kind === 'failed') throw new Error(`git log failed on resolved commits: ${run.stderr}`)
 			return { kind: 'ok', commits: parseLog(run.stdout) }
@@ -214,10 +224,14 @@ export function gitRepository(root: string, options: { alternate?: string } = {}
 			if (commits.length === 0) return { kind: 'ok', landed }
 			// One log from the newest commit that head and every commit asked share. It holds all that landed after any of
 			// them, and the parents in it say which of those each commit asked already had.
-			const shared = await gitKept(['merge-base', '--octopus', head, ...commits], signal)
+			const shared = await gitKept([head, ...commits], ['merge-base', '--octopus', head, ...commits], signal)
 			const from = shared.kind === 'ok' ? shared.stdout.trim() : ''
 			const range = HASH.test(from) ? `${from}..${head}` : head
-			const run = await gitKept(['log', '-z', '--name-only', '--no-renames', '--no-color', LOG_FORMAT, range], signal)
+			const run = await gitKept(
+				[head, ...commits],
+				['log', '-z', '--name-only', '--no-renames', '--no-color', LOG_FORMAT, range],
+				signal,
+			)
 			if (run.kind === 'too-large') return tooLarge
 			if (run.kind === 'failed') throw new Error(`git log failed on resolved commits: ${run.stderr}`)
 			const log = parseLog(run.stdout).map((commit) => ({ ...commit, paths: commit.paths.filter(outsideRecord) }))
@@ -259,7 +273,7 @@ export function gitRepository(root: string, options: { alternate?: string } = {}
 				LOG_FORMAT,
 				head,
 			]
-			const run = await gitKept([...args, ...OUTSIDE_RECORD], signal)
+			const run = await gitKept([head], [...args, ...OUTSIDE_RECORD], signal)
 			if (run.kind === 'too-large') return tooLarge
 			if (run.kind === 'failed') throw new Error(`git log failed on a resolved commit: ${run.stderr}`)
 			return { kind: 'ok', commits: parseLog(run.stdout) }
@@ -273,6 +287,7 @@ export function gitRepository(root: string, options: { alternate?: string } = {}
 
 		async diffFiles({ base, head }, signal) {
 			const run = await gitKept(
+				[base, head],
 				['diff', '--numstat', '-z', '-M', '--no-ext-diff', '--no-textconv', base, head, ...OUTSIDE_RECORD],
 				signal,
 			)
@@ -287,6 +302,7 @@ export function gitRepository(root: string, options: { alternate?: string } = {}
 			if (within.length) {
 				// Git only pairs a move when both names are in the patch. Find the other end before limiting the patch.
 				const moves = await gitKept(
+					[base, head],
 					['diff', '--name-status', '-z', '--diff-filter=R', ...args, ...OUTSIDE_RECORD],
 					signal,
 				)
@@ -305,8 +321,8 @@ export function gitRepository(root: string, options: { alternate?: string } = {}
 			}
 			const common = [...args, ...paths]
 			const [numstat, patch] = await Promise.all([
-				gitKept(['diff', '--numstat', '-z', ...common], signal),
-				gitKept(['diff', '-U0', ...common], signal),
+				gitKept([base, head], ['diff', '--numstat', '-z', ...common], signal),
+				gitKept([base, head], ['diff', '-U0', ...common], signal),
 			])
 			if (numstat.kind === 'too-large' || patch.kind === 'too-large') return tooLarge
 			if (numstat.kind === 'failed' || patch.kind === 'failed') {
@@ -340,7 +356,7 @@ export function gitRepository(root: string, options: { alternate?: string } = {}
 			const sent = paths.filter((each) => !each.includes('\n'))
 			if (sent.length === 0) return paths.map(() => null)
 			const asked = sent.map((each) => `${commit}:${each}\n`).join('')
-			const run = await gitKept(['cat-file', '--batch-check=%(objectname)'], signal, asked)
+			const run = await gitKept([commit], ['cat-file', '--batch-check=%(objectname)'], signal, asked)
 			if (run.kind !== 'ok') throw new Error(`git cat-file failed on a resolved commit: ${run.kind}`)
 			const lines = run.stdout.split('\n')
 			const answers = new Map(sent.map((each, index) => [each, lines[index] ?? '']))
