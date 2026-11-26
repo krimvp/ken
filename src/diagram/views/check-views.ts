@@ -99,8 +99,8 @@ export async function checkViews(
 	const outsideIds = () => new Set(world.outside.map((each) => each.id))
 	const frameIds = () => new Set(runtime.frames.map((each) => each.id))
 	const thingIds = () => new Set(runtime.things.map((each) => each.id))
-	// A reader takes two boxes with one name for one thing, and a part drawn twice for two, so a drawing shows each name
-	// once: a frame's, a part's as the level names it, a store's, an outside system's.
+	// A reader takes two boxes with one name for one thing, so a frame, a store and an outside system each take a name no
+	// other item of the drawing has. A part may sit in several frames: that is one part, which runs in two places.
 	const outsideName = (id: string) => world.outside.find((each) => each.id === id)?.name ?? ''
 	type Named = { name: string; what: string; part: boolean }
 	const drawnNames = (): Named[] => [
@@ -113,14 +113,9 @@ export async function checkViews(
 					: { name: outsideName(thing.id), what: `the outside system "${thing.id}"`, part: false },
 		),
 	]
-	const twice = (name: string, taken: Named[], part = false) => {
+	const twice = (name: string, taken: Named[]) => {
 		const before = name.trim() === '' ? undefined : taken.find((each) => sameName(each.name, name))
 		if (!before) return []
-		if (part && before.part) {
-			return [
-				`the part "${name}" is in this drawing already. Drawn twice, it reads as two things. Put a part in one frame, the one where most of it runs, and say in the line of the other frame what of it runs there.`,
-			]
-		}
 		return [`its name "${name}" is the name of ${before.what}, so the two read as one thing. Give each its own name.`]
 	}
 
@@ -252,7 +247,13 @@ export async function checkViews(
 					`it names the part "${sent.part}", which is not a part of the level. The parts are: ${parts.join(', ') || 'none yet'}.`,
 				)
 			}
-			if (part) item.problems.push(...twice(part, drawnNames(), true))
+			if (part)
+				item.problems.push(
+					...twice(
+						part,
+						drawnNames().filter((each) => !each.part),
+					),
+				)
 			const quotes = await item.quoted('it', sent.quotes)
 			item.done({ id: sent.id, kind: 'part', part: part ?? sent.part, frame, quotes }, runtime.things)
 			continue

@@ -48,9 +48,8 @@ export type Frame = {
 	quotes: Q[]
 }
 
-// A part is named as the level names it, and sits in one frame: a drawing shows each name once. An outside thing
-// places an outside system of "In its world" in this drawing: its id is that system's id, and it rests on that
-// system's lines.
+// A part is named as the level names it, and may sit in several frames, once per thing. An outside thing places an
+// outside system of "In its world" in this drawing: its id is that system's id, and it rests on that system's lines.
 export type Thing =
 	| { id: string; kind: 'part'; part: string; frame: string | null; quotes: Q[] }
 	| {

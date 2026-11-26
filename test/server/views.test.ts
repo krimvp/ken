@@ -90,7 +90,7 @@ const VIEWS = {
 				quotes: at('src/engine/worker.ts', 'self.onmessage = () => {}'),
 			},
 			{ id: 'cache', kind: 'part', part: 'Cache', frame: 'proc', quotes: at('src/main.ts', MAIN) },
-			// Engine drawn a second time, and a store that takes the name of the part Entry.
+			// Engine where it runs too, and a store that takes the name of the part Entry.
 			{
 				id: 'engine-again',
 				kind: 'part',
@@ -112,6 +112,15 @@ const VIEWS = {
 				store: 'database',
 				name: 'Database',
 				line: 'Keeps the rows.',
+				quotes: at('compose.yml', '  db:\n    image: postgres'),
+			},
+			// A second store with the name of the first.
+			{
+				id: 'db-again',
+				kind: 'store',
+				store: 'database',
+				name: 'database',
+				line: 'Keeps the rows too.',
 				quotes: at('compose.yml', '  db:\n    image: postgres'),
 			},
 		],
@@ -198,20 +207,21 @@ test('frames that sit inside each other are refused, since frames form a tree', 
 	assert.match(problemsOf('Frame "loop-a"'), /loop-b, which sit inside it/)
 })
 
-test('a part that is not a part of the level is refused, and the parts that are sit in their frames', () => {
+test('a part that is not a part of the level is refused, and the parts that are sit in their frames, one part in two', () => {
 	assert.deepEqual(
 		after.runtime.things.map((thing: { id: string; frame: string | null }) => [thing.id, thing.frame]),
 		[
 			['entry', 'proc'],
 			['engine-worker', 'worker'],
+			['engine-again', 'proc'],
 			['db', null],
 		],
 	)
 	assert.match(problemsOf('Thing "cache"'), /"Cache", which is not a part of the level/)
 })
 
-test('a name drawn twice goes back to the model: a part drawn again, or another thing named as a part', () => {
-	assert.match(problemsOf('Thing "engine-again"'), /the part "Engine" is in this drawing already/)
+test('two stores with one name, or a store named as a part, go back to the model', () => {
+	assert.match(problemsOf('Thing "db-again"'), /its name "database" is the name of the store "db"/)
 	assert.match(problemsOf('Thing "entry-files"'), /its name "entry" is the name of the part "Entry"/)
 })
 
