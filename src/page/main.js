@@ -759,6 +759,7 @@ function render() {
 		form.dataset.id,
 		form.elements.note.value,
 	])
+	const kept = keepTurnInPlace()
 	$('#thread').innerHTML = threadHtml()
 	for (const [id, note] of notes) {
 		const box = document.querySelector(`.decide-form[data-id="${CSS.escape(id)}"] textarea`)
@@ -770,6 +771,7 @@ function render() {
 	if (tooWide.length > 0) schedule()
 	for (const [i, box] of document.querySelectorAll('.drawing').entries()) box.scrollLeft = across[i] ?? 0
 	drawPictures($('#thread'))
+	kept()
 	if (state.view === 'question') loadChangeLooks()
 	const part = ui.wide && ui.panel.kind === 'quote' && ui.panel.key.match(/^g([\w-]+)n(\d+)$/)
 	if (part) markPart($('#thread'), part[1], part[2])
@@ -804,6 +806,25 @@ function render() {
 	watchTurns()
 	refocus()
 	tipFrom(null)
+}
+
+// The thread is drawn anew on each render, which the browser's own scroll anchoring cannot follow. So the first turn
+// that starts in the window, or else the one the window is inside, keeps its place when a picture or a card above it
+// fills in after the reply opened.
+let drawnThread = []
+function keepTurnInPlace() {
+	const top = $('.k-bar').offsetHeight
+	const turns = [...document.querySelectorAll('#thread .turn')]
+	const starts = turns.findIndex((turn) => turn.getBoundingClientRect().top >= top - 1)
+	const inside = turns.findLastIndex((turn) => turn.getBoundingClientRect().top < top)
+	const at = starts >= 0 && turns[starts].getBoundingClientRect().top < innerHeight ? starts : inside
+	const q = drawnThread[at]
+	const was = turns[at]?.getBoundingClientRect().top
+	drawnThread = state.thread
+	return () => {
+		const now = q && document.getElementById(`turn-${state.thread.indexOf(q)}`)
+		if (now) scrollBy(0, now.getBoundingClientRect().top - was)
+	}
 }
 
 // On a wide screen the panel follows the reader down the thread: it shows the checks of the reply most in view. A reply
