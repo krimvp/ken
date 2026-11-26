@@ -160,7 +160,6 @@ export function shellActions(app) {
 		// What was typed in search was for the page the reader left.
 		Object.assign(shell.search, { text: '', open: false, at: 0 })
 		$('#search-text').value = ''
-		state.menuOpen = false
 		state.view = state.base = 'home'
 		render()
 		await enter(page)

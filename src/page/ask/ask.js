@@ -1,6 +1,7 @@
 // The "Ask ken" drawer: a free question, for when no picture or brief answers it. It offers the questions of the
 // briefs the reader opened last, then the box, and the reader's earlier answers behind one press. A question sent
-// here opens as a thread with the cards ken checked, as every question does.
+// here opens as a thread with the cards ken checked, as every question does. A question of the reader's that is still
+// running shows under the box.
 import { icon } from '../shell/icons.js'
 import { esc, prose, RUN_COST, when } from '../views/format.js'
 import { lensHtml } from '../views/map.js'
@@ -53,6 +54,11 @@ export function askDrawerHtml(ask, env, briefOf) {
 								.join('')}</ul>`
 						: ''
 				}`
+	// The reader's own question still running, so they can go back to it from any page.
+	const running =
+		env.running && !env.running.onHome
+			? `<ul class="k-ask-rows"><li><button class="k-ask-row" data-act="open-running" data-key="ask-running"><b>${esc(env.running.q.question.split('\n')[0])}</b><span>Running now</span></button></li></ul>`
+			: ''
 	const model =
 		env.model?.kind === 'ok'
 			? `<p class="k-muted">The code ken reads for a reply goes to its model, <code>${esc(env.model.name)}</code>.</p>`
@@ -72,6 +78,7 @@ export function askDrawerHtml(ask, env, briefOf) {
 				${env.off ? `<p class="k-muted">${esc(env.off)}</p>` : ''}
 				${model}
 			</form>
+			${running}
 			${earlier}
 			${lenses}
 		</div>`

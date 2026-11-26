@@ -20,6 +20,8 @@ export const SIZE = {
 const BLOCK = {
 	part: { w: 272, h: 112 },
 	second: { w: 220, h: 72 },
+	// The second place of a part a container runs alone also names the container.
+	secondSolo: { w: 272, h: 96 },
 	store: { w: 212, h: 108 },
 	outside: { w: 260, h: 96 },
 	person: { w: 180, h: 136 },
@@ -246,14 +248,15 @@ function placedOf(views, folded, { framesShareRows, wrap, narrow }) {
 		const at = solos.has(thing.frame) ? solos.get(thing.frame).in : thing.frame
 		return at && frameOf.has(at) ? at : null
 	}
-	// A part drawn again in another frame is small and dashed there. A container that holds it alone is its own box.
+	// A part drawn again in another frame is small and dashed there, in a container that holds it alone too.
 	const seconds = new Map()
 	const firsts = new Map()
 	for (const thing of drawn.things) {
 		if (thing.kind !== 'part') continue
 		if (!firsts.has(thing.part)) firsts.set(thing.part, thing.id)
-		else if (!solos.has(thing.frame)) seconds.set(thing.id, firsts.get(thing.part))
+		else seconds.set(thing.id, firsts.get(thing.part))
 	}
+	const titles = soloTitles(solos, drawn.things)
 
 	const busOf = (crossing) => eventBus(drawn.things, crossing)
 	// The things a thing meets: the other end of each of its lines, and for a bus every thing on it.
@@ -296,7 +299,7 @@ function placedOf(views, folded, { framesShareRows, wrap, narrow }) {
 	function sizeOfThing(thing) {
 		if (hasLanes(thing)) return { w: BUS.least, h: BUS.head + thing.topics.length * BUS.lane + BUS.foot }
 		if (thing.kind === 'outside') return BLOCK[people.has(thing.id) ? 'person' : 'outside']
-		if (seconds.has(thing.id)) return BLOCK.second
+		if (seconds.has(thing.id)) return BLOCK[solos.has(thing.frame) ? 'secondSolo' : 'second']
 		return BLOCK[thing.kind]
 	}
 
@@ -536,6 +539,7 @@ function placedOf(views, folded, { framesShareRows, wrap, narrow }) {
 				h: r.h,
 				besideUser: r.besideUser,
 				solo: solos.get(r.thing.frame) ?? null,
+				title: titles.get(r.thing.frame) ?? r.thing.part,
 				second: seconds.get(r.thing.id),
 				holder: r.holder,
 			})
@@ -555,6 +559,28 @@ function placedOf(views, folded, { framesShareRows, wrap, narrow }) {
 	const height = Math.max(...all.map((r) => r.y + r.h)) + MARGIN
 
 	return { width, height, placed, drawn, busOf, folds }
+}
+
+// The title of a container that runs one part alone: its own words, those neither the part's name nor another
+// container that runs the same part has. So "multeval subject" and "multeval grader", which both run "multeval
+// integration", read "subject" and "grader", and two cut titles never read the same. A container with no words of its
+// own keeps its whole name.
+function soloTitles(solos, things) {
+	const words = (text) => text.toLowerCase().split(/\s+/)
+	const partIn = (frame) => things.find((thing) => thing.frame === frame.id).part
+	const titles = new Map()
+	for (const frame of solos.values()) {
+		const part = partIn(frame)
+		const taken = new Set([
+			...words(part),
+			...[...solos.values()]
+				.filter((other) => other !== frame && partIn(other) === part)
+				.flatMap((other) => words(other.name)),
+		])
+		const own = frame.name.split(/\s+/).filter((word) => !taken.has(word.toLowerCase()))
+		titles.set(frame.id, own.length > 0 ? own.join(' ') : frame.name)
+	}
+	return titles
 }
 
 // Which way a thing outside a frame would rather stand: a store on the right, an outside system on top or below, and

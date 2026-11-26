@@ -94,22 +94,25 @@ const SAMPLES: { [K in CardKind]: { card: Extract<Card, { kind: K }>; text: stri
 	},
 }
 
-test('the page shows a card of every kind ken can send, boxed and with its text, after the words', () => {
+// What the page has open: nothing, on a wide screen.
+const UI = {
+	panel: { kind: 'checks' },
+	openQuotes: new Set(),
+	openDecisions: new Set(),
+	openParts: new Set(),
+	openElements: new Set(),
+	tooWide: new Set(),
+	drawingsShown: new Set(),
+	unfolded: new Set(),
+	wordsOpen: new Set(),
+	mapSaid: null,
+	wide: true,
+}
+
+test('the page shows a card of every kind ken can send, boxed and with its text, after the words, the drawing first', () => {
 	const items = CARD_KINDS.map((kind) => ({ kind: 'card', card: SAMPLES[kind].card }))
 	const q = { reply: { items: [{ kind: 'words', text: 'Here is what I found.' }, ...items], change: null, topics: [] } }
-	const ui = {
-		panel: { kind: 'checks' },
-		openQuotes: new Set(),
-		openDecisions: new Set(),
-		openParts: new Set(),
-		openElements: new Set(),
-		tooWide: new Set(),
-		drawingsShown: new Set(),
-		unfolded: new Set(),
-		mapSaid: null,
-		wide: true,
-	}
-	const html = page.replyHtml(q, 0, ui, { running: false, inThread: true })
+	const html = page.replyHtml(q, 0, UI, { running: false, inThread: true })
 
 	assert.ok(!html.includes('cannot show'), 'every kind has a renderer')
 	assert.equal(html.match(/class="card card-/g)?.length, CARD_KINDS.length, 'each card is boxed')
@@ -118,11 +121,41 @@ test('the page shows a card of every kind ken can send, boxed and with its text,
 		at.every((place) => place > html.indexOf('Here is what I found.')),
 		`each card's text follows the words: ${at}`,
 	)
+	const drawingFirst = ['diagram', ...CARD_KINDS.filter((kind) => kind !== 'diagram')]
 	assert.deepEqual(
-		[...at].sort((a, b) => a - b),
-		at,
-		'the cards keep the order the reply gives them',
+		[...CARD_KINDS].sort((a, b) => html.indexOf(SAMPLES[a].text) - html.indexOf(SAMPLES[b].text)),
+		drawingFirst,
+		'the drawing leads, and the other cards keep the order the reply gives them',
 	)
+})
+
+test('unless the reader chose More words, a reply shows its first paragraph and its cards, and the rest of its words behind one press', () => {
+	const reply = {
+		items: [
+			{ kind: 'words', text: 'The loop retries.\n\nIt waits 100 ms between attempts.' },
+			{ kind: 'card', card: SAMPLES.claim.card },
+			{ kind: 'words', text: 'A caller can pass its own wait.' },
+		],
+		change: null,
+		topics: [],
+	}
+	const ui = (opened: number[]) => ({ ...UI, wordsOpen: new Set(opened) })
+	const shown = (text: string, opened: number[] = []) =>
+		page.replyHtml({ reply }, 0, ui(opened), { running: false, inThread: true, text })
+	const rest = ['It waits 100 ms between attempts.', 'A caller can pass its own wait.']
+
+	for (const text of ['pictures', 'balanced']) {
+		const short = shown(text)
+		assert.ok(short.includes('The loop retries.') && short.includes(claim.text), `${text}: the start and the card show`)
+		assert.ok(!rest.some((words) => short.includes(words)), `${text}: the rest of the words wait`)
+		assert.match(short, /aria-expanded="false">Read the rest of the answer</)
+		assert.ok(
+			rest.every((words) => shown(text, [0]).includes(words)),
+			`${text}: one press shows the rest`,
+		)
+	}
+	const all = shown('words')
+	assert.ok(rest.every((words) => all.includes(words)) && !all.includes('Read the rest'), 'More words shows it all')
 })
 
 test('a reply about a change opens on the change card, before the words: the parts it touched with files and lines, the others not touched, and its commits', async () => {
