@@ -55,6 +55,8 @@ const freshUi = () => ({
 	openFiles: new Set(),
 	// The turns of the thread whose steps the reader opened.
 	openSteps: new Set(),
+	// The turns whose whole text the reader opened, when their setting shows the start of each answer.
+	wordsOpen: new Set(),
 	detailsOpen: false,
 	coverageOpen: false,
 	addedOpen: false,
@@ -568,7 +570,7 @@ function turnHtml(q, t, ui) {
 	const working = q.live ? workingHtml(q, t, ui.openSteps.has(t), seconds()) : ''
 	let body
 	if (q.reply) {
-		const reply = replyHtml(q, t, ui, { running: state.running !== null, inThread: true })
+		const reply = replyHtml(q, t, ui, { running: state.running !== null, inThread: true, text: state.shell.prefs.text })
 		body = `${q.live ? '' : runLine(q, t, ui)}${q.outcome === 'partial' || q.outcome === 'unverified' ? endedHtml(q, t) : ''}${reply}${working}`
 	} else if (q.live) body = working
 	else body = runLine(q, t, ui) + endedHtml(q, t)
@@ -1328,6 +1330,10 @@ const actions = {
 	'tour-know': (el) => learnStop(Number(el.dataset.turn), Number(el.dataset.step), 'know'),
 	added() {
 		state.ui.addedOpen = !state.ui.addedOpen
+		render()
+	},
+	'words-more'(el) {
+		toggle(state.ui.wordsOpen, Number(el.dataset.turn))
 		render()
 	},
 	steps(el) {

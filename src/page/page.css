@@ -2744,6 +2744,11 @@ q.subject {
 	padding-left: var(--space-5);
 }
 
+/* The button that opens the rest of a reply's words, under its start and its drawings. */
+.words-more {
+	margin-top: var(--space-3);
+}
+
 .words-list > * + * {
 	margin-top: var(--space-1);
 }

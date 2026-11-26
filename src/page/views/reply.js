@@ -105,19 +105,43 @@ function topicOf(card) {
 }
 
 // inThread is false for a live note, which shows its words and cards alone: no chips, no map buttons, no checks.
-export function replyHtml(q, t, ui, { running, inThread }) {
+// A reply leads with its first paragraph and its drawings, as a brief leads with its picture. Unless the reader chose
+// More words in text, the rest of the model's words wait behind one press, and every card stays in view.
+export function replyHtml(q, t, ui, { running, inThread, text = 'words' }) {
 	const hidden = foldedTopics(q, ui)
 	const rows = { ui, commits: manyCommits(q), head: q.head, copies: copiesOf(q), change: q.reply.change }
 	const cards = cardsOf(q, t)
 	const named = new Set(cards.map(({ card }) => topicOf(card)).filter((name) => name !== null))
 	const steps = walkOf(q.reply)
-	// The cards of a step show in the walkthrough, under their step.
-	const parts = q.reply.items.map((item, j) => {
-		if (item.kind === 'words') return wordsHtml(item.text)
-		if (item.kind !== 'card' || (steps.length > 0 && item.step !== undefined)) return ''
-		if (hidden.has(topicOf(item.card))) return ''
-		return cardHtml(item.card, t, j, rows)
-	})
+	const lead = []
+	const drawings = []
+	// The rest in the reply's order: each words item as its blocks, each card as its box.
+	const rest = []
+	for (const [j, item] of q.reply.items.entries()) {
+		if (item.kind === 'words') {
+			const blocks = wordBlocks(item.text)
+			if (lead.length === 0 && blocks.length > 0) lead.push(blocks.shift())
+			if (blocks.length > 0) rest.push({ blocks })
+			continue
+		}
+		// The cards of a step show in the walkthrough, under their step.
+		if (item.kind !== 'card' || (steps.length > 0 && item.step !== undefined)) continue
+		if (hidden.has(topicOf(item.card))) continue
+		const html = cardHtml(item.card, t, j, rows)
+		if (item.card.kind === 'diagram') drawings.push(html)
+		else rest.push({ html })
+	}
+	const folds = inThread && !q.live && text !== 'words' && rest.some((each) => each.blocks)
+	const open = !folds || ui.wordsOpen.has(t)
+	const toggle = folds
+		? `<p class="words-more"><button class="link" data-act="words-more" data-turn="${t}" data-key="words-more-${t}" aria-expanded="${open}">${open ? 'Show less' : 'Read the rest of the answer'}</button></p>`
+		: ''
+	const parts = [
+		lead.length > 0 ? `<div class="words">${lead.join('')}</div>` : '',
+		...drawings,
+		toggle,
+		...rest.map((each) => each.html ?? (open ? `<div class="words">${each.blocks.join('')}</div>` : '')),
+	]
 	const shown = new Set(cards.map(({ card }) => card.kind))
 	const asks =
 		inThread && q.reply.change && !q.about
@@ -197,6 +221,10 @@ export function stepCardsHtml(q, t, step, ui, shown = null) {
 // The model writes plain text: paragraphs, now and then a list or a block of code. Each becomes its own element, and
 // everything in it is escaped.
 export function wordsHtml(text) {
+	return `<div class="words">${wordBlocks(text).join('')}</div>`
+}
+
+function wordBlocks(text) {
 	const blocks = []
 	const lines = text.trim().split('\n')
 	for (let i = 0; i < lines.length; i++) {
@@ -226,7 +254,7 @@ export function wordsHtml(text) {
 		}
 		blocks.push(`<p>${inline(paragraph.join(' ').replace(/^#+\s+/, ''))}</p>`)
 	}
-	return `<div class="words">${blocks.join('')}</div>`
+	return blocks
 }
 
 // `code` as code and **bold** as bold, after escaping.
