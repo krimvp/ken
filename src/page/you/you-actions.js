@@ -42,7 +42,7 @@ export function youActions(app) {
 	async function enter() {
 		you.fixing = -1
 		const { loads } = app.level
-		await Promise.all([state.shell.top ? null : app.reread(), loads.loadReader(), loads.loadNotes()])
+		await Promise.all([state.shell.top ? null : app.topRead(), loads.loadReader(), loads.loadNotes()])
 		render()
 	}
 

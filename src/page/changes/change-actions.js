@@ -98,7 +98,7 @@ export function changeActions(app) {
 		const part = chg.part
 		const home = state.home
 		if (change && part && chg.tab === 'changes') return show(change, part, remember)
-		if (!state.shell.timeline || home.changes.length === 0) await app.reread()
+		if (!state.shell.timeline || home.changes.length === 0) await app.topRead()
 		if (chg.tab !== 'changes') await app.older.load(chg.tab)
 		if (state.shell.page !== 'changes' || chg.part !== part) return
 		if (change) return show(change, part, remember)

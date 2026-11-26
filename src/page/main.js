@@ -1126,6 +1126,7 @@ state.shell = freshShell(app.prefs.prefs)
 app.briefs = briefStore(app)
 app.briefPaths = () => brief.readPaths()
 app.reread = () => shell.reread()
+app.topRead = () => shell.topRead()
 app.rereadKnows = () => shell.rereadKnows()
 const level = levelActions(app)
 app.level = level

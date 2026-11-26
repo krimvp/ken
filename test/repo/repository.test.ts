@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
+import { writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { test } from 'node:test'
 import { type CommitHash, gitRepository, parsePath, type RepoPath } from '../../src/repo/index.ts'
 import { buildRepository, OWNER } from '../fixtures/build-repository.ts'
@@ -164,4 +167,21 @@ test('what landed after several commits is read at once: a side line merged late
 	assert.deepEqual(subjects(start), ['main two', 'side one', 'main one'])
 	assert.deepEqual([subjects(gone), subjects('not a hash')], [null, null])
 	assert.deepEqual(read.landed.get(main)?.[1]?.paths, ['b.ts'])
+})
+
+test('a file read through a name such as HEAD shows the newest commit', async () => {
+	const { root } = buildRepository([{ message: 'feat: one', files: { 'a.txt': 'one\n' } }])
+	const repo = gitRepository(root)
+	const path = 'a.txt' as RepoPath
+	const before = await repo.readFile('HEAD' as CommitHash, path)
+	writeFileSync(join(root, 'a.txt'), 'two\n')
+	execFileSync('git', ['-c', 'commit.gpgsign=false', 'commit', '--quiet', '-am', 'feat: two'], { cwd: root })
+	const after = await repo.readFile('HEAD' as CommitHash, path)
+	assert.deepEqual(
+		[before, after],
+		[
+			{ kind: 'ok', text: 'one\n' },
+			{ kind: 'ok', text: 'two\n' },
+		],
+	)
 })

@@ -11,6 +11,7 @@ import {
 	type RecordStore,
 	sameName,
 	type Topic,
+	type TopicCode,
 	topicCode,
 } from '../record/index.ts'
 import type { Repository } from '../repo/index.ts'
@@ -27,6 +28,8 @@ export type OwnTopic = Pick<Topic, 'name' | 'quotes'>
 export type MapRead = { states: TopicState[]; own: OwnTopic[]; problems: string[] }
 
 type SelectedTopics = { record?: RecordRead; names: string[] }
+
+type CodeOf = (topic: Pick<Topic, 'quotes'>) => Promise<TopicCode>
 
 export type UnderstandingMap = {
 	file: string
@@ -85,23 +88,43 @@ export async function openMap(
 		return { current: [...recorded, ...own], versions: [...only(read.entries), ...own], own }
 	}
 
+	// A topic's code at one commit never changes, so each topic is checked once per HEAD and every read at that HEAD
+	// shares it. A new HEAD starts afresh. The shared check takes no signal: one reader's abort must not fail another's.
+	let shared: { head: string; codes: Map<string, Promise<TopicCode>> } | null = null
+	async function codesNow(abort?: AbortSignal): Promise<CodeOf> {
+		const head = await repo.resolve('HEAD', abort)
+		if (head.kind !== 'ok') return (topic) => topicCode(repo, topic, abort)
+		if (shared?.head !== head.commit) shared = { head: head.commit, codes: new Map() }
+		const { codes } = shared
+		return (topic) => {
+			const key = JSON.stringify(topic.quotes.map((quote) => [quote.path, quote.text, quote.startLine]))
+			let code = codes.get(key)
+			if (!code) {
+				code = topicCode(repo, topic, undefined, head.commit)
+				codes.set(key, code)
+				code.catch(() => codes.delete(key))
+			}
+			return code
+		}
+	}
+
 	async function stateNow(
 		topic: OwnTopic,
 		{ versions }: Topics,
 		entries: MapLine[],
 		now: Date,
-		abort?: AbortSignal,
+		codeOf: CodeOf,
 	): Promise<TopicState> {
 		const entry = entries.findLast((line): line is MapEntry => 'evidence' in line && sameName(line.topic, topic.name))
 		const preference = entries.findLast(
 			(line): line is DetailEntry => 'detail' in line && sameName(line.topic, topic.name),
 		)
-		const code = await topicCode(repo, topic, abort)
+		const code = await codeOf(topic)
 		const knew =
 			entry && code.hash !== entry.hash
 				? versions.find((version) => sameName(version.name, topic.name) && codeHash(version.quotes) === entry.hash)
 				: undefined
-		const knewGone = knew ? (await topicCode(repo, knew, abort)).gone : []
+		const knewGone = knew ? (await codeOf(knew)).gone : []
 		const state = stateOf(topic, entry, code, now, knewGone)
 		return preference?.detail === 'shorter' ? { ...state, shorterSince: preference.date } : state
 	}
@@ -112,7 +135,8 @@ export async function openMap(
 		const asked = selected
 			? known.current.filter((topic) => selected.names.some((name) => sameName(name, topic.name)))
 			: known.current
-		const states = await Promise.all(asked.map((topic) => stateNow(topic, known, entries, now, abort)))
+		const codeOf = await codesNow(abort)
+		const states = await Promise.all(asked.map((topic) => stateNow(topic, known, entries, now, codeOf)))
 		for (const entry of entries) {
 			if (!known.current.some((topic) => sameName(topic.name, entry.topic))) {
 				problems.push(`The map names "${entry.topic}", which is not a topic in the project record, so ken skips it.`)
@@ -125,7 +149,8 @@ export async function openMap(
 		const { entries } = await lines()
 		const known = await topics(entries, undefined, quoted)
 		const chosen = known.current.filter((topic) => names.some((name) => sameName(name, topic.name)))
-		const before = await Promise.all(chosen.map((topic) => stateNow(topic, known, entries, now, abort)))
+		const codeOf = await codesNow(abort)
+		const before = await Promise.all(chosen.map((topic) => stateNow(topic, known, entries, now, codeOf)))
 		const added = before.flatMap((state, at) => {
 			const line = lineFor(mapSignal, state, now)
 			const own = known.own.find((topic) => topic === chosen[at])
@@ -134,7 +159,7 @@ export async function openMap(
 		if (added.length === 0) return before
 		await append(added)
 		const updated = [...entries, ...added]
-		return await Promise.all(chosen.map((topic) => stateNow(topic, known, updated, now, abort)))
+		return await Promise.all(chosen.map((topic) => stateNow(topic, known, updated, now, codeOf)))
 	}
 
 	async function append(entries: MapLine[]) {
