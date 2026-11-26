@@ -1,7 +1,5 @@
-// The Processes page: the processes ken has drawn, as small pictures in a row, and the chosen one large. Large, a
-// process is lanes, one for each part it passes through, in the part's colour and with what ken thinks the reader
-// knows of it, and its steps run left to right, numbered. A switch shows the same steps on the map of the parts
-// instead. Beside the row are the processes ken offers to draw, and a box to ask for any other drawing.
+// The Processes page shows a saved drawing as lanes, steps on the map, or an ordered list of messages.
+import { rowHtml } from '../brief/brief.js'
 import { partId, processId, readConcept, stepId } from '../brief/concept-id.js'
 import { levelLabel } from '../level/level-state.js'
 import { partClass } from '../project/part-colours.js'
@@ -121,14 +119,34 @@ function mapHtml(process, look) {
 	return `<div class="k-route-map" style="--cols:${placed.cols};--rows:${placed.rows}"><svg viewBox="0 0 ${placed.cols * 100} ${placed.rows * 100}" preserveAspectRatio="none" aria-hidden="true"><path d="${line}"/></svg>${blocks.join('')}</div>`
 }
 
+function textHtml(process) {
+	const rows = process.messages.map((step) =>
+		rowHtml({
+			id: stepId(process.id, step.n),
+			key: `proc-text-step-${step.n}`,
+			number: step.n,
+			name: step.line,
+			note: `${process.lanes[step.from].name} to ${process.lanes[step.to].name}`,
+			swatch: step.part ? partClass(nameOf(step.part)) : null,
+		}),
+	)
+	return `<ol class="k-process-steps" aria-label="Process steps">${rows.join('')}</ol>`
+}
+
+const VIEWS = {
+	lanes: { label: 'As lanes', icon: 'layers', draw: lanesHtml },
+	map: { label: 'On the map', icon: 'architecture', draw: mapHtml },
+	text: { label: 'As text', icon: 'words', draw: textHtml },
+}
+
 function workingHtml(run, env) {
 	const tools = env.running.q.steps.filter((step) => step.kind === 'tool').length
 	return `<div class="k-proc-empty" role="status"><span class="k-spin" aria-hidden="true"></span><h2>ken's model is drawing "${esc(run.text)}"</h2><p class="k-muted k-num k-clock">${Math.round(env.seconds)} s so far, ${count(tools, 'action', 'actions')}</p><button class="k-btn is-quiet" data-act="stop" data-key="proc-stop">Stop</button></div>`
 }
 
 // procs is the page's state: { list, offers, at, view, problem }. look is the top level, for the parts' colours,
-// levels and the map. env says what the page is doing.
-export function processesPageHtml({ procs, look, home, env }) {
+// levels and the map. text is the reader's preference until they pick a view.
+export function processesPageHtml({ procs, look, home, text, env }) {
 	if (procs.list === null)
 		return '<div class="k-procs-page"><p class="k-home-line" role="status">Reading the drawn processes.</p></div>'
 	const offers = procs.offers.length > 0 ? procs.offers : FIXED_OFFERS
@@ -141,15 +159,16 @@ export function processesPageHtml({ procs, look, home, env }) {
 			: `<div class="k-proc-empty">${icon('processes')}<h2>ken has not drawn a process yet</h2><p>A process is one path through the parts, step by step, each step on the lines of code it rests on. Pick one ken offers, or say what to draw.</p></div>`
 		return `<div class="k-procs-page is-empty"><section class="k-tile k-proc-big">${empty}</section>${draw}</div>`
 	}
-	const switcher = ['lanes', 'map'].map(
-		(view) =>
-			`<button data-act="proc-view" data-view="${view}" data-key="proc-view-${view}" aria-pressed="${procs.view === view}">${icon(view === 'lanes' ? 'layers' : 'architecture')}${view === 'lanes' ? 'As lanes' : 'On the map'}</button>`,
+	const selected = procs.view ?? (text === 'words' ? 'text' : 'lanes')
+	const switcher = Object.entries(VIEWS).map(
+		([view, { label, icon: mark }]) =>
+			`<button data-act="proc-view" data-view="${view}" data-key="proc-view-${view}" aria-pressed="${selected === view}">${icon(mark)}${label}</button>`,
 	)
 	const big = run
 		? workingHtml(run, env)
 		: process
 			? `<div class="k-proc-head"><h2 id="proc-title">${prose(process.name)}</h2><button class="k-chip" data-act="brief-open" data-concept="${esc(processId(process.id))}" data-key="proc-brief">${icon('clock')}Its brief</button><span class="k-seg" role="group" aria-label="How to show it">${switcher.join('')}</span></div>
-			${procs.view === 'map' ? mapHtml(process, look) : lanesHtml(process, look, home)}
+			${VIEWS[selected].draw(process, look, home)}
 			<p class="k-proc-hint">Press a numbered step for its brief and its lines of code.</p>`
 			: ''
 	return `<div class="k-procs-page">

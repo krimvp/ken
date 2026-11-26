@@ -392,6 +392,7 @@ export function shellActions(app) {
 		'pref-text'(el) {
 			app.prefs.setText(el.dataset.text)
 			state.arch.format = null
+			state.procs.view = null
 			render()
 		},
 		'pref-theme'(el) {
