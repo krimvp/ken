@@ -434,3 +434,41 @@ test('a reader naming one part gets current code and can open it without another
 	assert.deepEqual(source.lines, [currentLine])
 	assert.equal(model.requests.length, 4)
 })
+
+test("a question whose model finds the reader's saved answer in memory keeps its topic out of the record", async () => {
+	const { root } = buildRepository([{ message: 'feat: start', files: FILES }])
+	const store = fileRecordStore(root, gitRepository(root))
+	const named = await store.append([
+		{
+			kind: 'layout',
+			within: [],
+			at: 'HEAD',
+			parts: [
+				{ name: 'Core', job: 'Runs the work', paths: ['src/core'] },
+				{ name: 'Command', job: 'The command a person types', paths: ['src/cli'] },
+			],
+			arrows: [],
+		},
+	])
+	if (named.kind !== 'appended') assert.fail(named.problems.join(' '))
+	const topic = {
+		name: 'single run',
+		note: 'The core runs its work once.',
+		quotes: [{ path: 'src/core/run.ts', commit: 'HEAD', text: 'export function run() {' }],
+	}
+	const model = await scriptedModel([
+		brief,
+		brief,
+		{ tool: 'ken__memory_search', args: { words: 'gives back' } },
+		{ tool: 'ken__show', text: 'The core runs once.', args: { topics: [topic] } },
+		{ text: 'Done.' },
+	])
+	const server = await openKen(root, readerHome(), model.baseUrl)
+	await ask(server, { lens: { kind: 'explain', within: [], part: 'Core' } })
+	await ask(server, { lens: { kind: 'answer', concept: 'part::Core', text: 'What does a run give back?' } })
+	await ask(server, { question: 'What does the core do?' })
+	const [found = ''] = toolResults(model.requests[3])
+	assert.match(found, /^answer of /m, "the search gave back the reader's saved answer")
+	const recorded = JSON.stringify((await store.read()).entries)
+	assert.ok(!recorded.includes(topic.name), 'the topic stays out of the record')
+})
