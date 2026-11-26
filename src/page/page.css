@@ -184,7 +184,7 @@ button {
 }
 
 /* A row fills its box, so its ring goes inside, where no neighbour or scroll edge can hide it. */
-:is(.q-row, .d-row, .row, .file summary):focus-visible {
+:is(.q-row, .d-row, .file summary):focus-visible {
 	outline-offset: -3px;
 }
 
@@ -269,82 +269,6 @@ html {
 	color: var(--color-muted);
 	text-decoration: none;
 	cursor: default;
-}
-
-/* The top bar */
-.top {
-	position: sticky;
-	top: 0;
-	z-index: 5;
-	display: flex;
-	align-items: center;
-	gap: var(--space-4);
-	min-height: var(--top);
-	padding: var(--space-2) var(--space-6);
-	border-bottom: 1px solid var(--color-border);
-	background: var(--color-bar);
-}
-
-/* ken's mark: three part colours in one tile, the way the picture shows a project. */
-.brand {
-	display: inline-flex;
-	align-items: center;
-	gap: var(--space-2);
-	font-size: var(--text-base);
-	font-weight: 750;
-	letter-spacing: -0.02em;
-}
-
-.brand::before {
-	content: "";
-	width: 1.25rem;
-	height: 1.25rem;
-	border-radius: 6px;
-	background:
-		radial-gradient(circle at 30% 30%, hsl(222 70% 62%) 0 28%, transparent 30%),
-		radial-gradient(circle at 72% 40%, hsl(24 80% 60%) 0 22%, transparent 24%),
-		radial-gradient(circle at 45% 76%, hsl(160 55% 48%) 0 22%, transparent 24%), var(--color-label-bg);
-}
-
-.project {
-	min-width: 0;
-	color: var(--color-note);
-	font-size: var(--text-note);
-	overflow-wrap: anywhere;
-}
-
-.project code {
-	color: var(--color-text);
-}
-
-.top-menu {
-	position: relative;
-	margin-left: auto;
-	font-size: var(--text-note);
-}
-
-.menu {
-	position: absolute;
-	top: calc(100% + var(--space-2));
-	right: 0;
-	width: min(30rem, calc(100vw - 2 * var(--gutter)));
-	max-height: calc(100vh - var(--top) - var(--space-6));
-	overflow-y: auto;
-	padding: var(--space-4) var(--space-5) var(--space-2);
-	border: 1px solid var(--color-border);
-	border-radius: var(--radius-lg);
-	background: var(--color-card);
-	font-size: var(--text-md);
-	box-shadow: var(--shadow-lg);
-}
-
-.menu-head {
-	color: var(--color-note);
-	font-size: var(--text-note);
-}
-
-.menu .row:last-child {
-	border-bottom: 0;
 }
 
 /* Two columns: the thread, and the panel with what ken checked */
@@ -469,39 +393,6 @@ html {
 
 .composer-cost {
 	margin-top: var(--space-1);
-}
-
-/* An earlier question, folded to one row */
-.row {
-	display: block;
-	width: 100%;
-	padding: var(--space-3) 0;
-	border: 0;
-	border-bottom: 1px solid var(--color-border);
-	background: none;
-	text-align: left;
-}
-
-/* A long question shows its first two lines in the menu. */
-.row-q {
-	display: -webkit-box;
-	-webkit-box-orient: vertical;
-	-webkit-line-clamp: 2;
-	overflow: hidden;
-	font-weight: 600;
-	line-height: 1.4;
-	overflow-wrap: anywhere;
-}
-
-.row:hover .row-q {
-	text-decoration: underline;
-	text-underline-offset: 0.18em;
-}
-
-.row-meta {
-	display: block;
-	color: var(--color-note);
-	font-size: var(--text-note);
 }
 
 /* The open question */
@@ -1561,10 +1452,6 @@ ul.left-out {
 }
 
 @media (max-width: 1099px) {
-	.top {
-		padding: var(--space-2) var(--gutter);
-	}
-
 	.page,
 	.page.single {
 		display: block;
@@ -1581,16 +1468,6 @@ ul.left-out {
 
 	:is(span, code).narrow-only {
 		display: inline;
-	}
-
-	.project {
-		overflow: hidden;
-		white-space: nowrap;
-		text-overflow: ellipsis;
-	}
-
-	.top-menu > .link {
-		white-space: nowrap;
 	}
 
 	.code {
@@ -1668,41 +1545,6 @@ ul.left-out {
 		font-size: var(--text-base);
 		font-weight: 650;
 	}
-}
-
-/* The understanding map: the lines a known topic folds to, the buttons under an answer, the lenses and the map view */
-.top-menu {
-	display: flex;
-	flex-wrap: wrap;
-	gap: var(--space-1);
-	justify-content: flex-end;
-}
-
-/* The views are tabs in the bar: plain words, a soft pill under the pointer, and a filled pill for the view open now. */
-.top-views {
-	display: flex;
-	gap: var(--space-1);
-}
-
-.top-menu > .link,
-.top-views .link {
-	padding: var(--space-1) var(--space-3);
-	border-radius: 999px;
-	color: var(--color-text);
-	font-weight: 550;
-	text-decoration: none;
-}
-
-.top-menu > .link:hover,
-.top-views .link:hover {
-	background: var(--color-code-bg);
-}
-
-.top-menu .link[aria-current="page"] {
-	background: var(--color-label-bg);
-	color: var(--color-label-text);
-	text-decoration: none;
-	font-weight: 650;
 }
 
 .asked-list {
@@ -2808,66 +2650,6 @@ q.subject {
 	line-height: 1.5;
 }
 
-/* The header on a phone: the views go into the menu, and the project's name keeps its room. */
-.top-narrow,
-.menu-views {
-	display: none;
-}
-
-.top-views {
-	display: contents;
-}
-
-@media (max-width: 720px) {
-	.top-wide {
-		display: none;
-	}
-
-	.top-narrow {
-		display: inline;
-	}
-
-	.menu-views.top-narrow {
-		display: grid;
-		gap: var(--space-1);
-		justify-items: start;
-		padding-bottom: var(--space-3);
-		margin-bottom: var(--space-2);
-		border-bottom: 1px solid var(--color-border);
-	}
-
-	.menu-views .link {
-		min-height: 2.75rem;
-	}
-
-	/* Tight enough that "Waiting on you" and Menu fit beside the project's name at 390 px. */
-	.top {
-		gap: var(--space-2);
-	}
-
-	.top-menu {
-		flex-wrap: nowrap;
-		gap: var(--space-1);
-	}
-
-	.top-menu > .link {
-		padding: var(--space-1) var(--space-2);
-	}
-
-	.project .reads {
-		display: none;
-	}
-
-	.project {
-		flex: 1 1 auto;
-		min-width: 4.5rem;
-	}
-
-	.top-menu {
-		flex: none;
-	}
-}
-
 /* The lenses under an answer, folded behind one line. */
 .lens-fold {
 	padding: var(--space-3) 0 var(--space-6);
@@ -2915,12 +2697,8 @@ q.subject {
 	font-weight: 600;
 }
 
-/* On a phone the ask box is pinned at the foot, so the menu ends above it. The note form loses its indent there. */
+/* On a phone the note form loses its indent. */
 @media (max-width: 720px) {
-	.menu {
-		max-height: calc(100vh - var(--top) - 6rem);
-	}
-
 	.decide-form {
 		padding-left: 0;
 	}

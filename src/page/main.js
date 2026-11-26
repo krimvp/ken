@@ -5,7 +5,6 @@
 
 import { VIEWS_RUN } from './arch-views/switch.js'
 import { archActions, freshArch } from './architecture/arch-actions.js'
-import { earlierAnswers } from './ask/ask.js'
 import { askActions, freshAsk } from './ask/ask-actions.js'
 import { openingRows, threadGaps, threadId } from './ask/thread-window.js'
 import { briefActions, freshBrief } from './brief/brief-actions.js'
@@ -26,13 +25,15 @@ import { atRest, drawPictures, lightPicture } from './project/parts-picture.js'
 import { tourKey } from './project/tour-card.js'
 import { partOf, stepDiffHtml, stopState, stopTopics, tourStart, walkOf } from './project/walk.js'
 import { fitWords } from './shell/fit-words.js'
+import { icon } from './shell/icons.js'
 import { writePlace } from './shell/place.js'
 import { readerPrefs } from './shell/prefs.js'
+import { PAGE_NAMES } from './shell/shell.js'
 import { freshShell, shellActions } from './shell/shell-actions.js'
 import { checksHtml, quoteCardHtml } from './views/checks.js'
 import { decisionsViewHtml } from './views/decisions.js'
 import { elementKey } from './views/diagram.js'
-import { count, duration, esc, focusLabel, projectHtml, prose, short, when } from './views/format.js'
+import { count, duration, esc, focusLabel, prose, short, when } from './views/format.js'
 import { changedLine, changedTopics, lensHtml } from './views/map.js'
 import { changedParts, openCount, openViewHtml } from './views/open.js'
 import { cardsOf, isMoved, itemsOf, knowPartHtml, LEGEND, replyHtml, stepCardsHtml } from './views/reply.js'
@@ -91,7 +92,6 @@ const state = {
 	open: null,
 	replyTo: undefined,
 	running: null,
-	menuOpen: false,
 	lensesOpen: false,
 	problem: null,
 	// "home" shows the pages and "question" a thread over them. base is the one the reader was on last.
@@ -310,7 +310,6 @@ async function send(body, onHome = null) {
 			state.thread = [...state.thread, q]
 			state.open = picked = q
 			state.replyTo = undefined
-			state.menuOpen = false
 			state.ask.open = false
 			state.view = state.base = 'question'
 			if (!body.lens) $('#question').value = ''
@@ -533,31 +532,6 @@ function schedule() {
 	})
 }
 
-function rowMeta(row) {
-	const ended = {
-		stopped: 'You stopped it',
-		unverified: 'Unverified source answer',
-		incomplete: 'No checked brief',
-		partial: 'Some parts still need a brief',
-		error: "ken's model did not reply",
-		'tool-proposal': 'No answer',
-		'no-answer': "ken's model gave no reply",
-		'out-of-turns': "ken's model ran out of turns",
-	}[row.outcome]
-	if (ended) return `${when(row.askedAt)} · ${ended}`
-	const parts = [row.cards === 0 ? 'a reply in words' : count(row.cards, 'checked card', 'checked cards')]
-	if (row.calls > 0) parts.push(`${row.calls} ${row.calls === 1 ? 'needs' : 'need'} your call`)
-	if (row.risks > 0) parts.push(count(row.risks, 'risk', 'risks'))
-	if (row.hunks) parts.push(`${row.hunks.total - row.hunks.uncovered} of ${row.hunks.total} changed blocks quoted`)
-	return `${when(row.askedAt)} · ${parts.join(', ')}`
-}
-
-function rowHtml(row) {
-	const current = state.open?.id === row.id
-	return `<button class="row" data-act="open" data-id="${esc(row.id)}" data-key="menu-${esc(row.id)}"${current ? ' aria-current="true"' : ''}>
-		<span class="row-q">${esc(firstLine(row.question))}</span><span class="row-meta">${current ? 'Open now · ' : ''}${row.background ? 'Prepared by ken · ' : ''}${rowMeta(row)}</span></button>`
-}
-
 // A lens's question is a line the reader asked and the list ken wrote under it. A question on a live note saved before
 // ken gave it a title line holds the whole prompt in its first line, "Go deeper on ken's live note about X at 06:40
 // UTC. ...", so its title is rewritten the way ken writes one now.
@@ -565,28 +539,6 @@ function firstLine(question) {
 	const first = question.split('\n')[0]
 	const old = first.match(/^Go deeper on ken's live note about (.+?) at (\d\d:\d\d) UTC\./)
 	return old ? `Go deeper on the ${old[2]} UTC note about ${old[1]}` : first
-}
-
-// The header over a reply: the earlier answers in a menu, behind one word on a phone.
-function menuHtml() {
-	const answers = earlierAnswers(state.rows)
-	const n = answers.length
-	const questions =
-		n === 0
-			? ''
-			: `<button class="link top-wide" data-act="menu" data-key="menu" aria-expanded="${state.menuOpen}">Earlier answers (${n})</button>`
-	const narrow = `<button class="link top-narrow" data-act="menu" data-key="menu-narrow" aria-expanded="${state.menuOpen}" aria-label="Earlier answers">Menu</button>`
-	const bar = `${questions}${narrow}`
-	if (!state.menuOpen) return bar
-	const running = state.running
-		? `<button class="row" data-act="open-running" data-key="menu-running"><span class="row-q">${esc(firstLine(state.running.q.question))}</span><span class="row-meta">Running now</span></button>`
-		: ''
-	const rows = answers.map((row) => rowHtml(row))
-	const list =
-		n === 0 && !running
-			? ''
-			: `<p class="menu-head">ken's earlier answers to you about this project, newest first. ken keeps them on this computer, outside the project.</p>${running}${rows.join('')}`
-	return `${bar}<div class="menu">${list}</div>`
 }
 
 function runLine(q, t, ui) {
@@ -680,7 +632,7 @@ function threadHtml() {
 	if (state.problem && !q)
 		return `<div class="notice" role="alert"><h3>ken did not answer</h3><p>${esc(state.problem)}</p></div>`
 	if (!q) return ''
-	const back = '<button class="link" data-act="back-page" data-key="back-home">Back to the page</button>'
+	const back = `<button class="k-back" data-act="back-page" data-key="back-home">${icon('left')}Back to ${PAGE_NAMES[state.shell.page]}</button>`
 	const gaps = gapsOfThread()
 	const page = (pos) => {
 		const next = gaps.get(pos)
@@ -795,8 +747,6 @@ function render() {
 		refocus()
 		return tipFrom(null)
 	}
-	$('#project').innerHTML = state.project ? `<span class="reads">reads </span>${projectHtml(state.project)}` : ''
-	$('#menu').innerHTML = menuHtml()
 	const q = state.open
 	const page = $('#page')
 	const panel = $('#panel')
@@ -866,7 +816,7 @@ function watchTurns() {
 	turnsInView.clear()
 	markDescribed()
 	if (!state.ui.wide || state.view !== 'question' || state.thread.length < 2) return
-	const margin = `${-$('.top').offsetHeight}px 0px ${-$('#ask').offsetHeight}px 0px`
+	const margin = `${-$('.k-bar').offsetHeight}px 0px ${-$('#ask').offsetHeight}px 0px`
 	const threshold = Array.from({ length: 101 }, (_, i) => i / 100)
 	watcher = new IntersectionObserver(
 		(entries) => {
@@ -883,7 +833,7 @@ function watchTurns() {
 
 function follow() {
 	if (state.ui.panel.kind !== 'checks') return
-	const top = $('.top').offsetHeight
+	const top = $('.k-bar').offsetHeight
 	const bottom = innerHeight - $('#ask').offsetHeight
 	const seen = (turn) => {
 		const box = turn.getBoundingClientRect()
@@ -1228,7 +1178,6 @@ async function showReply(id) {
 	if (!(await openQuestion(id))) return false
 	state.replyTo = state.open?.reply && !state.open.about ? state.open : null
 	state.ask.open = false
-	state.menuOpen = false
 	state.view = state.base = 'question'
 	picked = state.open
 	if (!brief.close()) render()
@@ -1320,10 +1269,6 @@ const actions = {
 		state.lensesOpen = !state.lensesOpen
 		render()
 	},
-	menu() {
-		state.menuOpen = !state.menuOpen
-		render()
-	},
 	// An opened reply is a new entry in the browser's history, so Back goes to where the reader was and a reload
 	// opens the reply again.
 	async open(el) {
@@ -1332,7 +1277,7 @@ const actions = {
 	},
 	async 'open-running'() {
 		shell.leaveReply()
-		state.menuOpen = false
+		state.ask.open = false
 		state.view = state.base = 'question'
 		const { q } = state.running
 		if (!state.thread.includes(q)) state.thread = [...(await threadOf(q.thread, q.after)), q]
@@ -1423,10 +1368,6 @@ const actions = {
 
 document.addEventListener('click', (event) => {
 	const el = event.target.closest('[data-act]')
-	if (state.menuOpen && !event.target.closest('#menu')) {
-		state.menuOpen = false
-		render()
-	}
 	shell.pressed(event.target)
 	if (el && !el.disabled) void actions[el.dataset.act](el)
 	else if (state.view === 'question' && state.thread.length > 0) chooseInDrawing(event.target)
@@ -1448,8 +1389,8 @@ document.addEventListener(
 
 document.addEventListener('keydown', (event) => {
 	if (shell.wrapTab(event)) return
-	if (!state.menuOpen && $('#tip').hidden && shell.key(event)) return
-	if (!state.menuOpen && $('#tip').hidden && ask.key(event)) return
+	if ($('#tip').hidden && shell.key(event)) return
+	if ($('#tip').hidden && ask.key(event)) return
 	if ((event.key === 'ArrowLeft' || event.key === 'ArrowRight') && state.view === 'question') {
 		const t = walkTurn()
 		if (t === null) return
@@ -1460,12 +1401,6 @@ document.addEventListener('keydown', (event) => {
 	if (event.key !== 'Escape') return
 	if (!$('#tip').hidden) return hideTip()
 	const ui = state.ui
-	if (state.menuOpen) {
-		state.menuOpen = false
-		render()
-		$('[data-key="menu"]')?.focus()
-		return
-	}
 	if (closePanel()) return
 	if (state.ui.walkAt.size > 0) {
 		const [t, number] = [...state.ui.walkAt].at(-1)

@@ -571,14 +571,117 @@ body {
 	display: none;
 }
 
-/* The views from before this look keep the window's own scroll. Their header stands under the bar. */
+/* The views from before this look keep the window's own scroll, under the bar. They wear this look's colours, its
+   buttons, its links and its cards, so a reply reads as part of the same page. */
 .k-old {
-	--top: calc(var(--k-bar) + 3.5rem);
+	--top: var(--k-bar);
+	--color-bg: var(--k-bg);
+	--color-bar: var(--k-bg);
+	--color-text: var(--k-ink);
+	--color-muted: var(--k-muted);
+	--color-note: var(--k-muted);
+	--color-border: var(--k-line);
+	--color-box-border: var(--k-line);
+	--color-accent: var(--k-brand);
+	--color-focus: var(--k-brand);
+	--color-card: var(--k-surface);
+	--color-label-bg: var(--k-brand-soft);
+	--color-label-text: var(--k-ink);
+	--shadow-sm: none;
+	--shadow-md: var(--k-shadow);
+	color: var(--k-ink);
 }
 
-.k-old > .top {
-	top: var(--k-bar);
-	min-height: 3.5rem;
+.k-old .link,
+.k-old a {
+	color: var(--k-ink);
+	font-weight: 600;
+	text-decoration: underline;
+	text-decoration-thickness: 1px;
+	text-underline-offset: 3px;
+}
+
+.k-old .link[disabled] {
+	color: var(--k-muted);
+	text-decoration: none;
+}
+
+.k-old :is(.primary, .quiet-button, .chip) {
+	border: 0;
+	border-radius: 12px;
+	box-shadow: none;
+	font-weight: 700;
+}
+
+.k-old :is(.primary, .chip-main) {
+	background: var(--k-brand);
+	color: var(--k-brand-ink);
+}
+
+.k-old :is(.quiet-button, .chip:not(.chip-main)) {
+	background: var(--k-sunk);
+	color: var(--k-ink);
+}
+
+.k-old :is(.quiet-button, .chip):hover:not(:disabled) {
+	background: var(--k-sunk);
+	box-shadow: inset 0 0 0 2px var(--k-ink);
+	text-decoration: none;
+}
+
+.k-old .primary:hover:not(:disabled),
+.k-old .chip-main:hover:not(:disabled) {
+	background: var(--k-brand);
+	color: var(--k-brand-ink);
+	filter: brightness(1.08);
+	box-shadow: none;
+}
+
+.k-old :is(.primary, .quiet-button, .chip):disabled {
+	background: var(--k-sunk);
+	color: var(--k-muted);
+}
+
+.k-old .chip {
+	border-radius: 999px;
+}
+
+.k-old .card {
+	border: 0;
+	border-radius: 18px;
+	background: var(--k-surface);
+	box-shadow: var(--k-shadow);
+}
+
+.k-old .composer textarea {
+	border: 1px solid var(--k-line);
+	border-radius: 12px;
+	background: var(--k-surface);
+}
+
+.k-old :focus-visible {
+	outline-color: var(--k-brand);
+}
+
+/* The way back from a reply, in the look of the rail: the page's own word for where it goes, and no underline. */
+.k-back {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	min-height: 44px;
+	margin-left: -12px;
+	padding: 8px 14px 8px 12px;
+	border: 0;
+	border-radius: 14px;
+	background: none;
+	color: var(--k-muted);
+	font-size: 14px;
+	font-weight: 600;
+}
+
+.k-back:hover {
+	background: var(--k-sunk);
+	color: var(--k-ink);
 }
 
 .k-old .home {

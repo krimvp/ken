@@ -12,11 +12,6 @@ export function prose(text) {
 	return esc(text).replace(/`([^`]+)`/g, '<code>$1</code>')
 }
 
-// The project by its name, with the path of its folder in the title.
-export function projectHtml({ name, folder }) {
-	return `<code title="${esc(folder)}">${esc(name)}</code>`
-}
-
 export function short(hash) {
 	return hash.slice(0, 7)
 }
