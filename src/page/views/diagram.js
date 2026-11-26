@@ -21,8 +21,8 @@ const NUMBERS = {
 	],
 }
 
-// The title, then the drawing, then one line that says who drew it and opens the numbered list. A drawing that does not
-// fit the column at its smallest text gives its place to the list, with a way to see it anyway: the list then shows the
+// The title, then the drawing, then one line that says who drew it and opens the numbered list. On a phone, a drawing
+// that does not fit the column at its smallest text gives its place to the list, with a way to see it anyway: the list then shows the
 // boxes, and the arrows behind one link, so the rest of the reply comes sooner. On a narrow screen each part of the
 // list folds to its words, and its quotes open under it.
 export function diagramHtml(diagram, id, rows) {

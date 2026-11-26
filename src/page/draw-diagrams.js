@@ -77,7 +77,8 @@ function config(actor) {
 			attributeBackgroundColorEven: token('--color-code-bg'),
 		},
 		// Tight spacing, and sequence labels broken into lines by breakSequence, so a diagram at the bounds (6 parts,
-		// 8 arrows) fits the answer column at 1440 pixels: six participants take 6 x 120 + 5 x 8 pixels.
+		// 8 arrows) fits the answer column beside the panel at 1280 pixels with its text at 11 pixels: six participants
+		// take 6 x 104 + 5 x 8 pixels before the labels widen the gaps.
 		flowchart: { useMaxWidth: false, diagramPadding: 4, nodeSpacing: 24, rankSpacing: 36, wrappingWidth: 140 },
 		sequence: {
 			useMaxWidth: false,
@@ -95,10 +96,9 @@ function config(actor) {
 }
 
 // A drawing wider than its box shrinks until its smallest text is this many pixels, and scrolls sideways from there.
-// One that is at most a quarter too wide shrinks to fit all the same, on a screen wider than a phone's: the whole of
-// it in view reads better than a cut edge, and its text stays above 11 pixels.
-const SMALLEST_TEXT = 14
-const FITS_FROM = 0.8
+// On a screen wider than a phone's it shrinks further, to 11 pixels: the whole drawing in view reads better there than
+// a cut edge or a list of its parts.
+const SMALLEST_TEXT = { phone: 14, wide: 11 }
 const phone = matchMedia('(max-width: 759px)')
 
 // A drawing is at most this much shorter than the window, so the caption above it and the head of the next part of the
@@ -113,11 +113,12 @@ function smallestText(svg) {
 	const sizes = [...svg.querySelectorAll('text, tspan, span, div, p')]
 		.filter((el) => [...el.childNodes].some((node) => node.nodeType === Node.TEXT_NODE && node.textContent.trim()))
 		.map((el) => Number.parseFloat(getComputedStyle(el).fontSize))
-	return sizes.length === 0 ? SMALLEST_TEXT : Math.min(...sizes)
+	return sizes.length === 0 ? SMALLEST_TEXT.phone : Math.min(...sizes)
 }
 
 // Shrinks a drawing to the column, but never so far that its smallest text drops under SMALLEST_TEXT. The frame around
-// the box fades the cut edge while part of a wide drawing is out of sight.
+// the box fades the cut edge while part of a wide drawing is out of sight. It answers whether the drawing should give
+// its place to the list of its parts, which only a phone does.
 function fit(box, drawing) {
 	const frame = box.parentElement
 	const svg = box.querySelector('svg')
@@ -132,16 +133,15 @@ function fit(box, drawing) {
 	// A drawing taller than tallest() shrinks too, as far as the same floor allows.
 	const tall = tallest() / svg.viewBox.baseVal.height
 	const across = room / natural
-	const least = SMALLEST_TEXT / drawing.smallest
-	const floor = across >= FITS_FROM && !phone.matches ? Math.min(least, across) : least
-	const scale = Math.min(1, Math.max(floor, Math.min(across, tall)))
+	const least = SMALLEST_TEXT[phone.matches ? 'phone' : 'wide'] / drawing.smallest
+	const scale = Math.min(1, Math.max(least, Math.min(across, tall)))
 	svg.style.width = `${natural * scale}px`
 	const wide = natural * scale > room + 1
 	frame.classList.toggle('wide', wide)
 	const atEnd = () => frame.classList.toggle('at-end', box.scrollLeft + box.clientWidth >= box.scrollWidth - 1)
 	box.addEventListener('scroll', atEnd)
 	atEnd()
-	return wide
+	return wide && phone.matches
 }
 
 // Mermaid wraps a sequence label by cutting long words, and it cuts through the entity codes ken writes for characters
@@ -151,7 +151,7 @@ function fit(box, drawing) {
 const CHAR_PX = 8.5
 const LINE_PX = 20
 const ACTOR_MARGIN = 8
-const ACTOR_WIDTH = { least: 120, most: 180 }
+const ACTOR_WIDTH = { least: 104, most: 180 }
 
 function participantsOf(text) {
 	const order = new Map()

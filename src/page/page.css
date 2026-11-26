@@ -2826,6 +2826,25 @@ q.subject {
 	margin-top: 0;
 }
 
+/* A drawing in a card takes the card's whole width, under the tick too, and beside the panel the card may grow into
+   the gap, so a drawing shows whole at a readable size on a laptop's screen. */
+@media (min-width: 760px) {
+	.card-diagram .drawing-frame {
+		margin-left: -2rem;
+	}
+
+	.card-diagram .drawing {
+		padding: var(--space-3);
+	}
+}
+
+@media (min-width: 1100px) {
+	.page:not(.single) .card-diagram {
+		max-width: none;
+		margin-right: calc(-1 * var(--space-6));
+	}
+}
+
 /* Under a reply about a change: ask for its decisions or its risks. */
 .chips {
 	display: flex;
