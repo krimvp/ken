@@ -163,9 +163,9 @@ function raw(quote: VerifiedQuote): Quote {
 }
 
 // The end of a question with a reply: the change facts from git over every quote the reader saw, the record entries
-// the reply adds, and the topics it names, marked as asked on the reader's map. withTopics is false when the
-// reply's topics stay in the reader's history and out of the record (see readerWords in start-chat.ts). problems says why the record
-// left out an entry; the reply stands either way.
+// the reply adds, and the topics it names, marked as asked on the reader's map whether the record holds them or not.
+// withTopics is false when the reply's topics stay in the reader's history and out of the record (see readerWords in
+// start-chat.ts). problems says why the record left out an entry; the reply stands either way.
 export async function endReply(
 	gate: Gate,
 	round: Round,
@@ -184,7 +184,13 @@ export async function endReply(
 	const items = round.items.map((item) => spelled(item, canonical))
 	const stops = (round.tour?.stops ?? []).map((stop) => canonical(stop.name)).filter((name) => names.includes(name))
 	const topics = [...new Set([...stops, ...items.flatMap(topicsOf)])]
-	if (round.asked) await gate.map?.learn('asked', topics, new Date(), signal)
+	// A topic the record lacks is marked from the lines the reply quoted, so the reader's map keeps it all the same.
+	const quoted = items.flatMap((item) =>
+		item.kind === 'card' && item.card.kind === 'topic'
+			? [{ name: item.card.topic.name, quotes: item.card.topic.quotes }]
+			: [],
+	)
+	if (round.asked) await gate.map?.learn('asked', topics, new Date(), signal, quoted)
 	return {
 		reply: {
 			items,

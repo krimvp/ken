@@ -333,6 +333,17 @@ test("a free question given the reader's notes keeps its topic and note out of t
 	assert.ok(written.record.includes(`"text":"${written.topic.note}"`), 'its note is in the record')
 })
 
+test('a topic kept out of the record still marks the reader as having asked about it, on the part whose code it quotes', async () => {
+	const { topic, server } = await freeQuestion('I call the core the quokka.')
+	const { states } = await json(server, '/api/map')
+	const state = states.find((each: { topic: string }) => each.topic === topic.name)
+	assert.equal(state?.kind, 'met', JSON.stringify(states))
+	assert.equal(state?.entry.evidence, 'asked')
+	const { look } = await json(server, '/api/layout')
+	const core = look.boxes.find((box: { name: string }) => box.name === 'Core')
+	assert.deepEqual(core?.topics, [{ topic: topic.name, mark: 'met' }])
+})
+
 test('a memory search lists every id on a page even when the names are long', () => {
 	assert.match(page, /^100 hits:/)
 	assert.equal(new Set([...page.matchAll(/^term of term:workshop (\d+)/gm)].map((match) => match[1])).size, 20)

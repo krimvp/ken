@@ -18,8 +18,13 @@ import { lineFor, type MapSignal } from './learn.ts'
 import { type DetailEntry, type MapEntry, type MapLine, parseMapLine } from './map-entry.ts'
 import { stateOf, type TopicState } from './topic-state.ts'
 
-// states holds every topic in the project record, in the record's order. problems names each line ken skipped.
-export type MapRead = { states: TopicState[]; problems: string[] }
+// A topic the reader met that the project record does not hold, with the lines its reply quoted: a reply given the
+// reader's own words keeps its topics in their history (see readerWords in the agent).
+export type OwnTopic = Pick<Topic, 'name' | 'quotes'>
+
+// states holds every topic in the project record, in the record's order, then the reader's own topics, which own
+// lists with their lines. problems names each line ken skipped.
+export type MapRead = { states: TopicState[]; own: OwnTopic[]; problems: string[] }
 
 type SelectedTopics = { record?: RecordRead; names: string[] }
 
@@ -27,8 +32,14 @@ export type UnderstandingMap = {
 	file: string
 	read(now: Date, signal?: AbortSignal, selected?: SelectedTopics): Promise<MapRead>
 	// Adds the lines a signal from the reader makes for these topics, and returns their states after it. A name with no
-	// topic in the record is left out.
-	learn(mapSignal: MapSignal, topics: string[], now: Date, signal?: AbortSignal): Promise<TopicState[]>
+	// topic in the record or the map is left out, unless quoted gives its lines: then it is one of the reader's own.
+	learn(
+		mapSignal: MapSignal,
+		topics: string[],
+		now: Date,
+		signal?: AbortSignal,
+		quoted?: OwnTopic[],
+	): Promise<TopicState[]>
 }
 
 export async function openMap(
@@ -54,16 +65,28 @@ export async function openMap(
 		return { entries, problems }
 	}
 
-	// The current topics, and every version of each, since a map line may hash a version the record has replaced.
-	type Topics = { current: Topic[]; versions: Topic[] }
-	async function topics(snapshot?: RecordRead): Promise<Topics> {
+	// The current topics, and every version of each, since a map line may hash a version the record has replaced. A
+	// topic the record lacks is the reader's own, with the lines of its newest map line, or of quoted, which is newer.
+	type Topics = { current: OwnTopic[]; versions: OwnTopic[]; own: OwnTopic[] }
+	async function topics(entries: MapLine[], snapshot?: RecordRead, quoted: OwnTopic[] = []): Promise<Topics> {
 		const read = snapshot ?? (await record.read())
 		const only = (entries: RecordEntry[]) => entries.flatMap((entry) => (entry.kind === 'topic' ? [entry] : []))
-		return { current: only(read.current), versions: only(read.entries) }
+		const recorded = only(read.current)
+		const own: OwnTopic[] = []
+		const kept = entries.flatMap((line) =>
+			'quotes' in line && line.quotes ? [{ name: line.topic, quotes: line.quotes }] : [],
+		)
+		for (const topic of [...kept, ...quoted]) {
+			if (recorded.some((each) => sameName(each.name, topic.name))) continue
+			const older = own.findIndex((each) => sameName(each.name, topic.name))
+			if (older === -1) own.push(topic)
+			else own[older] = topic
+		}
+		return { current: [...recorded, ...own], versions: [...only(read.entries), ...own], own }
 	}
 
 	async function stateNow(
-		topic: Topic,
+		topic: OwnTopic,
 		{ versions }: Topics,
 		entries: MapLine[],
 		now: Date,
@@ -84,7 +107,8 @@ export async function openMap(
 	}
 
 	async function read(now: Date, abort?: AbortSignal, selected?: SelectedTopics): Promise<MapRead> {
-		const [{ entries, problems }, known] = await Promise.all([lines(), topics(selected?.record)])
+		const { entries, problems } = await lines()
+		const known = await topics(entries, selected?.record)
 		const asked = selected
 			? known.current.filter((topic) => selected.names.some((name) => sameName(name, topic.name)))
 			: known.current
@@ -94,14 +118,19 @@ export async function openMap(
 				problems.push(`The map names "${entry.topic}", which is not a topic in the project record, so ken skips it.`)
 			}
 		}
-		return { states, problems: [...new Set(problems)] }
+		return { states, own: known.own, problems: [...new Set(problems)] }
 	}
 
-	async function learn(mapSignal: MapSignal, names: string[], now: Date, abort?: AbortSignal) {
-		const [{ entries }, known] = await Promise.all([lines(), topics()])
+	async function learn(mapSignal: MapSignal, names: string[], now: Date, abort?: AbortSignal, quoted?: OwnTopic[]) {
+		const { entries } = await lines()
+		const known = await topics(entries, undefined, quoted)
 		const chosen = known.current.filter((topic) => names.some((name) => sameName(name, topic.name)))
 		const before = await Promise.all(chosen.map((topic) => stateNow(topic, known, entries, now, abort)))
-		const added = before.flatMap((state) => lineFor(mapSignal, state, now) ?? [])
+		const added = before.flatMap((state, at) => {
+			const line = lineFor(mapSignal, state, now)
+			const own = known.own.find((topic) => topic === chosen[at])
+			return line === null ? [] : own && 'hash' in line ? [{ ...line, quotes: own.quotes }] : [line]
+		})
 		if (added.length === 0) return before
 		await append(added)
 		const updated = [...entries, ...added]

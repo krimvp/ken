@@ -4,7 +4,7 @@
 // what the reader told ken about how they want things shown, the lines on what the reader looked at, and how much
 // text they want. Nothing here talks to a model.
 
-export { type MapRead, openMap, type UnderstandingMap } from './file-map.ts'
+export { type MapRead, type OwnTopic, openMap, type UnderstandingMap } from './file-map.ts'
 export { type MapSignal, SIGNALS } from './learn.ts'
 export { type Asked, areaQuestion, catchUpQuestion, type DayWords, deeperQuestion, LIST_SAID } from './lens.ts'
 export { DEPTHS, type Depth, EVIDENCE, type Evidence, type MapEntry } from './map-entry.ts'
