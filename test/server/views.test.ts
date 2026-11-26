@@ -90,6 +90,22 @@ const VIEWS = {
 				quotes: at('src/engine/worker.ts', 'self.onmessage = () => {}'),
 			},
 			{ id: 'cache', kind: 'part', part: 'Cache', frame: 'proc', quotes: at('src/main.ts', MAIN) },
+			// Engine drawn a second time, and a store that takes the name of the part Entry.
+			{
+				id: 'engine-again',
+				kind: 'part',
+				part: 'Engine',
+				frame: 'proc',
+				quotes: at('src/engine/run.ts', 'export function work() {}'),
+			},
+			{
+				id: 'entry-files',
+				kind: 'store',
+				store: 'files',
+				name: 'entry',
+				line: 'Keeps what starts the work.',
+				quotes: at('src/main.ts', 'work()'),
+			},
 			{
 				id: 'db',
 				kind: 'store',
@@ -192,6 +208,11 @@ test('a part that is not a part of the level is refused, and the parts that are 
 		],
 	)
 	assert.match(problemsOf('Thing "cache"'), /"Cache", which is not a part of the level/)
+})
+
+test('a name drawn twice goes back to the model: a part drawn again, or another thing named as a part', () => {
+	assert.match(problemsOf('Thing "engine-again"'), /the part "Engine" is in this drawing already/)
+	assert.match(problemsOf('Thing "entry-files"'), /its name "entry" is the name of the part "Entry"/)
 })
 
 test('copies that the quoted line does not give, or that disagree with a compose file or a manifest, are refused, and copies that agree are kept', () => {
