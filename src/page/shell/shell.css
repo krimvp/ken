@@ -190,6 +190,12 @@ body {
 	border-radius: 8px;
 }
 
+/* A heading the page moves the keyboard to, as a reply, a brief or a drawer opens, takes no ring: the reader did not
+   move there, and no key acts on it. A screen reader still starts there. */
+:is(h1, h2, h3)[tabindex="-1"]:focus-visible {
+	outline: none;
+}
+
 .k-i {
 	flex: none;
 	width: 20px;
