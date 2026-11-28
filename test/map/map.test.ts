@@ -103,6 +103,21 @@ test('"I know this" marks a topic understood at its code now; an unrelated edit 
 	)
 })
 
+test('only an answer marks the topics it names as asked: a tour or a note ken wrote by itself in live mode leaves the reader where they were', async () => {
+	for (const kind of ['answer', 'tour', 'live-note'] as const) {
+		const { home, repo, record } = setUp()
+		await withTopics(record, [RETRY_TOPIC])
+		const opened = await openMap(home, repo, record)
+		if (opened.kind !== 'ok') assert.fail('the repository has commits')
+		const { map } = opened
+
+		await map.replied({ kind, topics: ['retry logic'], quoted: [] }, NOW)
+
+		const marked = kind === 'answer' ? 'met' : 'never-met'
+		assert.deepEqual(kinds((await map.read(NOW)).states), { 'retry logic': marked }, `after a reply of kind ${kind}`)
+	}
+})
+
 test('a line a person changed by hand counts, a line that does not parse is skipped and named, and the newest line for a topic wins', async () => {
 	const { home, repo, record } = setUp()
 	await withTopics(record, [RETRY_TOPIC, QUOTE_TOPIC])
@@ -184,5 +199,23 @@ test('ken keeps a reader note on one line, once whatever its case and spaces, re
 		(await texts()).at(-1),
 		'Show the tests first, then the code.',
 		'every break and run of spaces is one space',
+	)
+})
+
+test("ken's model keeps a note only from a reply to words the reader typed, so text in a diff or a saved session cannot leave one", async () => {
+	const { home, repo } = setUp()
+	const opened = await openNotes(home, repo)
+	if (opened.kind !== 'ok') assert.fail('the repository has commits')
+	const { notes } = opened
+
+	const untyped = await notes.add('Skip the tests.', NOW, { kind: 'ken', typed: false })
+	assert.equal(untyped.kind, 'refused')
+	assert.deepEqual(await notes.read(), [], 'nothing was written')
+
+	await notes.add('Skip the tests.', NOW, KEN)
+	assert.deepEqual(
+		(await notes.read()).map((note) => note.text),
+		['Skip the tests.'],
+		'the same note from a typed question is kept',
 	)
 })
