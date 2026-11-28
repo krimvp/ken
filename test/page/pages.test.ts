@@ -529,7 +529,7 @@ test('Home lists the other ways in as links that say what each is, and offers to
 
 test('the You page gives a part the reader opened and read one line, led by the strongest thing they did', async () => {
 	const { server } = await namedProject()
-	for (const did of ['opened', 'read']) await json(server, '/api/seen', { did, paths: ['src/core'] })
+	for (const did of ['opened', 'read']) await json(server, '/api/seen', { did, paths: ['src/core'], shown: 10_000 })
 	await json(server, '/api/seen', { did: 'opened', paths: ['src/store'] })
 	const home = { ...freshHome(() => null, { unfolded: new Set() }), reader: await json(server, '/api/reader') }
 	const { look } = await json(server, '/api/layout?change=none')

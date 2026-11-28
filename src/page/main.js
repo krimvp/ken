@@ -87,6 +87,8 @@ const state = {
 	chg: freshChanges(),
 	project: null,
 	model: null,
+	// How long a brief stays on screen before the page reports it, from the server once it answers.
+	readMs: null,
 	rows: [],
 	// The thread on screen, oldest question first: saved ones from the history, and the one running now. open is the
 	// question in it whose checks the panel shows.
@@ -1617,6 +1619,7 @@ try {
 	state.home.project = server.name
 	learnParts(server.parts)
 	state.model = server.model
+	state.readMs = server.readMs
 	// What ken reads by itself, on a first open the naming of the parts, which the server started.
 	if (state.model.kind === 'ok') void jobs.feed()
 	if (server.live === true) await loadLive()

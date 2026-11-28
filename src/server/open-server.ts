@@ -13,7 +13,7 @@ import {
 	pictureBefore,
 	readLayoutAsk,
 } from '../layout/index.ts'
-import { LEVELS, type MapSignal, prefsOf, TEXT_PREFS } from '../map/index.ts'
+import { LEVELS, type MapSignal, prefsOf, READ_MS, TEXT_PREFS, takeSent } from '../map/index.ts'
 import { MERMAID_FILE, PAGE_FOLDER } from '../page/index.ts'
 import { OUTCOMES } from '../record/index.ts'
 import type { CommitHash } from '../repo/index.ts'
@@ -24,7 +24,7 @@ import { refusal } from './http/guard-request.ts'
 import { type PageFile, readPageFiles } from './http/page-files.ts'
 import { openProject } from './ken-project.ts'
 import { fieldOf, type QuestionLine } from './question-desk.ts'
-import { readLooked } from './reader/read-looked.ts'
+import { readSent } from './reader/read-sent.ts'
 import { lastVisit, readerView } from './reader/reader-view.ts'
 import { TIMELINE_DAYS, timelineOf } from './timeline.ts'
 import { suggestWayIn } from './way-in.ts'
@@ -121,13 +121,22 @@ export async function openServer(options: {
 					? { kind: 'ok', name: model.name, thread: model.chat.thread }
 					: { kind: 'unset', message: model.message, missing: model.missing, example: MODEL_EXAMPLE }
 			// parts are the top level's parts in order with their paths, so the page colours each part, and the things in
-			// it, from its first paint. named says ken's model named them, so the first visit can offer a tour.
+			// it, from its first paint. named says ken's model named them, so the first visit can offer a tour. readMs is how
+			// long a brief stays on screen before the page reports it, which the map counts as read.
 			const top = await readLayoutAsk(layout, { change: 'none' }, new Date())
 			const look = top.kind === 'ok' ? await lookAtLayout(layout, top.ask, new Date()) : null
 			const parts = look?.boxes.map(({ name, paths }) => ({ name, paths })) ?? []
 			const named = Boolean(look?.named)
 			const on = live?.on() ?? false
-			return sendJson(response, 200, { project: shown, name: project.name, model: state, live: on, parts, named })
+			return sendJson(response, 200, {
+				project: shown,
+				name: project.name,
+				model: state,
+				live: on,
+				parts,
+				named,
+				readMs: READ_MS,
+			})
 		}
 		if (where === 'GET /api/first-look') {
 			const head = await repo.resolve('HEAD')
@@ -201,12 +210,10 @@ export async function openServer(options: {
 		}
 		if (where === 'POST /api/seen') {
 			const body = await readJson(request)
-			const looked = body.kind === 'ok' ? await readLooked(layout.repo, body.value) : body
-			if (looked.kind === 'refused') return sendJson(response, 400, { message: looked.problem })
-			const added =
-				looked.kind === 'undo'
-					? await seen.undo(looked.at, looked.head, new Date())
-					: await seen.add(looked.looked, looked.head, new Date())
+			const sent = body.kind === 'ok' ? readSent(body.value) : body
+			const taken = sent.kind === 'ok' ? await takeSent(seen, layout.repo, sent.sent, new Date()) : sent
+			if (taken.kind === 'refused') return sendJson(response, 400, { message: taken.problem })
+			const { added } = taken
 			if (added === 'missing') return sendJson(response, 400, { message: 'ken wrote no line at that moment.' })
 			return sendJson(response, 200, { written: added === 'written' })
 		}

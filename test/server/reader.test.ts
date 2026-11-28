@@ -18,11 +18,12 @@ test('what the page says the reader looked at is refused when ken cannot place i
 	])
 	const server = await openKen(root, readerHome())
 	const refused = [
-		{ did: 'read', paths: ['../outside'] },
-		{ did: 'read', paths: ['src/nowhere'] },
+		{ did: 'read', paths: ['../outside'], shown: 10_000 },
+		{ did: 'read', paths: ['src/nowhere'], shown: 10_000 },
 		{ did: 'skimmed', paths: ['src'] },
-		{ did: 'read', paths: [] },
-		{ did: 'read', paths: Array.from({ length: 201 }, () => 'src') },
+		{ did: 'read', paths: [], shown: 10_000 },
+		{ did: 'read', paths: Array.from({ length: 201 }, () => 'src'), shown: 10_000 },
+		{ did: 'read', paths: ['src'], shown: 9_999 },
 		{ did: 'change', paths: ['src/a/x.ts'], change: { base: hashes[0], head: 'nope' } },
 		{ did: 'set', paths: ['src'] },
 		{ did: 'set', level: 'expert', paths: ['src'] },
@@ -63,7 +64,7 @@ test('what the page says the reader looked at is refused when ken cannot place i
 test('a line the reader takes back counts for nothing and leaves what ken recorded, while the file keeps it and the line that took it back', async () => {
 	const { root } = buildRepository([{ message: 'feat: start', files: { 'src/a/x.ts': 'x\n', 'src/b/y.ts': 'y\n' } }])
 	const server = await openKen(root, readerHome())
-	await json(server, '/api/seen', { did: 'read', paths: ['src/a/x.ts'] })
+	await json(server, '/api/seen', { did: 'read', paths: ['src/a/x.ts'], shown: 10_000 })
 	await json(server, '/api/seen', { did: 'set', level: 'code', paths: ['src'] })
 	assert.equal(await levelOf(server, 'src'), 'code')
 

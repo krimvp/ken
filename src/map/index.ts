@@ -41,4 +41,5 @@ export {
 	type SeenLine,
 	type SeenRead,
 } from './reader/reader-seen.ts'
+export { READ_MS, type Sent, takeSent } from './reader/take-sent.ts'
 export { LONG_AGO_DAYS, linesText, type QuotedLines, stateLine, type TopicState } from './topic-state.ts'
