@@ -4,7 +4,7 @@
 // all comments. ken checks the quoted code. The model supplies the verb. The git id of each path tells ken which
 // parts changed since the model named them.
 import { type GitQuote, type VerifiedGitQuote, verifyGitQuote } from '../checks/index.ts'
-import { type CommitHash, type ObjectId, parsePath, type RepoPath, type Repository } from '../repo/index.ts'
+import { type CommitHash, KEN_FOLDER, type ObjectId, parsePath, type RepoPath, type Repository } from '../repo/index.ts'
 import { checkViews, type ViewsDraft, viewsDraft } from './views/check-views.ts'
 import type { Views } from './views/views.ts'
 
@@ -59,9 +59,6 @@ export const LAYOUT_BOUNDS = {
 
 export type LayoutCheck = { kind: 'ok'; layout: Layout } | { kind: 'refused'; problems: string[] }
 
-// ken's own record is not part of the project's code.
-const RECORD = '.ken'
-
 // Refuses with every problem it finds. where names the layout in each problem, such as "The layout". needsAbout is
 // true for a layout ken's model sends now, and false for one the record holds, which may be older than the rule.
 export async function checkLayout(
@@ -78,7 +75,7 @@ export async function checkLayout(
 	const listed = await repo.listFiles(at.commit, signal)
 	if (listed.kind !== 'ok')
 		return { kind: 'refused', problems: [`${where}: the project has too many files to lay out.`] }
-	const files = listed.paths.filter((file) => !under(file, RECORD))
+	const files = listed.paths.filter((file) => !under(file, KEN_FOLDER))
 
 	const within = pathsOf(draft.within, 'within', say)
 	const { fewest, parts: most, arrows: mostArrows, quotes: mostQuotes } = LAYOUT_BOUNDS

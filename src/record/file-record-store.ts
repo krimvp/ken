@@ -4,7 +4,7 @@
 // no update and no delete; a correction is a new entry whose replaces names the old one, which stays readable.
 import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
-import type { Repository } from '../repo/index.ts'
+import { KEN_FOLDER, type Repository } from '../repo/index.ts'
 import type { Transcripts } from '../transcripts/index.ts'
 import { checkEntry, type EntryDraft } from './check-entry.ts'
 import { contentId, type Entry, entryId, type Kind, type RecordEntry } from './entry.ts'
@@ -43,7 +43,7 @@ export type RecordStore = {
 // sessions is where the gate checks a quote of a saved session. A store that never takes one, such as one that only
 // reads or ken decide's, has none.
 export function fileRecordStore(root: string, repo: Repository, sessions: Transcripts | null = null): RecordStore {
-	const directory = path.join(root, '.ken', 'record')
+	const directory = path.join(root, KEN_FOLDER, 'record')
 	const sources = { repo, sessions }
 
 	async function read(): Promise<RecordRead> {

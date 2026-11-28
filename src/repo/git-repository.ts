@@ -4,14 +4,14 @@ import { parseDiff, parseNumstat } from './parse-diff.ts'
 import type { BlameLine, Commit, CommitHash, ObjectId, Repository, SearchMatch, Uncommitted } from './repository.ts'
 import { MAX_OUTPUT_BYTES, runGit } from './run-git.ts'
 
-// ken commits its own record to .ken/. Those bookkeeping commits are not changes to explain (plan risk: "The record's
-// own files pollute the history"), so every change fact reads git through this pathspec and no other.
-const OUTSIDE_RECORD = ['--', '.', ':(exclude).ken']
+// ken commits its own record to KEN_FOLDER. Those bookkeeping commits are not changes to explain (plan risk: "The
+// record's own files pollute the history"), so every change fact reads git through this pathspec and no other.
+export const KEN_FOLDER = '.ken'
+const OUTSIDE_RECORD = ['--', '.', `:(exclude)${KEN_FOLDER}`]
 
-const literalPaths = (paths: string[]) => ['--', ...paths.map((path) => `:(literal)${path}`), ':(exclude).ken']
+const literalPaths = (paths: string[]) => ['--', ...paths.map((path) => `:(literal)${path}`), `:(exclude)${KEN_FOLDER}`]
 
-const RECORD = '.ken'
-const outsideRecord = (file: string) => file !== RECORD && !file.startsWith(`${RECORD}/`)
+const outsideRecord = (file: string) => file !== KEN_FOLDER && !file.startsWith(`${KEN_FOLDER}/`)
 
 const HASH = /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/
 // A new file larger than this is not read to count its lines.
