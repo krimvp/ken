@@ -110,7 +110,7 @@ export async function decide(argv: string[]): Promise<number> {
 	if (checked.kind === 'refused') problems.push(...checked.problems)
 	if (problems.length > 0) return refuse(problems)
 
-	const appended = await store.append([draft])
+	const appended = await store.append([draft], 'project')
 	if (appended.kind === 'refused') return refuse(appended.problems)
 	const [result] = appended.entries
 	if (!result) throw new Error('ken decide: the record appended one draft and returned no entry')

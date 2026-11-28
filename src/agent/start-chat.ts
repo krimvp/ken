@@ -33,7 +33,7 @@ import { describeCall } from './tools/describe-call.ts'
 import { diffTool } from './tools/diff-tool.ts'
 import { type Elsewhere, elsewhereText } from './tools/elsewhere-text.ts'
 import { explorationTools } from './tools/exploration-tools.ts'
-import { MEMORY_TOOLS, type Memory, memoryTools, recordIndex } from './tools/memory-tool.ts'
+import { MEMORY_TOOLS, type Memory, memoryTools, readerPartText, recordIndex } from './tools/memory-tool.ts'
 import { rememberTool } from './tools/remember-tool.ts'
 import { sessionTools } from './tools/session-tools.ts'
 
@@ -455,7 +455,8 @@ export async function startChat(options: {
 				!signal?.aborted
 			) {
 				// Past this check the reply is whole, so a stop that comes while it is saved does not lose it.
-				const ended = await endReply(gate, current, !run.readerWords, new AbortController().signal)
+				const heard = run.readerWords ? 'reader' : 'project'
+				const ended = await endReply(gate, current, heard, new AbortController().signal)
 				if (
 					ending.outcome === 'answered' &&
 					as.kind === 'question' &&
@@ -527,7 +528,7 @@ export async function startChat(options: {
 		])
 		if (part) found(part.focus)
 		if (notes.length > 0) run.readerWords = true
-		const named = part ? `${part.text}\n\n` : ''
+		const named = part ? `${readerPartText(part)}\n\n` : ''
 		return `${index.text}\n\n${readerIndex(map, notes, prefs)}\n\n${named}${at}`
 	}
 
@@ -554,8 +555,8 @@ export async function startChat(options: {
 // What one question keeps while it runs: its round, the turns it has had in this step, the changes whose names used
 // elsewhere it was already told, and where the small requests to shorten a line add their cost. readerWords is true
 // once the run was given the reader's notes, text of their saved answers or of their saved coding sessions, whatever
-// kind of run it is: its topics and their notes then stay in the reader's history and out of the record the team
-// commits.
+// kind of run it is. The record hears it as Heard and keeps none of that run's topics and notes, which stay in the
+// reader's history.
 type Run = {
 	round: Round
 	turnsEnded: number

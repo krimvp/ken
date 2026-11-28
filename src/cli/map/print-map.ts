@@ -1,7 +1,9 @@
 import { onDay } from '../../follow-up/index.ts'
 import { type History, kenHome, openHistory } from '../../history/index.ts'
-import { type Knows, LEVELS, lookAtLayout, readLayoutAsk } from '../../layout/index.ts'
+import { lookAtLayout, readLayoutAsk } from '../../layout/index.ts'
 import {
+	type Knows,
+	LEVELS,
 	type MapRead,
 	openMap,
 	openNotes,

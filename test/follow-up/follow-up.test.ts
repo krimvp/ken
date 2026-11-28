@@ -44,7 +44,7 @@ function setUp() {
 }
 
 async function append(record: ReturnType<typeof fileRecordStore>, drafts: EntryDraft[]) {
-	const appended = await record.append(drafts)
+	const appended = await record.append(drafts, 'project')
 	if (appended.kind !== 'appended') assert.fail(appended.problems.join(' '))
 	return appended.entries.map(({ entry }) => entry)
 }

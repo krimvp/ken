@@ -5,7 +5,6 @@
 import { wordCount } from '../../agent/index.ts'
 import type { History } from '../../history/index.ts'
 import {
-	type Knows,
 	knowsOf,
 	type LayoutLook,
 	type LayoutSources,
@@ -14,6 +13,7 @@ import {
 	readLayoutAsk,
 	under,
 } from '../../layout/index.ts'
+import type { Knows } from '../../map/index.ts'
 import { decisionMark, type RecordRead, sameName } from '../../record/index.ts'
 import { type CommitHash, parsePath } from '../../repo/index.ts'
 import {

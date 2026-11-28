@@ -45,18 +45,21 @@ test('catch-up after a restart starts at the last personal question, even after 
 	await first.close()
 	execFileSync('git', ['switch', 'main'], { cwd: root, stdio: 'ignore' })
 	const record = fileRecordStore(root, gitRepository(root))
-	const named = await record.append([
-		{
-			kind: 'layout',
-			within: [],
-			at: 'HEAD',
-			parts: [
-				{ name: 'Retries', job: 'Runs retries.', paths: [file] },
-				{ name: 'Tests', job: 'Checks retries.', paths: ['test'] },
-			],
-			arrows: [],
-		},
-	])
+	const named = await record.append(
+		[
+			{
+				kind: 'layout',
+				within: [],
+				at: 'HEAD',
+				parts: [
+					{ name: 'Retries', job: 'Runs retries.', paths: [file] },
+					{ name: 'Tests', job: 'Checks retries.', paths: ['test'] },
+				],
+				arrows: [],
+			},
+		],
+		'project',
+	)
 	if (named.kind !== 'appended') assert.fail(named.problems.join(' '))
 	const preparing = await openKen(root, home, model.baseUrl, { KEN_BACKGROUND: 'on' })
 	const deadline = Date.now() + 12000

@@ -24,8 +24,8 @@ export function rememberTool(notes: ReaderNotes, round: () => Round): Tool {
 			additionalProperties: false,
 		},
 		async execute(args) {
-			if (!round().typed) return refuse('ken keeps a note only when the reader asks in their own words.')
-			const kept = await notes.add(readArgs(args, 'remember').text('note'), new Date())
+			const note = readArgs(args, 'remember').text('note')
+			const kept = await notes.add(note, new Date(), { kind: 'ken', typed: round().typed })
 			if (kept.kind === 'refused') return refuse(kept.problem)
 			return reply(
 				['ken now keeps these notes for the reader:', ...kept.notes.map(({ text }) => `- ${text}`)].join('\n'),

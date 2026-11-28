@@ -80,7 +80,10 @@ const record = fileRecordStore(root, gitRepository(root))
 type Arrow = { from: string; to: string; text: string; quotes: ReturnType<typeof quote>[] }
 async function draw(parts: ReturnType<typeof part>[], arrows: Arrow[]) {
 	const before = (await record.read()).current.findLast((entry) => entry.kind === 'layout')
-	const drawn = await record.append([{ kind: 'layout', within: [], at: 'HEAD', parts, arrows, replaces: before?.id }])
+	const drawn = await record.append(
+		[{ kind: 'layout', within: [], at: 'HEAD', parts, arrows, replaces: before?.id }],
+		'project',
+	)
 	if (drawn.kind !== 'appended') assert.fail(drawn.problems.join(' '))
 }
 // The parts as ken's model named them, the test part first, so no order below can come from the level's own.

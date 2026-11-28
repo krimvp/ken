@@ -9,6 +9,10 @@ import type { Repository } from '../../repo/index.ts'
 
 export type ReaderNote = { id: string; text: string; at: string; by?: 'reader' }
 
+// Who keeps a note: the reader on the page, or ken's model in a reply. typed is true when that reply answers words the
+// reader typed. ken keeps a note of its own only then, so text in a diff or a saved session cannot make it keep one.
+export type NoteBy = { kind: 'reader' } | { kind: 'ken'; typed: boolean }
+
 type Line = { kind: 'note'; note: ReaderNote } | { kind: 'removes'; id: string }
 
 const NOTE_CHARS = 200
@@ -23,7 +27,7 @@ export type ReaderNotes = {
 	add(
 		text: string,
 		now: Date,
-		by?: 'reader',
+		by: NoteBy,
 	): Promise<{ kind: 'kept'; notes: ReaderNote[] } | { kind: 'refused'; problem: string }>
 	remove(id: string, now: Date): Promise<ReaderNote[]>
 }
@@ -65,7 +69,11 @@ export async function openNotes(
 		notes: {
 			file,
 			read,
-			async add(text, now, by) {
+			async add(text, now, writer) {
+				if (writer.kind === 'ken' && !writer.typed) {
+					return { kind: 'refused', problem: 'ken keeps a note only when the reader asks in their own words.' }
+				}
+				const by = writer.kind === 'reader' ? 'reader' : undefined
 				const said = oneLine(text)
 				if (!isNote(said)) {
 					return { kind: 'refused', problem: `A note is one line of 1 to ${NOTE_CHARS} characters.` }

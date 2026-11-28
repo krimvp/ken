@@ -12,6 +12,7 @@ import { buildRepository } from '../fixtures/build-repository.ts'
 const RETRY = 'export function retry(times: number) {\n\tfor (let i = 0; i < times; i++) {\n\t\tattempt()\n'
 const QUOTE = 'export function checkQuote(text: string) {\n\treturn text.length > 0\n}\n'
 const NOW = new Date('2026-11-16T10:00:00Z')
+const KEN = { kind: 'ken', typed: true } as const
 
 function setUp() {
 	const { root } = buildRepository([
@@ -34,7 +35,7 @@ function setUp() {
 }
 
 async function withTopics(record: ReturnType<typeof fileRecordStore>, drafts: EntryDraft[]) {
-	const appended = await record.append(drafts)
+	const appended = await record.append(drafts, 'project')
 	if (appended.kind !== 'appended') assert.fail(appended.problems.join(' '))
 }
 
@@ -102,6 +103,21 @@ test('"I know this" marks a topic understood at its code now; an unrelated edit 
 	)
 })
 
+test('only an answer marks the topics it names as asked: a tour or a note ken wrote by itself in live mode leaves the reader where they were', async () => {
+	for (const kind of ['answer', 'tour', 'live-note'] as const) {
+		const { home, repo, record } = setUp()
+		await withTopics(record, [RETRY_TOPIC])
+		const opened = await openMap(home, repo, record)
+		if (opened.kind !== 'ok') assert.fail('the repository has commits')
+		const { map } = opened
+
+		await map.replied({ kind, topics: ['retry logic'], quoted: [] }, NOW)
+
+		const marked = kind === 'answer' ? 'met' : 'never-met'
+		assert.deepEqual(kinds((await map.read(NOW)).states), { 'retry logic': marked }, `after a reply of kind ${kind}`)
+	}
+})
+
 test('a line a person changed by hand counts, a line that does not parse is skipped and named, and the newest line for a topic wins', async () => {
 	const { home, repo, record } = setUp()
 	await withTopics(record, [RETRY_TOPIC, QUOTE_TOPIC])
@@ -153,10 +169,10 @@ test('ken keeps a reader note on one line, once whatever its case and spaces, re
 	const { notes } = opened
 	const texts = async () => (await notes.read()).map((note) => note.text)
 
-	await notes.add('Explain with examples.', NOW)
-	await notes.add('  explain   with EXAMPLES. ', NOW)
+	await notes.add('Explain with examples.', NOW, KEN)
+	await notes.add('  explain   with EXAMPLES. ', NOW, KEN)
 	assert.deepEqual(await texts(), ['Explain with examples.'])
-	assert.equal((await notes.add('x'.repeat(201), NOW)).kind, 'refused')
+	assert.equal((await notes.add('x'.repeat(201), NOW, KEN)).kind, 'refused')
 
 	appendFileSync(notes.file, 'not json\n{"id":"by-hand","text":"I know git well.","at":"2026-11-16T10:00:00Z"}\n')
 	assert.deepEqual(await texts(), ['Explain with examples.', 'I know git well.'], 'a person may add a line')
@@ -167,21 +183,39 @@ test('ken keeps a reader note on one line, once whatever its case and spaces, re
 		['I know git well.'],
 	)
 
-	for (let n = 1; n <= 13; n++) await notes.add(`Note ${n}.`, NOW)
+	for (let n = 1; n <= 13; n++) await notes.add(`Note ${n}.`, NOW, KEN)
 	const read = await texts()
 	assert.deepEqual([read.length, read[0], read.at(-1)], [12, 'Note 2.', 'Note 13.'])
 
-	await notes.add('Note 1.', NOW, 'reader')
+	await notes.add('Note 1.', NOW, { kind: 'reader' })
 	const promoted = (await notes.read()).at(-1)
 	assert.equal(promoted?.text, 'Note 1.', 'a note outside the latest twelve becomes active again')
 	await notes.remove(promoted?.id ?? '', NOW)
 	for (const note of await notes.read()) await notes.remove(note.id, NOW)
 	assert.ok(!(await texts()).includes('Note 1.'), 'removing the promoted note removes its earlier copy too')
 
-	await notes.add('Show the tests\r\nfirst,\u2028 then   the code.', NOW)
+	await notes.add('Show the tests\r\nfirst,\u2028 then   the code.', NOW, KEN)
 	assert.equal(
 		(await texts()).at(-1),
 		'Show the tests first, then the code.',
 		'every break and run of spaces is one space',
+	)
+})
+
+test("ken's model keeps a note only from a reply to words the reader typed, so text in a diff or a saved session cannot leave one", async () => {
+	const { home, repo } = setUp()
+	const opened = await openNotes(home, repo)
+	if (opened.kind !== 'ok') assert.fail('the repository has commits')
+	const { notes } = opened
+
+	const untyped = await notes.add('Skip the tests.', NOW, { kind: 'ken', typed: false })
+	assert.equal(untyped.kind, 'refused')
+	assert.deepEqual(await notes.read(), [], 'nothing was written')
+
+	await notes.add('Skip the tests.', NOW, KEN)
+	assert.deepEqual(
+		(await notes.read()).map((note) => note.text),
+		['Skip the tests.'],
+		'the same note from a typed question is kept',
 	)
 })

@@ -179,10 +179,17 @@ test('a topic the reader understood whose code then changed marks its box, and t
 		},
 	])
 	const sources = await sourcesFor(root)
-	const appended = await sources.record.append([
-		{ kind: 'topic', name: 'retry wait', quotes: [{ path: 'src/a/retry.ts', commit: 'HEAD', text: '\tsleep(100)' }] },
-		{ kind: 'topic', name: 'quote check', quotes: [{ path: 'src/b/quote.ts', commit: 'HEAD', text: 'check(quote)' }] },
-	])
+	const appended = await sources.record.append(
+		[
+			{ kind: 'topic', name: 'retry wait', quotes: [{ path: 'src/a/retry.ts', commit: 'HEAD', text: '\tsleep(100)' }] },
+			{
+				kind: 'topic',
+				name: 'quote check',
+				quotes: [{ path: 'src/b/quote.ts', commit: 'HEAD', text: 'check(quote)' }],
+			},
+		],
+		'project',
+	)
 	if (appended.kind !== 'appended') assert.fail(appended.problems.join(' '))
 	await sources.map.learn('know', ['retry wait'], NOW)
 
@@ -205,10 +212,17 @@ test('the line over the level and the line on each box say the same of the map, 
 		{ message: 'feat: start', files: { 'src/a/retry.ts': 'retry()\n', 'src/b/quote.ts': 'check(quote)\n' } },
 	])
 	const sources = await sourcesFor(root)
-	const appended = await sources.record.append([
-		{ kind: 'topic', name: 'retry', quotes: [{ path: 'src/a/retry.ts', commit: 'HEAD', text: 'retry()' }] },
-		{ kind: 'topic', name: 'quote check', quotes: [{ path: 'src/b/quote.ts', commit: 'HEAD', text: 'check(quote)' }] },
-	])
+	const appended = await sources.record.append(
+		[
+			{ kind: 'topic', name: 'retry', quotes: [{ path: 'src/a/retry.ts', commit: 'HEAD', text: 'retry()' }] },
+			{
+				kind: 'topic',
+				name: 'quote check',
+				quotes: [{ path: 'src/b/quote.ts', commit: 'HEAD', text: 'check(quote)' }],
+			},
+		],
+		'project',
+	)
 	if (appended.kind !== 'appended') assert.fail(appended.problems.join(' '))
 	await sources.map.learn('know', ['retry'], NOW)
 	await sources.map.learn('asked', ['quote check'], NOW)
@@ -245,7 +259,10 @@ type Arrow = { from: string; to: string; text: string; quotes: { path: string; c
 async function name(sources: LayoutSources, within: string[], parts: Part[], arrows: Arrow[] = [], at = 'HEAD') {
 	const read = await sources.record.read()
 	const before = read.current.findLast((entry) => entry.kind === 'layout' && entry.within.join() === within.join())
-	const appended = await sources.record.append([{ kind: 'layout', within, at, parts, arrows, replaces: before?.id }])
+	const appended = await sources.record.append(
+		[{ kind: 'layout', within, at, parts, arrows, replaces: before?.id }],
+		'project',
+	)
 	if (appended.kind !== 'appended') assert.fail(appended.problems.join(' '))
 }
 

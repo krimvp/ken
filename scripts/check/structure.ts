@@ -36,7 +36,7 @@ export const MODULES: Record<string, Module> = {
 		packages: [],
 	},
 	map: {
-		job: 'The understanding map: what this reader understands, topic by topic, the notes on how they want things shown, how much text they want, and the lines on what they looked at, kept outside the project.',
+		job: 'The understanding map: what this reader understands, topic by topic, the notes on how they want things shown, how much text they want, and the lines on what they looked at, kept outside the project, with what ken thinks they know of a part from those lines.',
 		imports: ['record', 'repo'],
 		packages: [],
 	},

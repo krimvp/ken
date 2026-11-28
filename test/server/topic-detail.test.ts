@@ -15,9 +15,10 @@ const file = 'src/retry.ts'
 async function project() {
 	const { root } = buildRepository([{ message: 'Start retries', files: { [file]: 'retry(1)\n' } }])
 	const record = fileRecordStore(root, gitRepository(root))
-	const saved = await record.append([
-		{ kind: 'topic', name: topic, quotes: [{ path: file, commit: 'HEAD', text: 'retry(1)' }] },
-	])
+	const saved = await record.append(
+		[{ kind: 'topic', name: topic, quotes: [{ path: file, commit: 'HEAD', text: 'retry(1)' }] }],
+		'project',
+	)
 	assert.equal(saved.kind, 'appended')
 	return { root, home: readerHome() }
 }

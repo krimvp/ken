@@ -103,12 +103,12 @@ test('a question recalls a matching note before browsing other topics, and drops
 	at(before)
 	const store = fileRecordStore(built.root, gitRepository(built.root))
 	const quotes = [{ path: 'retry.ts', commit: before, text: 'sleep(100)' }]
-	const target = await store.append([{ kind: 'topic', name: 'Backoff', quotes }])
+	const target = await store.append([{ kind: 'topic', name: 'Backoff', quotes }], 'project')
 	assert.ok(target.kind === 'appended' && target.entries[0])
 	const id = target.entries[0].entry.id
 	const note = 'Each attempt waits a tenth of a second.'
 	const others = Array.from({ length: 32 }, (_, i) => ({ kind: 'topic' as const, name: `Workshop ${i}`, quotes }))
-	assert.equal((await store.append([{ kind: 'note', topic: id, text: note }, ...others])).kind, 'appended')
+	assert.equal((await store.append([{ kind: 'note', topic: id, text: note }, ...others], 'project')).kind, 'appended')
 	const question = 'Explain backoff.'
 	const lens: Asking = { kind: 'answer', concept: 'part::Backoff', text: question, paths: [] }
 	const first = await ask(
@@ -129,7 +129,7 @@ test('a question recalls a matching note before browsing other topics, and drops
 
 test('a topic named like one in the record, in another case and spacing, is refused and the model is told to reuse it', async () => {
 	const store = fileRecordStore(root, gitRepository(root))
-	const seeded = await store.append([{ kind: 'topic', name: TOPIC.name, quotes: TOPIC.quotes }])
+	const seeded = await store.append([{ kind: 'topic', name: TOPIC.name, quotes: TOPIC.quotes }], 'project')
 	const existing = seeded.kind === 'appended' ? seeded.entries[0]?.entry : undefined
 	const { events, requests } = await ask([show({ topics: [{ ...TOPIC, name: '  Retry   Logic ' }] }), { text: '' }])
 
@@ -242,9 +242,10 @@ test('a long saved topic fits one memory read at a time and its last lines can s
 	).join('\n')
 	const built = buildRepository([{ message: 'List settings', files: { 'settings.ts': source } }])
 	const store = fileRecordStore(built.root, gitRepository(built.root))
-	const result = await store.append([
-		{ kind: 'topic', name: 'Settings', quotes: [{ path: 'settings.ts', commit: 'HEAD', text: source }] },
-	])
+	const result = await store.append(
+		[{ kind: 'topic', name: 'Settings', quotes: [{ path: 'settings.ts', commit: 'HEAD', text: source }] }],
+		'project',
+	)
 	assert.ok(result.kind === 'appended' && result.entries[0])
 	const about = result.entries[0].entry.id
 	const first = await ask([{ tool: 'ken__memory_known', args: { about } }, { text: 'Done.' }], built.root)

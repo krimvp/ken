@@ -471,7 +471,7 @@ test('a decision logged with ken decide shows in the decisions view as recorded,
 	const store = fileRecordStore(built.root, gitRepository(built.root))
 	const statement = { text: 'Retry sleeps.', label: 'inferred' as const, quotes: [{ ...SLEEP, commit: last }] }
 	const work = { kind: 'work' as const, title: 'Retry waits', summary: 'Retry waits.', statements: [statement] }
-	const added = await store.append([{ ...work, range: { base: first, head: last } }])
+	const added = await store.append([{ ...work, range: { base: first, head: last } }], 'project')
 	assert.equal(added.kind, 'appended', JSON.stringify(added))
 	const [joined] = (await json(server, '/api/decisions')).decisions
 	const id = added.kind === 'appended' ? added.entries[0]?.entry.id : null
@@ -575,7 +575,7 @@ test('what looks like a secret in a saved session reaches the model, the history
 // A repository of its own with the same history, whose record holds these entries, run by the owner.
 async function projectWith(drafts: EntryDraft[]) {
 	const { root: repo } = buildRepository(HISTORY)
-	const appended = await fileRecordStore(repo, gitRepository(repo)).append(drafts)
+	const appended = await fileRecordStore(repo, gitRepository(repo)).append(drafts, 'project')
 	if (appended.kind !== 'appended') assert.fail(appended.problems.join(' '))
 	return { repo, entries: appended.entries.map(({ entry }) => entry) }
 }

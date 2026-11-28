@@ -134,7 +134,10 @@ test('what to look at next leads with the part that changed since the reader rea
 		job: `does ${name}`,
 		paths: [`src/${'abcd'[index]}`],
 	}))
-	const named = await sources.record.append([{ kind: 'layout', within: ['src'], at: 'HEAD', parts, arrows: [] }])
+	const named = await sources.record.append(
+		[{ kind: 'layout', within: ['src'], at: 'HEAD', parts, arrows: [] }],
+		'project',
+	)
 	if (named.kind !== 'appended') assert.fail(named.problems.join(' '))
 	await did(sources, 1, start, { did: 'read', paths: ['src/c'] })
 	await did(sources, 2, start, { did: 'opened', paths: ['src/a'] })

@@ -58,7 +58,7 @@ function linesOf(file: string): string[] {
 }
 
 async function appended(store: ReturnType<typeof fileRecordStore>, drafts: EntryDraft[]) {
-	const result = await store.append(drafts)
+	const result = await store.append(drafts, 'project')
 	if (result.kind !== 'appended') assert.fail(`append was refused: ${result.problems.join(' ')}`)
 	return result.entries.map(({ entry }) => entry)
 }
@@ -73,7 +73,7 @@ test('an entry survives a restart, and writing the same entry again keeps one co
 	assert.deepEqual(current[0]?.kind === 'decision' && current[0].quotes, [
 		{ path: 'src/retry.ts', commit: hashes[4], startLine: 4, endLine: 4, text: '\t\tsleep(100)' },
 	])
-	const again = await restarted.append([decision])
+	const again = await restarted.append([decision], 'project')
 	assert.deepEqual(again.kind === 'appended' && again.entries.map((each) => each.written), [false])
 	assert.equal(linesOf('decisions.jsonl').length, 1)
 	assert.equal(JSON.parse(linesOf('decisions.jsonl')[0] ?? '').question, 'How long does a retry wait?')
@@ -109,12 +109,25 @@ test('a batch with a false quote, an unknown replaces, a decision with no reason
 	}
 
 	for (const bad of [falseQuote, unknownReplaces, noReason, messageTopic]) {
-		const result = await store.append([topic, bad])
+		const result = await store.append([topic, bad], 'project')
 		assert.equal(result.kind, 'refused')
 		assert.equal(result.kind === 'refused' && result.problems.length, 1, JSON.stringify(result))
 	}
 	assert.equal(existsSync(path.join(root, '.ken')), false, 'the valid topic in the same batch was not written')
 	assert.deepEqual((await store.read()).entries, [])
+})
+
+test("a batch drafted from the reader's own words writes its decision but no topic, so the record stays the same for every reader", async () => {
+	const store = emptyRecord()
+	const refused = await store.append([decision, topic], 'reader')
+	assert.equal(refused.kind, 'refused')
+	assert.deepEqual((await store.read()).entries, [])
+	const written = await store.append([decision], 'reader')
+	assert.equal(written.kind, 'appended')
+	assert.deepEqual(
+		(await store.read()).entries.map((entry) => entry.kind),
+		['decision'],
+	)
 })
 
 test('ken labels a decision by its strongest evidence: logged with ken decide, then the body of a commit message, then a saved session, then inferred, which a subject line or code alone stays', async () => {

@@ -32,17 +32,20 @@ async function named(root: string, pictures: { parts: string[]; asked?: string }
 	const record = fileRecordStore(root, gitRepository(root))
 	for (const { parts, asked } of pictures) {
 		const before = (await record.read()).current.findLast((entry) => entry.kind === 'layout')
-		const drawn = await record.append([
-			{
-				kind: 'layout',
-				within: [],
-				at: 'HEAD',
-				arrows: [],
-				parts: parts.map((name) => ({ name, job: `Does the work of ${name}`, paths: [`src/${name}`] })),
-				...(asked ? { asked } : {}),
-				replaces: before?.id,
-			},
-		])
+		const drawn = await record.append(
+			[
+				{
+					kind: 'layout',
+					within: [],
+					at: 'HEAD',
+					arrows: [],
+					parts: parts.map((name) => ({ name, job: `Does the work of ${name}`, paths: [`src/${name}`] })),
+					...(asked ? { asked } : {}),
+					replaces: before?.id,
+				},
+			],
+			'project',
+		)
 		if (drawn.kind !== 'appended') assert.fail(drawn.problems.join(' '))
 	}
 }

@@ -25,7 +25,7 @@ test('an answer saved before ken replied in words shows the decision it stored i
 		quotes: [quote],
 		work: null,
 	}
-	const appended = await record.append([decision])
+	const appended = await record.append([decision], 'project')
 	const stored = appended.kind === 'appended' ? appended.entries[0]?.entry : undefined
 	assert.ok(stored?.kind === 'decision')
 	const draft = { ...stored, id: 'draft-1', question: 'Should a retry wait at all?', needsOwner: true }

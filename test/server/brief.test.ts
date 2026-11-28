@@ -30,48 +30,51 @@ const term = {
 }
 const termEntry = await record.check(term)
 if (termEntry.kind !== 'ok') assert.fail(termEntry.problems.join(' '))
-const written = await record.append([
-	{
-		kind: 'layout',
-		within: [],
-		at: 'HEAD',
-		about: 'A command that runs one piece of work and saves it.',
-		flows: ['How a run is saved'],
-		parts: [
-			{ name: 'Core', job: 'Runs the work', paths: ['src/core'] },
-			{ name: 'Store', job: 'Saves what the core makes', paths: ['src/store'] },
-			{ name: 'Command', job: 'The command a person types', paths: ['src/cli'] },
-			{ name: 'Tests', job: 'Tests the core', paths: ['test'] },
-		],
-		arrows: [
-			{
-				from: 'Core',
-				to: 'Store',
-				text: 'saves to',
-				quotes: [quote('src/core/run.ts', FILES['src/core/run.ts'].trimEnd())],
-			},
-			{
-				from: 'Command',
-				to: 'Core',
-				text: 'runs',
-				quotes: [quote('src/cli/main.ts', FILES['src/cli/main.ts'].trimEnd())],
-			},
-		],
-	},
-	term,
-	{ kind: 'note', topic: termEntry.entry.id, text: 'Writes what the core made to the store.' },
-	{
-		kind: 'decision',
-		question: 'When does the core save?',
-		chosen: 'Once, at the end of a run',
-		reason: { text: 'One write keeps a run whole.', quotes: [] },
-		rejected: [],
-		undo: 'easy',
-		needsOwner: false,
-		quotes: [quote('src/core/run.ts', '\tsave(plan())')],
-		work: null,
-	},
-])
+const written = await record.append(
+	[
+		{
+			kind: 'layout',
+			within: [],
+			at: 'HEAD',
+			about: 'A command that runs one piece of work and saves it.',
+			flows: ['How a run is saved'],
+			parts: [
+				{ name: 'Core', job: 'Runs the work', paths: ['src/core'] },
+				{ name: 'Store', job: 'Saves what the core makes', paths: ['src/store'] },
+				{ name: 'Command', job: 'The command a person types', paths: ['src/cli'] },
+				{ name: 'Tests', job: 'Tests the core', paths: ['test'] },
+			],
+			arrows: [
+				{
+					from: 'Core',
+					to: 'Store',
+					text: 'saves to',
+					quotes: [quote('src/core/run.ts', FILES['src/core/run.ts'].trimEnd())],
+				},
+				{
+					from: 'Command',
+					to: 'Core',
+					text: 'runs',
+					quotes: [quote('src/cli/main.ts', FILES['src/cli/main.ts'].trimEnd())],
+				},
+			],
+		},
+		term,
+		{ kind: 'note', topic: termEntry.entry.id, text: 'Writes what the core made to the store.' },
+		{
+			kind: 'decision',
+			question: 'When does the core save?',
+			chosen: 'Once, at the end of a run',
+			reason: { text: 'One write keeps a run whole.', quotes: [] },
+			rejected: [],
+			undo: 'easy',
+			needsOwner: false,
+			quotes: [quote('src/core/run.ts', '\tsave(plan())')],
+			work: null,
+		},
+	],
+	'project',
+)
 if (written.kind !== 'appended') assert.fail(written.problems.join(' '))
 
 // A stop as ken's model sent it while ken still gave tours: a paragraph, and one card that proves it.
@@ -374,11 +377,12 @@ test('an old term note and its line numbers stay out of a brief when the quoted 
 	const file = 'src/term.ts'
 	const { root } = buildRepository([{ message: 'add timeout', files: { [file]: 'const timeout = 5\n' } }])
 	const record = fileRecordStore(root, gitRepository(root))
-	const topic = await record.append([
-		{ kind: 'topic', name: 'timeout', quotes: [{ path: file, commit: 'HEAD', text: 'const timeout = 5' }] },
-	])
+	const topic = await record.append(
+		[{ kind: 'topic', name: 'timeout', quotes: [{ path: file, commit: 'HEAD', text: 'const timeout = 5' }] }],
+		'project',
+	)
 	if (topic.kind !== 'appended' || !topic.entries[0]) assert.fail('the topic must be saved before the note')
-	await record.append([{ kind: 'note', topic: topic.entries[0].entry.id, text: 'Waits five seconds.' }])
+	await record.append([{ kind: 'note', topic: topic.entries[0].entry.id, text: 'Waits five seconds.' }], 'project')
 	const server = await openKen(root, readerHome())
 	const read = () => json(server, '/api/brief?concept=term:timeout')
 	assert.equal((await read()).note, 'Waits five seconds.')
@@ -393,19 +397,22 @@ test('reopening a decision and asking why keeps the recorded reason and its own 
 	const reason = 'The store requires one atomic write per run.'
 	const { root } = buildRepository([{ message: 'Save a run once', body: reason, files: FILES }])
 	const store = fileRecordStore(root, gitRepository(root))
-	const made = await store.append([
-		{
-			kind: 'decision',
-			question: 'Why save once?',
-			chosen: 'Save at the end.',
-			reason: { text: reason, quotes: [{ path: null, commit: 'HEAD', text: reason }] },
-			rejected: [],
-			undo: 'easy',
-			needsOwner: false,
-			work: null,
-			quotes: [quote('src/core/run.ts', '\tsave(plan())')],
-		},
-	])
+	const made = await store.append(
+		[
+			{
+				kind: 'decision',
+				question: 'Why save once?',
+				chosen: 'Save at the end.',
+				reason: { text: reason, quotes: [{ path: null, commit: 'HEAD', text: reason }] },
+				rejected: [],
+				undo: 'easy',
+				needsOwner: false,
+				work: null,
+				quotes: [quote('src/core/run.ts', '\tsave(plan())')],
+			},
+		],
+		'project',
+	)
 	assert.equal(made.kind, 'appended')
 	const [entry] = (await store.read()).current
 	assert.ok(entry)
@@ -427,20 +434,23 @@ test('reopening a decision and asking why keeps the recorded reason and its own 
 	const [held] = toolResults(provider.requests[1])
 	assert.match(held ?? '', /recorded from a commit message/)
 	assert.ok(held?.includes(reason))
-	const replaced = await store.append([
-		{
-			kind: 'decision',
-			question: 'How do writes work now?',
-			chosen: 'Save at each step.',
-			reason: { text: 'Writes can be retried independently.', quotes: [] },
-			rejected: [],
-			undo: 'easy',
-			needsOwner: false,
-			work: null,
-			quotes: [quote('src/core/run.ts', '\tsave(plan())')],
-			replaces: entry.id,
-		},
-	])
+	const replaced = await store.append(
+		[
+			{
+				kind: 'decision',
+				question: 'How do writes work now?',
+				chosen: 'Save at each step.',
+				reason: { text: 'Writes can be retried independently.', quotes: [] },
+				rejected: [],
+				undo: 'easy',
+				needsOwner: false,
+				work: null,
+				quotes: [quote('src/core/run.ts', '\tsave(plan())')],
+				replaces: entry.id,
+			},
+		],
+		'project',
+	)
 	assert.equal(replaced.kind, 'appended')
 	const older = await json(server, `/api/brief?concept=${concept}`)
 	assert.equal(older.why, reason)

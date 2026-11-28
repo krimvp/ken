@@ -27,6 +27,7 @@ export async function decide(
 				replaces: id,
 			},
 		],
+		'project',
 		signal,
 	)
 	if (appended.kind === 'refused') return { kind: 'refused', problem: appended.problems.join(' ') }

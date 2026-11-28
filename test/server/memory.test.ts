@@ -17,32 +17,35 @@ const { root } = buildRepository([{ message: 'feat: start', files: FILES }])
 const home = readerHome()
 const record = fileRecordStore(root, gitRepository(root))
 const ABOUT = 'A command that runs one piece of work.'
-const named = await record.append([
-	{
-		kind: 'layout',
-		within: [],
-		at: 'HEAD',
-		about: ABOUT,
-		parts: [
-			{ name: 'Core', job: 'Runs the work', paths: ['src/core'] },
-			{ name: 'Command', job: 'The command a person types', paths: ['src/cli'] },
-		],
-		arrows: [
-			{
-				from: 'Command',
-				to: 'Core',
-				text: 'runs',
-				quotes: [{ path: 'src/cli/main.ts', commit: 'HEAD', text: "import { run } from '../core/run.ts'" }],
-			},
-		],
-	},
-	// Many terms that quote the command's file, more than memory gives back at once.
-	...Array.from({ length: 50 }, (_, i) => ({
-		kind: 'topic' as const,
-		name: `workshop ${i} ${'reader detail '.repeat(4)}`,
-		quotes: [{ path: 'src/cli/main.ts', commit: 'HEAD', text: 'run()' }],
-	})),
-])
+const named = await record.append(
+	[
+		{
+			kind: 'layout',
+			within: [],
+			at: 'HEAD',
+			about: ABOUT,
+			parts: [
+				{ name: 'Core', job: 'Runs the work', paths: ['src/core'] },
+				{ name: 'Command', job: 'The command a person types', paths: ['src/cli'] },
+			],
+			arrows: [
+				{
+					from: 'Command',
+					to: 'Core',
+					text: 'runs',
+					quotes: [{ path: 'src/cli/main.ts', commit: 'HEAD', text: "import { run } from '../core/run.ts'" }],
+				},
+			],
+		},
+		// Many terms that quote the command's file, more than memory gives back at once.
+		...Array.from({ length: 50 }, (_, i) => ({
+			kind: 'topic' as const,
+			name: `workshop ${i} ${'reader detail '.repeat(4)}`,
+			quotes: [{ path: 'src/cli/main.ts', commit: 'HEAD', text: 'run()' }],
+		})),
+	],
+	'project',
+)
 if (named.kind !== 'appended') assert.fail(named.problems.join(' '))
 
 const RETURNS = 'A run gives back one.'
@@ -161,19 +164,22 @@ async function sharedRecall(concept: string) {
 			},
 		},
 	])
-	const named = await fileRecordStore(root, gitRepository(root)).append([
-		{ kind: 'topic', name: 'retry', quotes: [{ path: 'src/core/run.ts', commit: 'HEAD', text: '\treturn 1' }] },
-		{
-			kind: 'layout',
-			within: [],
-			at: 'HEAD',
-			parts: [
-				{ name: 'Core', job: 'Runs the work', paths: ['src/core'] },
-				{ name: 'Command', job: 'The command a person types', paths: ['src/cli'] },
-			],
-			arrows: [],
-		},
-	])
+	const named = await fileRecordStore(root, gitRepository(root)).append(
+		[
+			{ kind: 'topic', name: 'retry', quotes: [{ path: 'src/core/run.ts', commit: 'HEAD', text: '\treturn 1' }] },
+			{
+				kind: 'layout',
+				within: [],
+				at: 'HEAD',
+				parts: [
+					{ name: 'Core', job: 'Runs the work', paths: ['src/core'] },
+					{ name: 'Command', job: 'The command a person types', paths: ['src/cli'] },
+				],
+				arrows: [],
+			},
+		],
+		'project',
+	)
 	if (named.kind !== 'appended') assert.fail(named.problems.join(' '))
 	const said = `The ${MARK} gives back one.`
 	const model = await scriptedModel([
@@ -228,18 +234,21 @@ test("an answer that opens with the reader's notes keeps the terms of its brief 
 	const MARK = 'quokka'
 	const { root } = buildRepository([{ message: 'feat: start', files: FILES }])
 	const store = fileRecordStore(root, gitRepository(root))
-	const named = await store.append([
-		{
-			kind: 'layout',
-			within: [],
-			at: 'HEAD',
-			parts: [
-				{ name: 'Core', job: 'Runs the work', paths: ['src/core'] },
-				{ name: 'Command', job: 'The command a person types', paths: ['src/cli'] },
-			],
-			arrows: [],
-		},
-	])
+	const named = await store.append(
+		[
+			{
+				kind: 'layout',
+				within: [],
+				at: 'HEAD',
+				parts: [
+					{ name: 'Core', job: 'Runs the work', paths: ['src/core'] },
+					{ name: 'Command', job: 'The command a person types', paths: ['src/cli'] },
+				],
+				arrows: [],
+			},
+		],
+		'project',
+	)
 	if (named.kind !== 'appended') assert.fail(named.problems.join(' '))
 	const point = (line: string) => ({
 		line,
@@ -292,18 +301,21 @@ async function freeQuestion(note: string | null) {
 	const MARK = 'quokka'
 	const { root } = buildRepository([{ message: 'feat: start', files: FILES }])
 	const store = fileRecordStore(root, gitRepository(root))
-	const named = await store.append([
-		{
-			kind: 'layout',
-			within: [],
-			at: 'HEAD',
-			parts: [
-				{ name: 'Core', job: 'Runs the work', paths: ['src/core'] },
-				{ name: 'Command', job: 'The command a person types', paths: ['src/cli'] },
-			],
-			arrows: [],
-		},
-	])
+	const named = await store.append(
+		[
+			{
+				kind: 'layout',
+				within: [],
+				at: 'HEAD',
+				parts: [
+					{ name: 'Core', job: 'Runs the work', paths: ['src/core'] },
+					{ name: 'Command', job: 'The command a person types', paths: ['src/cli'] },
+				],
+				arrows: [],
+			},
+		],
+		'project',
+	)
 	if (named.kind !== 'appended') assert.fail(named.problems.join(' '))
 	const topic = {
 		name: `${MARK} run`,
@@ -385,18 +397,21 @@ test('a reader naming one part gets current code and can open it without another
 			files: { [file]: `${oldLine}\n`, 'src/deliver.ts': 'export const hours = 9\n' },
 		},
 	])
-	const made = await fileRecordStore(root, gitRepository(root)).append([
-		{
-			kind: 'layout',
-			within: [],
-			at: 'HEAD',
-			parts: [
-				{ name: 'Billing', job: 'Counts the price.', paths: [file] },
-				{ name: 'Schedule', job: 'Chooses the delivery time.', paths: ['src/deliver.ts'] },
-			],
-			arrows: [],
-		},
-	])
+	const made = await fileRecordStore(root, gitRepository(root)).append(
+		[
+			{
+				kind: 'layout',
+				within: [],
+				at: 'HEAD',
+				parts: [
+					{ name: 'Billing', job: 'Counts the price.', paths: [file] },
+					{ name: 'Schedule', job: 'Chooses the delivery time.', paths: ['src/deliver.ts'] },
+				],
+				arrows: [],
+			},
+		],
+		'project',
+	)
 	assert.equal(made.kind, 'appended')
 	writeFileSync(path.join(root, file), `${currentLine}\n`)
 	execFileSync('git', ['commit', '-qam', 'Use the current price'], { cwd: root })
@@ -438,18 +453,21 @@ test('a reader naming one part gets current code and can open it without another
 test("a question whose model finds the reader's saved answer in memory keeps its topic out of the record", async () => {
 	const { root } = buildRepository([{ message: 'feat: start', files: FILES }])
 	const store = fileRecordStore(root, gitRepository(root))
-	const named = await store.append([
-		{
-			kind: 'layout',
-			within: [],
-			at: 'HEAD',
-			parts: [
-				{ name: 'Core', job: 'Runs the work', paths: ['src/core'] },
-				{ name: 'Command', job: 'The command a person types', paths: ['src/cli'] },
-			],
-			arrows: [],
-		},
-	])
+	const named = await store.append(
+		[
+			{
+				kind: 'layout',
+				within: [],
+				at: 'HEAD',
+				parts: [
+					{ name: 'Core', job: 'Runs the work', paths: ['src/core'] },
+					{ name: 'Command', job: 'The command a person types', paths: ['src/cli'] },
+				],
+				arrows: [],
+			},
+		],
+		'project',
+	)
 	if (named.kind !== 'appended') assert.fail(named.problems.join(' '))
 	const topic = {
 		name: 'single run',

@@ -24,18 +24,21 @@ const home = readerHome()
 
 // The parts as ken's model named them before it drew where the project runs.
 const record = fileRecordStore(root, gitRepository(root))
-const named = await record.append([
-	{
-		kind: 'layout',
-		within: [],
-		at: 'HEAD',
-		parts: [
-			{ name: 'Entry', job: 'Starts the work', paths: ['src/main.ts'] },
-			{ name: 'Engine', job: 'Does the work', paths: ['src/engine'] },
-		],
-		arrows: [],
-	},
-])
+const named = await record.append(
+	[
+		{
+			kind: 'layout',
+			within: [],
+			at: 'HEAD',
+			parts: [
+				{ name: 'Entry', job: 'Starts the work', paths: ['src/main.ts'] },
+				{ name: 'Engine', job: 'Does the work', paths: ['src/engine'] },
+			],
+			arrows: [],
+		},
+	],
+	'project',
+)
 if (named.kind !== 'appended') assert.fail(named.problems.join(' '))
 
 const at = (path: keyof typeof FILES, text: string) => [{ path, text }]

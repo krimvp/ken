@@ -385,10 +385,13 @@ test('ken catch-up lists the topics whose code changed since the reader understo
 	const repo = gitRepository(project.root)
 	const record = fileRecordStore(project.root, repo)
 	const at = { path: 'app.py', commit: 'HEAD' }
-	await record.append([
-		{ kind: 'topic', name: 'totals', quotes: [{ ...at, text: '    return 0' }] },
-		{ kind: 'topic', name: 'naming', quotes: [{ ...at, text: 'def total(items):' }] },
-	])
+	await record.append(
+		[
+			{ kind: 'topic', name: 'totals', quotes: [{ ...at, text: '    return 0' }] },
+			{ kind: 'topic', name: 'naming', quotes: [{ ...at, text: 'def total(items):' }] },
+		],
+		'project',
+	)
 	const opened = await openMap(home, repo, record)
 	if (opened.kind !== 'ok') assert.fail('the repository has commits')
 	await opened.map.learn('know', ['totals', 'naming'], new Date())
@@ -417,20 +420,23 @@ test('ken follow-up prints what is open with no model: the decision that needs t
 	const repo = gitRepository(project.root)
 	const record = fileRecordStore(project.root, repo)
 	const zero = { path: 'app.py', commit: 'HEAD', text: '    return 0' }
-	await record.append([
-		{ kind: 'topic', name: 'totals', quotes: [zero] },
-		{
-			kind: 'decision',
-			question: 'What does an empty cart cost?',
-			chosen: 'Zero',
-			reason: { text: 'Nothing bought costs nothing.', quotes: [] },
-			rejected: [],
-			undo: 'easy',
-			needsOwner: true,
-			quotes: [zero],
-			work: null,
-		},
-	])
+	await record.append(
+		[
+			{ kind: 'topic', name: 'totals', quotes: [zero] },
+			{
+				kind: 'decision',
+				question: 'What does an empty cart cost?',
+				chosen: 'Zero',
+				reason: { text: 'Nothing bought costs nothing.', quotes: [] },
+				rejected: [],
+				undo: 'easy',
+				needsOwner: true,
+				quotes: [zero],
+				work: null,
+			},
+		],
+		'project',
+	)
 	const opened = await openMap(home, repo, record)
 	if (opened.kind !== 'ok') assert.fail('the repository has commits')
 	await opened.map.learn('know', ['totals'], new Date())

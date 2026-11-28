@@ -5,13 +5,20 @@
 // every read, from git, the record, the map and what the reader looked at, and nothing is stored here. A box opens the
 // level whose scope is the box's paths.
 
-import { openDecisions } from '../follow-up/index.ts'
+import { onDay, openDecisions } from '../follow-up/index.ts'
 import type { SnapshotStore } from '../live/index.ts'
-import type { ReaderSeen, UnderstandingMap } from '../map/index.ts'
+import { believe, type Knows, looksAt, type ReaderSeen, type UnderstandingMap } from '../map/index.ts'
 import type { EntryId, RecordEntry, RecordStore } from '../record/index.ts'
-import type { CommitHash, FileDiff, ObjectId, Range, RepoPath, Repository } from '../repo/index.ts'
+import {
+	type CommitHash,
+	type FileDiff,
+	KEN_FOLDER,
+	type ObjectId,
+	type Range,
+	type RepoPath,
+	type Repository,
+} from '../repo/index.ts'
 import { type Seed, splitScope, under } from './folder-split.ts'
-import { believe, type Knows, looksAt } from './reader/box-knows.ts'
 import { type LandedSize, nextItems } from './reader/next-items.ts'
 import { type BoxMap, type BoxTopic, boxMap, markOf, type Next, nextOf, topicsIn } from './reader/reader-marks.ts'
 import { sinceLooked } from './reader/since-looked.ts'
@@ -137,9 +144,6 @@ export type LayoutLook = {
 	views?: LookViews
 }
 
-// ken's own record is not part of the project's code, as in every change fact git gives.
-const RECORD = '.ken'
-
 export async function lookAtLayout(
 	sources: LayoutSources,
 	ask: LayoutAsk,
@@ -170,7 +174,7 @@ export async function lookAtLayout(
 	})
 	const sinces = await sinceLooked(repo, read, head.commit, drawn, signal)
 	const boxes: LookBox[] = drawn.map(({ box, inBox, looks }, index) => {
-		const knows = believe(looks, sinces[index] ?? null, head.commit, now)
+		const knows = believe(looks, sinces[index] ?? null, head.commit, (date) => onDay(date, now))
 		const marks = inBox.map(({ topic, state }) => ({ topic, mark: markOf(state) }))
 		const within = versionsOf(read.entries, box.paths.toSorted())
 		return {
@@ -419,7 +423,7 @@ async function projectFiles(repo: Repository, commit: CommitHash, signal?: Abort
 	// shortcut: a project with more file names than git's output limit holds cannot be laid out. Read the tree a level
 	// at a time if one ever needs to be.
 	if (listed.kind !== 'ok') throw new Error(`The project at ${commit} has too many files for ken to lay out.`)
-	return listed.paths.filter((file) => !under(file, RECORD))
+	return listed.paths.filter((file) => !under(file, KEN_FOLDER))
 }
 
 // What sits in the scope in no box, each as the shortest path that holds no box: a folder beside the boxes, such as

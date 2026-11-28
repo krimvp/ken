@@ -3,7 +3,7 @@
 // they never opened. Parts that changed come most commits first, then most lines. For a reader
 // who has read fewer than half the parts, the tour comes before the change. Plain code ranks them from the record, what the reader
 // looked at and git, so the page can show them before the reader asks.
-import type { Knows, Level, OpensAt } from './box-knows.ts'
+import type { Knows, Level, OpensAt } from '../../map/index.ts'
 
 // Where an item takes the reader: a way in, and there a part of this level, a level of detail and a change, as the
 // layout takes a change. A field left out keeps what the page shows. A part opens where its box says ken would open

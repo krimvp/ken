@@ -17,7 +17,7 @@ import {
 	type Views,
 	viewsDraft,
 } from '../../diagram/index.ts'
-import type { UnderstandingMap } from '../../map/index.ts'
+import type { ReplyKind, UnderstandingMap } from '../../map/index.ts'
 import { RECORD_LIMITS, type RecordStore, sameName, textProblem, UNDO } from '../../record/index.ts'
 import { type Range, type Repository, resolveRange } from '../../repo/index.ts'
 import { type BriefDraft, briefSchema, readBrief } from '../brief/brief-schema.ts'
@@ -45,8 +45,9 @@ export type Gate = {
 	map: UnderstandingMap | null
 }
 
-// What one question has seen of show. asked is false for a note ken writes by itself in live mode: it tells the
-// reader's map nothing and gets no second look. scope is the change the reply is about. Cards that passed wait in
+// What one question has seen of show. asked is false for a note ken writes by itself in live mode and for the briefs
+// of a tour: they get no second look. replyKind is what the reply was, from which the reader's map decides what it
+// learns. scope is the change the reply is about. Cards that passed wait in
 // pending until their turn ends, so they follow that turn's words. held is the risks of a change that passed, waiting
 // for the second look. shown holds a hash of each card the reader has, so the same card twice shows once. step is
 // "risks" while the second look runs, and passRejections counts the revisions it refused. tour is the parts the
@@ -55,11 +56,12 @@ export type Gate = {
 // reply shows for that level. want is what the reader asked of a change through its lens, or null. answers is the
 // question about one concept that the reply answers as a brief, or null.
 // views is what ken took of "In its world" and "Where it runs" in this reply, kept with the top level when it ends.
-// typed is true when the round starts from the reader's own words, the only round in which ken keeps a note about them,
-// so text in a diff or a saved session cannot make the model keep one. read counts the lines of files the model read
+// typed is true when the round starts from the reader's own words. The reader notes keep a note of the model's only
+// then (see NoteBy in the map). read counts the lines of files the model read
 // against the most a brief may read, or is null when the question has no such limit.
 export type Round = {
 	asked: boolean
+	replyKind: ReplyKind
 	typed: boolean
 	tour: Tour | null
 	view: { within: string[]; text: string } | null
@@ -105,6 +107,7 @@ export type Asking =
 export function freshRound(as: Asking, emit: Round['emit']): Round {
 	return {
 		asked: as.kind !== 'note' && as.kind !== 'explain',
+		replyKind: as.kind === 'explain' ? 'tour' : as.kind === 'note' ? 'live-note' : 'answer',
 		typed: as.kind === 'question' || as.kind === 'view' || (as.kind === 'answer' && as.typed === true),
 		tour: as.kind === 'explain' ? as.tour : null,
 		view: as.kind === 'view' ? { within: as.within, text: as.text } : null,

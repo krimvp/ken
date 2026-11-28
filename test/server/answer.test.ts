@@ -15,18 +15,21 @@ const FILES = {
 	'src/store/db.ts': 'export function save() {\n\tthrow new Error("full")\n}\n',
 }
 const { root } = buildRepository([{ message: 'feat: start', files: FILES }])
-const named = await fileRecordStore(root, gitRepository(root)).append([
-	{
-		kind: 'layout',
-		within: [],
-		at: 'HEAD',
-		parts: [
-			{ name: 'Core', job: 'Runs the work', paths: ['src/core'] },
-			{ name: 'Store', job: 'Saves what the core makes', paths: ['src/store'] },
-		],
-		arrows: [],
-	},
-])
+const named = await fileRecordStore(root, gitRepository(root)).append(
+	[
+		{
+			kind: 'layout',
+			within: [],
+			at: 'HEAD',
+			parts: [
+				{ name: 'Core', job: 'Runs the work', paths: ['src/core'] },
+				{ name: 'Store', job: 'Saves what the core makes', paths: ['src/store'] },
+			],
+			arrows: [],
+		},
+	],
+	'project',
+)
 if (named.kind !== 'appended') assert.fail(named.problems.join(' '))
 
 const point = (line: string, file: keyof typeof FILES, quoted: string) => ({

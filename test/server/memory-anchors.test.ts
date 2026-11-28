@@ -24,6 +24,7 @@ test('a source question finds the current lines of a moved quote and flags a rem
 			name: text,
 			quotes: [{ path: file, commit, text }],
 		})),
+		'project',
 	)
 	assert.equal(named.kind, 'appended')
 	const model = await scriptedModel([
@@ -49,6 +50,7 @@ test('the agent can follow the printed cursor to every matching term within the 
 			name,
 			quotes: [{ path: file, commit: 'HEAD', text: 'run()' }],
 		})),
+		'project',
 	)
 	if (saved.kind !== 'appended') assert.fail(saved.problems.join(' '))
 	const turns: Turn[] = []
@@ -84,6 +86,7 @@ test('a search keeps the changed-source warning on every shortened fact', async 
 			name: `retry ${i}`,
 			quotes: [{ path: file, commit: 'HEAD', text: 'const retries = 14' }],
 		})),
+		'project',
 	)
 	if (topics.kind !== 'appended') assert.fail(topics.problems.join(' '))
 	const notes = await store.append(
@@ -94,6 +97,7 @@ test('a search keeps the changed-source warning on every shortened fact', async 
 				'The service retries fourteen times when deliveries fail. ' +
 				'Another delivery gets the same limit. '.repeat(4),
 		})),
+		'project',
 	)
 	if (notes.kind !== 'appended') assert.fail(notes.problems.join(' '))
 	writeFileSync(path.join(root, file), 'const retries = 3')
@@ -120,9 +124,10 @@ test('an earlier answer can be found on a later search page when the current cha
 		archived.push(events.at(-1).view.entry.id)
 	}
 	await old.close()
-	const record = await fileRecordStore(root, gitRepository(root)).append([
-		{ kind: 'topic', name: 'Delay budget', quotes: [{ path: 'work.ts', commit: 'HEAD', text: 'run()' }] },
-	])
+	const record = await fileRecordStore(root, gitRepository(root)).append(
+		[{ kind: 'topic', name: 'Delay budget', quotes: [{ path: 'work.ts', commit: 'HEAD', text: 'run()' }] }],
+		'project',
+	)
 	assert.equal(record.kind, 'appended')
 	const model = await scriptedModel([
 		{ text: 'One new finding.' },

@@ -1,9 +1,8 @@
 // What the page tells ken about what the reader looked at, so ken's idea of what they know grows by itself. A brief
-// ken has explained, open in its drawer, counts as read after ten seconds with the tab in view. A send that fails is
-// dropped without a word: it must never block or slow the page. When ken wrote a line, the level and the record are
-// read again, so a part's fill moves with no reload.
-
-const READ_MS = 10_000
+// ken has explained, open in its drawer with the tab in view, is reported once it has stayed on screen as long as the
+// server says, with how long it stayed. The map decides whether that counts as read. A send that fails is dropped
+// without a word: it must never block or slow the page. When ken wrote a line, the level and the record are read
+// again, so a part's fill moves with no reload.
 
 // app is the page: its state, render, post, briefPaths, which gives the files of the brief that is open, or null,
 // and rereadKnows, which reads again what ken thinks the reader knows. loads reads the level again.
@@ -24,9 +23,9 @@ export function homeSeen(app, loads) {
 		render()
 	}
 
-	async function tell({ did, paths, change }) {
+	async function tell(sent) {
 		try {
-			const { written } = await post('/api/seen', { did, paths, ...(change ? { change } : {}) })
+			const { written } = await post('/api/seen', sent)
 			if (written) await recorded()
 		} catch {}
 	}
@@ -34,11 +33,18 @@ export function homeSeen(app, loads) {
 	// Called after every draw: starts the wait for the brief on screen now, and drops the one before.
 	function watch() {
 		const inView = document.visibilityState === 'visible'
-		const paths = inView ? app.briefPaths() : null
+		const paths = inView && state.readMs !== null ? app.briefPaths() : null
 		const key = paths?.length > 0 ? JSON.stringify(paths) : ''
 		if (key === (waiting?.key ?? '')) return
 		clearTimeout(waiting?.timer)
-		waiting = key ? { key, timer: setTimeout(() => void tell({ did: 'read', paths }), READ_MS) } : null
+		const from = performance.now()
+		const report = () => {
+			const shown = performance.now() - from
+			// A browser timer can fire a little early, and the map refuses a read even a millisecond short: wait out the rest.
+			if (shown < state.readMs) waiting.timer = setTimeout(report, state.readMs - shown)
+			else void tell({ did: 'read', paths, shown: Math.ceil(shown) })
+		}
+		waiting = key ? { key, timer: setTimeout(report, state.readMs) } : null
 	}
 
 	document.addEventListener('visibilitychange', watch)
