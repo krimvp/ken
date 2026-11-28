@@ -38,7 +38,12 @@ export function homeSeen(app, loads) {
 		if (key === (waiting?.key ?? '')) return
 		clearTimeout(waiting?.timer)
 		const from = performance.now()
-		const report = () => void tell({ did: 'read', paths, shown: Math.ceil(performance.now() - from) })
+		const report = () => {
+			const shown = performance.now() - from
+			// A browser timer can fire a little early, and the map refuses a read even a millisecond short: wait out the rest.
+			if (shown < state.readMs) waiting.timer = setTimeout(report, state.readMs - shown)
+			else void tell({ did: 'read', paths, shown: Math.ceil(shown) })
+		}
 		waiting = key ? { key, timer: setTimeout(report, state.readMs) } : null
 	}
 
