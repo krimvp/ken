@@ -1,12 +1,13 @@
-// What ken thinks the reader knows of one box, and why (plan: "What the reader looked at"). It is worked out from all
-// ken holds on the reader: the lines on what they looked at, and the map's topics that sit in the box. believe is the
-// one place that decides the level, and the box's standing is read from its answer, so the two cannot disagree.
-// Looking is never understanding: only "I know this part", or "I know this" on every topic in the box, gives "said".
-import { onDay } from '../../follow-up/index.ts'
-import type { Did, Known, Evidence as MapEvidence, SeenLine, TopicState } from '../../map/index.ts'
+// What ken thinks the reader knows of a box, or of any thing whose files are known, and why (plan: "What the reader
+// looked at"). It is worked out from all ken holds on the reader: the lines on what they looked at, and the map's
+// topics on those files. believe is the one place that decides the level, and the standing is read from its answer,
+// so the two cannot disagree. Looking is never understanding: only "I know this part", or "I know this" on every
+// topic in the box, gives "said".
 import type { CommitHash } from '../../repo/index.ts'
-import { under } from '../folder-split.ts'
-import type { Since } from './since-looked.ts'
+import type { DayWords } from '../lens.ts'
+import type { Evidence as MapEvidence } from '../map-entry.ts'
+import type { TopicState } from '../topic-state.ts'
+import type { Did, Known, SeenLine } from './reader-seen.ts'
 
 export type Level = Known
 
@@ -37,6 +38,10 @@ type Kind = Exclude<Did, 'set'> | 'topics' | 'toured' | 'answered' | 'unlearned'
 // day sorts before every moment in it, so a correction takes back what the map held that day. A correction carries
 // the level the reader picked.
 type Evidence = { at: string } & ({ kind: Kind } | { kind: 'set'; level: Level })
+
+// The commit the reader last looked at a box, as its full hash, and how many commits touched the box after it, merges
+// left out. gone: HEAD does not reach that commit. null: ken holds no such commit for the box.
+export type Since = { commit: string; commits: number } | 'gone' | null
 
 // What a box's belief is worked out from. lookedAt holds, for each line that says the reader looked at the box as it
 // was at a commit, newest line first, that commit: for a change they read the change's last commit, then the commit
@@ -93,7 +98,7 @@ const FROM_MAP: Record<MapEvidence, Kind> = {
 // files, while looking at a file's code or change counts for the part that holds it.
 export function looksAt(paths: string[], lines: SeenLine[], states: TopicState[]): Looks {
 	const counted = lines.filter((line) => {
-		const inside = (file: string) => paths.some((place) => under(file, place))
+		const inside = (file: string) => paths.some((place) => file === place || file.startsWith(`${place}/`))
 		if (line.did === 'code' || line.did === 'change') return line.paths.some(inside)
 		if (line.did === 'read') return line.paths.every(inside)
 		// A reader who opens or corrects a single part says nothing about the parts above or below it.
@@ -129,8 +134,9 @@ function fromMap(states: TopicState[]): Evidence[] {
 	return met.map((state) => ({ kind: FROM_MAP[state.entry.evidence], at: state.entry.date }))
 }
 
-// head is the commit checked out, where a change that shows what landed since the reader looked ends.
-export function believe(looks: Looks, since: Since, head: CommitHash, now: Date, thing: Thing = 'part'): Knows {
+// head is the commit checked out, where a change that shows what landed since the reader looked ends. day puts a day
+// in a sentence, such as "on 20 Nov".
+export function believe(looks: Looks, since: Since, head: CommitHash, day: DayWords, thing: Thing = 'part'): Knows {
 	const { evidence } = looks
 	// A correction takes back all that came before it and leaves the level the reader picked: seen, for one that
 	// only says they do not know the part.
@@ -145,7 +151,7 @@ export function believe(looks: Looks, since: Since, head: CommitHash, now: Date,
 	const last = evidence.at(-1)?.at.slice(0, 10) ?? null
 	const fresh = { level: 'new', last, since: 0, stale: false, go: { way: 'learn', detail: OPENS.new } } as const
 	if (best === undefined) return { ...fresh, why: `You have not opened this ${thing}.` }
-	const on = onDay(best.at.slice(0, 10), now)
+	const on = day(best.at.slice(0, 10))
 	// A part the reader calls new to them has no look of theirs to count commits from.
 	if (best.kind === 'set' && best.level === 'new') return { ...fresh, why: SET.new(on, thing) }
 	const times = standing.filter((each) => each.kind === best.kind).length

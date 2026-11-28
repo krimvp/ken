@@ -5,13 +5,12 @@
 // every read, from git, the record, the map and what the reader looked at, and nothing is stored here. A box opens the
 // level whose scope is the box's paths.
 
-import { openDecisions } from '../follow-up/index.ts'
+import { onDay, openDecisions } from '../follow-up/index.ts'
 import type { SnapshotStore } from '../live/index.ts'
-import type { ReaderSeen, UnderstandingMap } from '../map/index.ts'
+import { believe, type Knows, looksAt, type ReaderSeen, type UnderstandingMap } from '../map/index.ts'
 import type { EntryId, RecordEntry, RecordStore } from '../record/index.ts'
 import type { CommitHash, FileDiff, ObjectId, Range, RepoPath, Repository } from '../repo/index.ts'
 import { type Seed, splitScope, under } from './folder-split.ts'
-import { believe, type Knows, looksAt } from './reader/box-knows.ts'
 import { type LandedSize, nextItems } from './reader/next-items.ts'
 import { type BoxMap, type BoxTopic, boxMap, markOf, type Next, nextOf, topicsIn } from './reader/reader-marks.ts'
 import { sinceLooked } from './reader/since-looked.ts'
@@ -170,7 +169,7 @@ export async function lookAtLayout(
 	})
 	const sinces = await sinceLooked(repo, read, head.commit, drawn, signal)
 	const boxes: LookBox[] = drawn.map(({ box, inBox, looks }, index) => {
-		const knows = believe(looks, sinces[index] ?? null, head.commit, now)
+		const knows = believe(looks, sinces[index] ?? null, head.commit, (date) => onDay(date, now))
 		const marks = inBox.map(({ topic, state }) => ({ topic, mark: markOf(state) }))
 		const within = versionsOf(read.entries, box.paths.toSorted())
 		return {

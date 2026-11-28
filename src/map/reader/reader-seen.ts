@@ -13,8 +13,8 @@ import { type CommitHash, parsePath, type RepoPath, type Repository } from '../.
 export const DID = ['opened', 'read', 'code', 'said', 'forgot', 'change', 'set'] as const
 export type Did = (typeof DID)[number]
 
-// How well the reader knows a part, weakest first. The layout owns the words for each and decides the level from the
-// lines. They are named here because a correction keeps one in the file.
+// How well the reader knows a part, weakest first. reader-knows.ts holds the words for each and decides the level
+// from the lines. They are named here because a correction keeps one in the file.
 export const KNOWN = ['new', 'seen', 'read', 'code', 'said'] as const
 export type Known = (typeof KNOWN)[number]
 

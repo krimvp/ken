@@ -9,12 +9,11 @@ import {
 	type ChangeChoice,
 	changeChoices,
 	type LayoutAsk,
-	LEVELS,
 	lookAtLayout,
 	pictureBefore,
 	readLayoutAsk,
 } from '../layout/index.ts'
-import { type MapSignal, prefsOf, TEXT_PREFS } from '../map/index.ts'
+import { LEVELS, type MapSignal, prefsOf, TEXT_PREFS } from '../map/index.ts'
 import { MERMAID_FILE, PAGE_FOLDER } from '../page/index.ts'
 import { OUTCOMES } from '../record/index.ts'
 import type { CommitHash } from '../repo/index.ts'

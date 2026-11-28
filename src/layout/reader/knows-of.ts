@@ -1,10 +1,11 @@
 // What ken thinks the reader knows of a thing that is no box: a term or a drawn process. It is worked out as a box's
 // belief is, from the lines on what they looked at that name a file the thing quotes, and for a term from its own
 // topic on the map. null says ken holds nothing on it yet.
+import { onDay } from '../../follow-up/index.ts'
+import { believe, type Knows, looksAt, type Thing } from '../../map/index.ts'
 import { type RecordEntry, type RecordRead, sameName } from '../../record/index.ts'
 import type { CommitHash, RepoPath, Repository } from '../../repo/index.ts'
 import type { LayoutSources } from '../layout-look.ts'
-import { believe, type Knows, looksAt, type Thing } from './box-knows.ts'
 import { sinceLooked } from './since-looked.ts'
 
 // paths are the files the thing's quotes are in. topic is the term's own name in the record, null for a process.
@@ -30,7 +31,9 @@ export async function knowsOf(
 	})
 	const sinces = await sinceLooked(sources.repo, read, head.commit, drawn, signal)
 	return drawn.map(({ looks }, index) =>
-		looks.evidence.length === 0 ? null : believe(looks, sinces[index] ?? null, head.commit, now, things[index]?.thing),
+		looks.evidence.length === 0
+			? null
+			: believe(looks, sinces[index] ?? null, head.commit, (date) => onDay(date, now), things[index]?.thing),
 	)
 }
 
@@ -94,7 +97,7 @@ export async function readerPart(sources: LayoutSources, question: string, recor
 					arrow: arrow && level.drawnAt === head.commit ? [arrow.from, arrow.text, arrow.to] : null,
 				}
 			: null
-	let why = last ? believe(looks, null, head.commit, new Date()).why : ''
+	let why = last ? believe(looks, null, head.commit, onDay).why : ''
 	// Compare this part at two commits without reading the whole history or the files themselves.
 	const at = looks.lookedAt[0]?.[0]
 	if (last && at && at !== head.commit && (last.kind === 'said' || (last.kind === 'set' && last.level === 'said'))) {

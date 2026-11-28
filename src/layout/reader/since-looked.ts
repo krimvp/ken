@@ -1,15 +1,10 @@
 // What landed in each box since the reader last looked at it. The boxes may have been looked at at different commits,
 // and one read of git answers for all of them.
 import { commitsSince } from '../../follow-up/index.ts'
-import type { TopicState } from '../../map/index.ts'
+import type { Looks, Since, TopicState } from '../../map/index.ts'
 import type { RecordRead } from '../../record/index.ts'
 import type { Commit, CommitHash, Repository } from '../../repo/index.ts'
 import { under } from '../folder-split.ts'
-import type { Looks } from './box-knows.ts'
-
-// The commit the reader last looked at a box, as its full hash, and how many commits touched the box after it, merges
-// left out. gone: HEAD does not reach that commit. null: ken holds no such commit for the box.
-export type Since = { commit: string; commits: number } | 'gone' | null
 
 type Drawn = { box: { paths: string[] }; inBox: { state: TopicState }[]; looks: Looks }
 

@@ -1,10 +1,9 @@
 // What the reader's understanding map says about each box, and the one line on where to look next (plan: the layout
 // is also the guide's home view). A topic sits in every box that holds a file it quotes. The map judges topics at
 // HEAD, so the marks say what the reader knows of the code now, whatever commit the boxes show.
-import type { TopicState } from '../../map/index.ts'
+import type { Knows, TopicState } from '../../map/index.ts'
 import { sameName, type Topic } from '../../record/index.ts'
 import { under } from '../folder-split.ts'
-import type { Knows } from './box-knows.ts'
 import type { NextItem } from './next-items.ts'
 
 // new: the reader never met the topic. met: they asked about it or read on it, and did not say they understand it.
