@@ -33,7 +33,7 @@ import { describeCall } from './tools/describe-call.ts'
 import { diffTool } from './tools/diff-tool.ts'
 import { type Elsewhere, elsewhereText } from './tools/elsewhere-text.ts'
 import { explorationTools } from './tools/exploration-tools.ts'
-import { MEMORY_TOOLS, type Memory, memoryTools, recordIndex } from './tools/memory-tool.ts'
+import { MEMORY_TOOLS, type Memory, memoryTools, readerPartText, recordIndex } from './tools/memory-tool.ts'
 import { rememberTool } from './tools/remember-tool.ts'
 import { sessionTools } from './tools/session-tools.ts'
 
@@ -527,7 +527,7 @@ export async function startChat(options: {
 		])
 		if (part) found(part.focus)
 		if (notes.length > 0) run.readerWords = true
-		const named = part ? `${part.text}\n\n` : ''
+		const named = part ? `${readerPartText(part)}\n\n` : ''
 		return `${index.text}\n\n${readerIndex(map, notes, prefs)}\n\n${named}${at}`
 	}
 

@@ -26,11 +26,9 @@ export function memoryOf(layout: LayoutSources, reads: ReturnType<typeof concept
 			reader: readerLine(brief.knows),
 			quotes: brief.quotes ?? [],
 			changed: brief.staleFiles ?? [],
-			links: [
-				...brief.sideways.uses.map((link) => `From ${brief.name} to ${link.name}: ${link.verb} (${link.id})`),
-				...brief.sideways.usedBy.map((link) => `From ${link.name} to ${brief.name}: ${link.verb} (${link.id})`),
-				...[...(brief.inside ?? []), ...(brief.parts ?? [])].map((child) => `Contains ${child.name} (${child.id})`),
-			],
+			uses: brief.sideways.uses.map(({ id, name, verb }) => ({ id, name, verb })),
+			usedBy: brief.sideways.usedBy.map(({ id, name, verb }) => ({ id, name, verb })),
+			contains: [...(brief.inside ?? []), ...(brief.parts ?? [])].map(({ id, name }) => ({ id, name })),
 			points: brief.explained ? brief.points.map(({ line, quotes }) => ({ line, quotes })) : [],
 			terms: brief.terms.map((term) => term.name),
 			questions: brief.questions.map(({ text, answered }) => ({ text, answered })),
@@ -103,27 +101,12 @@ export function memoryOf(layout: LayoutSources, reads: ReturnType<typeof concept
 		async readerPart(question, record, signal) {
 			const found = await readerPart(layout, question, record, signal)
 			if (!found) return null
-			const { name, commit, within, reader, source, neighbor } = found
+			const { name, commit, within, reader, source, neighbor, drawnAt } = found
 			const part = { name, id: partId(within, name) }
 			const focus: QuestionFocus = source
 				? { part, commit, path: source.path, start: 1, end: source.end }
 				: { part, commit, view: 'parts', concepts: [part.id], earlier: found.earlier }
-			const lines = [
-				reader ? `Reader's map for ${name}: ${reader}` : '',
-				`The layout at ${found.drawnAt.slice(0, 7)} names this part ${JSON.stringify(name)}. Open ${part.id} with memory_known for more.`,
-				neighbor
-					? `Another part in the same layout is ${JSON.stringify(neighbor.name)}. Its path ${JSON.stringify(neighbor.path)} exists at this commit.`
-					: '',
-				neighbor?.source
-					? `Ken also read lines 1 to ${neighbor.source.end} of ${JSON.stringify(neighbor.path)} at ${commit}:\n${neighbor.source.text}`
-					: '',
-				neighbor?.arrow ? `The saved layout connects them: ${JSON.stringify(neighbor.arrow)}.` : '',
-				source
-					? `Ken read ${JSON.stringify(source.path)} at ${commit}. Lines 1 to ${source.end} are quoted as data:\n${source.text}`
-					: '',
-				'Base your explanation and next reading suggestion on this evidence. Check other files before suggesting them. Use show to quote the relevant lines.',
-			]
-			return { focus, text: lines.filter(Boolean).join('\n') }
+			return { focus, part, commit, drawnAt, reader, source: source ?? null, neighbor }
 		},
 	}
 }

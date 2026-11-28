@@ -25,8 +25,11 @@ const MAX_INDEXED = 12
 
 export type MemoryQuote = { path: string; commit: CommitHash; startLine: number; endLine: number; text: string }
 
+type Named = { id: string; name: string }
+
 // What ken holds of one concept: its line, its things to know with the lines each quotes, its terms and its
-// questions. id is the concept's name in ken, such as part::Core.
+// questions. id is the concept's name in ken, such as part::Core. uses and usedBy are its arrows, each with its verb,
+// and contains the concepts inside it.
 export type Known = {
 	id: string
 	kind: string
@@ -35,7 +38,9 @@ export type Known = {
 	reader: string | null
 	quotes: MemoryQuote[]
 	changed: string[]
-	links: string[]
+	uses: (Named & { verb: string })[]
+	usedBy: (Named & { verb: string })[]
+	contains: Named[]
 	points: { line: string; quotes: MemoryQuote[] }[]
 	terms: string[]
 	questions: { text: string; answered: boolean }[]
@@ -60,16 +65,51 @@ export type Fact = {
 	quotes: MemoryQuote[]
 }
 
+// The one part of the current layouts that a free question names. reader is the reader's last statement about it, or
+// ''. source is the start of its file at commit when it has one file, and neighbor another part of the same layout,
+// with the start of its file when the question asks where to read next.
+export type ReaderPart = {
+	focus: QuestionFocus
+	part: Named
+	commit: string
+	drawnAt: string
+	reader: string
+	source: { path: string; end: number; text: string } | null
+	neighbor: {
+		name: string
+		path: string
+		source: { end: number; text: string } | null
+		arrow: string[] | null
+	} | null
+}
+
 // Plain code on the server answers these from the layout, the record and the reader's history.
 export type Memory = {
-	readerPart(
-		question: string,
-		record: RecordRead,
-		signal?: AbortSignal,
-	): Promise<{ focus: QuestionFocus; text: string } | null>
+	readerPart(question: string, record: RecordRead, signal?: AbortSignal): Promise<ReaderPart | null>
 	known(about: string): Promise<Known | null>
 	level(within: string[]): Promise<KnownLevel | null>
 	facts(): Promise<Fact[]>
+}
+
+// What a question's first message says of the part it names.
+export function readerPartText(found: ReaderPart): string {
+	const { part, commit, reader, source, neighbor } = found
+	const lines = [
+		reader ? `Reader's map for ${part.name}: ${reader}` : '',
+		`The layout at ${found.drawnAt.slice(0, 7)} names this part ${JSON.stringify(part.name)}. Open ${part.id} with memory_known for more.`,
+		neighbor
+			? `Another part in the same layout is ${JSON.stringify(neighbor.name)}. Its path ${JSON.stringify(neighbor.path)} exists at this commit.`
+			: '',
+		neighbor?.source
+			? `Ken also read lines 1 to ${neighbor.source.end} of ${JSON.stringify(neighbor.path)} at ${commit}:\n${neighbor.source.text}`
+			: '',
+		neighbor?.arrow ? `The saved layout connects them: ${JSON.stringify(neighbor.arrow)}.` : '',
+		source
+			? `Ken read ${JSON.stringify(source.path)} at ${commit}. Lines 1 to ${source.end} are quoted as data:\n${source.text}`
+			: '',
+		'Base your explanation and next reading suggestion on this evidence. Check other files before suggesting them. Use show to quote the relevant lines.',
+	]
+	return lines.filter(Boolean).join('\n')
 }
 
 // Earlier answers, as thread memory finds them: in this chat by words or as chat:2, and the answers saved on earlier
@@ -206,7 +246,9 @@ export function memoryTools(deps: {
 					: sources.length
 						? []
 						: ["ken's model has not explained it yet."]),
-				...held.links,
+				...held.uses.map((link) => `From ${held.name} to ${link.name}: ${link.verb} (${link.id})`),
+				...held.usedBy.map((link) => `From ${link.name} to ${held.name}: ${link.verb} (${link.id})`),
+				...held.contains.map((child) => `Contains ${child.name} (${child.id})`),
 				...(held.terms.length ? [`Terms: ${held.terms.join(', ')}`] : []),
 				...(questions.length ? ['Questions:', ...questions] : []),
 			]
