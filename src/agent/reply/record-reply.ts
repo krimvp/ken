@@ -12,8 +12,10 @@ import { diagramDraft, layoutDraft, type Views, viewsDraft } from '../../diagram
 import {
 	type EntryDraft,
 	type EntryId,
+	type Heard,
 	type RecordEntry,
 	type RecordStore,
+	recordKeeps,
 	type Statement,
 	sameName,
 } from '../../record/index.ts'
@@ -34,7 +36,8 @@ export type Recorded =
 	| { kind: 'refused'; problems: string[] }
 
 // project reads the project's own git, never ken's snapshot store. scope is the change the reply is about, with the
-// title of its piece of work when it has one. views is what the reply holds of the drawings of the top level.
+// title of its piece of work when it has one. views is what the reply holds of the drawings of the top level. heard is
+// what the run was given besides the code: the record decides from it which entries it keeps.
 export async function recordReply(
 	store: RecordStore,
 	project: Repository,
@@ -42,12 +45,17 @@ export async function recordReply(
 	scope: { range: Range; work: string | null } | null,
 	tour: Tour | null,
 	views: Views | null,
+	heard: Heard,
 	signal: AbortSignal,
 ): Promise<Recorded> {
 	const cards = items.flatMap((item) => (item.kind === 'card' ? [item.card] : []))
 	const named = cards.flatMap((card) => (card.kind === 'layout' ? [card.layout.drawnAt] : []))
+	// A topic the record does not keep never reaches it, so its quotes do not make the reply a draft.
+	const counted = items.filter(
+		(item) => item.kind !== 'card' || item.card.kind !== 'topic' || recordKeeps('topic', heard),
+	)
 	const commits = new Set([
-		...quotesOf(items).map((quote) => quote.commit),
+		...quotesOf(counted).map((quote) => quote.commit),
 		...(scope ? [scope.range.head] : []),
 		...named,
 	])
@@ -62,6 +70,7 @@ export async function recordReply(
 	const drafts: EntryDraft[] = []
 	const problems: string[] = []
 	const add = async (where: string, draft: EntryDraft) => {
+		if (!recordKeeps(draft.kind, heard)) return null
 		const checked = await store.check(draft, pending, signal)
 		if (checked.kind === 'refused') {
 			problems.push(...checked.problems.map((problem) => `${where}: ${problem}`))
@@ -151,7 +160,7 @@ export async function recordReply(
 		} else problems.push('The drawings: the record has no named parts of the project to keep them with.')
 	}
 	if (drafts.length === 0) return { kind: 'recorded', entries: [], problems }
-	const appended = await store.append(drafts, signal)
+	const appended = await store.append(drafts, signal, heard)
 	if (appended.kind === 'refused') return appended
 	const entries = appended.entries.filter((each) => each.written).map((each) => each.entry)
 	return { kind: 'recorded', entries, problems }
@@ -164,20 +173,25 @@ function raw(quote: VerifiedQuote): Quote {
 
 // The end of a question with a reply: the change facts from git over every quote the reader saw, the record entries
 // the reply adds, and the topics it names, marked as asked on the reader's map whether the record holds them or not.
-// withTopics is false when the reply's topics stay in the reader's history and out of the record (see readerWords in
-// start-chat.ts). problems says why the record left out an entry; the reply stands either way.
+// problems says why the record left out an entry; the reply stands either way.
 export async function endReply(
 	gate: Gate,
 	round: Round,
-	withTopics: boolean,
+	heard: Heard,
 	signal: AbortSignal,
 ): Promise<{ reply: Reply; recorded: RecordEntry[]; problems: string[] }> {
 	const { scope } = round
 	const change = scope && (await changeOf(gate.sources.repo, scope.range, round.items, signal))
-	const kept = withTopics
-		? round.items
-		: round.items.filter((item) => item.kind !== 'card' || item.card.kind !== 'topic')
-	const recorded = await recordReply(gate.store, gate.project, kept, scope, round.tour, round.views, signal)
+	const recorded = await recordReply(
+		gate.store,
+		gate.project,
+		round.items,
+		scope,
+		round.tour,
+		round.views,
+		heard,
+		signal,
+	)
 	// Each card names a topic the record holds as the record spells it.
 	const names = (await gate.store.read()).current.flatMap((entry) => (entry.kind === 'topic' ? [entry.name] : []))
 	const canonical = (name: string) => names.find((other) => sameName(other, name)) ?? name

@@ -25,6 +25,15 @@ export type RecordRead = { entries: RecordEntry[]; current: RecordEntry[]; probl
 
 export type Refusal = { kind: 'refused'; problems: string[] }
 
+// What the run that drafted the entries was given besides the code and the record: nothing more, or the reader's own
+// words (their notes, text of their saved answers or of their saved coding sessions). The record is the same for every
+// reader, so it keeps no topic or note drafted from what one reader said.
+export type Heard = 'project' | 'reader'
+
+export function recordKeeps(kind: Kind, heard: Heard): boolean {
+	return heard === 'project' || (kind !== 'topic' && kind !== 'note')
+}
+
 export type RecordStore = {
 	directory: string
 	read(): Promise<RecordRead>
@@ -37,6 +46,7 @@ export type RecordStore = {
 	append(
 		drafts: EntryDraft[],
 		signal?: AbortSignal,
+		heard?: Heard,
 	): Promise<{ kind: 'appended'; entries: { entry: RecordEntry; written: boolean }[] } | Refusal>
 }
 
@@ -73,11 +83,15 @@ export function fileRecordStore(root: string, repo: Repository, sessions: Transc
 		return { kind: 'ok', entry: stored(checked.entry, checked.replaces) } as const
 	}
 
-	async function append(drafts: EntryDraft[], signal?: AbortSignal) {
+	async function append(drafts: EntryDraft[], signal?: AbortSignal, heard: Heard = 'project') {
 		const known = (await read()).entries
 		const entries: { entry: RecordEntry; written: boolean }[] = []
 		const problems: string[] = []
 		for (const [index, draft] of drafts.entries()) {
+			if (!recordKeeps(draft.kind, heard)) {
+				problems.push(`${draft.kind} ${index + 1}: drafted from the reader's own words, so it stays in their history.`)
+				continue
+			}
 			const checked = await checkEntry(sources, { known, current: currentOf(known) }, draft, signal)
 			if (checked.kind === 'refused') {
 				problems.push(...checked.problems.map((problem) => `${draft.kind} ${index + 1}: ${problem}`))

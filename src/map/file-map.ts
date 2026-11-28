@@ -20,7 +20,7 @@ import { type DetailEntry, type MapEntry, type MapLine, parseMapLine } from './m
 import { stateOf, type TopicState } from './topic-state.ts'
 
 // A topic the reader met that the project record does not hold, with the lines its reply quoted: a reply given the
-// reader's own words keeps its topics in their history (see readerWords in the agent).
+// reader's own words keeps its topics in their history (see Heard in the record).
 export type OwnTopic = Pick<Topic, 'name' | 'quotes'>
 
 // states holds every topic in the project record, in the record's order, then the reader's own topics, which own

@@ -117,6 +117,19 @@ test('a batch with a false quote, an unknown replaces, a decision with no reason
 	assert.deepEqual((await store.read()).entries, [])
 })
 
+test("a batch drafted from the reader's own words writes its decision but no topic, so the record stays the same for every reader", async () => {
+	const store = emptyRecord()
+	const refused = await store.append([decision, topic], undefined, 'reader')
+	assert.equal(refused.kind, 'refused')
+	assert.deepEqual((await store.read()).entries, [])
+	const written = await store.append([decision], undefined, 'reader')
+	assert.equal(written.kind, 'appended')
+	assert.deepEqual(
+		(await store.read()).entries.map((entry) => entry.kind),
+		['decision'],
+	)
+})
+
 test('ken labels a decision by its strongest evidence: logged with ken decide, then the body of a commit message, then a saved session, then inferred, which a subject line or code alone stays', async () => {
 	const built = buildRepository([
 		{
