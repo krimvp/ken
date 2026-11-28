@@ -6,6 +6,11 @@ import type { TopicState } from './topic-state.ts'
 export const SIGNALS = ['asked', 'know', 'too-much', 'deeper', 'usual', 'forgot', 'toured'] as const
 export type MapSignal = (typeof SIGNALS)[number]
 
+// What a reply was, which decides what it teaches the map. answer: ken answered something asked of it, so every topic
+// the reply names is marked as asked. tour: the briefs of a tour's stops, which the page marks as toured when the
+// reader reaches each one. live-note: a note ken wrote by itself in live mode, which tells the map nothing.
+export type ReplyKind = 'answer' | 'tour' | 'live-note'
+
 type Line = Pick<MapEntry, 'depth' | 'evidence'>
 
 type KnowledgeSignal = Exclude<MapSignal, 'too-much' | 'deeper' | 'usual'>

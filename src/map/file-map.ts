@@ -15,7 +15,7 @@ import {
 	topicCode,
 } from '../record/index.ts'
 import type { Repository } from '../repo/index.ts'
-import { lineFor, type MapSignal } from './learn.ts'
+import { lineFor, type MapSignal, type ReplyKind } from './learn.ts'
 import { type DetailEntry, type MapEntry, type MapLine, parseMapLine } from './map-entry.ts'
 import { stateOf, type TopicState } from './topic-state.ts'
 
@@ -35,14 +35,15 @@ export type UnderstandingMap = {
 	file: string
 	read(now: Date, signal?: AbortSignal, selected?: SelectedTopics): Promise<MapRead>
 	// Adds the lines a signal from the reader makes for these topics, and returns their states after it. A name with no
-	// topic in the record or the map is left out, unless quoted gives its lines: then it is one of the reader's own.
-	learn(
-		mapSignal: MapSignal,
-		topics: string[],
+	// topic in the record or the map is left out.
+	learn(mapSignal: MapSignal, topics: string[], now: Date, signal?: AbortSignal): Promise<TopicState[]>
+	// What a reply teaches the map: an answer marks each topic it names as asked. quoted gives the lines of a topic the
+	// record lacks, which then is one of the reader's own.
+	replied(
+		reply: { kind: ReplyKind; topics: string[]; quoted: OwnTopic[] },
 		now: Date,
 		signal?: AbortSignal,
-		quoted?: OwnTopic[],
-	): Promise<TopicState[]>
+	): Promise<void>
 }
 
 export async function openMap(
@@ -162,6 +163,14 @@ export async function openMap(
 		return await Promise.all(chosen.map((topic) => stateNow(topic, known, updated, now, codeOf)))
 	}
 
+	async function replied(
+		reply: { kind: ReplyKind; topics: string[]; quoted: OwnTopic[] },
+		now: Date,
+		abort?: AbortSignal,
+	) {
+		if (reply.kind === 'answer') await learn('asked', reply.topics, now, abort, reply.quoted)
+	}
+
 	async function append(entries: MapLine[]) {
 		await mkdir(path.dirname(file), { recursive: true })
 		const text = await readFile(file, 'utf8').catch(emptyWhenMissing)
@@ -170,7 +179,7 @@ export async function openMap(
 		await appendFile(file, `${lead}${entries.map((entry) => `${JSON.stringify(entry)}\n`).join('')}`)
 	}
 
-	return { kind: 'ok', map: { file, read, learn } }
+	return { kind: 'ok', map: { file, read, learn, replied } }
 }
 
 function emptyWhenMissing(error: unknown): string {

@@ -204,7 +204,7 @@ export async function endReply(
 			? [{ name: item.card.topic.name, quotes: item.card.topic.quotes }]
 			: [],
 	)
-	if (round.asked) await gate.map?.learn('asked', topics, new Date(), signal, quoted)
+	await gate.map?.replied({ kind: round.replyKind, topics, quoted }, new Date(), signal)
 	return {
 		reply: {
 			items,

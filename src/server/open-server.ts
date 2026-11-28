@@ -231,7 +231,7 @@ export async function openServer(options: {
 				return sendJson(response, 200, { notes: await readerNotes.remove(id, new Date()) })
 			}
 			if (typeof text === 'string' && id === undefined) {
-				const kept = await readerNotes.add(text, new Date(), 'reader')
+				const kept = await readerNotes.add(text, new Date(), { kind: 'reader' })
 				return kept.kind === 'kept'
 					? sendJson(response, 200, { notes: kept.notes })
 					: sendJson(response, 400, { message: kept.problem })

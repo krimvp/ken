@@ -6,7 +6,7 @@
 // Nothing here talks to a model.
 
 export { type MapRead, type OwnTopic, openMap, type UnderstandingMap } from './file-map.ts'
-export { type MapSignal, SIGNALS } from './learn.ts'
+export { type MapSignal, type ReplyKind, SIGNALS } from './learn.ts'
 export { type Asked, areaQuestion, catchUpQuestion, type DayWords, deeperQuestion, LIST_SAID } from './lens.ts'
 export { DEPTHS, type Depth, EVIDENCE, type Evidence, type MapEntry } from './map-entry.ts'
 export {
