@@ -35,7 +35,7 @@ function setUp() {
 }
 
 async function withTopics(record: ReturnType<typeof fileRecordStore>, drafts: EntryDraft[]) {
-	const appended = await record.append(drafts)
+	const appended = await record.append(drafts, 'project')
 	if (appended.kind !== 'appended') assert.fail(appended.problems.join(' '))
 }
 

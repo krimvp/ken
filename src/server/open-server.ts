@@ -314,7 +314,7 @@ export async function openServer(options: {
 			}
 			// A copy of the earlier picture, written as the newest: the record only grows, and the newest picture shows.
 			const copy = { kind: 'layout' as const, ...layoutDraft(pictures.before), replaces: pictures.shown.id }
-			const appended = await record.append([copy])
+			const appended = await record.append([copy], 'project')
 			if (appended.kind === 'refused') {
 				const message = `ken could not bring the earlier picture back: ${appended.problems.join(' ')}`
 				return sendJson(response, 409, { message })

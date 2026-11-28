@@ -126,25 +126,28 @@ test('on a first open the server itself starts naming the parts, as the first jo
 test("ken explains each part by itself in tour order; a part the reader presses stops ken's run, goes first, and ken's run comes back after", async () => {
 	const { root } = namedRepo
 	const record = fileRecordStore(root, gitRepository(root))
-	const named = await record.append([
-		{
-			kind: 'layout',
-			within: [],
-			at: 'HEAD',
-			parts: [
-				{ name: 'Core', job: 'Runs the work', paths: ['src/core'] },
-				{ name: 'Command', job: 'The command a person types', paths: ['src/cli'] },
-			],
-			arrows: [
-				{
-					from: 'Command',
-					to: 'Core',
-					text: 'runs',
-					quotes: [{ path: 'src/cli/main.ts', commit: 'HEAD', text: "import { run } from '../core/run.ts'" }],
-				},
-			],
-		},
-	])
+	const named = await record.append(
+		[
+			{
+				kind: 'layout',
+				within: [],
+				at: 'HEAD',
+				parts: [
+					{ name: 'Core', job: 'Runs the work', paths: ['src/core'] },
+					{ name: 'Command', job: 'The command a person types', paths: ['src/cli'] },
+				],
+				arrows: [
+					{
+						from: 'Command',
+						to: 'Core',
+						text: 'runs',
+						quotes: [{ path: 'src/cli/main.ts', commit: 'HEAD', text: "import { run } from '../core/run.ts'" }],
+					},
+				],
+			},
+		],
+		'project',
+	)
 	if (named.kind !== 'appended') assert.fail(named.problems.join(' '))
 	const model = await scriptedModel([
 		{ hang: () => {} },
@@ -226,7 +229,7 @@ test('ken answers ahead only the first two questions of the parts the reader ope
 		{ name: 'Core', job: 'Runs the work', paths: ['src/core'] },
 		{ name: 'Command', job: 'The command a person types', paths: ['src/cli'] },
 	]
-	const named = await record.append([{ kind: 'layout', within: [], at: 'HEAD', parts, arrows: [] }])
+	const named = await record.append([{ kind: 'layout', within: [], at: 'HEAD', parts, arrows: [] }], 'project')
 	if (named.kind !== 'appended') assert.fail(named.problems.join(' '))
 	const asked = ['What does run give back?', 'Who calls run?', 'Why does run give back one?']
 	const home = homes[2] ?? ''
@@ -277,7 +280,7 @@ test("a brief the model endpoint refused says the endpoint's reason, stays out o
 		{ name: 'Core', job: 'Runs the work', paths: ['src/core'] },
 		{ name: 'Command', job: 'The command a person types', paths: ['src/cli'] },
 	]
-	const named = await record.append([{ kind: 'layout', within: [], at: 'HEAD', parts, arrows: [] }])
+	const named = await record.append([{ kind: 'layout', within: [], at: 'HEAD', parts, arrows: [] }], 'project')
 	if (named.kind !== 'appended') assert.fail(named.problems.join(' '))
 	const model = await scriptedModel([{ status: 429 }, { hang: () => {} }])
 	const server = await openKen(root, homes[3] ?? '', model.baseUrl, BACKGROUND)
@@ -303,7 +306,7 @@ test('a run ken started that the reader stopped goes back in line when they pres
 		{ name: 'Core', job: 'Runs the work', paths: ['src/core'] },
 		{ name: 'Command', job: 'The command a person types', paths: ['src/cli'] },
 	]
-	const named = await record.append([{ kind: 'layout', within: [], at: 'HEAD', parts, arrows: [] }])
+	const named = await record.append([{ kind: 'layout', within: [], at: 'HEAD', parts, arrows: [] }], 'project')
 	if (named.kind !== 'appended') assert.fail(named.problems.join(' '))
 	const model = await scriptedModel([{ hang: () => {} }, { hang: () => {} }])
 	const server = await openKen(root, homes[4] ?? '', model.baseUrl, BACKGROUND)

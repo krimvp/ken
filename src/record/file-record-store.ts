@@ -45,8 +45,8 @@ export type RecordStore = {
 	): Promise<{ kind: 'ok'; entry: RecordEntry } | Refusal>
 	append(
 		drafts: EntryDraft[],
+		heard: Heard,
 		signal?: AbortSignal,
-		heard?: Heard,
 	): Promise<{ kind: 'appended'; entries: { entry: RecordEntry; written: boolean }[] } | Refusal>
 }
 
@@ -83,7 +83,7 @@ export function fileRecordStore(root: string, repo: Repository, sessions: Transc
 		return { kind: 'ok', entry: stored(checked.entry, checked.replaces) } as const
 	}
 
-	async function append(drafts: EntryDraft[], signal?: AbortSignal, heard: Heard = 'project') {
+	async function append(drafts: EntryDraft[], heard: Heard, signal?: AbortSignal) {
 		const known = (await read()).entries
 		const entries: { entry: RecordEntry; written: boolean }[] = []
 		const problems: string[] = []

@@ -222,29 +222,32 @@ async function namedProject() {
 		},
 	])
 	const record = fileRecordStore(root, gitRepository(root))
-	const drawn = await record.append([
-		{
-			kind: 'layout',
-			within: [],
-			at: 'HEAD',
-			// Two arrows join the same two parts.
-			arrows: [
-				{
-					from: 'core',
-					to: 'store',
-					text: 'starts',
-					quotes: [{ path: 'src/core/run.ts', commit: 'HEAD', text: startStore }],
-				},
-				{
-					from: 'core',
-					to: 'store',
-					text: 'waits on',
-					quotes: [{ path: 'src/core/wait.ts', commit: 'HEAD', text: waitForStore }],
-				},
-			],
-			parts: ['core', 'store'].map((name) => ({ name, job: `Does the work of ${name}`, paths: [`src/${name}`] })),
-		},
-	])
+	const drawn = await record.append(
+		[
+			{
+				kind: 'layout',
+				within: [],
+				at: 'HEAD',
+				// Two arrows join the same two parts.
+				arrows: [
+					{
+						from: 'core',
+						to: 'store',
+						text: 'starts',
+						quotes: [{ path: 'src/core/run.ts', commit: 'HEAD', text: startStore }],
+					},
+					{
+						from: 'core',
+						to: 'store',
+						text: 'waits on',
+						quotes: [{ path: 'src/core/wait.ts', commit: 'HEAD', text: waitForStore }],
+					},
+				],
+				parts: ['core', 'store'].map((name) => ({ name, job: `Does the work of ${name}`, paths: [`src/${name}`] })),
+			},
+		],
+		'project',
+	)
 	if (drawn.kind !== 'appended') assert.fail(drawn.problems.join(' '))
 	const server = await openKen(root, readerHome())
 	const read = async (url: string): Promise<Answer> => {
@@ -492,16 +495,19 @@ test('Home lists the other ways in as links that say what each is, and offers to
 		{ message: 'Merge pull request #42 from example/notices', parent: 0, merge: 1, files: {} },
 	])
 	const flow = 'A notice is sent and its receipt saved'
-	const named = await fileRecordStore(root, gitRepository(root)).append([
-		{
-			kind: 'layout',
-			within: [],
-			at: 'HEAD',
-			arrows: [],
-			flows: [flow],
-			parts: ['delivery', 'receipts'].map((name) => ({ name, job: `Does the work of ${name}`, paths: [name] })),
-		},
-	])
+	const named = await fileRecordStore(root, gitRepository(root)).append(
+		[
+			{
+				kind: 'layout',
+				within: [],
+				at: 'HEAD',
+				arrows: [],
+				flows: [flow],
+				parts: ['delivery', 'receipts'].map((name) => ({ name, job: `Does the work of ${name}`, paths: [name] })),
+			},
+		],
+		'project',
+	)
 	if (named.kind !== 'appended') assert.fail(named.problems.join(' '))
 	const server = await openKen(root, readerHome())
 	await json(server, '/api/seen', { did: 'opened', paths: ['delivery'] })

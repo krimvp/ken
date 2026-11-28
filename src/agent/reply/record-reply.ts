@@ -160,7 +160,7 @@ export async function recordReply(
 		} else problems.push('The drawings: the record has no named parts of the project to keep them with.')
 	}
 	if (drafts.length === 0) return { kind: 'recorded', entries: [], problems }
-	const appended = await store.append(drafts, signal, heard)
+	const appended = await store.append(drafts, heard, signal)
 	if (appended.kind === 'refused') return appended
 	const entries = appended.entries.filter((each) => each.written).map((each) => each.entry)
 	return { kind: 'recorded', entries, problems }

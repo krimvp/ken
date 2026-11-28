@@ -35,22 +35,25 @@ const { root } = buildRepository([
 ])
 const quote = (file: string, text: string) => ({ path: file, commit: 'HEAD', text })
 const part = (name: string, job: string, folder: string) => ({ name, job, paths: [folder] })
-const named = await fileRecordStore(root, gitRepository(root)).append([
-	{
-		kind: 'layout',
-		within: [],
-		at: 'HEAD',
-		parts: [part('Code', 'Runs the work', 'src'), part('Tests', 'Tests the code', 'test')],
-		arrows: [
-			{
-				from: 'Tests',
-				to: 'Code',
-				text: 'tests',
-				quotes: [quote('test/run.test.ts', "import { run } from '../src/core/run.ts'")],
-			},
-		],
-	},
-])
+const named = await fileRecordStore(root, gitRepository(root)).append(
+	[
+		{
+			kind: 'layout',
+			within: [],
+			at: 'HEAD',
+			parts: [part('Code', 'Runs the work', 'src'), part('Tests', 'Tests the code', 'test')],
+			arrows: [
+				{
+					from: 'Tests',
+					to: 'Code',
+					text: 'tests',
+					quotes: [quote('test/run.test.ts', "import { run } from '../src/core/run.ts'")],
+				},
+			],
+		},
+	],
+	'project',
+)
 if (named.kind !== 'appended') assert.fail(named.problems.join(' '))
 
 // What the reader asks on "Show it another way", as the home sends it, and a diagram the model answers with.

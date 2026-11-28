@@ -20,27 +20,30 @@ const home = readerHome()
 // The parts as ken's model named them, the test part first, to show that it is still explained last.
 const record = fileRecordStore(root, gitRepository(root))
 const quote = (file: keyof typeof FILES, text: string) => ({ path: file, commit: 'HEAD', text })
-const named = await record.append([
-	{
-		kind: 'layout',
-		within: [],
-		at: 'HEAD',
-		parts: [
-			{ name: 'Tests', job: 'Tests the core', paths: ['test'] },
-			{ name: 'Core', job: 'Runs the work', paths: ['src/core'] },
-			{ name: 'Store', job: 'Saves what the core makes', paths: ['src/store'] },
-			{ name: 'Command', job: 'The command a person types', paths: ['src/cli'] },
-		],
-		arrows: [
-			{
-				from: 'Core',
-				to: 'Store',
-				text: 'saves to',
-				quotes: [quote('src/core/run.ts', "import { save } from '../store/db.ts'")],
-			},
-		],
-	},
-])
+const named = await record.append(
+	[
+		{
+			kind: 'layout',
+			within: [],
+			at: 'HEAD',
+			parts: [
+				{ name: 'Tests', job: 'Tests the core', paths: ['test'] },
+				{ name: 'Core', job: 'Runs the work', paths: ['src/core'] },
+				{ name: 'Store', job: 'Saves what the core makes', paths: ['src/store'] },
+				{ name: 'Command', job: 'The command a person types', paths: ['src/cli'] },
+			],
+			arrows: [
+				{
+					from: 'Core',
+					to: 'Store',
+					text: 'saves to',
+					quotes: [quote('src/core/run.ts', "import { save } from '../store/db.ts'")],
+				},
+			],
+		},
+	],
+	'project',
+)
 if (named.kind !== 'appended') assert.fail(named.problems.join(' '))
 
 type Sent = { line: string; drawing?: object; file: keyof typeof FILES; quoted: string }
@@ -335,18 +338,21 @@ test("a brief's question carries each file's lines and outline and the most it m
 		'test/run.test.ts': 'run()\n',
 	}
 	const { root: own } = buildRepository([{ message: 'feat: start', files }])
-	const named = await fileRecordStore(own, gitRepository(own)).append([
-		{
-			kind: 'layout',
-			within: [],
-			at: 'HEAD',
-			parts: [
-				{ name: 'Core', job: 'Runs the work', paths: ['src'] },
-				{ name: 'Tests', job: 'Tests the core', paths: ['test'] },
-			],
-			arrows: [],
-		},
-	])
+	const named = await fileRecordStore(own, gitRepository(own)).append(
+		[
+			{
+				kind: 'layout',
+				within: [],
+				at: 'HEAD',
+				parts: [
+					{ name: 'Core', job: 'Runs the work', paths: ['src'] },
+					{ name: 'Tests', job: 'Tests the core', paths: ['test'] },
+				],
+				arrows: [],
+			},
+		],
+		'project',
+	)
 	if (named.kind !== 'appended') assert.fail(named.problems.join(' '))
 	const read = (start: number) => ({ tool: 'ken__read_file', args: { path: 'src/core/long.ts', start } })
 	const scripted = await scriptedModel([read(1), read(401), read(801), { text: 'I read what I could.' }])

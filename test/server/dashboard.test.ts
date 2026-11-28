@@ -42,9 +42,10 @@ test('back to the picture before walks back one picture at a time, with the word
 	})
 	const draw = async (picture: { parts: ReturnType<typeof part>[]; about?: string; asked?: string }) => {
 		const before = (await record.read()).current.findLast((entry) => entry.kind === 'layout')
-		const drawn = await record.append([
-			{ kind: 'layout', within: [], at: 'HEAD', arrows: [], ...picture, replaces: before?.id },
-		])
+		const drawn = await record.append(
+			[{ kind: 'layout', within: [], at: 'HEAD', arrows: [], ...picture, replaces: before?.id }],
+			'project',
+		)
 		if (drawn.kind !== 'appended') assert.fail(drawn.problems.join(' '))
 	}
 	const back = () => call(server, '/api/layout/back', { within: [] })
